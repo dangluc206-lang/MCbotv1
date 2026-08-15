@@ -1,0 +1,18 @@
+{
+  "enabled": true,
+  "directory": "data/runtime/inventory",
+  "debounceMs": 150,
+  "historyLimit": 300,
+  "postActionSync": {
+    "minTicks": 2,
+    "pollTicks": 1,
+    "pollMs": 50,
+    "quietMs": 125,
+    "timeoutMs": 2500,
+    "stablePasses": 2,
+    "fallbackTickMs": 50,
+    "debugMetadata": true,
+    "debugMaxItems": 4,
+    "persistStableSnapshot": true
+  }
+}

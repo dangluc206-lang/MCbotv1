@@ -1,0 +1,894 @@
+{
+  "cobblestone": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "material",
+            "value": "cobblestone"
+          }
+        ]
+      }
+    }
+  },
+  "coal": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "material",
+            "value": "coal"
+          }
+        ]
+      }
+    }
+  },
+  "redstone": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "material",
+            "value": "redstone"
+          }
+        ]
+      }
+    }
+  },
+  "lapis_lazuli": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "material",
+            "value": "lapis_lazuli"
+          }
+        ]
+      }
+    }
+  },
+  "iron_ingot": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "material",
+            "value": "iron_ingot"
+          }
+        ]
+      }
+    }
+  },
+  "gold_ingot": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "material",
+            "value": "gold_ingot"
+          }
+        ]
+      }
+    }
+  },
+  "diamond": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "material",
+            "value": "diamond"
+          }
+        ]
+      }
+    }
+  },
+  "emerald": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "material",
+            "value": "emerald"
+          }
+        ]
+      }
+    }
+  },
+  "stone": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "material",
+            "value": "stone"
+          }
+        ]
+      }
+    }
+  },
+  "smooth_stone": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "material",
+            "value": "smooth_stone"
+          }
+        ]
+      }
+    }
+  },
+  "raw_iron": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "material",
+            "value": "raw_iron"
+          }
+        ]
+      }
+    }
+  },
+  "raw_gold": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "material",
+            "value": "raw_gold"
+          }
+        ]
+      }
+    }
+  },
+  "super_cobblestone": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Siêu đá cuội"
+          }
+        ]
+      },
+      "inventory": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:SIEUDACUOI"
+          }
+        ]
+      },
+      "personal-vault": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:SIEUDACUOI"
+          }
+        ]
+      }
+    }
+  },
+  "refined_coal": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Than tinh luyện"
+          }
+        ]
+      },
+      "inventory": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:THANTINHLUYEN"
+          }
+        ]
+      },
+      "personal-vault": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:THANTINHLUYEN"
+          }
+        ]
+      }
+    }
+  },
+  "refined_redstone": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Đá đỏ tinh luyện"
+          }
+        ]
+      },
+      "inventory": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:DADOTINHLUYEN"
+          }
+        ]
+      },
+      "personal-vault": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:DADOTINHLUYEN"
+          }
+        ]
+      }
+    }
+  },
+  "refined_lapis": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Lưu ly tinh luyện"
+          }
+        ]
+      },
+      "inventory": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:LUULYTINHLUYEN"
+          }
+        ]
+      },
+      "personal-vault": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:LUULYTINHLUYEN"
+          }
+        ]
+      }
+    }
+  },
+  "refined_iron": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Sắt tinh luyện"
+          }
+        ]
+      },
+      "inventory": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:SATTINHLUYEN"
+          }
+        ]
+      },
+      "personal-vault": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:SATTINHLUYEN"
+          }
+        ]
+      }
+    }
+  },
+  "refined_gold": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Vàng tinh luyện"
+          }
+        ]
+      },
+      "inventory": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:VANGTINHLUYEN"
+          }
+        ]
+      },
+      "personal-vault": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:VANGTINHLUYEN"
+          }
+        ]
+      }
+    }
+  },
+  "refined_diamond": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Kim cương tinh luyện"
+          }
+        ]
+      },
+      "inventory": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:KIMCUONGTINHLUYEN"
+          }
+        ]
+      },
+      "personal-vault": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:KIMCUONGTINHLUYEN"
+          }
+        ]
+      }
+    }
+  },
+  "refined_emerald": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Ngọc lục bảo tinh luyện"
+          }
+        ]
+      },
+      "inventory": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:NGOCLUCBAOTINHLUYEN"
+          }
+        ]
+      },
+      "personal-vault": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:NGOCLUCBAOTINHLUYEN"
+          }
+        ]
+      }
+    }
+  },
+  "super_cobblestone_block": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Khối siêu đá cuội"
+          }
+        ]
+      },
+      "inventory": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:KHOISIEUDACUOI"
+          }
+        ]
+      },
+      "personal-vault": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:KHOISIEUDACUOI"
+          }
+        ]
+      }
+    }
+  },
+  "refined_coal_block": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Khối than tinh luyện"
+          }
+        ]
+      },
+      "inventory": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:KHOITHANTINHLUYEN"
+          }
+        ]
+      },
+      "personal-vault": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:KHOITHANTINHLUYEN"
+          }
+        ]
+      }
+    }
+  },
+  "refined_redstone_block": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Khối đá đỏ tinh luyện"
+          }
+        ]
+      },
+      "inventory": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN"
+          }
+        ]
+      },
+      "personal-vault": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN"
+          }
+        ]
+      }
+    }
+  },
+  "refined_lapis_block": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Khối lưu ly tinh luyện"
+          }
+        ]
+      },
+      "inventory": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:KHOILUULYTINHLUYEN"
+          }
+        ]
+      },
+      "personal-vault": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:KHOILUULYTINHLUYEN"
+          }
+        ]
+      }
+    }
+  },
+  "refined_iron_block": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Khối sắt tinh luyện"
+          }
+        ]
+      },
+      "inventory": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:KHOISATTINHLUYEN"
+          }
+        ]
+      },
+      "personal-vault": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:KHOISATTINHLUYEN"
+          }
+        ]
+      }
+    }
+  },
+  "refined_gold_block": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Khối vàng tinh luyện"
+          }
+        ]
+      },
+      "inventory": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:KHOIVANGTINHLUYEN"
+          }
+        ]
+      },
+      "personal-vault": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:KHOIVANGTINHLUYEN"
+          }
+        ]
+      }
+    }
+  },
+  "refined_diamond_block": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Khối kim cương tinh luyện"
+          }
+        ]
+      },
+      "inventory": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:KHOIKIMCUONGTINHLUYEN"
+          }
+        ]
+      },
+      "personal-vault": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:KHOIKIMCUONGTINHLUYEN"
+          }
+        ]
+      }
+    }
+  },
+  "refined_emerald_block": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Khối ngọc lục bảo tinh luyện"
+          }
+        ]
+      },
+      "inventory": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:KHOINGOCLUCBAOTINHLUYEN"
+          }
+        ]
+      },
+      "personal-vault": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:KHOINGOCLUCBAOTINHLUYEN"
+          }
+        ]
+      }
+    }
+  },
+  "carbon": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Carbon"
+          }
+        ]
+      },
+      "inventory": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:CACBON"
+          }
+        ]
+      },
+      "personal-vault": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:CACBON"
+          }
+        ]
+      }
+    }
+  },
+  "titanium": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Titanium"
+          }
+        ]
+      },
+      "inventory": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:TITAN"
+          }
+        ]
+      },
+      "personal-vault": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:TITAN"
+          }
+        ]
+      }
+    }
+  },
+  "tungsten": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Tungsten"
+          }
+        ]
+      }
+    }
+  },
+  "super_alloy": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Siêu hợp kim"
+          }
+        ]
+      },
+      "inventory": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:SIEUHOPKIM"
+          }
+        ]
+      },
+      "personal-vault": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:SIEUHOPKIM"
+          }
+        ]
+      }
+    }
+  },
+  "menu_convert_blocks": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Đổi khối"
+          }
+        ]
+      }
+    }
+  },
+  "menu_smelting": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Nung"
+          }
+        ]
+      }
+    }
+  },
+  "menu_withdraw": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Rút"
+          }
+        ]
+      }
+    }
+  },
+  "menu_crafting": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Chế tạo"
+          }
+        ]
+      }
+    }
+  },
+  "smelt_stone": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Đá nhẵn"
+          }
+        ]
+      }
+    }
+  },
+  "smelt_iron": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Sắt"
+          }
+        ]
+      }
+    }
+  },
+  "smelt_gold": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Vàng"
+          }
+        ]
+      }
+    }
+  },
+  "storage_capacity": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Sức chứa"
+          }
+        ]
+      }
+    }
+  },
+  "dungeon_default": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "Dungeon"
+          }
+        ]
+      }
+    }
+  },
+  "grass_block": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "material",
+            "value": "grass_block"
+          }
+        ]
+      }
+    }
+  },
+  "coal_block": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "material",
+            "value": "coal_block"
+          }
+        ]
+      }
+    }
+  },
+  "redstone_block": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "material",
+            "value": "redstone_block"
+          }
+        ]
+      }
+    }
+  },
+  "lapis_block": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "material",
+            "value": "lapis_block"
+          }
+        ]
+      }
+    }
+  },
+  "iron_block": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "material",
+            "value": "iron_block"
+          }
+        ]
+      }
+    }
+  },
+  "gold_block": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "material",
+            "value": "gold_block"
+          }
+        ]
+      }
+    }
+  },
+  "diamond_block": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "material",
+            "value": "diamond_block"
+          }
+        ]
+      }
+    }
+  },
+  "emerald_block": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "material",
+            "value": "emerald_block"
+          }
+        ]
+      }
+    }
+  }
+}

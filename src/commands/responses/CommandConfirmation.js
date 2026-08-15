@@ -1,0 +1,5 @@
+'use strict';
+const TimeoutError=require('../../shared/errors/TimeoutError');
+const OperationCancelledError=require('../../shared/errors/OperationCancelledError');
+class CommandConfirmation{constructor({eventBus,matcher}){this.eventBus=eventBus;this.matcher=matcher;}wait({botId,rules,timeoutMs=5000,cancellationToken=null}){return new Promise((resolve,reject)=>{let done=false;let unsubscribe=()=>{};const finish=(fn,value)=>{if(done)return;done=true;clearTimeout(timer);off();unsubscribe();fn(value);};const off=this.eventBus.on('command:message',event=>{if(event.botId!==botId)return;const result=this.matcher.match(event.message,rules);if(result.matched)finish(resolve,{message:event.message,rule:result.rule});});const timer=setTimeout(()=>finish(reject,new TimeoutError('Command confirmation timed out.')),timeoutMs);if(cancellationToken)unsubscribe=cancellationToken.onCancelled(reason=>finish(reject,new OperationCancelledError(String(reason||'Operation cancelled.'))));});}}
+module.exports=CommandConfirmation;

@@ -1,0 +1,11 @@
+{
+  "commandKey": "personalVault2",
+  "storageSlots": 54,
+  "guiId": "personalVault2",
+  "guiTimeoutMs": 5000,
+  "openSettleMs": 150,
+  "openAttempts": 2,
+  "openRetryMs": 350,
+  "transferVerifyAttempts": 8,
+  "transferVerifyRetryMs": 200
+}

@@ -1,0 +1,90 @@
+{
+  "enabled": true,
+  "commandKey": "afk",
+  "guiTimeoutMs": 7000,
+  "openSettleMs": 150,
+  "teleportTimeoutMs": 10000,
+  "teleportMinDistance": 1.5,
+  "areaRetryMs": 5000,
+  "errorRetryMs": 3000,
+  "connectionPollMs": 1000,
+  "rodMaterial": "fishing_rod",
+  "lookPitchDegrees": 85,
+  "recastDelayMs": 50,
+  "biteTimeoutMs": 65000,
+  "positionGuardPollMs": 100,
+  "movement": {
+    "timeoutMs": 30000,
+    "tickMs": 100,
+    "arrivalRadius": 1.0,
+    "verticalTolerance": 1.5,
+    "arrivalStableMs": 400,
+    "noProgressMs": 4000,
+    "progressDelta": 0.05,
+    "lookIntervalMs": 500,
+    "shoreFishingPitchDegrees": 10
+  },
+  "worldReadiness": {
+    "timeoutMs": 10000,
+    "pollMs": 100,
+    "settleMs": 350
+  },
+  "positionGuard": {
+    "radius": 1.0,
+    "verticalTolerance": 1.5
+  },
+  "probe": {
+    "enabled": false,
+    "maxProfiles": 1,
+    "totalTimeoutMs": 30000,
+    "profileTimeoutMs": 10000,
+    "gapMs": 100,
+    "profiles": [
+      {
+        "name": "shift-walk-continuous",
+        "forward": true,
+        "sneak": true,
+        "sprint": false,
+        "jump": false
+      }
+    ]
+  },
+  "packetObservation": {
+    "sampleLimit": 64
+  },
+  "recovery": {
+    "waitMs": 5000,
+    "retryMs": 3000,
+    "movementRetryMs": 3000,
+    "connectionRetryMs": 1000
+  },
+  "occupancyPatterns": [
+    "(?<current>\\d+)\\s*/\\s*(?<capacity>\\d+)"
+  ],
+  "currentPatterns": [
+    "(?:người|player|players)\\D*(?<current>\\d+)"
+  ],
+  "areas": [
+    {
+      "id": "afk-11",
+      "menuSlot": 11,
+      "priority": 1,
+      "capacity": null,
+      "destination": { "x": 74, "y": 70, "z": 90 }
+    },
+    {
+      "id": "afk-13",
+      "menuSlot": 13,
+      "priority": 2,
+      "capacity": null,
+      "destination": { "x": 1, "y": 64, "z": 3 }
+    },
+    {
+      "id": "afk-15",
+      "menuSlot": 15,
+      "priority": 3,
+      "capacity": null,
+      "destination": { "x": 1, "y": 64, "z": 3 }
+    }
+  ]
+}

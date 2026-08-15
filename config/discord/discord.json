@@ -1,0 +1,62 @@
+{
+  "enabled": true,
+  "tokenEnv": "DISCORD_TOKEN",
+  "applicationIdEnv": "DISCORD_APPLICATION_ID",
+  "guildIdEnv": "DISCORD_GUILD_ID",
+  "allowedUserIdsEnv": "DISCORD_ALLOWED_USER_IDS",
+  "commandName": "gui",
+  "defaultBotId": "bot-01",
+  "guiTimeoutMs": 7000,
+  "readyTimeoutMs": 15000,
+  "maxAttachmentBytes": 7500000,
+  "ephemeral": true,
+  "targets": {
+    "sky": {
+      "display": "/sky",
+      "commandKey": "skyblock"
+    },
+    "ks": {
+      "display": "/ks",
+      "commandKey": "minerals"
+    },
+    "kho": {
+      "display": "/kho",
+      "commandKey": "storage"
+    },
+    "pv2": {
+      "display": "/pv 2",
+      "commandKey": "personalVault2"
+    },
+    "nung": {
+      "display": "/nung",
+      "commandKey": "smelting"
+    },
+    "d": {
+      "display": "/d",
+      "commandKey": "dungeon"
+    }
+  },
+  "modeCommandName": "mode",
+  "panels": {
+    "enabled": true,
+    "botId": "bot-01",
+    "refreshIntervalMs": 3000,
+    "storePath": "data/runtime/discord/panels.json",
+    "autoCreateChannels": true,
+    "channels": {
+      "control": {
+        "idEnv": "DISCORD_CONTROL_CHANNEL_ID",
+        "name": "bot-control"
+      },
+      "config": {
+        "idEnv": "DISCORD_CONFIG_CHANNEL_ID",
+        "name": "bot-config"
+      },
+      "errors": {
+        "idEnv": "DISCORD_ERRORS_CHANNEL_ID",
+        "name": "bot-errors"
+      }
+    }
+  },
+  "fishingModeCommandName": "fishmode"
+}

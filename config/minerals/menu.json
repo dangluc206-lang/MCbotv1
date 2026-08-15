@@ -1,0 +1,38 @@
+{
+  "commandKey": "minerals",
+  "conversionMenuItemId": "menu_convert_blocks",
+  "smeltingMenuItemId": "menu_smelting",
+  "withdrawMenuItemId": "menu_withdraw",
+  "craftingMenuItemId": "menu_crafting",
+  "crafting": {
+    "commandKey": "minerals",
+    "quantitySlots": {
+      "1": 20,
+      "64": 22,
+      "ALL": 24
+    },
+    "_note": "Quantity GUI bootstrap: slot 20 = craft 1, slot 22 = craft 64, slot 24 = ALL. Bot inspects live text/lore/components first; slots are fallback only.",
+    "mineralsGuiId": "minerals",
+    "guiId": "crafting",
+    "quantityGuiId": "craftingQuantity",
+    "entryMenuItemId": "menu_crafting",
+    "guiTimeoutMs": 5000,
+    "resultDelayMs": 250,
+    "entrySlot": 16,
+    "commandOpenAttempts": 3,
+    "commandOpenRetryMs": 600,
+    "resultVerifyAttempts": 10,
+    "resultVerifyRetryMs": 300,
+    "preQuantityClickTicks": 15,
+    "postQuantityClickTicks": 10,
+    "commandCloseSettleMs": 350
+  },
+  "guiId": "minerals",
+  "guiTimeoutMs": 5000,
+  "conversionMenuSlot": 10,
+  "smeltingMenuSlot": 12,
+  "craftingMenuSlot": 16,
+  "commandOpenAttempts": 3,
+  "commandOpenRetryMs": 600,
+  "commandCloseSettleMs": 350
+}

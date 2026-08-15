@@ -1,0 +1,2 @@
+'use strict';
+const CommandRegistry=require('../src/commands/CommandRegistry');const CommandResolver=require('../src/commands/CommandResolver');const commands=require('../config/commands/commands.json');const key=process.argv[2];const args=process.argv[3]?JSON.parse(process.argv[3]):{};if(!key){console.error('Usage: node scripts/test-command.js <commandKey> [jsonArgs]');process.exitCode=1;}else console.log(new CommandResolver({registry:new CommandRegistry(commands)}).resolve(key,args));

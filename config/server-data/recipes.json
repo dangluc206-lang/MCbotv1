@@ -1,0 +1,201 @@
+{
+  "super_cobblestone": {
+    "output": "super_cobblestone",
+    "outputAmount": 1,
+    "menuItemId": "super_cobblestone",
+    "inputs": {
+      "cobblestone": 16
+    },
+    "menuSlot": 10,
+    "inputSource": "storage"
+  },
+  "refined_coal": {
+    "output": "refined_coal",
+    "outputAmount": 1,
+    "menuItemId": "refined_coal",
+    "inputs": {
+      "coal": 16
+    },
+    "menuSlot": 11,
+    "inputSource": "storage"
+  },
+  "refined_redstone": {
+    "output": "refined_redstone",
+    "outputAmount": 1,
+    "menuItemId": "refined_redstone",
+    "inputs": {
+      "redstone": 64
+    },
+    "menuSlot": 12,
+    "inputSource": "storage"
+  },
+  "refined_lapis": {
+    "output": "refined_lapis",
+    "outputAmount": 1,
+    "menuItemId": "refined_lapis",
+    "inputs": {
+      "lapis_lazuli": 64
+    },
+    "menuSlot": 13,
+    "inputSource": "storage"
+  },
+  "refined_iron": {
+    "output": "refined_iron",
+    "outputAmount": 1,
+    "menuItemId": "refined_iron",
+    "inputs": {
+      "iron_ingot": 64
+    },
+    "menuSlot": 14,
+    "inputSource": "storage"
+  },
+  "refined_gold": {
+    "output": "refined_gold",
+    "outputAmount": 1,
+    "menuItemId": "refined_gold",
+    "inputs": {
+      "gold_ingot": 64
+    },
+    "menuSlot": 15,
+    "inputSource": "storage"
+  },
+  "refined_diamond": {
+    "output": "refined_diamond",
+    "outputAmount": 1,
+    "menuItemId": "refined_diamond",
+    "inputs": {
+      "diamond": 32
+    },
+    "menuSlot": 16,
+    "inputSource": "storage"
+  },
+  "refined_emerald": {
+    "output": "refined_emerald",
+    "outputAmount": 1,
+    "menuItemId": "refined_emerald",
+    "inputs": {
+      "emerald": 32
+    },
+    "menuSlot": 19,
+    "inputSource": "storage"
+  },
+  "super_cobblestone_block": {
+    "output": "super_cobblestone_block",
+    "outputAmount": 1,
+    "menuItemId": "super_cobblestone_block",
+    "inputs": {
+      "super_cobblestone": 16
+    },
+    "menuSlot": 20
+  },
+  "refined_coal_block": {
+    "output": "refined_coal_block",
+    "outputAmount": 1,
+    "menuItemId": "refined_coal_block",
+    "inputs": {
+      "refined_coal": 16
+    },
+    "menuSlot": 21
+  },
+  "refined_redstone_block": {
+    "output": "refined_redstone_block",
+    "outputAmount": 1,
+    "menuItemId": "refined_redstone_block",
+    "inputs": {
+      "refined_redstone": 16
+    },
+    "menuSlot": 22
+  },
+  "refined_lapis_block": {
+    "output": "refined_lapis_block",
+    "outputAmount": 1,
+    "menuItemId": "refined_lapis_block",
+    "inputs": {
+      "refined_lapis": 16
+    },
+    "menuSlot": 23
+  },
+  "refined_iron_block": {
+    "output": "refined_iron_block",
+    "outputAmount": 1,
+    "menuItemId": "refined_iron_block",
+    "inputs": {
+      "refined_iron": 16
+    },
+    "menuSlot": 24
+  },
+  "refined_gold_block": {
+    "output": "refined_gold_block",
+    "outputAmount": 1,
+    "menuItemId": "refined_gold_block",
+    "inputs": {
+      "refined_gold": 16
+    },
+    "menuSlot": 25
+  },
+  "refined_diamond_block": {
+    "output": "refined_diamond_block",
+    "outputAmount": 1,
+    "menuItemId": "refined_diamond_block",
+    "inputs": {
+      "refined_diamond": 16
+    },
+    "menuSlot": 28
+  },
+  "refined_emerald_block": {
+    "output": "refined_emerald_block",
+    "outputAmount": 1,
+    "menuItemId": "refined_emerald_block",
+    "inputs": {
+      "refined_emerald": 16
+    },
+    "menuSlot": 29
+  },
+  "carbon": {
+    "output": "carbon",
+    "outputAmount": 1,
+    "menuItemId": "carbon",
+    "inputs": {
+      "refined_redstone_block": 8,
+      "super_cobblestone_block": 4,
+      "refined_coal_block": 16
+    },
+    "menuSlot": 30
+  },
+  "titanium": {
+    "output": "titanium",
+    "outputAmount": 1,
+    "menuItemId": "titanium",
+    "inputs": {
+      "refined_lapis_block": 4,
+      "refined_iron_block": 16,
+      "refined_gold_block": 8,
+      "refined_emerald_block": 2
+    },
+    "menuSlot": 31
+  },
+  "tungsten": {
+    "output": "tungsten",
+    "outputAmount": 1,
+    "menuItemId": "tungsten",
+    "inputs": {
+      "super_cobblestone_block": 2,
+      "refined_diamond_block": 16,
+      "refined_emerald_block": 4,
+      "refined_iron_block": 8,
+      "refined_gold_block": 8
+    },
+    "menuSlot": 32
+  },
+  "super_alloy": {
+    "output": "super_alloy",
+    "outputAmount": 1,
+    "menuItemId": "super_alloy",
+    "inputs": {
+      "tungsten": 8,
+      "titanium": 16,
+      "carbon": 32
+    },
+    "menuSlot": 33
+  }
+}

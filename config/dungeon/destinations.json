@@ -1,0 +1,13 @@
+{
+  "commandKey": "dungeon",
+  "defaultCountdownMs": 6000,
+  "destinations": {
+    "default": {
+      "menuItemId": "dungeon_default",
+      "countdownMs": 6000,
+      "verifyTimeoutMs": 10000
+    }
+  },
+  "guiId": "dungeon",
+  "guiTimeoutMs": 5000
+}

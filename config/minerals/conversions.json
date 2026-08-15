@@ -1,0 +1,92 @@
+{
+  "menuSettleMs": 200,
+  "menuTransitionAttempts": 3,
+  "menuTransitionRetryMs": 350,
+  "resultDelayMs": 300,
+  "smeltingRecipeIds": [
+    "raw_iron_to_iron",
+    "raw_gold_to_gold"
+  ],
+  "resources": {
+    "cobblestone": {
+      "baseId": "cobblestone",
+      "blockId": null,
+      "ratio": 1,
+      "sellId": "cobblestone"
+    },
+    "coal": {
+      "baseId": "coal",
+      "blockId": "coal_block",
+      "ratio": 9,
+      "sellId": "coal_block",
+      "toBlockMenuItemId": "coal_block",
+      "toBaseMenuItemId": "coal"
+    },
+    "redstone": {
+      "baseId": "redstone",
+      "blockId": "redstone_block",
+      "ratio": 9,
+      "sellId": "redstone_block",
+      "toBlockMenuItemId": "redstone_block",
+      "toBaseMenuItemId": "redstone"
+    },
+    "lapis_lazuli": {
+      "baseId": "lapis_lazuli",
+      "blockId": "lapis_block",
+      "ratio": 9,
+      "sellId": "lapis_block",
+      "toBlockMenuItemId": "lapis_block",
+      "toBaseMenuItemId": "lapis_lazuli"
+    },
+    "iron_ingot": {
+      "baseId": "iron_ingot",
+      "blockId": "iron_block",
+      "ratio": 9,
+      "sellId": "iron_block",
+      "toBlockMenuItemId": "iron_block",
+      "toBaseMenuItemId": "iron_ingot"
+    },
+    "gold_ingot": {
+      "baseId": "gold_ingot",
+      "blockId": "gold_block",
+      "ratio": 9,
+      "sellId": "gold_block",
+      "toBlockMenuItemId": "gold_block",
+      "toBaseMenuItemId": "gold_ingot"
+    },
+    "diamond": {
+      "baseId": "diamond",
+      "blockId": "diamond_block",
+      "ratio": 9,
+      "sellId": "diamond_block",
+      "toBlockMenuItemId": "diamond_block",
+      "toBaseMenuItemId": "diamond"
+    },
+    "emerald": {
+      "baseId": "emerald",
+      "blockId": "emerald_block",
+      "ratio": 9,
+      "sellId": "emerald_block",
+      "toBlockMenuItemId": "emerald_block",
+      "toBaseMenuItemId": "emerald"
+    }
+  },
+  "storagePressure": {
+    "watchRatio": 0.7,
+    "highRatio": 0.8,
+    "usedRatio": 0.8,
+    "criticalRatio": 0.92,
+    "growthHorizonMinutes": 0.5,
+    "fastGrowthPerMinute": 0.03,
+    "maxSalesPerPass": 8,
+    "decompressionMaxRatio": 0.8,
+    "requireKnownCapacityForDecompression": true,
+    "lowWaterRatio": 0.7,
+    "materialGrowthWeightMinutes": 2,
+    "maxProtectionPasses": 3,
+    "maxSellBurstsPerPass": 6,
+    "maxSellBurstClicks": 64,
+    "sellBurstEscalationFactor": 2,
+    "minPressureImprovementRatio": 0.002
+  }
+}

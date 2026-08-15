@@ -1,0 +1,12 @@
+{
+  "storage": "/kho",
+  "personalVault2": "/pv 2",
+  "minerals": "/ks",
+  "smelting": "/nung",
+  "islandHome": "/is",
+  "dungeon": "/d",
+  "login": "/login {password}",
+  "skyblock": "/sky",
+  "storageSell": "/kho sell",
+  "afk": "/afk"
+}

@@ -1,0 +1,35 @@
+{
+  "commandKey": "smelting",
+  "mineralsCommandKey": "minerals",
+  "recipes": {
+    "stone_to_smooth_stone": {
+      "input": "stone",
+      "output": "smooth_stone",
+      "menuItemId": "smelt_stone"
+    },
+    "raw_iron_to_iron": {
+      "input": "raw_iron",
+      "output": "iron_ingot",
+      "menuItemId": "smelt_iron"
+    },
+    "raw_gold_to_gold": {
+      "input": "raw_gold",
+      "output": "gold_ingot",
+      "menuItemId": "smelt_gold"
+    }
+  },
+  "guiId": "smelting",
+  "mineralsGuiId": "minerals",
+  "mineralsMenuItemId": "menu_smelting",
+  "guiTimeoutMs": 5000,
+  "resultDelayMs": 1000,
+  "mineralsMenuSlot": 12,
+  "actionSlot": 1,
+  "actionItemId": null,
+  "verificationAttempts": 6,
+  "verificationRetryMs": 750,
+  "commandOpenAttempts": 3,
+  "commandOpenRetryMs": 600,
+  "commandCloseSettleMs": 350,
+  "openSettleMs": 200
+}

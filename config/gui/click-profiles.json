@@ -1,0 +1,12 @@
+{
+  "default": {
+    "button": 0,
+    "mode": 0,
+    "timeoutMs": 3000
+  },
+  "shiftLeft": {
+    "button": 0,
+    "mode": 1,
+    "timeoutMs": 3000
+  }
+}

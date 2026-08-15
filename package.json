@@ -1,0 +1,25 @@
+{
+  "name": "mcbot-complete",
+  "version": "2.0.1",
+  "private": true,
+  "description": "Config-driven multi-bot Mineflayer framework",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test tests/**/*.test.js",
+    "validate": "node scripts/validate-structure.js",
+    "inspect:config": "node scripts/validate-config.js",
+    "cleanup:stale:dry": "node scripts/cleanup-stale.js",
+    "cleanup:stale": "node scripts/cleanup-stale.js --apply"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "mineflayer": "^4.37.1",
+    "mineflayer-pathfinder": "^2.4.5",
+    "discord.js": "^14.25.1"
+  }
+}

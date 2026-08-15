@@ -1,0 +1,2 @@
+'use strict';
+module.exports=value=>({valid:Boolean(value&&typeof value==='object'),errors:value&&typeof value==='object'?[]:['movement config must be an object']});

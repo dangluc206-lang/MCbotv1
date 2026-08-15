@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "directory": "data/runtime/gui",
+  "debounceMs": 350,
+  "semanticCacheMs": 5000
+}

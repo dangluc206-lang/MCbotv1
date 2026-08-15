@@ -1,0 +1,8 @@
+{
+  "priority": [
+    "nbt",
+    "material",
+    "lore",
+    "name"
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "logLevel": "info",
+  "logging": {
+    "console": {
+      "level": "info",
+      "format": "compact",
+      "meta": "none",
+      "maxMetaFields": 4
+    },
+    "file": {
+      "enabled": true,
+      "level": "debug",
+      "directory": "data/logs",
+      "prefix": "mcbot"
+    }
+  },
+  "commandIntervalMs": 350,
+  "shutdownTimeoutMs": 10000,
+  "multiBot": {
+    "connectionStartSpacingMs": 10000,
+    "postSuccessSpacingMs": 10000,
+    "transientFailureCooldownMs": 15000,
+    "connectionResetCooldownMs": 20000,
+    "lostConnectionCooldownMs": 20000,
+    "loginTooFastCooldownMs": 30000
+  },
+  "diagnostics": {
+    "runtimeFailures": {
+      "enabled": true,
+      "directory": "data/runtime/errors",
+      "repeatWindowMs": 10000,
+      "connectionAggregationMs": 750,
+      "maxFileMb": 8,
+      "maxTotalMb": 64,
+      "retentionDays": 14,
+      "cleanupIntervalMs": 3600000
+    },
+    "circuitBreaker": {
+      "baseBackoffMs": 5000,
+      "maxBackoffMs": 60000,
+      "multiplier": 2,
+      "jitterRatio": 0.15,
+      "maxConsecutiveFailures": 5,
+      "openDurationMs": 120000
+    }
+  }
+}

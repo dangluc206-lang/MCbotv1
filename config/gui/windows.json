@@ -1,0 +1,68 @@
+{
+  "storage": {
+    "title": {
+      "regex": "kho|storage"
+    },
+    "layout": {}
+  },
+  "personalVault2": {
+    "title": {
+      "regex": "pv\\s*2|personal\\s*vault"
+    },
+    "layout": {
+      "slotCount": 90
+    }
+  },
+  "minerals": {
+    "title": {
+      "regex": "khoáng|khoang|mineral|ks"
+    },
+    "layout": {}
+  },
+  "smelting": {
+    "title": {
+      "regex": "nung|smelt"
+    },
+    "layout": {}
+  },
+  "crafting": {
+    "title": {
+      "regex": "chế tạo|che tao|craft"
+    },
+    "layout": {}
+  },
+  "craftingQuantity": {
+    "title": {
+      "regex": "số lượng|so luong|quantity"
+    },
+    "layout": {}
+  },
+  "dungeon": {
+    "title": {
+      "regex": "dungeon"
+    },
+    "layout": {}
+  },
+  "skyServerSelect": {
+    "title": {
+      "value": "ᴄʜọɴ ᴍáʏ ᴄʜủ",
+      "exact": true
+    },
+    "layout": {
+      "slotCount": 63,
+      "type": "minecraft:generic_9x3"
+    },
+    "fingerprints": [
+      {
+        "slot": 12,
+        "itemId": "grass_block",
+        "context": "gui"
+      },
+      {
+        "slot": 14,
+        "itemId": "grass_block",
+        "context": "gui"
+      }
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "enabled": true,
+  "commandKey": "login",
+  "delayMs": 500,
+  "confirm": false,
+  "timeoutMs": 5000
+}

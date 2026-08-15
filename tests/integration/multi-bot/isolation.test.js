@@ -1,0 +1,3 @@
+'use strict';
+const test=require('node:test');const assert=require('node:assert/strict');const path=require('node:path');const createApplication=require('../../../src/bootstrap/createApplication');
+test('bot runtimes do not share context, state, queue or lock manager',async()=>{const {application}=await createApplication({baseDir:path.resolve(__dirname,'../../..'),output:()=>{}});const [a,b]=application.listRuntimes();assert.notEqual(a.context,b.context);assert.notEqual(a.state,b.state);assert.notEqual(a.requireService('operationManager'),b.requireService('operationManager'));a.context.attach({name:'a'});assert.equal(b.context.has(),false);a.context.detach(a.context.get());await application.destroy();});

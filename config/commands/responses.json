@@ -1,0 +1,32 @@
+{
+  "storage": [
+    {
+      "includes": "kho"
+    }
+  ],
+  "personalVault2": [
+    {
+      "includes": "pv"
+    }
+  ],
+  "minerals": [
+    {
+      "includes": "ks"
+    }
+  ],
+  "smelting": [
+    {
+      "includes": "nung"
+    }
+  ],
+  "islandHome": [
+    {
+      "includes": "island"
+    }
+  ],
+  "dungeon": [
+    {
+      "includes": "dungeon"
+    }
+  ]
+}

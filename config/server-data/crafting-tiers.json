@@ -1,0 +1,40 @@
+{
+  "B1": [
+    "cobblestone",
+    "coal",
+    "redstone",
+    "lapis_lazuli",
+    "iron_ingot",
+    "gold_ingot",
+    "diamond",
+    "emerald"
+  ],
+  "B2": [
+    "super_cobblestone",
+    "refined_coal",
+    "refined_redstone",
+    "refined_lapis",
+    "refined_iron",
+    "refined_gold",
+    "refined_diamond",
+    "refined_emerald"
+  ],
+  "B3": [
+    "super_cobblestone_block",
+    "refined_coal_block",
+    "refined_redstone_block",
+    "refined_lapis_block",
+    "refined_iron_block",
+    "refined_gold_block",
+    "refined_diamond_block",
+    "refined_emerald_block"
+  ],
+  "B4": [
+    "carbon",
+    "titanium",
+    "tungsten"
+  ],
+  "B5": [
+    "super_alloy"
+  ]
+}

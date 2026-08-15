@@ -1,0 +1,13 @@
+{
+  "defaultProfile": "default",
+  "defaults": {
+    "auth": "offline",
+    "version": "1.21.1"
+  },
+  "profiles": {
+    "default": {
+      "host": "mc.minerua.com",
+      "port": 25565
+    }
+  }
+}

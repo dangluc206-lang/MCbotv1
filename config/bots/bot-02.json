@@ -1,0 +1,26 @@
+{
+  "id": "bot-02",
+  "enabled": true,
+  "username": "lucsomo",
+  "auth": "offline",
+  "version": "1.21.1",
+  "serverProfile": "default",
+  "role": "worker",
+  "readyTimeoutMs": 30000,
+  "reconnect": {
+    "enabled": true,
+    "maxAttempts": 20,
+    "baseDelayMs": 5000,
+    "maxDelayMs": 60000
+  },
+  "fishing": {
+    "areas": {
+      "afk-11": {
+        "x": 75,
+        "y": 70,
+        "z": 86
+      }
+    },
+    "shoreFishingPitchDegrees": 12
+  }
+}

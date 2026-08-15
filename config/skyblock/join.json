@@ -1,0 +1,30 @@
+{
+  "commandKey": "skyblock",
+  "entryGuiId": "skyServerSelect",
+  "joinGuiId": null,
+  "selections": {
+    "primary": {
+      "slot": 11
+    },
+    "secondary": {
+      "slot": 13
+    }
+  },
+  "defaultSelection": "primary",
+  "joinSlot": 19,
+  "guiTimeoutMs": 5000,
+  "clickTimeoutMs": 3000,
+  "slotReadyTimeoutMs": 5000,
+  "selectionSettleMs": 300,
+  "joinSettleMs": 500,
+  "postJoinTimeoutMs": 7000,
+  "autoJoin": {
+    "enabled": true,
+    "selection": "primary",
+    "delayMs": 1200,
+    "spawnFallbackDelayMs": 5000,
+    "maxAttempts": 3,
+    "retryDelayMs": 2000,
+    "waitForResourcePack": false
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "enabled": true,
+  "timezoneOffsetMinutes": 420,
+  "sky": {
+    "enabled": true,
+    "hour": 3,
+    "minute": 0,
+    "waitMinutes": 5,
+    "retryWindowMinutes": 20
+  },
+  "server": {
+    "enabled": true,
+    "hour": 5,
+    "minute": 0,
+    "waitMinutes": 5,
+    "retryWindowMinutes": 20
+  }
+}
