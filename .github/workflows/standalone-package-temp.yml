@@ -1,0 +1,87 @@
+name: Temporary standalone package exporter
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  standalone-export:
+    if: github.head_ref == 'remove-git-github-dependencies'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout PR source
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Validate standalone transformer syntax
+        run: python -m py_compile scripts/prepare-standalone-source.py scripts/finalize-standalone-source.py
+
+      - name: Convert source tree to standalone
+        run: python scripts/prepare-standalone-source.py
+
+      - name: Finalize generated standalone source
+        run: python scripts/finalize-standalone-source.py
+
+      - name: Install dependencies for verification
+        run: npm ci --no-audit --no-fund
+
+      - name: Fast quality gates
+        run: node scripts/run-quality-gates.js --lane fast
+
+      - name: Full test suite
+        run: npm test
+
+      - name: Build clean source ZIP
+        shell: python
+        run: |
+          import os, zipfile
+          root = os.getcwd()
+          out = os.path.join(root, 'MCbotv1_standalone_2.7.67.zip')
+          skip_dirs = {'.git', '.github', 'node_modules', 'data', 'out', 'coverage', '.tmp', '__pycache__'}
+          with zipfile.ZipFile(out, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+              for current, dirs, files in os.walk(root):
+                  dirs[:] = [d for d in dirs if d not in skip_dirs and not d.startswith('tmp-')]
+                  for name in files:
+                      absolute = os.path.join(current, name)
+                      relative = os.path.relpath(absolute, root).replace(os.sep, '/')
+                      if name == '.gitignore' or relative == os.path.basename(out):
+                          continue
+                      if name == '.env' or (name.startswith('.env.') and name != '.env.example'):
+                          continue
+                      z.write(absolute, relative)
+          print(out)
+
+      - name: Verify ZIP contents
+        shell: python
+        run: |
+          import zipfile, sys
+          archive = 'MCbotv1_standalone_2.7.67.zip'
+          with zipfile.ZipFile(archive) as z:
+              names = z.namelist()
+          forbidden = [n for n in names if n.startswith(('.git/', '.github/', 'node_modules/', 'data/', 'out/')) or n == '.gitignore' or n == '.env' or (n.startswith('.env.') and n != '.env.example')]
+          if forbidden:
+              print('\n'.join(forbidden[:100]))
+              sys.exit('Forbidden files found in standalone ZIP')
+          required = ['package.json', 'package-lock.json', 'src/index.js', 'src/desktop/main.js', 'scripts/run-quality-gates.js']
+          missing = [n for n in required if n not in names]
+          if missing:
+              sys.exit('Missing required files: ' + ', '.join(missing))
+          print(f'ZIP OK: {len(names)} files')
+
+      - name: Upload standalone source ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: MCbotv1-standalone-2.7.67
+          path: MCbotv1_standalone_2.7.67.zip
+          if-no-files-found: error
+          retention-days: 7
