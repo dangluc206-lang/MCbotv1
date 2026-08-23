@@ -27,34 +27,12 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          node scripts/run-quality-gates.js --lane release --json | tee quality-gate-report.json
-
-      - name: Diagnostic failing tests and baseline inventory
-        if: always()
-        shell: bash
-        run: |
-          npm test > full-test-output.txt 2>&1 || true
-          node - <<'NODE' > baseline-files.txt
-          const { walkFiles } = require('./scripts/architecture-baseline');
-          for (const file of walkFiles(process.cwd())) console.log(file);
-          NODE
-          git status --short --untracked-files=all > git-status.txt || true
-
-      - name: Upload diagnostic evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: diagnostic-evidence
-          path: |
-            full-test-output.txt
-            baseline-files.txt
-            git-status.txt
-          if-no-files-found: error
+          node scripts/run-quality-gates.js --lane release --json | tee "$RUNNER_TEMP/quality-gate-report.json"
 
       - name: Upload quality gate report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: quality-gate-report
-          path: quality-gate-report.json
+          path: ${{ runner.temp }}/quality-gate-report.json
           if-no-files-found: warn
