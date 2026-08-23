@@ -1,0 +1,88 @@
+name: Standalone package temporary
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    if: github.head_ref == 'remove-git-github-dependencies'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout PR source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Remove Git/GitHub integration
+        run: |
+          python scripts/prepare-standalone-source.py
+          python scripts/finalize-standalone-source.py
+
+      - name: Syntax check modified runtime files
+        run: |
+          node --check src/desktop/main.js
+          node --check src/desktop/preload.js
+          node --check src/desktop/DesktopPreferenceStore.js
+          node --check src/ai/LocalAiService.js
+          node --check scripts/architecture-baseline.js
+
+      - name: Verify removed integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e .github
+          test ! -e .gitignore
+          test ! -e src/desktop/update/GitHubUpdateService.js
+          test ! -e tests/unit/desktop/GitHubUpdateService.test.js
+          if grep -RniE --exclude='package-lock.json' --exclude='prepare-standalone-source.py' --exclude='prepare-standalone-source.js' --exclude-dir='node_modules' --exclude-dir='data' '(api\.github\.com|github\.com|GitHubUpdateService|git rev-parse|git status|git diff|updateRepository|updateChannel)' src scripts tests architecture; then
+            echo 'Operational Git/GitHub integration remains.' >&2
+            exit 1
+          fi
+          rm -f scripts/prepare-standalone-source.py scripts/prepare-standalone-source.js
+
+      - name: Build clean ZIP
+        shell: python
+        run: |
+          import os, zipfile
+          root = os.getcwd()
+          archive = os.path.join(root, 'MCbotv1_standalone.zip')
+          skip_dirs = {'.git', '.github', 'node_modules', 'data', 'out', 'coverage', '.tmp', '__pycache__'}
+          with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+              for current, dirs, files in os.walk(root):
+                  dirs[:] = [d for d in dirs if d not in skip_dirs and not d.startswith('tmp-')]
+                  for name in files:
+                      absolute = os.path.join(current, name)
+                      relative = os.path.relpath(absolute, root).replace(os.sep, '/')
+                      if relative == 'MCbotv1_standalone.zip' or name == '.gitignore':
+                          continue
+                      if name == '.env' or (name.startswith('.env.') and name != '.env.example'):
+                          continue
+                      z.write(absolute, relative)
+          with zipfile.ZipFile(archive) as z:
+              names = z.namelist()
+          forbidden = [n for n in names if n.startswith(('.git/', '.github/', 'node_modules/', 'data/')) or n == '.gitignore' or n == '.env' or (n.startswith('.env.') and n != '.env.example') or 'prepare-standalone-source' in n]
+          if forbidden:
+              raise SystemExit('Forbidden files in ZIP: ' + ', '.join(forbidden[:20]))
+          for required in ['package.json', 'package-lock.json', 'src/index.js', 'src/desktop/main.js']:
+              if required not in names:
+                  raise SystemExit('Missing required file: ' + required)
+          print(f'ZIP OK: {len(names)} files')
+
+      - name: Upload ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: MCbotv1-standalone
+          path: MCbotv1_standalone.zip
+          if-no-files-found: error
+          retention-days: 7
