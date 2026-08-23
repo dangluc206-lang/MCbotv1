@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - remove-git-github-dependencies
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
