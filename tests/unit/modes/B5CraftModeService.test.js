@@ -283,7 +283,7 @@ test('B5 craft mode may re-plan only after repeated fresh reads prove observable
     });
     await coordinator.initialize(); await coordinator.start();
     assert.equal((await mode.enable()).success, true);
-    await new Promise(resolve => setTimeout(resolve, 28));
+    await waitUntil(() => calls.inspect >= 2 && craftCalls >= 2, 500);
     await mode.disable('test complete');
     assert.ok(calls.inspect >= 2);
     assert.ok(craftCalls >= 2, 're-plan is allowed only after the no-effect reconciliation barrier completes');

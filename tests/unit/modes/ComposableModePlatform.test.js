@@ -209,16 +209,24 @@ test('CustomModeStore shared config transaction orders concurrent save/delete op
 test('CustomModeStore temp ownership remains unique when wall-clock timestamps collide', async t => {
     const baseDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'mcbot-custom-temp-unique-'));
     const originalWriteFile = fsp.writeFile;
+    const originalRemove = fsp.rm;
+    const tempFiles = [];
     let tempArrivals = 0;
     let releaseTempWrites;
     const gate = new Promise(resolve => { releaseTempWrites = resolve; });
     t.mock.method(fsp, 'writeFile', async (file, ...args) => {
         if (String(file).endsWith('.tmp')) {
+            tempFiles.push(path.resolve(String(file)));
             tempArrivals += 1;
             if (tempArrivals === 2) releaseTempWrites();
             await gate;
         }
         return originalWriteFile(file, ...args);
+    });
+    // This test owns only the temp-name contract. Avoid making it depend on
+    // platform-specific overwrite semantics when two renames target one file.
+    t.mock.method(fsp, 'rename', async source => {
+        await originalRemove(source, { force: true });
     });
     const oldNow = Date.now;
     Date.now = () => 1700000000000;
@@ -228,6 +236,8 @@ test('CustomModeStore temp ownership remains unique when wall-clock timestamps c
             new CustomModeStore({ baseDir }).save({ ...definition('unique-temp'), label: 'B' })
         ]);
         assert.deepEqual(results.map(result => result.status), ['fulfilled', 'fulfilled']);
+        assert.equal(tempFiles.length, 2);
+        assert.equal(new Set(tempFiles).size, 2, 'each concurrent save must own a distinct temp path');
     } finally {
         Date.now = oldNow;
         await fsp.rm(baseDir, { recursive: true, force: true });

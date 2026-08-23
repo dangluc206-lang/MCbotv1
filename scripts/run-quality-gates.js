@@ -169,17 +169,13 @@ function fastGateDefinitions() {
     ];
 }
 
-function npmExecutable() {
-    return process.platform === 'win32' ? 'npm.cmd' : 'npm';
-}
-
 function executeLane(lane = 'fast') {
     if (!['fast', 'release'].includes(lane)) throw new Error(`Unsupported quality lane: ${lane}`);
     const gates = fastGateDefinitions().map(run => run());
     if (lane === 'release') {
         gates.push(runProcessGate({
             id: 'broader-regression', wp: 'WP-402', description: 'Source-only broader regression gate',
-            command: npmExecutable(), args: ['test']
+            command: process.execPath, args: ['scripts/run-tests.js']
         }));
         const installedGate = runProcessGate({
             id: 'installed-regression', wp: 'WP-402', description: 'Complete installed dependency test graph',
@@ -189,13 +185,30 @@ function executeLane(lane = 'fast') {
         if (installedGate.status === STATUS.PASS) {
             gates.push(runProcessGate({
                 id: 'coverage', wp: 'WP-402', description: 'Installed full-suite coverage thresholds',
-                command: npmExecutable(), args: ['run', 'test:coverage']
+                command: process.execPath, args: [
+                    '--test',
+                    '--experimental-test-coverage',
+                    '--test-coverage-include=src/**/*.js',
+                    '--test-coverage-lines=80',
+                    '--test-coverage-branches=65',
+                    '--test-coverage-functions=80',
+                    'tests/**/*.test.js'
+                ]
             }));
         } else {
             gates.push(resultBase({
                 id: 'coverage', wp: 'WP-402', description: 'Installed full-suite coverage thresholds', status: STATUS.BLOCKED,
                 exitCode: null, reason: `prerequisite installed-regression=${installedGate.status}`, details: null,
-                command: [npmExecutable(), 'run', 'test:coverage'], durationMs: 0
+                command: [
+                    process.execPath,
+                    '--test',
+                    '--experimental-test-coverage',
+                    '--test-coverage-include=src/**/*.js',
+                    '--test-coverage-lines=80',
+                    '--test-coverage-branches=65',
+                    '--test-coverage-functions=80',
+                    'tests/**/*.test.js'
+                ], durationMs: 0
             }));
         }
     }
