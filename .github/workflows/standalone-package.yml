@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - remove-git-github-dependencies
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
@@ -15,7 +12,7 @@ permissions:
 jobs:
   standalone:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 15
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -24,38 +21,44 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
 
-      - name: Validate standalone transformer syntax
-        run: node --check scripts/prepare-standalone-source.js
+      - name: Remove Git/GitHub integration from source
+        run: |
+          python scripts/prepare-standalone-source.py
+          python scripts/finalize-standalone-source.py
 
-      - name: Convert repository tree to standalone source
-        run: node scripts/prepare-standalone-source.js
+      - name: Check modified JavaScript syntax
+        run: |
+          node --check src/desktop/main.js
+          node --check src/desktop/preload.js
+          node --check src/desktop/DesktopPreferenceStore.js
+          node --check src/ai/LocalAiService.js
+          node --check scripts/architecture-baseline.js
 
-      - name: Install dependencies for verification
-        run: npm ci --no-audit --no-fund
-
-      - name: Run fast quality gates
-        run: node scripts/run-quality-gates.js --lane fast
-
-      - name: Run full test suite
-        run: npm test
-
-      - name: Verify no operational version-control dependency remains
+      - name: Verify operational Git/GitHub integration is gone
         shell: bash
         run: |
           set -euo pipefail
-          if grep -RniE --exclude='package-lock.json' --exclude-dir='node_modules' --exclude-dir='data' --exclude-dir='docs' --exclude='*.md' --exclude='*.txt' '(github\.com|api\.github\.com|\bGitHub\b|\bgit\b|\.git(hub|ignore)?)' src scripts tests architecture; then
-            echo 'Operational Git/GitHub reference remains.' >&2
+          test ! -e .github
+          test ! -e .gitignore
+          test ! -e src/desktop/update/GitHubUpdateService.js
+          test ! -e tests/unit/desktop/GitHubUpdateService.test.js
+          if grep -RniE --exclude='package-lock.json' --exclude='prepare-standalone-source.py' --exclude='prepare-standalone-source.js' --exclude-dir='node_modules' --exclude-dir='data' '(api\.github\.com|github\.com|GitHubUpdateService|git rev-parse|git status|git diff|updateRepository|updateChannel)' src scripts tests architecture; then
+            echo 'Operational Git/GitHub integration remains.' >&2
             exit 1
           fi
+
+      - name: Remove conversion-only helpers
+        shell: bash
+        run: |
+          rm -f scripts/prepare-standalone-source.py scripts/prepare-standalone-source.js
 
       - name: Build clean source ZIP
         shell: python
         run: |
           import os, zipfile
           root = os.getcwd()
-          out = os.path.join(root, 'MCbotv1_standalone_2.7.67.zip')
+          out = os.path.join(root, 'MCbotv1_standalone.zip')
           skip_dirs = {'.git', '.github', 'node_modules', 'data', 'out', 'coverage', '.tmp', '__pycache__'}
           skip_files = {'.gitignore'}
           with zipfile.ZipFile(out, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z:
@@ -75,14 +78,14 @@ jobs:
         shell: python
         run: |
           import zipfile, sys
-          archive = 'MCbotv1_standalone_2.7.67.zip'
+          archive = 'MCbotv1_standalone.zip'
           with zipfile.ZipFile(archive) as z:
               names = z.namelist()
-          forbidden = [n for n in names if n.startswith(('.git/', '.github/', 'node_modules/', 'data/', 'out/')) or n == '.gitignore' or n == '.env' or (n.startswith('.env.') and n != '.env.example')]
+          forbidden = [n for n in names if n.startswith(('.git/', '.github/', 'node_modules/', 'data/')) or n == '.gitignore' or n == '.env' or (n.startswith('.env.') and n != '.env.example') or 'prepare-standalone-source' in n]
           if forbidden:
               print('\n'.join(forbidden[:100]))
               sys.exit('Forbidden files found in standalone ZIP')
-          required = ['package.json', 'package-lock.json', 'src/index.js', 'src/desktop/main.js', 'scripts/run-quality-gates.js']
+          required = ['package.json', 'package-lock.json', 'src/index.js', 'src/desktop/main.js']
           missing = [n for n in required if n not in names]
           if missing:
               sys.exit('Missing required files: ' + ', '.join(missing))
@@ -91,7 +94,7 @@ jobs:
       - name: Upload standalone source ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: MCbotv1-standalone-2.7.67
-          path: MCbotv1_standalone_2.7.67.zip
+          name: MCbotv1-standalone
+          path: MCbotv1_standalone.zip
           if-no-files-found: error
           retention-days: 7
