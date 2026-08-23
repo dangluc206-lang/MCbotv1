@@ -1,22 +1,22 @@
 name: Refresh 2.7.67 baseline
 
 on:
-  pull_request:
+  push:
+    branches: [ci-2.7.67-release-qualification]
 
 permissions:
   contents: write
 
 jobs:
   refresh-baseline:
-    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
-      - name: Checkout PR head
+      - name: Checkout branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
+          ref: ci-2.7.67-release-qualification
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -95,4 +95,4 @@ jobs:
           git add .github/workflows/ci.yml architecture/baseline/current.json docs/architecture-roadmap/baseline/WP-001_GAP_REPORT.md
           git diff --cached --check
           git commit -m "ci: refresh 2.7.67 closure baseline"
-          git push origin "HEAD:${{ github.head_ref }}"
+          git push origin HEAD:ci-2.7.67-release-qualification
