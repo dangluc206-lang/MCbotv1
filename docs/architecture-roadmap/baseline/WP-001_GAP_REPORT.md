@@ -1,6 +1,6 @@
 # WP-001 Architecture Baseline and Gap Inventory
 
-Generated: 2026-08-23T07:27:03.500Z
+Generated: 2026-08-23T09:16:03.372Z
 
 Release: 2.7.67
 
@@ -8,7 +8,7 @@ Release: 2.7.67
 
 - Files: 664; source: 304; tests: 180; scripts: 30; config JSON: 34.
 - Git: unavailable in packaged baseline; worktree: UNAVAILABLE.
-- Safe-scope source fingerprint: `76f78d036925ec992e49160fb38da9ca3dd511c7b6ecea736240c58fd893fc85` (bot-profile payload bytes excluded).
+- Safe-scope source fingerprint: `a49b547d2153202886e5bad7509a6185b6b84119ae6f0a4d8fc0e6fbdab73f68` (bot-profile payload bytes excluded).
 - Excluded from inventory/content capture: `.git/**`, `.env*`, `data/**`, `node_modules/**`, `**/*.log`; bot profile payloads are not content-scanned.
 - The manifest and generated gap report are excluded from `counts.files` to avoid self-referential count drift.
 
