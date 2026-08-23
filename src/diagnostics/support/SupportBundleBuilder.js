@@ -2,7 +2,7 @@
 
 const Redactor=require('../../shared/security/Redactor');
 const CONTRACT='support-bundle'; const VERSION=1;
-const PROTECTED=/(^|\/)(?:\.env(?:\.|$)|data(?:\/|$)|node_modules(?:\/|$)|config\/bots(?:\/|$)|\.git(?:\/|$))/i;
+const PROTECTED=/(^|\/)(?:\.[^/]+(?:\/|$)|data(?:\/|$)|node_modules(?:\/|$)|config\/bots(?:\/|$))/i;
 const ALLOWED=[/^RELEASE_NOTES\.txt$/,/^architecture\/baseline\/current\.json$/,/^evidence\/(?:runtime-failure|health|mode-status|trace|replay)-[a-z0-9._-]+\.json$/i];
 function freeze(v){if(!v||typeof v!=='object'||Object.isFrozen(v))return v;for(const c of Object.values(v))freeze(c);return Object.freeze(v);}
 class SupportBundleBuilder{
