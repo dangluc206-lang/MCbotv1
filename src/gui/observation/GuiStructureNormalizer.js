@@ -1,6 +1,7 @@
 'use strict';
 
 const TitleTextExtractor = require('../detection/TitleTextExtractor');
+const { containerEnd } = require('../ContainerSlotRange');
 
 class GuiStructureNormalizer {
     constructor({ itemNormalizer, titleTextExtractor = new TitleTextExtractor() }) {
@@ -12,7 +13,8 @@ class GuiStructureNormalizer {
         if (!session?.window) throw new TypeError('GUI session with window is required.');
         const window = session.window;
         const items = [];
-        for (let slot = 0; slot < (window.slots?.length || 0); slot += 1) {
+        const guiEnd = containerEnd(window);
+        for (let slot = 0; slot < guiEnd; slot += 1) {
             const raw = window.slots[slot];
             if (!raw) continue;
             items.push({ slot, ...this.fingerprintItem(raw) });
@@ -24,13 +26,17 @@ class GuiStructureNormalizer {
                 definitionId: session.definitionId || null,
                 titleText,
                 type: window.type || null,
-                slotCount: window.slots?.length || 0
+                slotCount: window.slots?.length || 0,
+                inventoryStart: Number.isInteger(window.inventoryStart) ? window.inventoryStart : null,
+                containerSlotCount: guiEnd
             },
             structure: { items },
             latest: {
                 titleText,
                 type: window.type || null,
                 slotCount: window.slots?.length || 0,
+                inventoryStart: Number.isInteger(window.inventoryStart) ? window.inventoryStart : null,
+                containerSlotCount: guiEnd,
                 items: this.#latestItems(window)
             }
         };
@@ -94,7 +100,8 @@ class GuiStructureNormalizer {
 
     #latestItems(window) {
         const result = [];
-        for (let slot = 0; slot < (window.slots?.length || 0); slot += 1) {
+        const end = containerEnd(window);
+        for (let slot = 0; slot < end; slot += 1) {
             const raw = window.slots[slot];
             if (!raw) continue;
             const item = this.itemNormalizer.normalize(raw);

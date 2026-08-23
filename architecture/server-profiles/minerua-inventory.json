@@ -1,0 +1,1066 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "WP-101",
+  "generatedAt": "2026-08-22",
+  "profile": {
+    "id": "default",
+    "revision": "r-1344d60a53f3",
+    "implementation": "minerua",
+    "endpointHost": "mc.minerua.com"
+  },
+  "statusVocabulary": [
+    "CONFIRMED",
+    "INFERRED",
+    "UNKNOWN",
+    "DEPRECATED"
+  ],
+  "safety": {
+    "liveServerObserved": false,
+    "secretsCaptured": false,
+    "runtimeDataCaptured": false,
+    "logPayloadCaptured": false
+  },
+  "counts": {
+    "commands": 11,
+    "guis": 9,
+    "items": 49,
+    "recipes": 20,
+    "facts": 33
+  },
+  "facts": [
+    {
+      "factId": "command.storage",
+      "category": "command",
+      "semanticMeaning": "Semantic server command storage",
+      "currentLocations": [
+        "config/commands/commands.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "CommandRegistry",
+        "CommandResolver",
+        "CommandService"
+      ],
+      "mutationRisk": "MEDIUM",
+      "targetProfileGroup": "commands",
+      "testCoverage": [
+        "tests/unit/commands"
+      ],
+      "notes": "/kho"
+    },
+    {
+      "factId": "command.personalVault2",
+      "category": "command",
+      "semanticMeaning": "Semantic server command personalVault2",
+      "currentLocations": [
+        "config/commands/commands.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "CommandRegistry",
+        "CommandResolver",
+        "CommandService"
+      ],
+      "mutationRisk": "MEDIUM",
+      "targetProfileGroup": "commands",
+      "testCoverage": [
+        "tests/unit/commands"
+      ],
+      "notes": "/pv 2"
+    },
+    {
+      "factId": "command.minerals",
+      "category": "command",
+      "semanticMeaning": "Semantic server command minerals",
+      "currentLocations": [
+        "config/commands/commands.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "CommandRegistry",
+        "CommandResolver",
+        "CommandService"
+      ],
+      "mutationRisk": "MEDIUM",
+      "targetProfileGroup": "commands",
+      "testCoverage": [
+        "tests/unit/commands"
+      ],
+      "notes": "/ks"
+    },
+    {
+      "factId": "command.smelting",
+      "category": "command",
+      "semanticMeaning": "Semantic server command smelting",
+      "currentLocations": [
+        "config/commands/commands.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "CommandRegistry",
+        "CommandResolver",
+        "CommandService"
+      ],
+      "mutationRisk": "MEDIUM",
+      "targetProfileGroup": "commands",
+      "testCoverage": [
+        "tests/unit/commands"
+      ],
+      "notes": "/nung"
+    },
+    {
+      "factId": "command.islandHome",
+      "category": "command",
+      "semanticMeaning": "Semantic server command islandHome",
+      "currentLocations": [
+        "config/commands/commands.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "CommandRegistry",
+        "CommandResolver",
+        "CommandService"
+      ],
+      "mutationRisk": "MEDIUM",
+      "targetProfileGroup": "commands",
+      "testCoverage": [
+        "tests/unit/commands"
+      ],
+      "notes": "/is"
+    },
+    {
+      "factId": "command.dungeon",
+      "category": "command",
+      "semanticMeaning": "Semantic server command dungeon",
+      "currentLocations": [
+        "config/commands/commands.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "CommandRegistry",
+        "CommandResolver",
+        "CommandService"
+      ],
+      "mutationRisk": "MEDIUM",
+      "targetProfileGroup": "commands",
+      "testCoverage": [
+        "tests/unit/commands"
+      ],
+      "notes": "/d"
+    },
+    {
+      "factId": "command.login",
+      "category": "command",
+      "semanticMeaning": "Semantic server command login",
+      "currentLocations": [
+        "config/commands/commands.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "CommandRegistry",
+        "CommandResolver",
+        "CommandService"
+      ],
+      "mutationRisk": "HIGH",
+      "targetProfileGroup": "commands",
+      "testCoverage": [
+        "tests/unit/commands"
+      ],
+      "notes": "Template contains password placeholder only; secret value is never inventoried."
+    },
+    {
+      "factId": "command.skyblock",
+      "category": "command",
+      "semanticMeaning": "Semantic server command skyblock",
+      "currentLocations": [
+        "config/commands/commands.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "CommandRegistry",
+        "CommandResolver",
+        "CommandService"
+      ],
+      "mutationRisk": "MEDIUM",
+      "targetProfileGroup": "commands",
+      "testCoverage": [
+        "tests/unit/commands"
+      ],
+      "notes": "/sky"
+    },
+    {
+      "factId": "command.storageSell",
+      "category": "command",
+      "semanticMeaning": "Semantic server command storageSell",
+      "currentLocations": [
+        "config/commands/commands.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "CommandRegistry",
+        "CommandResolver",
+        "CommandService"
+      ],
+      "mutationRisk": "MEDIUM",
+      "targetProfileGroup": "commands",
+      "testCoverage": [
+        "tests/unit/commands"
+      ],
+      "notes": "/kho sell"
+    },
+    {
+      "factId": "command.afk",
+      "category": "command",
+      "semanticMeaning": "Semantic server command afk",
+      "currentLocations": [
+        "config/commands/commands.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "CommandRegistry",
+        "CommandResolver",
+        "CommandService"
+      ],
+      "mutationRisk": "MEDIUM",
+      "targetProfileGroup": "commands",
+      "testCoverage": [
+        "tests/unit/commands"
+      ],
+      "notes": "/afk"
+    },
+    {
+      "factId": "command.hub",
+      "category": "command",
+      "semanticMeaning": "Semantic server command hub",
+      "currentLocations": [
+        "config/commands/commands.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "CommandRegistry",
+        "CommandResolver",
+        "CommandService"
+      ],
+      "mutationRisk": "MEDIUM",
+      "targetProfileGroup": "commands",
+      "testCoverage": [
+        "tests/unit/commands"
+      ],
+      "notes": "/hub"
+    },
+    {
+      "factId": "gui.storage",
+      "category": "gui-identity",
+      "semanticMeaning": "Stateful GUI identity storage",
+      "currentLocations": [
+        "config/gui/windows.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "GuiRegistry",
+        "GuiDetector",
+        "GuiIdentityEngine"
+      ],
+      "mutationRisk": "HIGH",
+      "targetProfileGroup": "gui",
+      "testCoverage": [
+        "tests/unit/gui"
+      ],
+      "notes": {
+        "title": {
+          "regex": "ᴋʜᴏ\\s*ᴄʜứᴀ|kho\\s*chua|storage"
+        },
+        "layout": {},
+        "fingerprintCount": 0
+      }
+    },
+    {
+      "factId": "gui.personalVault2",
+      "category": "gui-identity",
+      "semanticMeaning": "Stateful GUI identity personalVault2",
+      "currentLocations": [
+        "config/gui/windows.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "GuiRegistry",
+        "GuiDetector",
+        "GuiIdentityEngine"
+      ],
+      "mutationRisk": "HIGH",
+      "targetProfileGroup": "gui",
+      "testCoverage": [
+        "tests/unit/gui"
+      ],
+      "notes": {
+        "title": {
+          "regex": "ᴋʜᴏ\\s*đồ\\s*#?\\s*2|kho\\s*do\\s*#?\\s*2|pv\\s*2|personal\\s*vault"
+        },
+        "layout": {
+          "slotCount": 90
+        },
+        "fingerprintCount": 0
+      }
+    },
+    {
+      "factId": "gui.minerals",
+      "category": "gui-identity",
+      "semanticMeaning": "Stateful GUI identity minerals",
+      "currentLocations": [
+        "config/gui/windows.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "GuiRegistry",
+        "GuiDetector",
+        "GuiIdentityEngine"
+      ],
+      "mutationRisk": "HIGH",
+      "targetProfileGroup": "gui",
+      "testCoverage": [
+        "tests/unit/gui"
+      ],
+      "notes": {
+        "title": {
+          "regex": "^ᴋʜᴏáɴɢ\\s*ѕảɴ$|^khoáng\\s*sản$|^khoang\\s*san$|^minerals?$|^ks$"
+        },
+        "layout": {},
+        "fingerprintCount": 0
+      }
+    },
+    {
+      "factId": "gui.smelting",
+      "category": "gui-identity",
+      "semanticMeaning": "Stateful GUI identity smelting",
+      "currentLocations": [
+        "config/gui/windows.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "GuiRegistry",
+        "GuiDetector",
+        "GuiIdentityEngine"
+      ],
+      "mutationRisk": "HIGH",
+      "targetProfileGroup": "gui",
+      "testCoverage": [
+        "tests/unit/gui"
+      ],
+      "notes": {
+        "title": {
+          "regex": "^ɴᴜɴɢ\\s*ᴋʜᴏáɴɢ\\s*ѕảɴ$|^nung(?:\\s+khoang\\s+san)?$|^smelt(?:ing)?$"
+        },
+        "layout": {},
+        "fingerprintCount": 0
+      }
+    },
+    {
+      "factId": "gui.crafting",
+      "category": "gui-identity",
+      "semanticMeaning": "Stateful GUI identity crafting",
+      "currentLocations": [
+        "config/gui/windows.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "GuiRegistry",
+        "GuiDetector",
+        "GuiIdentityEngine"
+      ],
+      "mutationRisk": "HIGH",
+      "targetProfileGroup": "gui",
+      "testCoverage": [
+        "tests/unit/gui"
+      ],
+      "notes": {
+        "title": {
+          "regex": "chế tạo|che tao|craft"
+        },
+        "layout": {},
+        "fingerprintCount": 0
+      }
+    },
+    {
+      "factId": "gui.craftingQuantity",
+      "category": "gui-identity",
+      "semanticMeaning": "Stateful GUI identity craftingQuantity",
+      "currentLocations": [
+        "config/gui/windows.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "GuiRegistry",
+        "GuiDetector",
+        "GuiIdentityEngine"
+      ],
+      "mutationRisk": "HIGH",
+      "targetProfileGroup": "gui",
+      "testCoverage": [
+        "tests/unit/gui"
+      ],
+      "notes": {
+        "title": {
+          "regex": "số lượng|so luong|quantity"
+        },
+        "layout": {},
+        "fingerprintCount": 0
+      }
+    },
+    {
+      "factId": "gui.dungeon",
+      "category": "gui-identity",
+      "semanticMeaning": "Stateful GUI identity dungeon",
+      "currentLocations": [
+        "config/gui/windows.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "GuiRegistry",
+        "GuiDetector",
+        "GuiIdentityEngine"
+      ],
+      "mutationRisk": "HIGH",
+      "targetProfileGroup": "gui",
+      "testCoverage": [
+        "tests/unit/gui"
+      ],
+      "notes": {
+        "title": {
+          "regex": "dungeon"
+        },
+        "layout": {},
+        "fingerprintCount": 0
+      }
+    },
+    {
+      "factId": "gui.skyServerSelect",
+      "category": "gui-identity",
+      "semanticMeaning": "Stateful GUI identity skyServerSelect",
+      "currentLocations": [
+        "config/gui/windows.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "GuiRegistry",
+        "GuiDetector",
+        "GuiIdentityEngine"
+      ],
+      "mutationRisk": "HIGH",
+      "targetProfileGroup": "gui",
+      "testCoverage": [
+        "tests/unit/gui"
+      ],
+      "notes": {
+        "title": {
+          "value": "ᴄʜọɴ ᴍáʏ ᴄʜủ",
+          "exact": true
+        },
+        "layout": {
+          "slotCount": 63,
+          "type": "minecraft:generic_9x3"
+        },
+        "fingerprintCount": 2
+      }
+    },
+    {
+      "factId": "gui.mineralConversion",
+      "category": "gui-identity",
+      "semanticMeaning": "Stateful GUI identity mineralConversion",
+      "currentLocations": [
+        "config/gui/windows.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "GuiRegistry",
+        "GuiDetector",
+        "GuiIdentityEngine"
+      ],
+      "mutationRisk": "HIGH",
+      "targetProfileGroup": "gui",
+      "testCoverage": [
+        "tests/unit/gui"
+      ],
+      "notes": {
+        "title": {
+          "regex": "ép phôi thành khối|ep phoi thanh khoi"
+        },
+        "layout": {
+          "slotCount": 54
+        },
+        "fingerprintCount": 0
+      }
+    },
+    {
+      "factId": "auth.login",
+      "category": "authentication",
+      "semanticMeaning": "Server login behavior references semantic login command",
+      "currentLocations": [
+        "config/authentication/login.json",
+        "src/server-features/authentication/ServerLoginService.js"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "ServerLoginService"
+      ],
+      "mutationRisk": "HIGH",
+      "targetProfileGroup": "authentication",
+      "testCoverage": [
+        "tests/unit/server-features/ServerLoginGeneration.test.js"
+      ],
+      "notes": {
+        "enabled": true,
+        "commandKey": "login",
+        "confirm": false
+      }
+    },
+    {
+      "factId": "join.skyblock",
+      "category": "join",
+      "semanticMeaning": "Sky server selection/join contract",
+      "currentLocations": [
+        "config/skyblock/join.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "SkyblockJoinOperation",
+        "SkyblockAutoJoinService"
+      ],
+      "mutationRisk": "HIGH",
+      "targetProfileGroup": "join",
+      "testCoverage": [
+        "tests/unit/server-features"
+      ],
+      "notes": {
+        "commandKey": "skyblock",
+        "entryGuiId": "skyServerSelect",
+        "selections": [
+          "sky1",
+          "sky2",
+          "primary",
+          "secondary"
+        ],
+        "defaultSelection": "sky1"
+      }
+    },
+    {
+      "factId": "command.responses",
+      "category": "command-response",
+      "semanticMeaning": "Server response confirmation patterns",
+      "currentLocations": [
+        "config/commands/responses.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "CommandConfirmation",
+        "ResponseMatcher"
+      ],
+      "mutationRisk": "MEDIUM",
+      "targetProfileGroup": "commands",
+      "testCoverage": [
+        "tests/unit/commands"
+      ],
+      "notes": {
+        "keys": [
+          "dungeon",
+          "islandHome",
+          "minerals",
+          "personalVault2",
+          "smelting",
+          "storage"
+        ]
+      }
+    },
+    {
+      "factId": "items.catalog",
+      "category": "item-identity",
+      "semanticMeaning": "MinerUA/vanilla logical item identity catalog including B1-B5 and GUI carrier identities",
+      "currentLocations": [
+        "config/items/items.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "ItemRegistry",
+        "ItemResolver",
+        "GuiIdentityEngine",
+        "CraftingRecipeRegistry"
+      ],
+      "mutationRisk": "HIGH",
+      "targetProfileGroup": "items",
+      "testCoverage": [
+        "tests/unit/items",
+        "tests/unit/gui"
+      ],
+      "notes": {
+        "itemIds": [
+          "carbon",
+          "coal",
+          "coal_block",
+          "cobblestone",
+          "diamond",
+          "diamond_block",
+          "dungeon_default",
+          "emerald",
+          "emerald_block",
+          "gold_block",
+          "gold_ingot",
+          "grass_block",
+          "iron_block",
+          "iron_ingot",
+          "lapis_block",
+          "lapis_lazuli",
+          "menu_convert_blocks",
+          "menu_crafting",
+          "menu_smelting",
+          "menu_withdraw",
+          "raw_gold",
+          "raw_iron",
+          "redstone",
+          "redstone_block",
+          "refined_coal",
+          "refined_coal_block",
+          "refined_diamond",
+          "refined_diamond_block",
+          "refined_emerald",
+          "refined_emerald_block",
+          "refined_gold",
+          "refined_gold_block",
+          "refined_iron",
+          "refined_iron_block",
+          "refined_lapis",
+          "refined_lapis_block",
+          "refined_redstone",
+          "refined_redstone_block",
+          "smelt_gold",
+          "smelt_iron",
+          "smelt_stone",
+          "smooth_stone",
+          "stone",
+          "storage_capacity",
+          "super_alloy",
+          "super_cobblestone",
+          "super_cobblestone_block",
+          "titanium",
+          "tungsten"
+        ],
+        "count": 49,
+        "mmoIdentityItems": [
+          "carbon",
+          "refined_coal",
+          "refined_coal_block",
+          "refined_diamond",
+          "refined_diamond_block",
+          "refined_emerald",
+          "refined_emerald_block",
+          "refined_gold",
+          "refined_gold_block",
+          "refined_iron",
+          "refined_iron_block",
+          "refined_lapis",
+          "refined_lapis_block",
+          "refined_redstone",
+          "refined_redstone_block",
+          "super_alloy",
+          "super_cobblestone",
+          "super_cobblestone_block",
+          "titanium",
+          "tungsten"
+        ]
+      }
+    },
+    {
+      "factId": "recipes.crafting",
+      "category": "recipe",
+      "semanticMeaning": "B2-B5 recipe inputs/output/menu-slot/server input source",
+      "currentLocations": [
+        "config/server-data/recipes.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "CraftingRecipeRegistry",
+        "B5Planner",
+        "CraftingOperation"
+      ],
+      "mutationRisk": "HIGH",
+      "targetProfileGroup": "recipes",
+      "testCoverage": [
+        "tests/unit/planning",
+        "tests/unit/server-features"
+      ],
+      "notes": {
+        "recipeIds": [
+          "carbon",
+          "refined_coal",
+          "refined_coal_block",
+          "refined_diamond",
+          "refined_diamond_block",
+          "refined_emerald",
+          "refined_emerald_block",
+          "refined_gold",
+          "refined_gold_block",
+          "refined_iron",
+          "refined_iron_block",
+          "refined_lapis",
+          "refined_lapis_block",
+          "refined_redstone",
+          "refined_redstone_block",
+          "super_alloy",
+          "super_cobblestone",
+          "super_cobblestone_block",
+          "titanium",
+          "tungsten"
+        ],
+        "count": 20
+      }
+    },
+    {
+      "factId": "tiers.b1-b5",
+      "category": "crafting-tier",
+      "semanticMeaning": "B1-B5 item tier mapping",
+      "currentLocations": [
+        "config/server-data/crafting-tiers.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "B5Planner",
+        "B5PlanningService"
+      ],
+      "mutationRisk": "HIGH",
+      "targetProfileGroup": "recipes",
+      "testCoverage": [
+        "tests/unit/planning"
+      ],
+      "notes": {
+        "B1": [
+          "cobblestone",
+          "coal",
+          "redstone",
+          "lapis_lazuli",
+          "iron_ingot",
+          "gold_ingot",
+          "diamond",
+          "emerald"
+        ],
+        "B2": [
+          "super_cobblestone",
+          "refined_coal",
+          "refined_redstone",
+          "refined_lapis",
+          "refined_iron",
+          "refined_gold",
+          "refined_diamond",
+          "refined_emerald"
+        ],
+        "B3": [
+          "super_cobblestone_block",
+          "refined_coal_block",
+          "refined_redstone_block",
+          "refined_lapis_block",
+          "refined_iron_block",
+          "refined_gold_block",
+          "refined_diamond_block",
+          "refined_emerald_block"
+        ],
+        "B4": [
+          "carbon",
+          "titanium",
+          "tungsten"
+        ],
+        "B5": [
+          "super_alloy"
+        ]
+      }
+    },
+    {
+      "factId": "policy.b5",
+      "category": "bot-policy",
+      "semanticMeaning": "B5 execution policy; explicitly not a server-profile fact",
+      "currentLocations": [
+        "config/server-data/b5.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "B5PlanningService",
+        "B5AutomationService",
+        "B5CraftModeService"
+      ],
+      "mutationRisk": "HIGH",
+      "targetProfileGroup": "OUTSIDE_PROFILE",
+      "testCoverage": [
+        "tests/unit/modes/B5CraftModeService.test.js"
+      ],
+      "notes": {
+        "targetId": "super_alloy",
+        "policyKeys": [
+          "b1SupplyMode",
+          "b3AllMinEmptySlots",
+          "inventorySafetyEmptySlots",
+          "personalVaultBackpressure",
+          "pvInventorySettlePollMs",
+          "pvInventorySettleTimeoutMs",
+          "quantityOptimization",
+          "targetId",
+          "timeoutMs"
+        ]
+      }
+    },
+    {
+      "factId": "storage.kho",
+      "category": "storage",
+      "semanticMeaning": "Kho read/capacity/open semantics",
+      "currentLocations": [
+        "config/storage/kho.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "KhoReader",
+        "KhoService",
+        "KhoCapacityReader"
+      ],
+      "mutationRisk": "HIGH",
+      "targetProfileGroup": "storage",
+      "testCoverage": [
+        "tests/unit/server-features"
+      ],
+      "notes": {
+        "commandKey": "storage",
+        "guiId": "storage",
+        "capacitySlot": 49,
+        "fallbackLimit": 800000
+      }
+    },
+    {
+      "factId": "storage.sell",
+      "category": "storage-sell",
+      "semanticMeaning": "Kho sell GUI semantics and item aliases",
+      "currentLocations": [
+        "config/storage/kho.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "KhoSellOperation",
+        "SellGuiReader"
+      ],
+      "mutationRisk": "CRITICAL",
+      "targetProfileGroup": "storage",
+      "testCoverage": [
+        "tests/unit/server-features"
+      ],
+      "notes": {
+        "enabled": true,
+        "commandKey": "storageSell",
+        "mode": "gui",
+        "resultDelayMs": 250,
+        "itemAliases": {
+          "cobblestone": "COBBLESTONE",
+          "coal": "COAL",
+          "redstone": "REDSTONE",
+          "lapis_lazuli": "LAPIS_LAZULI",
+          "iron_ingot": "IRON_INGOT",
+          "gold_ingot": "GOLD_INGOT",
+          "diamond": "DIAMOND",
+          "emerald": "EMERALD",
+          "coal_block": "COAL_BLOCK",
+          "redstone_block": "REDSTONE_BLOCK",
+          "lapis_block": "LAPIS_BLOCK",
+          "iron_block": "IRON_BLOCK",
+          "gold_block": "GOLD_BLOCK",
+          "diamond_block": "DIAMOND_BLOCK",
+          "emerald_block": "EMERALD_BLOCK"
+        },
+        "allowAll": false,
+        "openSettleMs": 250,
+        "closeSettleMs": 180,
+        "updateTimeoutMs": 2500,
+        "openAfterCloseSettleMs": 1000,
+        "blockOnly": true,
+        "reserveCoverage": 1.5,
+        "allowSingle": false
+      }
+    },
+    {
+      "factId": "storage.pv2",
+      "category": "personal-vault",
+      "semanticMeaning": "PV2 container/open/transfer semantics",
+      "currentLocations": [
+        "config/personal-vault/pv2.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "PersonalVaultService",
+        "PersonalVaultReader",
+        "PersonalVaultTransfer"
+      ],
+      "mutationRisk": "HIGH",
+      "targetProfileGroup": "storage",
+      "testCoverage": [
+        "tests/unit/server-features"
+      ],
+      "notes": {
+        "commandKey": "personalVault2",
+        "guiId": "personalVault2",
+        "storageSlots": 54
+      }
+    },
+    {
+      "factId": "smelting.contract",
+      "category": "smelting",
+      "semanticMeaning": "MinerUA smelting menu/action/verification semantics",
+      "currentLocations": [
+        "config/smelting/recipes.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "SmeltingOperation",
+        "SmeltingService"
+      ],
+      "mutationRisk": "HIGH",
+      "targetProfileGroup": "recipes",
+      "testCoverage": [
+        "tests/unit/server-features"
+      ],
+      "notes": {
+        "commandKey": "smelting",
+        "guiId": "smelting",
+        "recipes": [
+          "raw_gold_to_gold",
+          "raw_iron_to_iron"
+        ]
+      }
+    },
+    {
+      "factId": "minerals.menu",
+      "category": "conversion",
+      "semanticMeaning": "Minerals menu and conversion/crafting entry semantics",
+      "currentLocations": [
+        "config/minerals/menu.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "MineralConversionOperation",
+        "CraftingOperation"
+      ],
+      "mutationRisk": "HIGH",
+      "targetProfileGroup": "recipes",
+      "testCoverage": [
+        "tests/unit/server-features"
+      ],
+      "notes": {
+        "commandKey": "minerals",
+        "guiId": "minerals",
+        "conversionGuiId": "mineralConversion"
+      }
+    },
+    {
+      "factId": "minerals.conversions",
+      "category": "conversion",
+      "semanticMeaning": "B1 raw/ingot/block conversion and smelting resource facts",
+      "currentLocations": [
+        "config/minerals/conversions.json"
+      ],
+      "status": "CONFIRMED",
+      "evidence": "committed-config-and-server-behavior-doc",
+      "consumers": [
+        "B1StorageMaterialService",
+        "MineralConversionOperation"
+      ],
+      "mutationRisk": "CRITICAL",
+      "targetProfileGroup": "recipes",
+      "testCoverage": [
+        "tests/unit/server-features"
+      ],
+      "notes": {
+        "resources": [
+          "coal",
+          "cobblestone",
+          "diamond",
+          "emerald",
+          "gold_ingot",
+          "iron_ingot",
+          "lapis_lazuli",
+          "redstone"
+        ],
+        "smeltingRecipeIds": [
+          "raw_iron_to_iron",
+          "raw_gold_to_gold"
+        ]
+      }
+    }
+  ],
+  "conflictsAndUnknowns": [
+    {
+      "id": "sky.joinGuiId",
+      "status": "UNKNOWN",
+      "note": "joinGuiId is null in committed config; extraction must preserve fallback behavior rather than invent an identity."
+    },
+    {
+      "id": "gui.slots.dynamic",
+      "status": "INFERRED",
+      "note": "Fixed slot registry is empty; recipe/menu/bootstrap and observation knowledge supply current semantic slot evidence."
+    },
+    {
+      "id": "runtime.live-drift",
+      "status": "UNKNOWN",
+      "note": "No live server observation was performed in WP-101."
+    }
+  ],
+  "extractionBatches": {
+    "WP-102": [
+      "config/commands/commands.json",
+      "config/commands/responses.json",
+      "config/authentication/login.json",
+      "config/skyblock/join.json",
+      "src/commands/**",
+      "src/server-features/authentication/**",
+      "src/server-features/skyblock/**"
+    ],
+    "WP-103": [
+      "config/gui/**",
+      "config/items/items.json",
+      "src/gui/**",
+      "src/items/**"
+    ],
+    "WP-104": [
+      "config/server-data/**",
+      "config/storage/kho.json",
+      "config/personal-vault/pv2.json",
+      "config/minerals/**",
+      "config/smelting/**",
+      "src/server-features/storage/**",
+      "src/server-features/crafting/**",
+      "src/server-features/minerals/**",
+      "src/server-features/smelting/**"
+    ]
+  }
+}

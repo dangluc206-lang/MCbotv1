@@ -98,6 +98,21 @@ test('planning does not treat unsafe compressed block stock as immediately craft
     assert.equal(chain.storedEffective, 12);
     assert.equal(chain.storedTotalEffective, 300);
     assert.equal(chain.decompressionBlocked, true);
-    assert.equal(chain.readyToReserve, false);
+    assert.equal(chain.readyToReserve, true, 'owned compressed stock is reservable after a PREPARE_B1/headroom step');
     assert.equal(result.data.progress.feasible, false);
+    assert.equal(result.data.progress.nextStep?.kind, 'PREPARE_B1');
+    assert.equal(result.data.progress.nextStep?.reason, 'decompression-headroom');
+});
+
+test('B5PlanningService preserves stable thrown dependency status instead of collapsing to FAILED', async () => {
+    const service = createService({ loose: 256 });
+    const error = new (require('../../../src/shared/errors/FlowError'))('Storage generation is stale.', {
+        code: 'DISCONNECTED', subsystem: 'storage', operation: 'KhoService', step: 'generation-guard'
+    });
+    service.readFlows.kho.read = async () => { throw error; };
+
+    const result = await service.inspectAdditional(1, { expectedGeneration: 7 });
+    assert.equal(result.success, false);
+    assert.equal(result.status, 'DISCONNECTED');
+    assert.equal(result.error?.code, 'DISCONNECTED');
 });

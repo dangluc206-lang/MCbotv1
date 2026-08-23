@@ -11,7 +11,8 @@ class FishingRecoveryPolicy {
             waitMs: this.#nonNegative(recovery.waitMs ?? config.areaRetryMs, 5000),
             retryMs: this.#nonNegative(recovery.retryMs ?? config.errorRetryMs, 3000),
             movementRetryMs: this.#nonNegative(recovery.movementRetryMs ?? config.errorRetryMs, 3000),
-            connectionRetryMs: this.#nonNegative(recovery.connectionRetryMs ?? config.connectionPollMs, 1000)
+            connectionRetryMs: this.#nonNegative(recovery.connectionRetryMs ?? config.connectionPollMs, 1000),
+            cycleRetryLimit: this.#positiveInteger(recovery.cycleRetryLimit, 3)
         });
     }
 
@@ -64,6 +65,11 @@ class FishingRecoveryPolicy {
     #nonNegative(value, fallback) {
         const number = Number(value);
         return Number.isFinite(number) && number >= 0 ? number : fallback;
+    }
+
+    #positiveInteger(value, fallback) {
+        const number = Number(value);
+        return Number.isInteger(number) && number > 0 ? number : fallback;
     }
 }
 

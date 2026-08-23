@@ -4,8 +4,10 @@
   "guiId": "personalVault2",
   "guiTimeoutMs": 5000,
   "openSettleMs": 150,
-  "openAttempts": 2,
+  "openAttempts": 3,
   "openRetryMs": 350,
   "transferVerifyAttempts": 8,
-  "transferVerifyRetryMs": 200
+  "transferVerifyRetryMs": 200,
+  "openAfterCloseSettleMs": 1000,
+  "openCloseConfirmTimeoutMs": 1000
 }

@@ -7,11 +7,32 @@ class RouteExecutor {
     constructor({ context, arrivalDetector }) {
         this.context = context;
         this.arrivalDetector = arrivalDetector;
+        this.navigationSequence = 0;
+        this.activeNavigation = null;
     }
 
     stop() {
-        const bot = this.context.get?.();
-        bot?.pathfinder?.stop?.();
+        const active = this.activeNavigation;
+        if (!active) return false;
+
+        this.#stopNavigation(active);
+        return true;
+    }
+
+    #stopNavigation(navigation) {
+        // Do not let completion/timeout from an older route cancel a newer
+        // route that has already replaced it.
+        if (this.activeNavigation !== navigation) return false;
+
+        // mineflayer-pathfinder's stop() only raises an internal stopPathing
+        // flag. Calling it while idle leaves that flag armed and makes the next
+        // goto() fail immediately with PathStopped. Only stop a route owned by
+        // this executor, and force a null goal so the plugin consumes/clears the
+        // flag synchronously instead of poisoning the next navigation.
+        const pathfinder = navigation.bot?.pathfinder;
+        pathfinder?.stop?.();
+        pathfinder?.setGoal?.(null);
+        return true;
     }
 
     async goTo(destination, { timeoutMs = 30000, radius = 1.5, cancellationToken = null } = {}) {
@@ -37,6 +58,8 @@ class RouteExecutor {
             });
         }
 
+        const navigation = Object.freeze({ id: ++this.navigationSequence, bot });
+        this.activeNavigation = navigation;
         try {
             await Timeout.withTimeout(
                 bot.pathfinder.goto(new GoalNear(destination.x, destination.y, destination.z, radius)),
@@ -44,12 +67,21 @@ class RouteExecutor {
                 { cancellationToken, message: 'Navigation timed out.' }
             );
         } catch (error) {
+            // Timeout.withTimeout settles its wrapper but cannot cancel the
+            // underlying pathfinder Promise. Stop the exact owned route before
+            // returning a terminal timeout/cancellation to the caller.
+            if (error?.code === 'TIMEOUT' || cancellationToken?.isCancelled) {
+                this.#stopNavigation(navigation);
+            }
+            cancellationToken?.throwIfCancelled?.();
             throw FlowError.wrap(error, {
                 code: error?.code === 'TIMEOUT' ? 'NAVIGATION_TIMEOUT' : 'NAVIGATION_FAILED',
                 subsystem: 'movement', operation: 'RouteExecutor', step: 'navigate', action: 'pathfinder.goto',
                 resource: `${destination.x},${destination.y},${destination.z}`,
                 details: { start, destination, radius, timeoutMs }
             });
+        } finally {
+            if (this.activeNavigation === navigation) this.activeNavigation = null;
         }
 
         if (!this.arrivalDetector.arrived(destination, radius + 0.5)) {

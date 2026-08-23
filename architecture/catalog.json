@@ -1,0 +1,146 @@
+{
+  "version": 3,
+  "officialDocuments": [
+    "README.md",
+    "AGENTS.md",
+    "ARCHITECTURE.md",
+    "SERVER_BEHAVIOR.md",
+    "RULES.md",
+    "JS_RESPONSIBILITIES.md"
+  ],
+  "governedDocumentRoots": [
+    "docs/architecture-roadmap"
+  ],
+  "runtimeEntrypoints": [
+    "src/index.js",
+    "src/desktop/main.js",
+    "src/desktop/preload.js",
+    "src/desktop/renderer/app.js"
+  ],
+  "configuration": {
+    "specModule": "src/configuration/ConfigSpecs.js",
+    "botProfileDirectory": "config/bots",
+    "customModeDirectory": "config/modes/custom"
+  },
+  "eventScopes": {
+    "registryModule": "src/core/events/EventScopeRegistry.js"
+  },
+  "scopeOwners": {
+    "application": [
+      "configuration",
+      "logging",
+      "bot-registry",
+      "discord",
+      "fleet-scheduling"
+    ],
+    "bot": [
+      "runtime-state",
+      "mode-coordination",
+      "connection",
+      "operations",
+      "gui",
+      "movement",
+      "inventory",
+      "server-features"
+    ],
+    "connection": [
+      "raw-client-listeners",
+      "packet-observation",
+      "generation-owned-waiters"
+    ],
+    "operation": [
+      "cancellation",
+      "timeouts",
+      "locks",
+      "cleanup",
+      "side-effect-evidence"
+    ]
+  },
+  "exclusiveSideEffects": [
+    {
+      "id": "server-command",
+      "pattern": "\\.chat\\s*\\(",
+      "owners": [
+        "src/commands/CommandExecutor.js"
+      ]
+    },
+    {
+      "id": "gui-click",
+      "pattern": "\\.clickWindow\\s*\\(",
+      "owners": [
+        "src/gui/click/ClickExecutor.js"
+      ]
+    },
+    {
+      "id": "client-end",
+      "pattern": "\\.end\\s*\\(",
+      "owners": [
+        "src/connection/ConnectionManager.js"
+      ]
+    },
+    {
+      "id": "fishing-raw-protocol",
+      "pattern": "\\._client\\b",
+      "owners": [
+        "src/modes/fishing/ConnectionPacketObserver.js"
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "id": "fishing-mode-no-raw-client",
+      "files": [
+        "src/modes/fishing/FishingModeService.js"
+      ],
+      "forbiddenPatterns": [
+        "BotContext",
+        "\\._client\\b",
+        "\\.clickWindow\\s*\\(",
+        "\\.chat\\s*\\(",
+        "\\.fish\\s*\\(",
+        "\\.end\\s*\\(",
+        "\\bVec3\\b"
+      ]
+    },
+    {
+      "id": "collector-mode-no-raw-client",
+      "files": [
+        "src/modes/collector-b5/CollectorB5ModeService.js"
+      ],
+      "forbiddenPatterns": [
+        "\\._client\\b",
+        "\\.clickWindow\\s*\\(",
+        "\\.chat\\s*\\(",
+        "\\.end\\s*\\(",
+        "\\bVec3\\b"
+      ]
+    },
+    {
+      "id": "planner-purity",
+      "globs": [
+        "src/planning/**/*.js"
+      ],
+      "forbiddenPatterns": [
+        "\\.clickWindow\\s*\\(",
+        "\\.chat\\s*\\(",
+        "\\.end\\s*\\(",
+        "setTimeout\\s*\\(",
+        "setInterval\\s*\\("
+      ]
+    }
+  ],
+  "staleManifest": "scripts/cleanup-stale.js",
+  "coverage": {
+    "include": "src/**/*.js",
+    "lines": 80,
+    "branches": 65,
+    "functions": 80
+  },
+  "architectureBaseline": {
+    "manifest": "architecture/baseline/current.json",
+    "schema": "architecture/baseline/schema.json",
+    "report": "docs/architecture-roadmap/baseline/WP-001_GAP_REPORT.md",
+    "inspector": "scripts/inspect-architecture-baseline.js"
+  },
+  "artifactOwnershipManifest": "architecture/artifact-ownership.json"
+}

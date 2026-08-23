@@ -1,0 +1,22 @@
+{
+  "targetId": "super_alloy",
+  "timeoutMs": 900000,
+  "inventorySafetyEmptySlots": 2,
+  "pvInventorySettleTimeoutMs": 1600,
+  "pvInventorySettlePollMs": 50,
+  "quantityOptimization": {
+    "enabled": true,
+    "useAllForB2": false,
+    "useAllForB3": true,
+    "useAllForB4WhenExact": true,
+    "useAllForB5": false,
+    "keepSurplusInPv2": true,
+    "b2BatchSize": 64
+  },
+  "b3AllMinEmptySlots": 1,
+  "b1SupplyMode": "continuous",
+  "personalVaultBackpressure": {
+    "minEmptySlots": 3,
+    "hardMinEmptySlots": 1
+  }
+}

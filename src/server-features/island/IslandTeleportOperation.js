@@ -5,6 +5,7 @@ const FlowError = require('../../shared/errors/FlowError');
 const CancellationSource = require('../../shared/cancellation/CancellationSource');
 const OperationCancellation = require('../../operations/OperationCancellation');
 const Status = require('../../shared/result/Status');
+const { normalizeConnectionGeneration } = require('../../core/events/EventEnvelope');
 
 class IslandTeleportOperation {
     constructor({ commandService, positionService, eventBus, connectionState, botId, config }) {
@@ -18,9 +19,13 @@ class IslandTeleportOperation {
         Object.assign(this, { commandService, positionService, eventBus, connectionState, botId, config });
     }
 
-    async execute({ cancellationToken = null } = {}) {
+    async execute({ cancellationToken = null, expectedGeneration = null, operationContext = null } = {}) {
         const before = this.positionService.current();
-        const expectedGeneration = Number(this.connectionState.generation());
+        // Capture once at the public/direct entry boundary. Managed callers pass the
+        // generation captured before the root queue; direct callers fall back to the
+        // current generation synchronously before the first await.
+        const generationCandidate = expectedGeneration ?? operationContext?.connectionGeneration ?? this.connectionState.generation();
+        expectedGeneration = Number(generationCandidate);
         let stage = 'send-command';
         let waiter = null;
         const commandCancellation = new CancellationSource();
@@ -175,9 +180,7 @@ class IslandTeleportOperation {
     }
 
     #eventGeneration(event) {
-        const value = event?.connectionGeneration ?? event?.generation;
-        const generation = Number(value);
-        return Number.isFinite(generation) ? generation : null;
+        return normalizeConnectionGeneration(event);
     }
 
     #isCurrentGeneration(expectedGeneration) {
@@ -186,7 +189,7 @@ class IslandTeleportOperation {
     }
 
     #assertGeneration(expectedGeneration, step) {
-        if (Number.isFinite(Number(expectedGeneration)) && this.#isCurrentGeneration(expectedGeneration)) return;
+        if (Number.isInteger(Number(expectedGeneration)) && Number(expectedGeneration) > 0 && this.#isCurrentGeneration(expectedGeneration)) return;
         throw this.#staleGeneration(expectedGeneration, step);
     }
 

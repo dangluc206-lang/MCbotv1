@@ -3,6 +3,10 @@
 const Result = require('../../shared/result/Result');
 const Status = require('../../shared/result/Status');
 const FlowError = require('../../shared/errors/FlowError');
+const { normalizeConnectionGeneration } = require('../../core/events/EventEnvelope');
+const Operation = require('../../operations/Operation');
+const CancellationSource = require('../../shared/cancellation/CancellationSource');
+const OperationCancellation = require('../../operations/OperationCancellation');
 
 class AfkAreaService {
     constructor({
@@ -13,6 +17,7 @@ class AfkAreaService {
         eventBus,
         positionService,
         occupancyParser,
+        operationManager = null,
         config = {},
         logger = null
     }) {
@@ -27,6 +32,7 @@ class AfkAreaService {
             eventBus,
             positionService,
             occupancyParser,
+            operationManager,
             logger
         });
         this.config = this.#normalize(config);
@@ -45,9 +51,17 @@ class AfkAreaService {
         return this.areas();
     }
 
-    async inspect({ cancellationToken = null } = {}) {
+    async inspect(options = {}) {
+        const { cancellationToken = null, operationContext = null } = options;
+        if (this.operationManager && !operationContext) {
+            return this.#runManaged('AfkAreaService.inspect', ['gui'], options,
+                context => this.inspect({ ...options, operationContext: context, cancellationToken: context.cancellation.token, expectedGeneration: context.connectionGeneration }));
+        }
         try {
-            const session = await this.#open(cancellationToken);
+            const generation = this.#expectedGeneration(options);
+            this.#assertGeneration(generation);
+            const session = await this.#open(cancellationToken, generation, operationContext);
+            this.#assertGeneration(generation);
             const areas = this.#readAreas(session.window);
             return Result.ok({ areas, sessionId: session.id });
         } catch (error) {
@@ -58,15 +72,44 @@ class AfkAreaService {
                 step: 'inspect',
                 action: 'open /afk and read area occupancy'
             });
-            return Result.fail(Status.FAILED, wrapped.message, wrapped, wrapped.toDiagnostic());
+            return Result.fail(Operation.statusForError(wrapped), wrapped.message, wrapped, wrapped.toDiagnostic());
         }
     }
 
-    async joinBestAvailable({ cancellationToken = null } = {}) {
+    async joinBestAvailable(options = {}) {
+        const { cancellationToken = null, operationContext = null } = options;
+        if (this.operationManager && !operationContext) {
+            return this.#runManaged('AfkAreaService.joinBestAvailable', ['gui', 'movement', 'teleport'], options,
+                context => this.joinBestAvailable({ ...options, operationContext: context, cancellationToken: context.cancellation.token, expectedGeneration: context.connectionGeneration }));
+        }
+
         let selected = null;
         let teleportWaiter = null;
+        let clickTask = null;
+        let teleportTask = null;
+        const branchCancellation = new CancellationSource();
+        const unlinkParentCancellation = OperationCancellation.link(cancellationToken, branchCancellation);
+        const branchToken = branchCancellation.token;
+
+        const settleBranches = async reason => {
+            branchCancellation.cancel(reason);
+            teleportWaiter?.cancel?.(reason instanceof Error ? reason : new FlowError(String(reason || 'AFK operation settled.'), {
+                code: 'CANCELLED', subsystem: 'afk', operation: 'AfkAreaService', step: 'cleanup'
+            }));
+            const pending = [clickTask, teleportTask].filter(Boolean);
+            // Promise.allSettled attaches observers immediately without forcing the
+            // public result to wait forever on a dependency that ignores cancellation.
+            // Real queued click primitives observe branchToken synchronously and are
+            // revoked before this method can settle.
+            if (pending.length) void Promise.allSettled(pending);
+            await Promise.resolve();
+        };
+
         try {
-            const session = await this.#open(cancellationToken);
+            const generation = this.#expectedGeneration(options);
+            this.#assertGeneration(generation);
+            const session = await this.#open(branchToken, generation, operationContext);
+            this.#assertGeneration(generation);
             const areas = this.#readAreas(session.window);
             selected = areas.find(area => area.occupancy.known && !area.occupancy.full) || null;
 
@@ -95,40 +138,43 @@ class AfkAreaService {
             }
 
             const before = this.positionService.current();
-            teleportWaiter = this.#createTeleportWaiter(before, cancellationToken);
-            const clickTask = Promise.resolve()
-                .then(() => this.guiManager.click(selected.menuSlot, { timeoutMs: this.config.guiTimeoutMs }))
+            teleportWaiter = this.#createTeleportWaiter(before, branchToken, generation);
+            clickTask = Promise.resolve()
+                .then(() => this.guiManager.click(selected.menuSlot, {
+                    timeoutMs: this.config.guiTimeoutMs,
+                    cancellationToken: branchToken,
+                    expectedGeneration: generation,
+                    operationId: operationContext?.operationId || null,
+                    correlationId: operationContext?.correlationId || null
+                }))
                 .then(
                     value => ({ branch: 'click', ok: true, value }),
-                    error => {
-                        this.logger?.debug?.('AFK area click failed while teleport verification was pending.', {
-                            botId: this.botId,
-                            areaId: selected?.id || null,
-                            error
-                        });
-                        return { branch: 'click', ok: false, error };
-                    }
+                    error => ({ branch: 'click', ok: false, error })
                 );
-            const teleportTask = teleportWaiter.promise.then(
+            teleportTask = teleportWaiter.promise.then(
                 value => ({ branch: 'teleport', ok: true, value }),
                 error => ({ branch: 'teleport', ok: false, error })
             );
 
             const first = await Promise.race([clickTask, teleportTask]);
             if (first.branch === 'click' && !first.ok) {
-                teleportWaiter.cancel(first.error);
+                await settleBranches(first.error);
                 throw first.error;
             }
             if (first.branch === 'teleport') {
+                await settleBranches(first.ok ? 'AFK teleport verified; cancel pending click branch.' : first.error);
                 if (!first.ok) throw first.error;
+                this.#assertGeneration(generation);
                 return Result.ok({ joined: true, area: selected, areas, teleport: first.value });
             }
 
             const teleportOutcome = await teleportTask;
+            await settleBranches(teleportOutcome.ok ? 'AFK teleport verified.' : teleportOutcome.error);
             if (!teleportOutcome.ok) throw teleportOutcome.error;
-            const teleport = teleportOutcome.value;
-            return Result.ok({ joined: true, area: selected, areas, teleport });
+            this.#assertGeneration(generation);
+            return Result.ok({ joined: true, area: selected, areas, teleport: teleportOutcome.value });
         } catch (error) {
+            await settleBranches(error);
             const wrapped = FlowError.wrap(error, {
                 code: error?.code || 'AFK_AREA_JOIN_FAILED',
                 subsystem: 'afk',
@@ -138,22 +184,30 @@ class AfkAreaService {
                 resource: selected?.id || null,
                 retryable: true
             });
-            return Result.fail(error?.code === 'CANCELLED' ? Status.CANCELLED : Status.FAILED, wrapped.message, wrapped, wrapped.toDiagnostic());
+            return Result.fail(Operation.statusForError(error), wrapped.message, wrapped, wrapped.toDiagnostic());
         } finally {
+            await settleBranches('AFK join operation settled.');
             teleportWaiter?.dispose?.();
+            unlinkParentCancellation();
+            branchCancellation.dispose();
         }
     }
 
-    async #open(cancellationToken) {
+    async #open(cancellationToken, expectedGeneration, operationContext) {
+        this.#assertGeneration(expectedGeneration);
         if (this.guiManager.current()) await this.guiManager.closeCurrentWindow();
         const { session } = await this.guiManager.performAndWaitForOpen(
             () => this.commandService.send(this.config.commandKey, {
                 confirm: false,
-                cancellationToken
+                cancellationToken,
+                expectedGeneration,
+                operationId: operationContext?.operationId || null,
+                correlationId: operationContext?.correlationId || null
             }),
             {
                 timeoutMs: this.config.guiTimeoutMs,
                 cancellationToken,
+                expectedGeneration,
                 label: '/afk',
                 settleMs: this.config.openSettleMs,
                 source: {
@@ -182,8 +236,7 @@ class AfkAreaService {
             });
     }
 
-    #createTeleportWaiter(before, cancellationToken) {
-        const generation = this.context.getGeneration();
+    #createTeleportWaiter(before, cancellationToken, generation) {
         let cancel = () => {};
         let dispose = () => {};
         const promise = new Promise((resolve, reject) => {
@@ -228,7 +281,7 @@ class AfkAreaService {
             // additional position delta can falsely time out when the server
             // corrects/teleports the player to the same AFK spawn coordinates.
             unsubscribers.push(this.eventBus.on('movement:teleport', event => {
-                const eventGeneration = Number(event?.connectionGeneration ?? event?.generation);
+                const eventGeneration = normalizeConnectionGeneration(event);
                 if (event?.botId !== this.botId || !Number.isFinite(eventGeneration) || eventGeneration !== Number(generation)) return;
                 if (!checkCurrentGeneration()) return;
                 const position = this.positionService.current() || event.position || null;
@@ -313,6 +366,32 @@ class AfkAreaService {
     #nonNegative(value, fallback) {
         const number = Number(value);
         return Number.isFinite(number) && number >= 0 ? number : fallback;
+    }
+
+    #expectedGeneration(options = {}) {
+        const generation = Number(options.expectedGeneration ?? options.operationContext?.connectionGeneration ?? this.context.getGeneration());
+        return Number.isInteger(generation) && generation > 0 ? generation : null;
+    }
+
+    #assertGeneration(generation) {
+        if (Number.isInteger(generation) && generation > 0 && this.context.has() && Number(this.context.getGeneration()) === generation) return;
+        throw new FlowError('AFK workflow belongs to a stale connection generation.', {
+            code: 'AFK_STALE_GENERATION', subsystem: 'afk', operation: 'AfkAreaService', step: 'generation-guard', retryable: true,
+            details: { expectedGeneration: generation, currentGeneration: this.context.getGeneration?.() ?? null }
+        });
+    }
+
+    #runManaged(name, lockKeys, options, action) {
+        const operation = new Operation({ name, lockKeys, returnsResult: true, execute: action });
+        return this.operationManager.run(operation, {
+            operationContext: options.operationContext || null,
+            cancellationToken: options.cancellationToken || null,
+            connectionGeneration: this.#expectedGeneration(options),
+            timeoutMs: options.timeoutMs,
+            queueWaitTimeoutMs: options.queueWaitTimeoutMs,
+            correlationId: options.correlationId || null,
+            metadata: { subsystem: 'afk', action: name }
+        });
     }
 }
 

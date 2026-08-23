@@ -19,11 +19,14 @@ class DiscordService {
         this.discord = discord;
         this.client = null;
         this.onInteraction = null;
+        this.activeInteractions = new Set();
+        this.stopping = false;
     }
 
     async initialize() {}
 
     async start() {
+        this.stopping = false;
         if (!this.config.enabled) {
             this.logger?.info?.('Discord integration is disabled.');
             return;
@@ -43,9 +46,12 @@ class DiscordService {
 
         this.client = new discord.Client({ intents: [discord.GatewayIntentBits.Guilds] });
         this.onInteraction = interaction => {
-            Promise.resolve(this.#handleInteraction(interaction)).catch(error => {
+            if (this.stopping) return;
+            const task = Promise.resolve().then(() => this.#handleInteraction(interaction));
+            this.activeInteractions.add(task);
+            task.catch(error => {
                 this.logger?.error?.('Discord interaction handler failed.', { error });
-            });
+            }).finally(() => this.activeInteractions.delete(task));
         };
         this.client.on(discord.Events.InteractionCreate, this.onInteraction);
 
@@ -86,12 +92,33 @@ class DiscordService {
 
     async stop() {
         if (!this.client) return;
+        this.stopping = true;
         const discord = this.discord || require('discord.js');
-        await this.panelManager?.stop?.();
         if (this.onInteraction) this.client.off(discord.Events.InteractionCreate, this.onInteraction);
+        await this.#drainActiveInteractions();
+        await this.panelManager?.stop?.();
         this.client.destroy();
         this.client = null;
         this.onInteraction = null;
+        this.activeInteractions.clear();
+    }
+
+    async #drainActiveInteractions() {
+        const pending = [...this.activeInteractions];
+        if (pending.length === 0) return;
+        const timeoutMs = Math.max(100, Number(this.config.shutdownDrainMs || 5000));
+        let timer = null;
+        const outcome = await Promise.race([
+            Promise.allSettled(pending).then(() => 'settled'),
+            new Promise(resolve => { timer = setTimeout(() => resolve('timeout'), timeoutMs); })
+        ]);
+        if (timer) clearTimeout(timer);
+        if (outcome === 'timeout') {
+            this.logger?.warn?.('Discord shutdown interaction drain timed out.', {
+                pending: this.activeInteractions.size,
+                timeoutMs
+            });
+        }
     }
 
     async destroy() { await this.stop(); }

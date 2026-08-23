@@ -4,6 +4,14 @@ const path = require('node:path');
 
 const MIN_RUNTIME_FAILURE_FILE_MB = 768 / (1024 * 1024);
 
+function rejectUnknown(value, allowed, label, errors) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+    const keys = new Set(allowed);
+    for (const key of Object.keys(value)) {
+        if (!keys.has(key)) errors.push(`${label}.${key} is not allowed`);
+    }
+}
+
 function isSafeRelativeDirectory(value) {
     if (typeof value !== 'string' || !value.trim() || /[\u0000-\u001f]/.test(value)) return false;
     const trimmed = value.trim();
@@ -19,6 +27,10 @@ module.exports = value => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
         return { valid: false, errors: ['app config must be an object'] };
     }
+    rejectUnknown(value, [
+        'logLevel', 'logging', 'commandIntervalMs', 'shutdownTimeoutMs',
+        'operations', 'multiBot', 'controlPlane', 'diagnostics'
+    ], 'app', errors);
     if (value.logLevel !== undefined && !levels.includes(value.logLevel)) {
         errors.push('logLevel is invalid');
     }
@@ -28,11 +40,40 @@ module.exports = value => {
         }
     }
 
+    if (value.operations !== undefined) {
+        const operations = value.operations;
+        if (!operations || typeof operations !== 'object' || Array.isArray(operations)) {
+            errors.push('operations must be an object');
+        } else {
+            rejectUnknown(operations, [
+                'maxPending', 'defaultQueueWaitTimeoutMs',
+                'defaultExecutionTimeoutMs', 'shutdownDrainTimeoutMs'
+            ], 'operations', errors);
+            if (!Number.isInteger(operations.maxPending) || operations.maxPending < 1) {
+                errors.push('operations.maxPending must be a positive integer');
+            }
+            for (const key of [
+                'defaultQueueWaitTimeoutMs',
+                'defaultExecutionTimeoutMs',
+                'shutdownDrainTimeoutMs'
+            ]) {
+                if (!Number.isFinite(operations[key]) || operations[key] < 0) {
+                    errors.push(`operations.${key} must be a non-negative number`);
+                }
+            }
+        }
+    }
+
 
     if (value.multiBot !== undefined) {
         if (!value.multiBot || typeof value.multiBot !== 'object' || Array.isArray(value.multiBot)) {
             errors.push('multiBot must be an object');
         } else {
+            rejectUnknown(value.multiBot, [
+                'connectionStartSpacingMs', 'postSuccessSpacingMs',
+                'transientFailureCooldownMs', 'connectionResetCooldownMs',
+                'lostConnectionCooldownMs', 'loginTooFastCooldownMs'
+            ], 'multiBot', errors);
             for (const key of [
                 'connectionStartSpacingMs',
                 'postSuccessSpacingMs',
@@ -49,15 +90,38 @@ module.exports = value => {
         }
     }
 
+    if (value.controlPlane !== undefined) {
+        const controlPlane = value.controlPlane;
+        if (!controlPlane || typeof controlPlane !== 'object' || Array.isArray(controlPlane)) {
+            errors.push('controlPlane must be an object');
+        } else {
+            rejectUnknown(controlPlane, [
+                'enabled', 'intentFile', 'maxBytes', 'concurrency', 'maxPending',
+                'taskTimeoutMs', 'shutdownDrainMs'
+            ], 'controlPlane', errors);
+            if (typeof controlPlane.enabled !== 'boolean') errors.push('controlPlane.enabled must be boolean');
+            if (!isSafeRelativeDirectory(controlPlane.intentFile)) errors.push('controlPlane.intentFile must be a safe relative path');
+            if (!Number.isInteger(controlPlane.maxBytes) || controlPlane.maxBytes < 1024) errors.push('controlPlane.maxBytes must be an integer >= 1024');
+            for (const key of ['concurrency', 'maxPending']) {
+                if (!Number.isInteger(controlPlane[key]) || controlPlane[key] < 1) errors.push(`controlPlane.${key} must be a positive integer`);
+            }
+            for (const key of ['taskTimeoutMs', 'shutdownDrainMs']) {
+                if (!Number.isFinite(controlPlane[key]) || controlPlane[key] < 0) errors.push(`controlPlane.${key} must be a non-negative number`);
+            }
+        }
+    }
+
     if (value.logging !== undefined) {
         if (!value.logging || typeof value.logging !== 'object' || Array.isArray(value.logging)) {
             errors.push('logging must be an object');
         } else {
+            rejectUnknown(value.logging, ['console', 'file', 'coalesce'], 'logging', errors);
             const consoleConfig = value.logging.console;
             if (consoleConfig !== undefined) {
                 if (!consoleConfig || typeof consoleConfig !== 'object' || Array.isArray(consoleConfig)) {
                     errors.push('logging.console must be an object');
                 } else {
+                    rejectUnknown(consoleConfig, ['level', 'format', 'meta', 'maxMetaFields'], 'logging.console', errors);
                     if (consoleConfig.level !== undefined && !levels.includes(consoleConfig.level)) errors.push('logging.console.level is invalid');
                     if (consoleConfig.format !== undefined && !['compact', 'json'].includes(consoleConfig.format)) errors.push('logging.console.format is invalid');
                     if (consoleConfig.meta !== undefined && !['none', 'summary', 'full'].includes(consoleConfig.meta)) errors.push('logging.console.meta is invalid');
@@ -71,6 +135,7 @@ module.exports = value => {
                 if (!coalesceConfig || typeof coalesceConfig !== 'object' || Array.isArray(coalesceConfig)) {
                     errors.push('logging.coalesce must be an object');
                 } else {
+                    rejectUnknown(coalesceConfig, ['enabled', 'windowMs', 'maxBuckets', 'levels'], 'logging.coalesce', errors);
                     if (coalesceConfig.enabled !== undefined && typeof coalesceConfig.enabled !== 'boolean') errors.push('logging.coalesce.enabled must be boolean');
                     if (coalesceConfig.windowMs !== undefined && (!Number.isFinite(coalesceConfig.windowMs) || coalesceConfig.windowMs < 0)) errors.push('logging.coalesce.windowMs must be a non-negative number');
                     if (coalesceConfig.maxBuckets !== undefined && (!Number.isInteger(coalesceConfig.maxBuckets) || coalesceConfig.maxBuckets < 1)) errors.push('logging.coalesce.maxBuckets must be a positive integer');
@@ -83,6 +148,10 @@ module.exports = value => {
                 if (!fileConfig || typeof fileConfig !== 'object' || Array.isArray(fileConfig)) {
                     errors.push('logging.file must be an object');
                 } else {
+                    rejectUnknown(fileConfig, [
+                        'enabled', 'level', 'directory', 'prefix', 'bufferFlushMs',
+                        'bufferMaxBytes', 'retentionDays', 'maxTotalMb', 'cleanupIntervalMs'
+                    ], 'logging.file', errors);
                     if (fileConfig.enabled !== undefined && typeof fileConfig.enabled !== 'boolean') errors.push('logging.file.enabled must be boolean');
                     if (fileConfig.level !== undefined && !levels.includes(fileConfig.level)) errors.push('logging.file.level is invalid');
                     if (fileConfig.directory !== undefined && (typeof fileConfig.directory !== 'string' || !fileConfig.directory.trim())) errors.push('logging.file.directory must be a non-empty string');
@@ -100,10 +169,15 @@ module.exports = value => {
     if (!value.diagnostics || typeof value.diagnostics !== 'object' || Array.isArray(value.diagnostics)) {
         errors.push('diagnostics must be an object');
     } else {
+        rejectUnknown(value.diagnostics, ['runtimeFailures', 'circuitBreaker'], 'diagnostics', errors);
         const runtimeFailures = value.diagnostics.runtimeFailures;
         if (!runtimeFailures || typeof runtimeFailures !== 'object' || Array.isArray(runtimeFailures)) {
             errors.push('diagnostics.runtimeFailures must be an object');
         } else {
+            rejectUnknown(runtimeFailures, [
+                'enabled', 'directory', 'repeatWindowMs', 'connectionAggregationMs',
+                'maxFileMb', 'maxTotalMb', 'retentionDays', 'cleanupIntervalMs'
+            ], 'diagnostics.runtimeFailures', errors);
             if (typeof runtimeFailures.enabled !== 'boolean') errors.push('diagnostics.runtimeFailures.enabled must be boolean');
             if (!isSafeRelativeDirectory(runtimeFailures.directory)) errors.push('diagnostics.runtimeFailures.directory must be a safe relative path');
             for (const key of ['repeatWindowMs', 'connectionAggregationMs', 'cleanupIntervalMs']) {
@@ -133,6 +207,10 @@ module.exports = value => {
         if (!breaker || typeof breaker !== 'object' || Array.isArray(breaker)) {
             errors.push('diagnostics.circuitBreaker must be an object');
         } else {
+            rejectUnknown(breaker, [
+                'baseBackoffMs', 'maxBackoffMs', 'multiplier', 'jitterRatio',
+                'maxConsecutiveFailures', 'openDurationMs'
+            ], 'diagnostics.circuitBreaker', errors);
             for (const key of ['baseBackoffMs', 'maxBackoffMs', 'openDurationMs']) {
                 if (!Number.isFinite(breaker[key]) || breaker[key] < 0) errors.push(`diagnostics.circuitBreaker.${key} must be a non-negative number`);
             }

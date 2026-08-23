@@ -1,6 +1,5 @@
 'use strict';
 
-const CancellationSource = require('../../shared/cancellation/CancellationSource');
 const Timeout = require('../../shared/time/Timeout');
 const Result = require('../../shared/result/Result');
 const Status = require('../../shared/result/Status');
@@ -8,6 +7,11 @@ const FlowError = require('../../shared/errors/FlowError');
 const FailureCircuitBreaker = require('../../shared/resilience/FailureCircuitBreaker');
 const { classifyRuntimeResult } = require('../../shared/result/RuntimeResultClassifier');
 const { createFailureEvent } = require('../../diagnostics/runtime/RuntimeFailureEvent');
+const { normalizeConnectionGeneration } = require('../../core/events/EventEnvelope');
+const ModeLeaseSession = require('../ModeLeaseSession');
+const TaskSupervisor = require('../../core/TaskSupervisor');
+
+const MODE_ID = 'fishing';
 
 const DEFAULT_PROFILE = Object.freeze({
     name: 'shift-walk-continuous',
@@ -23,6 +27,8 @@ class FishingModeService {
         eventBus,
         connectionState,
         connectionControl = null,
+        skyblockReadiness = null,
+        skyTarget = null,
         afkAreas,
         fishing,
         island,
@@ -31,7 +37,7 @@ class FishingModeService {
         positionGuard,
         worldReadiness,
         recoveryPolicy,
-        collectorB5Mode = null,
+        modeCoordinator,
         failurePublisher = null,
         failurePolicy,
         config = {},
@@ -39,13 +45,13 @@ class FishingModeService {
         delay = Timeout.delay
     }) {
         if (!botId || !eventBus || !connectionState || !afkAreas || !fishing || !island || !movement
-            || !movementProbe || !positionGuard || !worldReadiness || !recoveryPolicy) {
+            || !movementProbe || !positionGuard || !worldReadiness || !recoveryPolicy || !modeCoordinator) {
             throw new TypeError('FishingModeService dependencies are required');
         }
         Object.assign(this, {
-            name: 'FishingModeService', botId, eventBus, connectionState, connectionControl,
+            name: 'FishingModeService', botId, eventBus, connectionState, connectionControl, skyblockReadiness, skyTarget,
             afkAreas, fishing, island, movement, movementProbe, positionGuard, worldReadiness,
-            recoveryPolicy, collectorB5Mode, failurePublisher, logger, delay
+            recoveryPolicy, modeCoordinator, failurePublisher, logger, delay
         });
         this.failureBreaker = new FailureCircuitBreaker({ policy: failurePolicy });
         this.config = this.#freezeConfig(config);
@@ -55,23 +61,33 @@ class FishingModeService {
         this.source = null;
         this.loopPromise = null;
         this.restartTimer = null;
+        this.taskSupervisor = new TaskSupervisor({ name: `${botId}:fishing:tasks`, logger, historyLimit: 8, delay });
+        this.restartSupervisor = this.taskSupervisor; // Compatibility alias for diagnostics/tests.
         this.startedAt = null;
         this.currentAreaId = null;
         this.needsHomeBeforeAfk = true;
         this.lastAreas = [];
         this.catches = 0;
         this.lastCatchAt = null;
+        this.consecutiveCycleRetries = 0;
         this.lastError = null;
         this.lastMovementProfile = null;
         this.lastMovementCalibration = null;
         this.fishingAnchorKind = null;
         this.fishingPitchOverrideDegrees = null;
         this.unsubscribers = [];
+        this.leaseSession = new ModeLeaseSession({
+            modeId: MODE_ID,
+            modeCoordinator,
+            requestedResources: ['primary-mode'],
+            logger
+        });
     }
 
     async initialize() {
         if (this.unsubscribers.length > 0) return;
         this.unsubscribers.push(
+            this.modeCoordinator.onChange(change => this.#handleCoordinatorChange(change)),
             this.eventBus.on('connection:ended', event => {
                 if (event?.botId !== this.botId) return;
                 const eventGeneration = this.#eventGeneration(event);
@@ -97,14 +113,22 @@ class FishingModeService {
     async start() {}
 
     async enable() {
+        let acquiredLease = null;
         try {
             if (!this.config.enabled) return Result.fail(Status.NOT_READY, 'Fishing mode is disabled by config.');
-            if (this.collectorB5Mode?.status?.().enabled) return Result.fail(Status.BUSY, 'Tắt hoặc dừng mode Nhặt+B5 trước khi bật mode câu cá.');
             this.#requireDestinations();
             if (this.enabled) {
+                if (!this.#hasModeLease()) {
+                    return Result.fail(Status.BUSY, 'Fishing mode lease is no longer current.', null, {
+                        owner: this.leaseSession.owner()
+                    });
+                }
                 if (this.paused) return this.resume();
                 return Result.ok(this.status(), { alreadyEnabled: true });
             }
+            const acquired = this.leaseSession.acquire({ reason: 'Fishing mode enabled.' });
+            if (!acquired.success) return acquired;
+            acquiredLease = acquired.data;
             this.enabled = true;
             this.paused = false;
             this.phase = 'STARTING';
@@ -114,6 +138,7 @@ class FishingModeService {
             this.lastAreas = [];
             this.catches = 0;
             this.lastCatchAt = null;
+            this.consecutiveCycleRetries = 0;
             this.lastError = null;
             this.lastMovementProfile = null;
             this.lastMovementCalibration = null;
@@ -121,9 +146,14 @@ class FishingModeService {
             this.fishingPitchOverrideDegrees = null;
             this.positionGuard.invalidate();
             this.failureBreaker.reset();
+            this.skyblockReadiness?.requireTarget?.(this.skyTarget, { owner: MODE_ID, trigger: 'fishing-enabled' });
             this.#startLoop();
-            return Result.ok(this.status());
+            return Result.ok(this.status(), { leaseId: this.leaseSession.leaseId() });
         } catch (error) {
+            if (acquiredLease) this.#releaseModeLease();
+            this.enabled = false;
+            this.paused = false;
+            this.phase = 'OFF';
             return Result.fail(Status.INVALID_INPUT, error.message, error);
         }
     }
@@ -131,9 +161,11 @@ class FishingModeService {
     async pause(reason = 'Fishing mode paused.') {
         if (!this.enabled) return Result.fail(Status.NOT_READY, 'Fishing mode is not enabled.');
         if (this.paused) return Result.ok(this.status(), { alreadyPaused: true });
+        const leasePause = this.leaseSession.pause();
+        if (!leasePause.success) return leasePause;
         this.paused = true;
         this.phase = 'PAUSING';
-        this.#clearRestartTimer();
+        await this.#clearRestartTimer(reason);
         this.source?.cancel(reason);
         await this.#safeCleanup('pause');
         await this.#awaitLoop();
@@ -145,34 +177,42 @@ class FishingModeService {
         try {
             if (!this.enabled) return Result.fail(Status.NOT_READY, 'Fishing mode is not enabled.');
             if (!this.paused) return Result.ok(this.status(), { alreadyRunning: true });
-            if (this.collectorB5Mode?.status?.().enabled) return Result.fail(Status.BUSY, 'Tắt hoặc dừng mode Nhặt+B5 trước khi chạy tiếp mode câu cá.');
             this.#requireDestinations();
+            const leaseResume = this.leaseSession.resume();
+            if (!leaseResume.success) return leaseResume;
             const pausedForError = ['PAUSED_ERROR', 'DEGRADED'].includes(this.phase);
             this.paused = false;
             this.lastError = null;
             this.#invalidateRoute();
             if (pausedForError) this.failureBreaker.reset();
             this.phase = 'RESUMING';
+            this.skyblockReadiness?.requireTarget?.(this.skyTarget, { owner: MODE_ID, trigger: 'fishing-resumed' });
             this.#startLoop();
             return Result.ok(this.status());
         } catch (error) {
+            this.leaseSession.pause();
             return Result.fail(Status.INVALID_INPUT, error.message, error);
         }
     }
 
     async disable(reason = 'Fishing mode disabled.') {
-        if (!this.enabled && !this.loopPromise) return Result.ok(this.status(), { alreadyDisabled: true });
-        this.enabled = false;
-        this.paused = false;
-        this.phase = 'STOPPING';
-        this.#clearRestartTimer();
-        this.source?.cancel(reason);
-        await this.#safeCleanup('disable');
-        await this.#awaitLoop();
-        this.#invalidateRoute();
-        this.failureBreaker.reset();
-        this.phase = 'OFF';
-        return Result.ok(this.status());
+        const alreadyDisabled = !this.enabled && !this.loopPromise;
+        try {
+            this.enabled = false;
+            this.paused = false;
+            this.phase = 'STOPPING';
+            await this.#clearRestartTimer(reason);
+            this.source?.cancel(reason);
+            await this.#safeCleanup('disable');
+            await this.#awaitLoop();
+            this.#invalidateRoute();
+            this.failureBreaker.reset();
+            this.skyblockReadiness?.releaseTarget?.(MODE_ID);
+            this.phase = 'OFF';
+        } finally {
+            this.#releaseModeLease();
+        }
+        return Result.ok(this.status(), alreadyDisabled ? { alreadyDisabled: true } : null);
     }
 
     status() {
@@ -196,6 +236,7 @@ class FishingModeService {
             })),
             catches: this.catches,
             lastCatchAt: this.lastCatchAt,
+            consecutiveCycleRetries: this.consecutiveCycleRetries,
             startedAt: this.startedAt,
             lastError: this.lastError?.message || null,
             movementProfile: this.enabled ? this.lastMovementProfile : null,
@@ -208,7 +249,8 @@ class FishingModeService {
                 name: 'shift-walk-continuous', forward: true, sneak: true, sprint: false, jump: false,
                 shoreFishingPitchDegrees: this.config.movement.shoreFishingPitchDegrees
             },
-            position: this.connectionState.isConnected() ? this.positionGuard.current() : null
+            position: this.connectionState.isConnected() ? this.positionGuard.current() : null,
+            modeLease: this.leaseSession.status()
         });
     }
 
@@ -240,6 +282,7 @@ class FishingModeService {
         this.#invalidateRoute();
         if (wasRunning && this.enabled && !this.paused) {
             this.phase = 'RESUMING';
+            this.skyblockReadiness?.requireTarget?.(this.skyTarget, { owner: MODE_ID, trigger: 'fishing-resumed' });
             this.#startLoop();
         } else if (this.enabled && this.paused) this.phase = 'PAUSED';
         else if (!this.enabled) this.phase = 'OFF';
@@ -251,25 +294,44 @@ class FishingModeService {
         for (const unsubscribe of this.unsubscribers.splice(0)) unsubscribe();
     }
 
-    async destroy() { await this.stop(); }
+    async destroy() {
+        await this.stop();
+        await this.taskSupervisor.close('Fishing destroyed.');
+    }
 
     #startLoop() {
         if (this.loopPromise || !this.enabled || this.paused) return;
-        this.#clearRestartTimer();
-        const source = new CancellationSource();
-        this.source = source;
+        if (!this.#hasModeLease()) {
+            this.#handleLostLease('Fishing cannot start without its current mode lease.');
+            return;
+        }
+        void this.#clearRestartTimer('Fishing loop started.');
         let restart = false;
         let retryMs = 0;
-        this.loopPromise = this.#run(source.token)
-            .catch(async error => {
-                const classification = classifyRuntimeResult({ error, token: source.token });
-                if (classification.kind === 'TOKEN_CANCELLED') return;
-                const decision = await this.#handleFailure({ error, classification, token: source.token, unhandled: true });
+        let loopToken = null;
+        const handle = this.taskSupervisor.start('loop', async ({ cancellationToken }) => {
+            loopToken = cancellationToken;
+            try {
+                return await this.#run(cancellationToken);
+            } catch (error) {
+                const classification = classifyRuntimeResult({ error, token: cancellationToken });
+                if (classification.kind === 'TOKEN_CANCELLED') throw error;
+                const decision = await this.#handleFailure({ error, classification, token: cancellationToken, unhandled: true });
                 restart = this.enabled && !this.paused && !['STOP', 'PAUSE_ERROR'].includes(decision.action);
                 retryMs = decision.delayMs;
+            }
+        }, { metadata: { kind: 'main-loop' } });
+        const source = Object.freeze({
+            get token() { return loopToken; },
+            cancel: reason => handle.cancel(reason)
+        });
+        this.source = source;
+        this.loopPromise = handle.promise
+            .catch(error => {
+                if (source.token?.isCancelled || error?.code === 'CANCELLED') return;
+                throw error;
             })
             .finally(() => {
-                source.dispose();
                 if (this.source === source) this.source = null;
                 this.loopPromise = null;
                 if (!this.enabled) this.phase = 'OFF';
@@ -277,11 +339,16 @@ class FishingModeService {
                 else if (restart) {
                     const breaker = this.failureBreaker.beforeAttempt();
                     if (breaker.state === 'OPEN') this.phase = 'DEGRADED';
-                    this.restartTimer = setTimeout(() => {
-                        this.restartTimer = null;
+                    const restartDelayMs = Math.max(50, retryMs);
+                    const handle = this.taskSupervisor.start('restart', async ({ cancellationToken }) => {
+                        await this.delay(restartDelayMs, { cancellationToken });
+                        if (this.restartTimer === handle) this.restartTimer = null;
                         if (this.enabled && !this.paused && !this.loopPromise) this.#startLoop();
-                    }, Math.max(50, retryMs));
-                    this.restartTimer.unref?.();
+                    }, { metadata: { phase: this.phase, retryDelayMs: restartDelayMs } });
+                    this.restartTimer = handle;
+                    handle.promise.catch(error => {
+                        if (error?.code !== 'CANCELLED') this.logger?.debug?.('Fishing supervised restart ended with error.', { error });
+                    });
                 }
             });
     }
@@ -289,6 +356,10 @@ class FishingModeService {
     async #run(token) {
         while (this.enabled && !this.paused) {
             token.throwIfCancelled();
+            if (!this.#hasModeLease()) {
+                this.#handleLostLease('Fishing mode lease was lost while running.');
+                return;
+            }
             const permit = this.failureBreaker.beforeAttempt();
             if (!permit.allowed) {
                 this.phase = 'DEGRADED';
@@ -301,7 +372,12 @@ class FishingModeService {
                 await this.delay(this.config.connectionPollMs, { cancellationToken: token });
                 continue;
             }
-            const expectedGeneration = this.connectionState.generation();
+            const expectedGeneration = Number(this.connectionState.generation());
+            if (!this.#isSkyblockReady(expectedGeneration)) {
+                this.phase = 'WAITING_SKYBLOCK';
+                await this.delay(this.config.connectionPollMs, { cancellationToken: token });
+                continue;
+            }
             try {
                 await this.#businessCycle(token, expectedGeneration);
             } catch (error) {
@@ -395,18 +471,9 @@ class FishingModeService {
             const selected = this.config.probe.profiles.find(candidate => candidate.name === probe.selected);
             if (selected) profile = selected;
         }
-        this.lastMovementProfile = Object.freeze({ ...profile });
-        this.phase = 'MOVING_TO_SHORE';
-        const arrival = this.positionGuard.verifyDestination(destination);
-        if (!arrival.valid) await this.movement.move({ destination, expectedGeneration, cancellationToken: token, profile });
-        this.#assertCurrentGeneration(expectedGeneration, 'movement-complete');
-        const verified = this.positionGuard.verifyDestination(destination);
-        if (!verified.valid) {
-            throw new FlowError('Fishing destination arrival verification failed.', {
-                code: verified.code || 'FISHING_DESTINATION_NOT_REACHED', subsystem: 'fishing-mode', operation: 'FishingModeService',
-                step: 'verify-arrival', resource: area.id, retryable: true, details: verified
-            });
-        }
+        profile = Object.freeze({ ...profile, sneak: true });
+        this.lastMovementProfile = profile;
+        await this.#moveToShore({ area, destination, profile, token, expectedGeneration });
         this.#assertCurrentGeneration(expectedGeneration, 'capture-anchor');
         this.positionGuard.capture({ expectedGeneration });
         this.fishingAnchorKind = 'configured-destination';
@@ -442,12 +509,38 @@ class FishingModeService {
         });
         this.#assertCurrentGeneration(expectedGeneration, 'fish-cycle-complete');
         this.lastError = null;
+        if (cycle?.retry || cycle?.timeout) {
+            this.consecutiveCycleRetries += 1;
+            const retryLimit = this.#positiveInteger(this.config.recovery?.cycleRetryLimit, 3);
+            if (this.consecutiveCycleRetries >= retryLimit) {
+                throw new FlowError(`Fishing cycle failed ${this.consecutiveCycleRetries} consecutive times.`, {
+                    code: 'FISHING_CYCLE_RETRY_EXHAUSTED',
+                    subsystem: 'fishing',
+                    operation: 'FishingModeService',
+                    step: 'fish-cycle-retry-budget',
+                    resource: area.id,
+                    retryable: true,
+                    details: {
+                        consecutiveCycleRetries: this.consecutiveCycleRetries,
+                        retryLimit,
+                        signal: cycle.signal || null,
+                        cycleError: cycle.error || null
+                    }
+                });
+            }
+            return cycle;
+        }
+        this.consecutiveCycleRetries = 0;
         if (cycle?.caught) {
             this.failureBreaker.recordSuccess({ verified: true });
             this.catches += 1;
             this.lastCatchAt = new Date().toISOString();
+            // The catch belongs to the exact cycle generation captured before
+            // asynchronous fishing work. Do not recapture the replacement connection generation.
+            this.#assertCurrentGeneration(expectedGeneration, 'emit-catch');
             this.eventBus.emit('mode:fishing:catch', {
                 botId: this.botId,
+                connectionGeneration: expectedGeneration,
                 areaId: area.id,
                 catches: this.catches,
                 at: this.lastCatchAt,
@@ -455,6 +548,93 @@ class FishingModeService {
             });
         }
         return cycle;
+    }
+
+    async #moveToShore({ area, destination, profile, token, expectedGeneration }) {
+        this.phase = 'MOVING_TO_SHORE';
+        const retryLimit = Math.max(0, Number(this.config.movement?.localRetryLimit || 0));
+        const retryDelayMs = Math.max(0, Number(this.config.movement?.localRetryDelayMs || 0));
+        let lastError = null;
+
+        for (let attempt = 0; attempt <= retryLimit; attempt += 1) {
+            token.throwIfCancelled();
+            this.#assertCurrentGeneration(expectedGeneration, `movement-attempt-${attempt + 1}`);
+            const arrival = this.positionGuard.verifyDestination(destination);
+            if (arrival.valid) return arrival;
+
+            try {
+                await this.movement.move({
+                    destination,
+                    expectedGeneration,
+                    cancellationToken: token,
+                    profile: { ...profile, sneak: true }
+                });
+                this.#assertCurrentGeneration(expectedGeneration, `movement-complete-${attempt + 1}`);
+                const verified = this.positionGuard.verifyDestination(destination);
+                if (verified.valid) return verified;
+                lastError = new FlowError('Fishing destination arrival verification failed.', {
+                    code: verified.code || 'FISHING_DESTINATION_NOT_REACHED',
+                    subsystem: 'fishing-mode',
+                    operation: 'FishingModeService',
+                    step: 'verify-arrival',
+                    resource: area.id,
+                    retryable: true,
+                    details: { ...verified, localAttempt: attempt + 1, localAttempts: retryLimit + 1 }
+                });
+            } catch (error) {
+                const code = String(error?.code || '').toUpperCase();
+                if (['CANCELLED', 'FISHING_STALE_GENERATION', 'FISHING_MOVEMENT_DISCONNECTED'].includes(code)) throw error;
+                if (!this.#isLocalMovementRetryable(code)) throw error;
+                lastError = error;
+            }
+
+            await this.movement.stop?.();
+            if (attempt < retryLimit && retryDelayMs > 0) {
+                this.logger?.warn?.('Fishing shore movement retrying in the same AFK area.', {
+                    botId: this.botId,
+                    areaId: area.id,
+                    attempt: attempt + 1,
+                    maxAttempts: retryLimit + 1,
+                    error: lastError?.message || null,
+                    code: lastError?.code || null,
+                    sneak: true
+                });
+                await this.delay(retryDelayMs, { cancellationToken: token });
+            }
+        }
+
+        throw lastError || new FlowError('Fishing movement could not reach the configured shore point.', {
+            code: 'FISHING_DESTINATION_NOT_REACHED',
+            subsystem: 'fishing-mode',
+            operation: 'FishingModeService',
+            step: 'move-to-shore',
+            resource: area.id,
+            retryable: true
+        });
+    }
+
+    #isLocalMovementRetryable(code) {
+        return new Set([
+            'TIMEOUT',
+            'FISHING_MOVEMENT_TIMEOUT',
+            'FISHING_MOVEMENT_STUCK',
+            'FISHING_DESTINATION_NOT_REACHED',
+            'FISHING_DESTINATION_VERTICAL_DRIFT'
+        ]).has(String(code || '').toUpperCase());
+    }
+
+    #isSkyblockReady(expectedGeneration) {
+        if (!this.skyblockReadiness || typeof this.skyblockReadiness.isGenerationReady !== 'function') return true;
+        try {
+            return this.skyblockReadiness.isGenerationReady(expectedGeneration, this.skyTarget) === true;
+        } catch (error) {
+            this.logger?.warn?.('Fishing Skyblock readiness probe failed.', {
+                botId: this.botId,
+                expectedGeneration,
+                error
+            });
+            return false;
+        }
     }
 
     async #consumeResult(result, token, waitPhase, expectedGeneration = null) {
@@ -578,21 +758,62 @@ class FishingModeService {
         this.fishingPitchOverrideDegrees = null;
     }
 
-    #clearRestartTimer() {
-        if (!this.restartTimer) return;
-        clearTimeout(this.restartTimer);
+    async #clearRestartTimer(reason = 'Fishing restart cancelled.') {
+        const handle = this.restartTimer;
+        if (!handle) return;
         this.restartTimer = null;
+        handle.cancel(reason);
+        try {
+            await handle.promise;
+        } catch (error) {
+            if (error?.code !== 'CANCELLED') {
+                this.logger?.debug?.('Fishing restart cleanup observed an unexpected rejection.', { reason, error });
+            }
+        }
     }
 
     #eventGeneration(event) {
-        const value = event?.connectionGeneration ?? event?.generation;
-        const generation = Number(value);
-        return Number.isFinite(generation) ? generation : null;
+        return normalizeConnectionGeneration(event);
     }
 
     #isCurrentGeneration(expectedGeneration) {
         return this.connectionState.isConnected()
             && Number(this.connectionState.generation()) === Number(expectedGeneration);
+    }
+
+    #hasModeLease() {
+        return this.leaseSession.isHeld();
+    }
+
+    #releaseModeLease() {
+        const leaseId = this.leaseSession.leaseId();
+        if (!leaseId) return;
+        const released = this.leaseSession.release();
+        if (!released.success) this.logger?.warn?.('Fishing mode lease release failed.', {
+            botId: this.botId,
+            leaseId,
+            message: released.message
+        });
+    }
+
+    #handleCoordinatorChange(change) {
+        if (!this.leaseSession.matchesRelease(change) || !this.enabled) return;
+        this.#handleLostLease('Fishing mode lease was revoked.');
+    }
+
+    #handleLostLease(message) {
+        if (!this.enabled) return;
+        this.lastError = new FlowError(message, {
+            code: 'MODE_LEASE_LOST',
+            subsystem: 'mode-coordinator',
+            operation: 'FishingModeService',
+            step: 'lease-ownership',
+            retryable: false,
+            details: { botId: this.botId, modeId: MODE_ID, leaseId: this.leaseSession.leaseId() }
+        });
+        this.paused = true;
+        this.phase = 'PAUSED_ERROR';
+        this.source?.cancel(message);
     }
 
     #assertCurrentGeneration(expectedGeneration, step) {
@@ -623,6 +844,11 @@ class FishingModeService {
 
     #requireDestinations() {
         for (const area of this.config.areas || []) this.#destination(area);
+    }
+
+    #positiveInteger(value, fallback) {
+        const number = Number(value);
+        return Number.isInteger(number) && number > 0 ? number : fallback;
     }
 
     #freezeConfig(config) {

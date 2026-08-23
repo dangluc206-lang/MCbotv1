@@ -3,6 +3,12 @@
   "entryGuiId": "skyServerSelect",
   "joinGuiId": null,
   "selections": {
+    "sky1": {
+      "slot": 11
+    },
+    "sky2": {
+      "slot": 13
+    },
     "primary": {
       "slot": 11
     },
@@ -10,7 +16,7 @@
       "slot": 13
     }
   },
-  "defaultSelection": "primary",
+  "defaultSelection": "sky1",
   "joinSlot": 19,
   "guiTimeoutMs": 5000,
   "clickTimeoutMs": 3000,
@@ -18,13 +24,13 @@
   "selectionSettleMs": 300,
   "joinSettleMs": 500,
   "postJoinTimeoutMs": 7000,
-  "autoJoin": {
-    "enabled": true,
-    "selection": "primary",
+  "postJoinMinPositionDelta": 4,
+  "modeJoin": {
     "delayMs": 1200,
     "spawnFallbackDelayMs": 5000,
-    "maxAttempts": 3,
-    "retryDelayMs": 2000,
+    "retryDelayMs": 300000,
+    "rejoinDelayMs": 300000,
+    "recoveryPollMs": 10000,
     "waitForResourcePack": false
   }
 }

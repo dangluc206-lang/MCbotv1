@@ -4,10 +4,11 @@ const Timeout = require('../../shared/time/Timeout');
 const FlowError = require('../../shared/errors/FlowError');
 
 class KhoSellOperation {
-    constructor({ commandService, guiManager, reader, config, logger = null }) {
+    constructor({ commandService, guiManager, context = null, reader, config, logger = null }) {
         this.commandService = commandService;
         this.guiManager = guiManager;
         this.reader = reader;
+        this.context = context;
         this.config = config;
         this.logger = logger;
         // Ownership is command-provenance for a live /kho sell session. Some
@@ -18,7 +19,15 @@ class KhoSellOperation {
         this.sellSessionOwned = false;
     }
 
-    async execute(logicalId, { quantity = 64, cancellationToken = null } = {}) {
+    reconfigure(config) {
+        this.config = config || {};
+        this.reader?.reconfigure?.(this.config);
+        return this;
+    }
+
+    async execute(logicalId, { quantity = 64, cancellationToken = null, expectedGeneration = null, operationContext = null } = {}) {
+        expectedGeneration = expectedGeneration ?? operationContext?.connectionGeneration ?? this.context?.getGeneration?.() ?? null;
+        this.#assertGeneration(expectedGeneration);
         const sell = this.config?.sell;
         if (!sell || sell.enabled !== true) throw new Error('Storage sell is disabled.');
         if (!Object.prototype.hasOwnProperty.call(sell.itemAliases || {}, logicalId)) {
@@ -26,11 +35,11 @@ class KhoSellOperation {
         }
 
         const normalizedQuantity = this.#normalizeQuantity(quantity);
-        if (normalizedQuantity === 'ALL' && sell.allowAll !== true) {
+        if (normalizedQuantity === 'ALL' && !this.#allowsSellAll(logicalId)) {
             throw new Error('SELL ALL is disabled for production B1.');
         }
 
-        const session = await this.#ensureOpen({ logicalId, cancellationToken });
+        const session = await this.#ensureOpen({ logicalId, cancellationToken, expectedGeneration, operationContext });
         const before = this.reader.read(session.window);
         const entry = before.entries?.[logicalId] || null;
         if (!entry) {
@@ -53,6 +62,7 @@ class KhoSellOperation {
                 mode: click.mode,
                 timeoutMs: Number(sell.updateTimeoutMs || this.config.guiTimeoutMs || 5000),
                 cancellationToken,
+                expectedGeneration,
                 label: `/kho sell ${logicalId} ${normalizedQuantity}`,
                 settleMs: Number(sell.resultDelayMs || 250),
                 source: { commandKey: sell.commandKey, command: '/kho sell', actions: ['sell'], clicks: [entry.slot], source: 'operation' }
@@ -94,6 +104,22 @@ class KhoSellOperation {
         const amountChanged = amountReliable && Number.isFinite(beforeAmount) && Number.isFinite(afterAmount)
             ? afterAmount !== beforeAmount
             : null;
+        const amountDelta = amountReliable && Number.isFinite(beforeAmount) && Number.isFinite(afterAmount)
+            ? Number(beforeAmount) - Number(afterAmount)
+            : null;
+        const amountDecreased = Number.isFinite(amountDelta) ? amountDelta > 0 : null;
+        const verifiedSoldQuantity = amountDecreased === true ? amountDelta : null;
+        const verification = Object.freeze({
+            verified: Number.isFinite(verifiedSoldQuantity),
+            source: Number.isFinite(verifiedSoldQuantity) ? 'sell-gui-amount' : null,
+            verifiedSoldQuantity,
+            requestedQuantity: normalizedQuantity,
+            amountReliable,
+            amountDelta,
+            amountDecreased,
+            transitioned,
+            requiresFreshStorage: !Number.isFinite(verifiedSoldQuantity)
+        });
 
         if (!transitioned && amountChanged !== true) {
             throw FlowError.wrap(transitionError || new Error('Sell click produced no observable GUI update.'), {
@@ -110,6 +136,8 @@ class KhoSellOperation {
             after: amountReliable ? afterAmount : null,
             amountReliable,
             amountChanged,
+            amountDelta,
+            verifiedSoldQuantity,
             transitioned
         });
 
@@ -122,7 +150,11 @@ class KhoSellOperation {
             afterAmount,
             amountReliable,
             amountChanged,
+            amountDelta,
+            amountDecreased,
+            verifiedSoldQuantity,
             transitioned,
+            verification,
             before,
             after
         };
@@ -130,15 +162,26 @@ class KhoSellOperation {
 
     async close() {
         const current = this.guiManager.current();
+        const sell = this.config?.sell || {};
+        const currentIsExplicitSell = current?.source?.commandKey === sell.commandKey
+            || current?.source?.command === '/kho sell';
+        const currentHasExplicitOtherSource = Boolean(current?.source) && !currentIsExplicitSell;
+        const ownedCurrentSell = currentIsExplicitSell || (this.sellSessionOwned && !currentHasExplicitOtherSource);
         this.sellSessionOwned = false;
-        if (!current) return false;
+
+        // closeSellGui() is a cleanup primitive, not "close whatever GUI happens
+        // to be open". In particular, a startup pass with zero sales often still
+        // has the authoritative /kho window open. Closing it here created the
+        // /kho close/reopen race observed in production.
+        if (!current || !ownedCurrentSell) return false;
+
         await this.guiManager.closeCurrentWindow();
-        const settle = Number(this.config?.sell?.closeSettleMs || 150);
+        const settle = Number(sell.closeSettleMs ?? 150);
         if (settle > 0) await Timeout.delay(settle);
         return true;
     }
 
-    async #ensureOpen({ logicalId = null, cancellationToken = null } = {}) {
+    async #ensureOpen({ logicalId = null, cancellationToken = null, expectedGeneration = null, operationContext = null } = {}) {
         const sell = this.config.sell;
         let current = this.guiManager.syncCurrentWindow?.() || this.guiManager.current();
         const source = this.#sellSource();
@@ -171,6 +214,7 @@ class KhoSellOperation {
 
         for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
             cancellationToken?.throwIfCancelled?.();
+            this.#assertGeneration(expectedGeneration);
             current = this.guiManager.syncCurrentWindow?.() || this.guiManager.current();
 
             // /kho and /kho sell are intentionally almost identical on this
@@ -193,7 +237,10 @@ class KhoSellOperation {
             try {
                 const actionResult = await this.commandService.send(sell.commandKey, {
                     confirm: false,
-                    cancellationToken
+                    cancellationToken,
+                    expectedGeneration,
+                    operationId: operationContext?.operationId || null,
+                    correlationId: operationContext?.correlationId || null
                 });
                 if (actionResult?.success === false) {
                     throw actionResult.error || new Error(actionResult.message || '/kho sell command failed.');
@@ -205,6 +252,7 @@ class KhoSellOperation {
 
                 while (Date.now() <= deadline) {
                     cancellationToken?.throwIfCancelled?.();
+                    this.#assertGeneration(expectedGeneration);
                     const session = this.guiManager.syncCurrentWindow?.() || this.guiManager.current();
                     if (session?.window) {
                         const snapshot = this.reader.read(session.window);
@@ -275,9 +323,20 @@ class KhoSellOperation {
         try {
             const entries = this.reader.read(window)?.entries || {};
             return logicalId ? Boolean(entries[logicalId]) : Object.keys(entries).length > 0;
-        } catch {
+        } catch (error) {
+            this.logger?.debug?.('Sell GUI entry scan failed.', { error });
             return false;
         }
+    }
+
+    #assertGeneration(expectedGeneration) {
+        if (expectedGeneration === null || expectedGeneration === undefined || !this.context) return;
+        const expected = Number(expectedGeneration);
+        if (this.context.has?.() && Number(this.context.getGeneration?.()) === expected) return;
+        throw new FlowError('Sell operation belongs to a stale connection generation.', {
+            code: 'DISCONNECTED', subsystem: 'storage', operation: 'KhoSellOperation', step: 'generation-guard', retryable: true,
+            details: { expectedGeneration: expected, currentGeneration: this.context.getGeneration?.() ?? null }
+        });
     }
 
     #normalizeQuantity(quantity) {
@@ -285,6 +344,10 @@ class KhoSellOperation {
         const value = Number(quantity);
         if (value === 1 || value === 64) return value;
         throw new RangeError(`Unsupported sell quantity: ${quantity}`);
+    }
+
+    #allowsSellAll(logicalId) {
+        return this.config?.sell?.allowAll === true;
     }
 
     #clickOptions(quantity) {

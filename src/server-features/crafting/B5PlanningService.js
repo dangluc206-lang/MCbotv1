@@ -3,6 +3,10 @@
 const Result = require('../../shared/result/Result');
 const Status = require('../../shared/result/Status');
 const FlowError = require('../../shared/errors/FlowError');
+const Operation = require('../../operations/Operation');
+const B5KhoReadFlow = require('./b5/flows/B5KhoReadFlow');
+const B5Pv2ReadFlow = require('./b5/flows/B5Pv2ReadFlow');
+const B5InventoryReadFlow = require('./b5/flows/B5InventoryReadFlow');
 
 class B5PlanningService {
     constructor({
@@ -15,8 +19,10 @@ class B5PlanningService {
         recipeRegistry,
         tiers,
         b1Materials = null,
+        executionPlanner = null,
         config = null,
-        guiDataMaxAgeMs = 5000
+        guiDataMaxAgeMs = 5000,
+        readFlows = {}
     }) {
         Object.assign(this, {
             storage,
@@ -28,37 +34,54 @@ class B5PlanningService {
             recipeRegistry,
             tiers,
             b1Materials,
+            executionPlanner,
             config: config || {},
             guiDataMaxAgeMs
         });
+        this.readFlows = Object.freeze({
+            kho: readFlows.kho || new B5KhoReadFlow({ storage }),
+            pv2: readFlows.pv2 || new B5Pv2ReadFlow({ personalVault }),
+            inventory: readFlows.inventory || new B5InventoryReadFlow({ inventoryReader })
+        });
     }
 
-    inspect(amount = 1, { fresh = false } = {}) {
-        return this.#inspect(amount, { additional: false, fresh });
+    inspect(amount = 1, options = {}) {
+        return this.#inspect(amount, { ...options, additional: false });
     }
 
-    inspectAdditional(amount = 1, { fresh = false } = {}) {
-        return this.#inspect(amount, { additional: true, fresh });
+    inspectAdditional(amount = 1, options = {}) {
+        return this.#inspect(amount, { ...options, additional: true });
     }
 
-    inspectAdditionalFresh(amount = 1) {
-        return this.#inspect(amount, { additional: true, fresh: true });
+    inspectAdditionalFresh(amount = 1, options = {}) {
+        return this.#inspect(amount, { ...options, additional: true, fresh: true });
     }
 
-    async #inspect(amount, { additional, fresh = false }) {
+    async #inspect(amount, {
+        additional,
+        fresh = false,
+        cancellationToken = null,
+        operationContext = null,
+        expectedGeneration = null
+    }) {
         try {
-            const storageResult = await this.storage.read({ preferData: !fresh, maxAgeMs: fresh ? 0 : this.guiDataMaxAgeMs });
+            const childOptions = {
+                cancellationToken,
+                operationContext,
+                expectedGeneration,
+                preferData: !fresh,
+                maxAgeMs: fresh ? 0 : this.guiDataMaxAgeMs
+            };
+            const storageResult = await this.readFlows.kho.read(childOptions);
             if (!storageResult.success) return this.#contextualize(storageResult, {
                 code: 'B5_PLAN_STORAGE_READ_FAILED', step: 'read-storage', action: 'read /kho', resource: 'B1'
             });
-            const vaultResult = await this.personalVault.read({ preferData: !fresh, maxAgeMs: fresh ? 0 : this.guiDataMaxAgeMs });
+            const vaultResult = await this.readFlows.pv2.read(childOptions);
             if (!vaultResult.success) return this.#contextualize(vaultResult, {
                 code: 'B5_PLAN_PV_READ_FAILED', step: 'read-personal-vault', action: 'read /pv 2', resource: 'B2-B5'
             });
 
-            const inventoryViews = typeof this.inventoryReader.readViews === 'function'
-                ? this.inventoryReader.readViews()
-                : [this.inventoryReader.read()];
+            const inventoryViews = this.readFlows.inventory.readViews();
             const inventorySnapshot = inventoryViews.find(view => view?.source === 'current-window')
                 || inventoryViews.find(view => view?.source === 'bot-inventory')
                 || inventoryViews[0];
@@ -92,9 +115,10 @@ class B5PlanningService {
             const craftableStorageItems = this.b1Materials?.craftableItems
                 ? this.b1Materials.craftableItems(storageResult.data || {})
                 : effectiveStorageItems;
-            // Total effective stock is useful for diagnostics, but only stock
-            // that can be decompressed without a /kho capacity spike is allowed
-            // to make the immediate crafting plan feasible.
+            // Keep both views: total stock answers whether the material is
+            // owned at all; craftable stock answers whether it can execute with
+            // the current /kho headroom. A blocked block-form reserve is an
+            // actionable PREPARE_B1 state, not the same thing as missing stock.
             const allAvailable = this.#mergeCounts(nonStorageAvailable, craftableStorageItems);
             const planWithoutStorage = this.b5Planner.plan(amount, nonStorageAvailable);
             const fullPlan = this.b5Planner.plan(amount, allAvailable);
@@ -120,7 +144,7 @@ class B5PlanningService {
                 inventoryTotals
             });
 
-            return Result.ok({
+            const inspection = {
                 amount,
                 additional,
                 storage: storageResult.data,
@@ -142,14 +166,16 @@ class B5PlanningService {
                 chains,
                 progress,
                 fresh
-            });
+            };
+            inspection.executionPlan = this.executionPlanner?.compile?.(inspection) || null;
+            return Result.ok(inspection);
         } catch (error) {
             const wrapped = FlowError.wrap(error, {
                 code: 'B5_PLANNING_FAILED', subsystem: 'b5-planning', operation: 'B5PlanningService',
                 step: 'calculate-plan', action: additional ? 'inspect additional B5' : 'inspect B5 target',
                 resource: this.b5Planner.targetId, details: { amount, additional }
             });
-            return Result.fail(Status.FAILED, wrapped.message, wrapped, wrapped.toDiagnostic());
+            return Result.fail(Operation.statusForError(wrapped), wrapped.message, wrapped, wrapped.toDiagnostic());
         }
     }
 
@@ -210,7 +236,8 @@ class B5PlanningService {
             const rawNeededFromStorage = Number(planWithoutStorage.missing[baseId] || 0);
             const storedEffective = Number(effectiveStorageItems?.[baseId] || 0);
             const storedTotalEffective = Number(totalEffectiveStorageItems?.[baseId] || storedEffective);
-            const missingRaw = Math.max(0, rawNeededFromStorage - storedEffective);
+            const immediateMissingRaw = Math.max(0, rawNeededFromStorage - storedEffective);
+            const missingRaw = Math.max(0, rawNeededFromStorage - storedTotalEffective);
             const readyToReserve = missingRaw === 0;
             const b2Step = stepsByOutput.get(b2Id) || null;
             const b3Step = stepsByOutput.get(b3Id) || null;
@@ -229,6 +256,7 @@ class B5PlanningService {
                 storedEffective,
                 storedTotalEffective,
                 decompressionBlocked: storedTotalEffective > storedEffective,
+                immediateMissingRaw,
                 missingRaw,
                 readyToReserve,
                 b2Crafts: Number(b2Step?.crafts || 0),
@@ -338,8 +366,21 @@ class B5PlanningService {
                     break;
                 }
                 if (Number(chain.b2Crafts || 0) > 0) {
-                    nextStep = { kind: 'B2/B3', id: chain.b3Id, b2Id: chain.b2Id,
-                        b2Crafts: Number(chain.b2Crafts || 0), b3Crafts: Number(chain.b3Crafts || 0) };
+                    const needsBasePreparation = Number(chain.immediateMissingRaw || 0) > 0
+                        && Number(chain.missingRaw || 0) <= 0;
+                    nextStep = needsBasePreparation
+                        ? {
+                            kind: 'PREPARE_B1',
+                            id: chain.baseId,
+                            b2Id: chain.b2Id,
+                            b3Id: chain.b3Id,
+                            b2Crafts: Number(chain.b2Crafts || 0),
+                            reason: chain.decompressionBlocked ? 'decompression-headroom' : 'prepare-base-form'
+                        }
+                        : {
+                            kind: 'B2/B3', id: chain.b3Id, b2Id: chain.b2Id,
+                            b2Crafts: Number(chain.b2Crafts || 0), b3Crafts: Number(chain.b3Crafts || 0)
+                        };
                     break;
                 }
             }

@@ -51,7 +51,7 @@ class DiscordErrorReporter {
         clearTimeout(this.timer);
         this.timer = null;
         if (this.enabled) await this.#flushExpired(true);
-        await this.sendChain.catch(() => {});
+        await this.sendChain;
         this.seenFailureIds.clear();
         this.buckets.clear();
         this.channel = null;
@@ -178,8 +178,10 @@ class DiscordErrorReporter {
     #sendSummary(event, summary) { return this.#enqueueSend(() => this.#sendEmbed('Runtime failure repeats', event, summary)); }
 
     #enqueueSend(task) {
-        const next = this.sendChain.catch(() => {}).then(task);
-        this.sendChain = next.catch(() => {});
+        const next = this.sendChain.then(task);
+        this.sendChain = next.catch(error => {
+            this.logger?.debug?.('Discord error send queue recovered after an unexpected rejection.', { error: Redactor.sanitize(error) });
+        });
         return next;
     }
 

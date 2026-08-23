@@ -1,0 +1,18 @@
+{
+  "enabled": true,
+  "teleportHomeOnEnable": true,
+  "waitForSkyblockReady": true,
+  "autoResumeOnReconnect": true,
+  "skyblockReadyTimeoutMs": 30000,
+  "pollIntervalMs": 10000,
+  "disconnectedPollMs": 1500,
+  "errorRetryMs": 5000,
+  "errorRetryMaxMs": 30000,
+  "craftLoopDelayMs": 300,
+  "storageProtection": {
+    "enabled": true,
+    "startupTrimToReserve": false,
+    "startupReserveCoverage": 1.5,
+    "allowSmelting": false
+  }
+}

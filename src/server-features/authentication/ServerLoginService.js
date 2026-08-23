@@ -2,6 +2,7 @@
 
 const CancellationSource = require('../../shared/cancellation/CancellationSource');
 const Timeout = require('../../shared/time/Timeout');
+const { normalizeConnectionGeneration } = require('../../core/events/EventEnvelope');
 
 class ServerLoginService {
     constructor({
@@ -66,13 +67,18 @@ class ServerLoginService {
 
         this.unsubscribeSpawn = this.eventBus.on('connection:spawned', event => {
             if (event.botId !== this.botId) return;
+            const generation = normalizeConnectionGeneration(event);
+            if (!this.#isCurrentGeneration(generation)) return;
             void this.#handleSpawn(event);
         });
 
         this.unsubscribeEnd = this.eventBus.on('connection:ended', event => {
             if (event.botId !== this.botId) return;
+            const generation = normalizeConnectionGeneration(event);
+            if (!Number.isInteger(generation) || generation <= 0) return;
+            if (this.pending?.generation !== generation && this.#isCurrentGeneration(this.pending?.generation)) return;
             this.#cancelPending('Minecraft connection ended.');
-            this.completedGenerations.delete(event.connectionGeneration);
+            this.completedGenerations.delete(generation);
         });
     }
 
@@ -91,7 +97,8 @@ class ServerLoginService {
     }
 
     async #handleSpawn(event) {
-        const generation = event.connectionGeneration;
+        const generation = normalizeConnectionGeneration(event);
+        if (!this.#isCurrentGeneration(generation)) return;
 
         if (!this.enabled) {
             this.eventBus.emit('server-login:disabled', {
@@ -135,6 +142,7 @@ class ServerLoginService {
                 confirm: this.confirm,
                 timeoutMs: this.timeoutMs,
                 cancellationToken: cancellationSource.token,
+                expectedGeneration: generation,
                 sensitive: true
             });
 
@@ -157,6 +165,7 @@ class ServerLoginService {
             });
         } catch (error) {
             if (cancellationSource.token.isCancelled) return;
+            if (this.pending?.generation !== generation || !this.#isCurrentGeneration(generation)) return;
 
             this.logger?.error?.('Server login failed.', {
                 botId: this.botId,

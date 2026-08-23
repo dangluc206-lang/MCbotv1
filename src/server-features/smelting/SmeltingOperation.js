@@ -2,6 +2,7 @@
 
 const Timeout = require('../../shared/time/Timeout');
 const FlowError = require('../../shared/errors/FlowError');
+const { findContainerSlot, isContainerSlot } = require('../../gui/ContainerSlotRange');
 
 /**
  * MinerUA smelting is per-material, but each click processes ALL stock of that
@@ -11,9 +12,10 @@ const FlowError = require('../../shared/errors/FlowError');
  * Minerals flow: /ks   -> smelting entry -> smelting GUI -> click material
  */
 class SmeltingOperation {
-    constructor({ commandService, guiManager, itemResolver, guiKnowledge = null, config, logger = null }) {
+    constructor({ commandService, guiManager, context = null, itemResolver, guiKnowledge = null, config, logger = null }) {
         this.commandService = commandService;
         this.guiManager = guiManager;
+        this.context = context;
         this.itemResolver = itemResolver;
         this.guiKnowledge = guiKnowledge;
         this.logger = logger;
@@ -23,7 +25,10 @@ class SmeltingOperation {
 
     isAvailable(recipeId) { return !this.unavailableRecipes.has(recipeId); }
 
-    async execute(recipeId, { entry = 'direct', cancellationToken = null } = {}) {
+    async execute(recipeId, { entry = 'direct', cancellationToken = null, expectedGeneration = null, operationContext = null } = {}) {
+        cancellationToken = operationContext?.cancellation?.token || cancellationToken;
+        expectedGeneration = expectedGeneration ?? operationContext?.connectionGeneration ?? this.context?.getGeneration?.() ?? null;
+        this.#assertGeneration(expectedGeneration);
         let stage = 'validate';
         try {
         if (!['direct', 'minerals'].includes(entry)) throw new RangeError(`Unknown smelting entry: ${entry}`);
@@ -59,10 +64,17 @@ class SmeltingOperation {
             }
             try {
                 ({ session } = await this.guiManager.performAndWaitForOpen(
-                    () => this.commandService.send(commandKey, { confirm: false }),
+                    () => this.commandService.send(commandKey, {
+                        confirm: false,
+                        cancellationToken,
+                        expectedGeneration,
+                        operationId: operationContext?.operationId || null,
+                        correlationId: operationContext?.correlationId || null
+                    }),
                     {
                         timeoutMs: this.config.guiTimeoutMs,
                         cancellationToken,
+                        expectedGeneration,
                         label: command,
                         settleMs: this.config.openSettleMs,
                         source: rootSource
@@ -107,6 +119,8 @@ class SmeltingOperation {
             };
             session = await this.guiManager.clickAndWaitForTransition(menuSlot, {
                 timeoutMs: this.config.guiTimeoutMs,
+                cancellationToken,
+                expectedGeneration,
                 cancellationToken,
                 label: 'smelting menu click',
                 requireNewWindow: true,
@@ -174,7 +188,8 @@ class SmeltingOperation {
             operation: 'SmeltingOperation', step: stage, phase: 'START',
             action: 'click material', resource: recipe.input, recipeId, slot: materialSlot
         });
-        await this.guiManager.click(materialSlot);
+        this.#assertGeneration(expectedGeneration);
+        await this.guiManager.click(materialSlot, { cancellationToken, expectedGeneration });
         await Timeout.delay(this.config.resultDelayMs, { cancellationToken });
 
         // No quantity GUI exists. The single click above tells the server to
@@ -206,9 +221,19 @@ class SmeltingOperation {
         }
     }
 
+    #assertGeneration(expectedGeneration) {
+        if (expectedGeneration === null || expectedGeneration === undefined || !this.context) return;
+        const expected = Number(expectedGeneration);
+        if (this.context.has?.() && Number(this.context.getGeneration?.()) === expected) return;
+        throw new FlowError('Smelting operation belongs to a stale connection generation.', {
+            code: 'DISCONNECTED', subsystem: 'smelting', operation: 'SmeltingOperation', step: 'generation-guard', retryable: true,
+            details: { expectedGeneration: expected, currentGeneration: this.context.getGeneration?.() ?? null }
+        });
+    }
+
     #fallbackMenuSlot(window) {
         const slots = window?.slots || [];
-        if (Number.isInteger(this.config.mineralsMenuSlot) && this.config.mineralsMenuSlot >= 0 && slots[this.config.mineralsMenuSlot]) {
+        if (isContainerSlot(window, this.config.mineralsMenuSlot) && slots[this.config.mineralsMenuSlot]) {
             return this.config.mineralsMenuSlot;
         }
         return this.#findSlot(window, this.config.mineralsMenuItemId, 'minerals-menu');
@@ -216,7 +241,7 @@ class SmeltingOperation {
 
     #findSlot(window, logicalItemId, context) {
         if (!logicalItemId) return -1;
-        return (window?.slots || []).findIndex(item => item && this.itemResolver.matches(item, logicalItemId, context).matched);
+        return findContainerSlot(window, item => item && this.itemResolver.matches(item, logicalItemId, context).matched);
     }
 
     #normalizeRecipeSlot(value) {

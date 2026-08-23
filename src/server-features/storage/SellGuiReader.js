@@ -15,6 +15,12 @@ class SellGuiReader {
         this.allowedLogicalIds = new Set(Object.keys(this.config?.sell?.itemAliases || {}));
     }
 
+    reconfigure(config) {
+        this.config = config || {};
+        this.allowedLogicalIds = new Set(Object.keys(this.config?.sell?.itemAliases || {}));
+        return this;
+    }
+
     read(window) {
         const entries = {};
         const bySlot = {};

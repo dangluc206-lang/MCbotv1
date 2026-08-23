@@ -58,5 +58,7 @@
       }
     }
   },
-  "fishingModeCommandName": "fishmode"
+  "fishingModeCommandName": "fishmode",
+  "remoteOnly": true,
+  "skyCommandName": "skycmd"
 }

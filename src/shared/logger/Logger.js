@@ -1,5 +1,6 @@
 'use strict';
 const Redactor = require('../security/Redactor');
+const VietnamTime = require('../time/VietnamTime');
 const LEVELS = Object.freeze({ debug: 10, info: 20, warn: 30, error: 40 });
 class Logger {
     constructor({ scope, minimumLevel = 'info', output = null } = {}) {
@@ -15,7 +16,7 @@ class Logger {
     #write(level, message, meta = null) {
         if (LEVELS[level] < LEVELS[this.minimumLevel]) return null;
         const record = Object.freeze({
-            timestamp: new Date().toISOString(),
+            timestamp: VietnamTime.iso(),
             level,
             scope: this.scope,
             message: Redactor.redactText(message),

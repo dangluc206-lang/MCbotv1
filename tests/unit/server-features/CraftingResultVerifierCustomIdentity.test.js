@@ -280,3 +280,104 @@ test('bot-inventory verification mode ignores current-window snapshots and event
     assert.equal(after.eventEvidence.eventCount, 0);
     assert.equal(after.inventorySource, 'bot-inventory');
 });
+
+test('craft verifier accepts event evidence only from the operation connection generation', async () => {
+    const empty = { source: 'bot-inventory', items: [] };
+    const inventoryReader = { readViews: () => [empty], read: () => empty };
+    const inventoryCounter = {
+        count(snapshot, logicalId) {
+            return (snapshot?.items || []).reduce((sum, entry) => sum + (entry?.name === logicalId ? Number(entry.count || 0) : 0), 0);
+        }
+    };
+    const events = [{
+        at: Date.now() + 100,
+        botId: 'bot-01', connectionGeneration: 1, source: 'bot-inventory', slot: 1,
+        oldItem: null, newItem: { name: 'crafted_output', count: 1 }
+    }];
+    const requestedGenerations = [];
+    const inventoryObservation = {
+        eventsSince(since, { connectionGeneration } = {}) {
+            requestedGenerations.push(connectionGeneration);
+            return events.filter(event => event.at >= since && event.connectionGeneration === connectionGeneration);
+        }
+    };
+    const verifier = new CraftingResultVerifier({ inventoryReader, inventoryCounter, inventoryObservation });
+    const before = verifier.before('crafted_output', [], { connectionGeneration: 2 });
+    verifier.arm(before);
+    const staleOnly = await verifier.after('crafted_output', before, { attempts: 1, retryMs: 0, expectedDelta: 1, connectionGeneration: 2 });
+    assert.equal(staleOnly.verified, false, 'gen1 delta must not verify a gen2 craft');
+    assert.equal(staleOnly.eventEvidence.eventCount, 0);
+    assert.equal(requestedGenerations.every(value => value === 2), true);
+
+    events.push({
+        at: Date.now() + 100,
+        botId: 'bot-01', connectionGeneration: 2, source: 'bot-inventory', slot: 1,
+        oldItem: null, newItem: { name: 'crafted_output', count: 1 }
+    });
+    const current = await verifier.after('crafted_output', before, { attempts: 1, retryMs: 0, expectedDelta: 1, connectionGeneration: 2 });
+    assert.equal(current.verified, true);
+    assert.equal(current.verificationMode, 'output-event-delta');
+    assert.equal(current.eventEvidence.eventCount, 1);
+});
+
+test('craft verifier refuses to learn a configured input MMOItems identity as a different output', async () => {
+    const resolver = {
+        resolve(rawItem, context) {
+            const ids = rawItem?.identityComponents || [];
+            if ((context === 'inventory' || context === 'personal-vault') && ids.includes('MMOITEMS_ITEM_ID:SIEUDACUOI')) {
+                return { id: 'super_cobblestone', match: { strength: 'VERY_STRONG', details: [{ matched: true, field: 'identity' }] } };
+            }
+            if ((context === 'inventory' || context === 'personal-vault') && ids.includes('MMOITEMS_ITEM_ID:KHOISIEUDACUOI')) {
+                return { id: 'super_cobblestone_block', match: { strength: 'VERY_STRONG', details: [{ matched: true, field: 'identity' }] } };
+            }
+            return null;
+        },
+        matches: () => ({ matched: false })
+    };
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'mcbot-craft-known-input-not-output-'));
+    try {
+        const normalizer = new GuiStructureNormalizer({ itemNormalizer: new ItemNormalizer() });
+        const store = new GuiObservationStore({ baseDir: directory, botId: 'bot-01' });
+        const guiKnowledge = new GuiKnowledgeRegistry({ botId: 'bot-01', normalizer, store, itemResolver: resolver });
+        await guiKnowledge.initialize();
+
+        const scanner = new InventoryScanner({ resolver, guiKnowledge });
+        const inventoryCounter = new InventoryCounter({ scanner });
+        const make = count => ({
+            source: 'bot-inventory',
+            items: [{
+                slot: 33,
+                name: 'cobblestone',
+                displayName: 'Cobblestone',
+                count,
+                identityComponents: ['MMOITEMS_ITEM_ID:SIEUDACUOI', 'MATERIAL'],
+                identityNbt: [],
+                customMetadataPresent: true
+            }]
+        });
+        const reads = [make(25), make(27)];
+        const inventoryReader = {
+            readBotInventory: () => reads.shift() || make(27),
+            readViews: () => [reads.shift() || make(27)],
+            read: () => reads.shift() || make(27)
+        };
+        const verifier = new CraftingResultVerifier({ inventoryReader, inventoryCounter, guiKnowledge });
+
+        const before = verifier.before('super_cobblestone_block', ['super_cobblestone'], { inventorySource: 'bot-inventory' });
+        verifier.arm(before);
+        const after = await verifier.after('super_cobblestone_block', before, {
+            attempts: 1,
+            retryMs: 0,
+            expectedDelta: 1,
+            inventorySource: 'bot-inventory',
+            inputRequirements: { super_cobblestone: { amount: 16, source: 'inventory' } }
+        });
+
+        assert.equal(after.verified, false);
+        assert.equal(after.learnedIdentity, null);
+        assert.equal(guiKnowledge.getStrongIdentity('super_cobblestone_block'), null);
+        assert.equal(guiKnowledge.getStrongIdentity('super_cobblestone'), null);
+    } finally {
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});

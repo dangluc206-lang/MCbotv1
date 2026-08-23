@@ -3,7 +3,16 @@
 const Operation = require('../../operations/Operation');
 const FlowError = require('../../shared/errors/FlowError');
 const Status = require('../../shared/result/Status');
-const Timeout = require('../../shared/time/Timeout');
+const B5ReadFlow = require('./b5/flows/B5ReadFlow');
+const B5PlanningFlow = require('./b5/flows/B5PlanningFlow');
+const B5StorageFlow = require('./b5/flows/B5StorageFlow');
+const B5DepositFlow = require('./b5/flows/B5DepositFlow');
+const B5WithdrawFlow = require('./b5/flows/B5WithdrawFlow');
+const B5CraftFlow = require('./b5/flows/B5CraftFlow');
+const B5ProgressTracker = require('./b5/support/B5ProgressTracker');
+const B5InventoryState = require('./b5/support/B5InventoryState');
+const B5ActionDiagnostics = require('./b5/support/B5ActionDiagnostics');
+const B5RecipeResolver = require('./b5/support/B5RecipeResolver');
 
 class B5AutomationService {
     constructor({
@@ -16,8 +25,11 @@ class B5AutomationService {
         inventoryCounter,
         recipeRegistry,
         operationManager,
+        context = null,
+        traceRecorder = null,
         config,
-        logger = null
+        logger = null,
+        flows = {}
     }) {
         Object.assign(this, {
             planningService,
@@ -29,65 +41,112 @@ class B5AutomationService {
             inventoryCounter,
             recipeRegistry,
             operationManager,
+            context,
+            traceRecorder,
             config,
             logger
         });
-        this.liveProgress = Object.freeze({
-            running: false,
-            state: 'IDLE',
-            currentStep: null,
-            remainingStages: null,
-            remainingCrafts: null,
-            updatedAt: null
+        this.progressTracker = new B5ProgressTracker({ logger });
+        this.inventoryState = new B5InventoryState({ inventoryReader, inventoryCounter, config });
+        this.recipeResolver = new B5RecipeResolver({ recipeRegistry, config, logger });
+        this.flows = Object.freeze({
+            read: flows.read || new B5ReadFlow({ planningService, storage, personalVault, inventoryReader }),
+            plan: flows.plan || new B5PlanningFlow({ recipeRegistry, config }),
+            storage: flows.storage || new B5StorageFlow({ b1Materials }),
+            deposit: flows.deposit || new B5DepositFlow({ personalVault }),
+            withdraw: flows.withdraw || new B5WithdrawFlow({ personalVault }),
+            craft: flows.craft || new B5CraftFlow({ crafting })
         });
-        this.lastActivityLogKey = null;
     }
 
     status() {
-        return this.liveProgress;
-    }
-
-    run(amount = 1, { cancellationToken = null } = {}) {
-        return this.#runOperation(amount, { additional: false, cancellationToken, mode: 'production', allowFinalB5: true, allowNewB2: true });
-    }
-
-    runNext({ cancellationToken = null } = {}) {
-        return this.#runOperation(1, { additional: true, cancellationToken, mode: 'production', allowFinalB5: true, allowNewB2: true });
-    }
-
-    runMaintenance({ cancellationToken = null, allowNewB2 = false } = {}) {
-        return this.#runOperation(1, {
-            additional: true, cancellationToken, mode: 'maintenance', allowFinalB5: false, allowNewB2: allowNewB2 === true
+        const base = this.progressTracker.status();
+        const trace = this.traceRecorder?.latest?.() || null;
+        return Object.freeze({
+            ...base,
+            trace: trace ? Object.freeze({
+                traceId: trace.traceId,
+                connectionGeneration: trace.connectionGeneration,
+                productive: trace.productive,
+                complete: trace.complete,
+                plan: trace.plan,
+                blockers: trace.blockers,
+                traceEnvelope: trace.traceEnvelope ? Object.freeze({ contract: trace.traceEnvelope.contract, version: trace.traceEnvelope.version, traceId: trace.traceEnvelope.traceId, correlationId: trace.traceEnvelope.correlationId, decisionDigest: trace.traceEnvelope.decisionDigest }) : null,
+                replay: trace.replayEnvelope ? Object.freeze({
+                    contract: trace.replayEnvelope.contract,
+                    version: trace.replayEnvelope.version,
+                    digest: trace.replayEnvelope.digest,
+                    domain: trace.replayEnvelope.domain,
+                    profile: trace.replayEnvelope.profile,
+                    policy: trace.replayEnvelope.policy
+                }) : null,
+                error: trace.error
+            }) : null
         });
     }
 
-    async #runOperation(amount, { additional, cancellationToken, mode = 'production', allowFinalB5 = true, allowNewB2 = true }) {
+    run(amount = 1, { cancellationToken = null, operationContext = null, expectedGeneration = null, decompressionPolicy = 'unbounded', decompressionMaxUsageRatio = null, requireKnownCapacity = false } = {}) {
+        return this.#runOperation(amount, { additional: false, cancellationToken, operationContext, expectedGeneration, mode: 'production', allowFinalB5: true, allowNewB2: true, decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity });
+    }
+
+    runNext({ cancellationToken = null, operationContext = null, expectedGeneration = null, freshInspection = false, recoveryOnly = false, decompressionPolicy = 'unbounded', decompressionMaxUsageRatio = null, requireKnownCapacity = false } = {}) {
+        return this.#runOperation(1, { additional: true, cancellationToken, operationContext, expectedGeneration, mode: 'production', allowFinalB5: true, allowNewB2: true, freshInspection, recoveryOnly: recoveryOnly === true, decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity });
+    }
+
+    runMaintenance({ cancellationToken = null, operationContext = null, expectedGeneration = null, allowNewB2 = false, decompressionPolicy = 'unbounded', decompressionMaxUsageRatio = null, requireKnownCapacity = false } = {}) {
+        return this.#runOperation(1, {
+            additional: true, cancellationToken, operationContext, expectedGeneration,
+            mode: 'maintenance', allowFinalB5: false, allowNewB2: allowNewB2 === true,
+            decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity
+        });
+    }
+
+    async #runOperation(amount, {
+        additional,
+        cancellationToken,
+        operationContext = null,
+        expectedGeneration = null,
+        mode = 'production',
+        allowFinalB5 = true,
+        allowNewB2 = true,
+        freshInspection = false,
+        recoveryOnly = false,
+        decompressionPolicy = 'unbounded',
+        decompressionMaxUsageRatio = null,
+        requireKnownCapacity = false
+    }) {
         const operationName = mode === 'maintenance' ? 'B5StorageMaintenance' : (additional ? 'B5AutomationNext' : 'B5Automation');
         const operation = new Operation({
             name: operationName,
             lockKeys: ['gui', 'server-command', 'inventory', 'crafting', 'storage'],
-            execute: context => this.#execute(amount, context, { additional, mode, allowFinalB5, allowNewB2 })
+            execute: context => this.#execute(amount, context, { additional, mode, allowFinalB5, allowNewB2, freshInspection, recoveryOnly, decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity })
         });
         const result = await this.operationManager.run(operation, {
+            operationContext,
+            connectionGeneration: expectedGeneration ?? operationContext?.connectionGeneration ?? this.context?.getGeneration?.() ?? null,
             timeoutMs: this.config.timeoutMs,
-            metadata: { operation: operationName, target: 'super_alloy', amount, additional, mode, allowFinalB5, allowNewB2 },
+            metadata: { operation: operationName, target: 'super_alloy', amount, additional, mode, allowFinalB5, allowNewB2, freshInspection, recoveryOnly, decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity },
             cancellationToken
         });
+        this.traceRecorder?.recordResult?.(result, { mode, amount });
         if (result?.success === false) {
-            this.#setLiveProgress({
+            this.progressTracker.set({
                 running: false,
                 state: result?.status === 'CANCELLED' ? 'CANCELLED' : 'ERROR',
-                currentStep: result?.meta?.step || this.liveProgress.currentStep,
+                currentStep: result?.meta?.step || this.status()?.currentStep,
                 lastError: result?.message || result?.error?.message || 'B5 automation failed'
             });
         }
         return result;
     }
 
-    async #execute(amount, context, { additional, mode = 'production', allowFinalB5 = true, allowNewB2 = true }) {
-        const inspect = () => additional
-            ? this.planningService.inspectAdditional(amount)
-            : this.planningService.inspect(amount);
+    async #execute(amount, context, { additional, mode = 'production', allowFinalB5 = true, allowNewB2 = true, freshInspection = false, recoveryOnly = false, decompressionPolicy = 'unbounded', decompressionMaxUsageRatio = null, requireKnownCapacity = false }) {
+        const inspect = () => {
+            const options = { additional, ...this.#childOptions(context) };
+            return freshInspection && typeof this.flows.read.inspectFresh === 'function'
+                ? this.flows.read.inspectFresh(amount, options)
+                : this.flows.read.inspect(amount, options);
+        };
 
         const first = await this.#runStep(context, {
             subsystem: 'b5', step: 'inspect-initial', action: 'read /kho + /pv 2 + inventory', resource: 'super_alloy'
@@ -95,15 +154,88 @@ class B5AutomationService {
         const actions = [];
         const targetId = first.data.fullPlan.targetId;
         const targetVaultBefore = Number(first.data.personalVault?.totals?.[targetId] || 0);
-        const vaultAllowsNewIntermediates = first.data?.personalVaultPressure?.allowNewIntermediates !== false;
-        const createNewB2 = allowNewB2 === true && vaultAllowsNewIntermediates;
+        const orphanedTargetCount = Math.max(0, Number(first.data?.inventoryTotals?.[targetId] || 0));
         const chainCatalog = Array.isArray(first.data?.chains) ? first.data.chains : [];
         let workingInspection = first;
-        this.#syncLiveProgress(first.data, targetId);
+        let createNewB2 = allowNewB2 === true && this.inventoryState.allowsNewIntermediates(first.data);
+        this.progressTracker.sync(first.data, targetId);
+
+        // A previous run may have crafted B5 successfully and then lost its
+        // deposit acknowledgement. The physical item in inventory is the
+        // durable recovery record: store it before any promotion or new craft.
+        if (orphanedTargetCount > 0) {
+            if (!this.inventoryState.vaultCanAccept(first.data?.personalVault, targetId, orphanedTargetCount)) {
+                const blocked = {
+                    status: 'waiting',
+                    reason: 'pv2-target-capacity',
+                    targetId,
+                    amount: orphanedTargetCount
+                };
+                actions.push(blocked);
+                this.progressTracker.set({
+                    running: false,
+                    state: 'WAITING_PV2_TARGET_CAPACITY',
+                    currentStep: { kind: 'DEPOSIT', id: targetId },
+                    completedAmount: 0,
+                    stored: null
+                });
+                return {
+                    amount, additional, mode, allowFinalB5, allowNewB2: false, actions,
+                    complete: false, completedNewB5: false, recoveredExistingB5: false,
+                    targetId, b5Ready: false, plan: first.data?.executionPlan || null, pv2Backpressure: first.data?.personalVaultPressure || null,
+                    waitingForMaterials: true, progress: this.status()
+                };
+            }
+
+            this.progressTracker.set({ running: true, state: 'RECOVERING_TARGET', currentStep: { kind: 'DEPOSIT', id: targetId } });
+            await this.#runStep(context, {
+                subsystem: 'b5', step: 'recover-existing-b5', action: 'deposit existing B5 before any new craft', resource: targetId,
+                details: { orphanedTargetCount, targetVaultBefore }
+            }, () => this.flows.deposit.deposit(targetId, this.#childOptions(context)));
+            const targetInventoryAfter = await this.inventoryState.waitForAtMost(targetId, 0, context.cancellation.token);
+            const vaultAfterResult = await this.#runStep(context, {
+                subsystem: 'b5', step: 'verify-recovered-b5', action: 'verify recovered B5 in /pv 2', resource: targetId
+            }, () => this.flows.read.readPv2(this.#childOptions(context)));
+            const targetVaultAfter = Number(vaultAfterResult.data?.totals?.[targetId] || 0);
+            if (targetVaultAfter < targetVaultBefore + orphanedTargetCount || targetInventoryAfter > 0) {
+                throw new FlowError('Existing B5 recovery could not be verified.', {
+                    code: 'B5_RECOVERY_VERIFICATION_FAILED', subsystem: 'b5', operation: 'B5Automation',
+                    step: 'verify-recovered-b5', action: 'verify inventory and /pv 2 deltas', resource: targetId,
+                    retryable: true,
+                    details: { orphanedTargetCount, targetVaultBefore, targetVaultAfter, targetInventoryAfter },
+                    trace: context.trace
+                });
+            }
+            actions.push({ status: 'existing-b5-recovered', targetId, amount: orphanedTargetCount, targetVaultBefore, targetVaultAfter });
+            this.progressTracker.set({
+                running: false,
+                state: 'RECOVERED_TARGET',
+                currentStep: { kind: 'DONE', id: targetId },
+                completedAmount: 0,
+                stored: 'PV2'
+            });
+            return {
+                amount, additional, mode, allowFinalB5, allowNewB2: false, actions,
+                complete: false, completedNewB5: false, recoveredExistingB5: true,
+                recoveredAmount: orphanedTargetCount, targetId, b5Ready: false, plan: first.data?.executionPlan || null,
+                pv2Backpressure: first.data?.personalVaultPressure || null,
+                waitingForMaterials: false, progress: this.status()
+            };
+        }
+
+        if (recoveryOnly) {
+            return {
+                amount, additional, mode, allowFinalB5: false, allowNewB2: false, actions,
+                complete: false, completedNewB5: false, recoveredExistingB5: false,
+                recoveryOnly: true, targetId, b5Ready: false, plan: first.data?.executionPlan || null,
+                pv2Backpressure: first.data?.personalVaultPressure || null,
+                waitingForMaterials: true, productive: false, progress: this.status()
+            };
+        }
 
         // Global priority policy:
         //   B5 > B4 > B3 > B2.
-        // Existing B2/B3 are storage pressure, not a checkpoint. Before making
+        // Existing B2/B3 are intermediate inventory, not a storage-protection checkpoint. Before making
         // any new B2 from /kho, promote everything already owned as high as the
         // current recipes allow. Any B4 type that can be made is made immediately.
         const initialPromotion = await this.#runStep(context, {
@@ -114,55 +246,43 @@ class B5AutomationService {
         }, () => this.#promoteOwnedIntermediates(first, inspect, context));
         if (initialPromotion?.actions?.length) actions.push(...initialPromotion.actions);
         if (initialPromotion?.inspection?.success) workingInspection = initialPromotion.inspection;
-        this.#syncLiveProgress(workingInspection.data, targetId);
+        createNewB2 = allowNewB2 === true && this.inventoryState.allowsNewIntermediates(workingInspection.data);
+        this.progressTracker.sync(workingInspection.data, targetId);
 
         // Only create more B2 from B1 when the higher-tier inventory cannot
         // advance further. Re-inspect before every material because an earlier
         // B4 craft may have consumed shared B3 and changed the optimal plan.
-        const chainOrder = (workingInspection.data?.chains || []).map(chain => chain.b3Id);
+        const chainOrder = [...(workingInspection.data?.chains || [])]
+            .map(chain => chain.b3Id);
         for (const chainId of chainOrder) {
             context.cancellation.token.throwIfCancelled();
-            if (this.#isB5DirectlyReady(workingInspection.data, amount)) break;
+            if (this.recipeResolver.isB5DirectlyReady(workingInspection.data, amount)) break;
 
             const currentChain = (workingInspection.data?.chains || []).find(candidate => candidate.b3Id === chainId);
             if (!currentChain) continue;
+            createNewB2 = allowNewB2 === true && this.inventoryState.allowsNewIntermediates(workingInspection.data);
 
-            const plannedB2Exact = Math.max(0, Number(currentChain.b2Crafts || 0));
-            const plannedB3 = Math.max(0, Number(currentChain.b3Crafts || 0));
-            const b2BatchSize = Math.max(1, Number(this.config?.quantityOptimization?.b2BatchSize || 64));
-            const useAllForB2 = this.#allEnabled('useAllForB2');
+            const chainPlan = this.flows.plan.planChain(currentChain);
+            const {
+                plannedB2Exact,
+                plannedB2,
+                plannedB3,
+                b2BatchSize,
+                useAllForB2,
+                basePerB2,
+                requiredRawForStart,
+                totalEffective: storedEffective,
+                totalB2Crafts: availableB2Crafts
+            } = chainPlan;
+            const storageKnown = Number.isFinite(storedEffective) && storedEffective >= 0 && basePerB2 > 0;
 
-            // B1 -> B2 quantity is a transport strategy, not a planner target.
-            // With storage safety enabled, ALL is allowed for the material the
-            // planner selected. It may intentionally create B2 beyond the exact
-            // current shortage; B2 -> B3 ALL immediately compresses that stock
-            // and any irreducible higher-tier surplus is kept in PV2.
-            let plannedB2 = 0;
+            // Planning decides WHAT is required from the full B1 stock. Storage
+            // preparation decides HOW compressed stock becomes executable. This
+            // avoids the old deadlock where blocked block-form B1 was treated as
+            // if it did not exist at all.
             let reserveChain = currentChain;
             if (plannedB2Exact > 0) {
-                const b2Recipe = this.recipeRegistry.require(currentChain.b2RecipeId);
-                const basePerB2 = Math.max(0, Number(b2Recipe?.inputs?.[currentChain.baseId] || 0));
-                const storedEffective = Number(currentChain.storedEffective);
-                const storageKnown = Number.isFinite(storedEffective) && storedEffective >= 0 && basePerB2 > 0;
-                const availableB2Crafts = storageKnown ? Math.floor(storedEffective / basePerB2) : null;
-
-                if (useAllForB2) {
-                    // We only need proof that one B2 craft can start. The server's
-                    // ALL quantity determines how many B2 are actually produced
-                    // from the currently available B1 and inventory capacity.
-                    plannedB2 = storageKnown && availableB2Crafts < 1 ? 0 : plannedB2Exact;
-                } else {
-                    const roundedNeed = Math.ceil(plannedB2Exact / b2BatchSize) * b2BatchSize;
-                    const availableFullBatches = storageKnown
-                        ? Math.floor(availableB2Crafts / b2BatchSize) * b2BatchSize
-                        : roundedNeed;
-                    plannedB2 = Math.max(0, Math.min(roundedNeed, availableFullBatches));
-                }
-
                 if (plannedB2 > 0) {
-                    const requiredRawForStart = basePerB2 > 0
-                        ? (useAllForB2 ? basePerB2 : plannedB2 * basePerB2)
-                        : Math.max(0, Number(currentChain.rawNeededFromStorage || 0));
                     reserveChain = {
                         ...currentChain,
                         b2Crafts: plannedB2,
@@ -175,33 +295,38 @@ class B5AutomationService {
                         actions.push({
                             baseId: currentChain.baseId,
                             status: 'new-b2-suppressed',
-                            reason: vaultAllowsNewIntermediates ? 'maintenance-policy' : 'pv2-backpressure',
+                            reason: allowNewB2 === true ? 'pv2-backpressure' : 'maintenance-policy',
                             plannedB2,
-                            pv2: first.data?.personalVaultPressure || null
+                            pv2: workingInspection.data?.personalVaultPressure || null
                         });
                         continue;
                     }
 
-                    if (useAllForB2 && typeof this.b1Materials?.inspectStoragePressure === 'function') {
-                        const safety = await this.#runStep(context, {
-                            subsystem: 'b5', step: 'guard-b1-b2-all',
-                            action: 'verify /kho safety before B1->B2 ALL', resource: currentChain.baseId
-                        }, () => this.b1Materials.inspectStoragePressure({ cancellationToken: context.cancellation.token }));
-                        if (safety.data?.known !== true || safety.data?.protectionRequired === true) {
-                            actions.push({ baseId: currentChain.baseId, status: 'waiting', reason: 'storage-not-safe-for-b1-all', pressure: safety.data || null });
-                            continue;
-                        }
-                    }
 
+                    this.progressTracker.set({
+                        running: true,
+                        state: 'PREPARING_B1',
+                        currentStep: {
+                            kind: 'PREPARE_B1',
+                            id: currentChain.baseId,
+                            b2Id: currentChain.b2Id,
+                            required: requiredRawForStart,
+                            blocked: chainPlan.decompressionBlocked
+                        }
+                    });
                     const prepared = await this.#runStep(context, {
                         subsystem: 'b5', step: 'prepare-b1',
                         action: useAllForB2 ? 'ensure B1 is ready for guarded B2 ALL' : 'ensure enough B1 for complete B2 batches',
                         resource: currentChain.baseId,
                         details: { required: requiredRawForStart, plannedB2Exact, plannedB2, b2BatchSize, basePerB2, useAllForB2, storedEffective: storageKnown ? storedEffective : null, availableB2Crafts, b2RecipeId: currentChain.b2RecipeId }
-                    }, () => this.b1Materials.ensureBaseAvailable(
+                    }, () => this.flows.storage.prepareBase(
                         currentChain.baseId,
                         requiredRawForStart,
-                        { cancellationToken: context.cancellation.token }
+                        this.#childOptions(context, {
+                            decompressionPolicy,
+                            decompressionMaxRatioOverride: decompressionMaxUsageRatio,
+                            requireKnownCapacityOverride: requireKnownCapacity
+                        })
                     ), { acceptFailedResult: true });
                     if (prepared?.success === false) {
                         // /kho is fed continuously and may change between the plan
@@ -226,8 +351,31 @@ class B5AutomationService {
                         });
                     }
                     if (prepared.data?.ready === false) {
-                        actions.push({ baseId: currentChain.baseId, status: 'waiting', reason: prepared.data.reason || 'base-form-unavailable', data: prepared.data });
+                        const waitReason = prepared.data.reason || 'base-form-unavailable';
+                        actions.push({ baseId: currentChain.baseId, status: 'waiting', reason: waitReason, data: prepared.data });
+                        this.logger?.info?.('B5 B1 PREP WAIT.', {
+                            operation: 'B5Automation', step: 'prepare-b1',
+                            resource: currentChain.baseId, reason: waitReason,
+                            required: requiredRawForStart,
+                            available: prepared.data.available ?? null,
+                            blocks: prepared.data.blocks ?? null,
+                            expansion: prepared.data.expansion || null
+                        });
                         continue;
+                    }
+                    const preparedLoose = Number(prepared.data?.available);
+                    if (Number.isFinite(preparedLoose) && preparedLoose >= 0) {
+                        reserveChain = {
+                            ...reserveChain,
+                            reconciliationBaseline: {
+                                inputs: {
+                                    [currentChain.baseId]: {
+                                        source: 'storage',
+                                        count: preparedLoose
+                                    }
+                                }
+                            }
+                        };
                     }
                     actions.push({ baseId: currentChain.baseId, status: 'base-ready', data: prepared.data });
                 } else {
@@ -248,7 +396,7 @@ class B5AutomationService {
             if (plannedB2 <= 0 && plannedB3 <= 0) continue;
 
             const reserveStageCount = (plannedB2 > 0 ? 1 : 0) + (plannedB3 > 0 ? 1 : 0);
-            this.#setLiveProgress({
+            this.progressTracker.set({
                 running: true,
                 state: 'CRAFTING_INTERMEDIATE',
                 currentStep: {
@@ -270,17 +418,19 @@ class B5AutomationService {
             }));
             actions.push({
                 baseId: currentChain.baseId,
-                status: reserveResult?.deferredForSpace ? 'deferred-for-space' : 'reserved',
+                status: reserveResult?.deferredForSpace
+                    ? 'deferred-for-space'
+                    : (reserveResult?.deferredForFreshReplan ? 'deferred-for-fresh-replan' : 'reserved'),
                 b3Id: currentChain.b3Id,
                 b3Crafts: plannedB3,
                 data: reserveResult || null
             });
-            this.#advanceLiveProgress(reserveStageCount);
+            this.progressTracker.advance(reserveStageCount);
 
             // Once one B3 material chain is finished, immediately put the
             // remaining loose B1 of that same resource back into block form.
             // This is storage maintenance, not an end-of-cycle cleanup.
-            this.#setLiveProgress({
+            this.progressTracker.set({
                 running: true,
                 state: 'COMPACTING',
                 currentStep: { kind: 'CONVERT_BLOCKS', id: currentChain.baseId }
@@ -290,13 +440,8 @@ class B5AutomationService {
                 step: 'compact-b1-after-reserve',
                 action: 'convert loose B1 back to block after this B3 material',
                 resource: currentChain.baseId
-            }, () => this.b1Materials.compact(currentChain.baseId, { cancellationToken: context.cancellation.token }));
+            }, () => this.flows.storage.compact(currentChain.baseId, this.#childOptions(context)));
             actions.push({ baseId: currentChain.baseId, status: 'compacted-after-b3', data: compactedB1.data });
-
-            // Selling is capacity protection only. If /kho is near full, sell
-            // the currently-largest compacted B1 type, then re-check capacity.
-            // Never wait for B5 completion before protecting storage.
-            await this.#relieveStoragePressureIfNeeded(context, actions, currentChain.baseId);
 
             // Mutation happened: refresh once, then immediately run the same
             // top-down promotion policy. This is the only re-read needed here.
@@ -312,9 +457,10 @@ class B5AutomationService {
             if (higher?.actions?.length) actions.push(...higher.actions);
             if (higher?.inspection?.success) workingInspection = higher.inspection;
             else workingInspection = refreshed;
+            createNewB2 = allowNewB2 === true && this.inventoryState.allowsNewIntermediates(workingInspection.data);
 
-            this.#syncLiveProgress(workingInspection.data, targetId);
-            if (this.#isB5DirectlyReady(workingInspection.data, amount)) break;
+            this.progressTracker.sync(workingInspection.data, targetId);
+            if (this.recipeResolver.isB5DirectlyReady(workingInspection.data, amount)) break;
         }
 
         // One final top-down sweep. This catches B4 made possible by B3 types
@@ -330,14 +476,28 @@ class B5AutomationService {
         }, inspect);
 
         let completedNewB5 = false;
-        this.#syncLiveProgress(afterReserve.data, targetId, {
-            state: this.#isB5DirectlyReady(afterReserve.data, amount) ? 'B5_READY' : (afterReserve.data.fullPlan.feasible ? 'FINAL_READY' : 'WAITING_MATERIALS')
+        this.progressTracker.sync(afterReserve.data, targetId, {
+            state: this.recipeResolver.isB5DirectlyReady(afterReserve.data, amount) ? 'B5_READY' : (afterReserve.data.fullPlan.feasible ? 'FINAL_READY' : 'WAITING_MATERIALS')
         });
 
-        if (allowFinalB5 && (afterReserve.data.fullPlan.feasible || this.#isB5DirectlyReady(afterReserve.data, amount))) {
+        const targetCapacityAvailable = this.inventoryState.vaultCanAccept(afterReserve.data?.personalVault, targetId, amount);
+        const targetCapacityBlocked = allowFinalB5 && !targetCapacityAvailable
+            && (afterReserve.data.fullPlan.feasible || this.recipeResolver.isB5DirectlyReady(afterReserve.data, amount));
+        if (targetCapacityBlocked
+            && (afterReserve.data.fullPlan.feasible || this.recipeResolver.isB5DirectlyReady(afterReserve.data, amount))) {
+            actions.push({ status: 'waiting', reason: 'pv2-target-capacity', targetId, amount });
+            this.progressTracker.set({
+                running: false,
+                state: 'WAITING_PV2_TARGET_CAPACITY',
+                currentStep: { kind: 'DEPOSIT', id: targetId }
+            });
+        }
+
+        if (allowFinalB5 && targetCapacityAvailable
+            && (afterReserve.data.fullPlan.feasible || this.recipeResolver.isB5DirectlyReady(afterReserve.data, amount))) {
             let finalSteps = afterReserve.data.finalSteps || [];
-            if (this.#isB5DirectlyReady(afterReserve.data, amount)) {
-                const targetRecipe = this.#recipeForOutput(targetId, finalSteps);
+            if (this.recipeResolver.isB5DirectlyReady(afterReserve.data, amount)) {
+                const targetRecipe = this.recipeResolver.recipeForOutput(targetId, finalSteps);
                 if (!targetRecipe) {
                     throw new FlowError(`B5 recipe not found for ${targetId}.`, {
                         code: 'B5_TARGET_RECIPE_NOT_FOUND', subsystem: 'b5', step: 'craft-final-chain',
@@ -349,24 +509,40 @@ class B5AutomationService {
                 finalSteps = [{ recipeId: targetRecipe.recipeId, outputId: targetId, crafts: amount }];
             }
 
-            await this.#runStep(context, {
-                subsystem: 'b5',
-                step: 'craft-final-chain',
-                action: 'craft highest-priority B4/B5 final steps',
-                resource: targetId,
-                details: { steps: finalSteps }
-            }, () => this.#executeFinalSteps(finalSteps, context));
+            try {
+                await this.#runStep(context, {
+                    subsystem: 'b5',
+                    step: 'craft-final-chain',
+                    action: 'craft highest-priority B4/B5 final steps',
+                    resource: targetId,
+                    details: { steps: finalSteps, targetId, targetVaultBefore }
+                }, () => this.#executeFinalSteps(finalSteps, context));
+            } catch (error) {
+                // StepRunner intentionally preserves the leaf FlowError details at
+                // top-level and moves wrapper context into parentFlow. Normalize the
+                // final-B5 completion context here, before the error leaves the B5
+                // owner, so consumers never have to guess through arbitrary nesting.
+                throw FlowError.wrap(error, {
+                    details: {
+                        b5CompletionContext: {
+                            finalChain: true,
+                            targetId,
+                            targetVaultBefore
+                        }
+                    }
+                });
+            }
 
-            this.#setLiveProgress({ running: true, state: 'DEPOSITING', currentStep: { kind: 'DEPOSIT', id: targetId } });
+            this.progressTracker.set({ running: true, state: 'DEPOSITING', currentStep: { kind: 'DEPOSIT', id: targetId } });
             await this.#runStep(context, {
                 subsystem: 'b5', step: 'deposit-b5', action: 'deposit final B5 to /pv 2', resource: targetId
-            }, () => this.personalVault.deposit(targetId, { cancellationToken: context.cancellation.token }));
-            this.#advanceLiveProgress(1);
+            }, () => this.flows.deposit.deposit(targetId, this.#childOptions(context)));
+            this.progressTracker.advance(1);
 
-            this.#setLiveProgress({ running: true, state: 'VERIFYING', currentStep: { kind: 'VERIFY', id: targetId } });
+            this.progressTracker.set({ running: true, state: 'VERIFYING', currentStep: { kind: 'VERIFY', id: targetId } });
             const vaultAfterResult = await this.#runStep(context, {
                 subsystem: 'b5', step: 'verify-b5-deposit', action: 'read /pv 2 after deposit', resource: targetId
-            }, () => this.personalVault.read({ cancellationToken: context.cancellation.token }));
+            }, () => this.flows.read.readPv2(this.#childOptions(context)));
             const targetVaultAfter = Number(vaultAfterResult.data?.totals?.[targetId] || 0);
             if (targetVaultAfter < targetVaultBefore + amount) {
                 throw new FlowError(
@@ -378,9 +554,9 @@ class B5AutomationService {
                     }
                 );
             }
-            this.#advanceLiveProgress(1);
+            this.progressTracker.advance(1);
             completedNewB5 = true;
-            this.#setLiveProgress({
+            this.progressTracker.set({
                 running: true,
                 state: 'POST_PROCESSING',
                 currentStep: { kind: 'STORE', id: targetId },
@@ -399,7 +575,7 @@ class B5AutomationService {
                 const postB5Inspection = await this.#runStep(context, {
                     subsystem: 'b5', step: 'inspect-post-b5', action: 'refresh lower tiers after B5 consumption', resource: 'B2-B4'
                 }, inspect);
-                this.#setLiveProgress({ running: true, state: 'COMPACTING', currentStep: { kind: 'CONVERT_BLOCKS', id: 'B2-B4' } });
+                this.progressTracker.set({ running: true, state: 'COMPACTING', currentStep: { kind: 'CONVERT_BLOCKS', id: 'B2-B4' } });
                 const postB5Promotion = await this.#runStep(context, {
                     subsystem: 'b5', step: 'post-b5-compaction', action: 'compress leftover B2/B3 into B3/B4 for next cycle', resource: 'B2-B4'
                 }, () => this.#promoteOwnedIntermediates(postB5Inspection, inspect, context, { stopAtB5Ready: false }));
@@ -413,17 +589,15 @@ class B5AutomationService {
                 actions
             );
 
-            this.#setLiveProgress({ running: true, state: 'COMPACTING', currentStep: { kind: 'CONVERT_BLOCKS', id: 'B1' } });
+            this.progressTracker.set({ running: true, state: 'COMPACTING', currentStep: { kind: 'CONVERT_BLOCKS', id: 'B1' } });
             const compacted = await this.#runStep(context, {
                 subsystem: 'b5', step: 'compact-all-b1', action: 'convert remaining B1 to blocks', resource: 'B1'
-            }, () => this.b1Materials.compactAll({ cancellationToken: context.cancellation.token }));
+            }, () => this.flows.storage.compactAll(this.#childOptions(context)));
             actions.push({ status: 'all-b1-compacted', data: compacted.data });
 
-            // Do not sell just because B5 succeeded. Sell only when /kho
-            // capacity is actually near full, always choosing the largest
-            // compacted B1 stock first.
-            await this.#relieveStoragePressureIfNeeded(context, actions, 'B1', { legacyFallback: true });
-            this.#setLiveProgress({
+            // Selling never occurs inside a craft campaign. The next B5 batch
+            // starts with the mode-owned storage protection boundary.
+            this.progressTracker.set({
                 running: false,
                 state: 'SUCCESS',
                 currentStep: { kind: 'DONE', id: targetId },
@@ -437,20 +611,24 @@ class B5AutomationService {
         if (!completedNewB5) {
             // No B5 yet: still store only irreducible lower-tier remainder after
             // every possible B2->B3 and B3->B4 promotion has been attempted.
-            await this.#depositIntermediateRemainders(
-                { ...afterReserve.data, chains: chainCatalog.length > 0 ? chainCatalog : (afterReserve.data?.chains || []) },
-                context,
-                actions
-            );
+            // When PV2 has no proven target capacity, do not add more
+            // intermediates to the same full vault. Keep them in inventory and
+            // only perform B1 storage maintenance until capacity is available.
+            if (!targetCapacityBlocked) {
+                await this.#depositIntermediateRemainders(
+                    { ...afterReserve.data, chains: chainCatalog.length > 0 ? chainCatalog : (afterReserve.data?.chains || []) },
+                    context,
+                    actions
+                );
+            }
 
             if (mode === 'maintenance') {
-                this.#setLiveProgress({ running: true, state: 'COMPACTING', currentStep: { kind: 'CONVERT_BLOCKS', id: 'B1' } });
+                this.progressTracker.set({ running: true, state: 'COMPACTING', currentStep: { kind: 'CONVERT_BLOCKS', id: 'B1' } });
                 const compacted = await this.#runStep(context, {
                     subsystem: 'b5', step: 'maintenance-compact-b1', action: 'compact B1 during storage maintenance', resource: 'B1'
-                }, () => this.b1Materials.compactAll({ cancellationToken: context.cancellation.token }));
+                }, () => this.flows.storage.compactAll(this.#childOptions(context)));
                 actions.push({ status: 'maintenance-b1-compacted', data: compacted.data });
-                await this.#relieveStoragePressureIfNeeded(context, actions, 'B1', { legacyFallback: true });
-                this.#setLiveProgress({
+                    this.progressTracker.set({
                     running: false,
                     state: 'MAINTENANCE_COMPLETE',
                     currentStep: { kind: 'DONE', id: 'STORAGE' },
@@ -458,19 +636,15 @@ class B5AutomationService {
                     remainingCrafts: Number(afterReserve.data?.progress?.remainingCrafts || 0)
                 });
             } else {
-                // A production pass may have crafted only B2/B3/B4. That is
-                // still a crafting boundary: immediately put every loose B1
-                // back into block form before Collector loops again. Otherwise
-                // continuously-fed B1 can accumulate while the next plan is
-                // being inspected and eventually overflow /kho into inventory.
-                this.#setLiveProgress({ running: true, state: 'COMPACTING', currentStep: { kind: 'CONVERT_BLOCKS', id: 'B1' } });
-                const compacted = await this.#runStep(context, {
-                    subsystem: 'b5', step: 'post-production-compact-b1', action: 'compact all loose B1 after partial production pass', resource: 'B1'
-                }, () => this.b1Materials.compactAll({ cancellationToken: context.cancellation.token }));
-                actions.push({ status: 'post-production-b1-compacted', data: compacted.data });
-                await this.#relieveStoragePressureIfNeeded(context, actions, 'B1');
+                // Continuous B1 supply must be allowed to accumulate in loose
+                // form until a complete B2 batch (64) is fundable. Compacting
+                // every partial/no-op production pass recreates a deadlock:
+                // loose B1 is compressed before the next planner pass, then the
+                // block reserve cannot be expanded safely, so B2 never starts.
+                // Storage selling is owned by the next batch-protection boundary;
+                // do not sell or compact normal loose B1 here.
 
-                this.#setLiveProgress({
+                this.progressTracker.set({
                     running: false,
                     state: 'WAITING_MATERIALS',
                     currentStep: afterReserve.data?.progress?.nextStep || null,
@@ -479,63 +653,19 @@ class B5AutomationService {
                 });
             }
         }
+        const blockingReasons = B5ActionDiagnostics.blockingReasons(actions);
+        const productive = completedNewB5 || actions.some(action => B5ActionDiagnostics.isProductiveAction(action));
+        const actionSummary = B5ActionDiagnostics.summarizeActions(actions);
         return {
             amount, additional, mode, allowFinalB5, allowNewB2: createNewB2, actions,
             complete: completedNewB5, completedNewB5, targetId,
-            b5Ready: this.#isB5DirectlyReady(afterReserve.data, amount),
-            pv2Backpressure: first.data?.personalVaultPressure || null,
-            waitingForMaterials: !completedNewB5 && actions.some(action => action?.status === 'waiting'),
+            plan: afterReserve.data?.executionPlan || workingInspection.data?.executionPlan || first.data?.executionPlan || null,
+            b5Ready: this.recipeResolver.isB5DirectlyReady(afterReserve.data, amount),
+            pv2Backpressure: afterReserve.data?.personalVaultPressure || first.data?.personalVaultPressure || null,
+            waitingForMaterials: !completedNewB5 && blockingReasons.length > 0,
+            productive, blockingReasons, actionSummary,
             progress: this.status()
         };
-    }
-
-    #syncLiveProgress(data, targetId, override = {}) {
-        const progress = data?.progress || {};
-        return this.#setLiveProgress({
-            running: true,
-            state: progress.state || (progress.feasible ? 'READY' : 'PREPARING'),
-            currentStep: progress.nextStep || { kind: 'PLAN', id: targetId },
-            remainingStages: Number(progress.remainingStages || 0),
-            remainingCrafts: Number(progress.remainingCrafts || 0),
-            targetId,
-            priority: 'B5>B4>B3>B2',
-            ...override
-        });
-    }
-
-    #recipeForOutput(outputId, fallbackSteps = []) {
-        const directStep = (fallbackSteps || []).find(step => step?.outputId === outputId && step?.recipeId);
-        if (directStep) {
-            try {
-                return { recipeId: directStep.recipeId, recipe: this.recipeRegistry.require(directStep.recipeId) };
-            } catch {}
-        }
-        if (typeof this.recipeRegistry?.ids === 'function') {
-            for (const recipeId of this.recipeRegistry.ids()) {
-                try {
-                    const recipe = this.recipeRegistry.require(recipeId);
-                    if (recipe?.output === outputId) return { recipeId, recipe };
-                } catch {}
-            }
-        }
-        try {
-            const recipe = this.recipeRegistry.require(outputId);
-            if (recipe && (!recipe.output || recipe.output === outputId)) return { recipeId: outputId, recipe };
-        } catch {}
-        return null;
-    }
-
-    #isB5DirectlyReady(data, amount = 1) {
-        const targetId = data?.fullPlan?.targetId || this.config?.targetId || 'super_alloy';
-        const targetRecipe = this.#recipeForOutput(targetId, data?.finalSteps || []);
-        if (!targetRecipe?.recipe) return false;
-        const available = data?.nonStorageAvailable || {};
-        const targetAmount = Math.max(1, Number(amount || 1));
-        const entries = Object.entries(targetRecipe.recipe.inputs || {}).filter(([, count]) => Number(count) > 0);
-        if (entries.length === 0) return false;
-        return entries.every(([id, perCraft]) =>
-            Number(available[id] || 0) >= Number(perCraft) * targetAmount
-        );
     }
 
     async #promoteOwnedIntermediates(initialInspection, inspect, context, { stopAtB5Ready = true } = {}) {
@@ -549,7 +679,7 @@ class B5AutomationService {
 
             // B5 has absolute priority. Once all B4 inputs exist, stop compacting
             // lower tiers and let the main flow craft the B5 immediately.
-            if (stopAtB5Ready && this.#isB5DirectlyReady(inspection.data, 1)) break;
+            if (stopAtB5Ready && this.recipeResolver.isB5DirectlyReady(inspection.data, 1)) break;
 
             const b4Compacted = await this.#compactReadyB4(inspection, inspect, context, { stopAtB5Ready });
             if (b4Compacted.length > 0) {
@@ -557,17 +687,17 @@ class B5AutomationService {
                 actions.push({ status: 'b3-promoted-to-b4', data: b4Compacted });
                 inspection = await inspect();
                 if (inspection?.success === false) throw inspection.error || new Error(inspection.message || 'B5 promotion re-inspection failed.');
-                if (stopAtB5Ready && this.#isB5DirectlyReady(inspection.data, 1)) break;
+                if (stopAtB5Ready && this.recipeResolver.isB5DirectlyReady(inspection.data, 1)) break;
             }
 
             // B4 cannot advance further right now. Compress every complete B2
             // group into B3, regardless of whether that B3 is already sufficient
-            // for the current B5 plan. Lower tiers are storage pressure.
+            // for the current B5 plan. Lower tiers remain intermediate inventory to promote.
             let promotedB2 = false;
             for (const chain of inspection.data?.chains || []) {
                 context.cancellation.token.throwIfCancelled();
                 const inputPerCraft = Math.max(1, Number(chain.b3InputPerCraft || 1));
-                const inventoryB2 = Math.max(Number(chain.inventoryB2 || 0), this.#inventoryCount(chain.b2Id));
+                const inventoryB2 = Math.max(Number(chain.inventoryB2 || 0), this.inventoryState.count(chain.b2Id));
                 const ownedB2 = Math.max(0, Number(chain.vaultB2 || 0) + inventoryB2);
                 const crafts = Math.floor(ownedB2 / inputPerCraft);
                 if (crafts <= 0) continue;
@@ -604,10 +734,10 @@ class B5AutomationService {
                 }
                 inspection = await inspect();
                 if (inspection?.success === false) throw inspection.error || new Error(inspection.message || 'B5 promotion re-inspection failed.');
-                if (stopAtB5Ready && this.#isB5DirectlyReady(inspection.data, 1)) break;
+                if (stopAtB5Ready && this.recipeResolver.isB5DirectlyReady(inspection.data, 1)) break;
             }
 
-            if (stopAtB5Ready && this.#isB5DirectlyReady(inspection.data, 1)) break;
+            if (stopAtB5Ready && this.recipeResolver.isB5DirectlyReady(inspection.data, 1)) break;
             if (!changed || !promotedB2) {
                 // If only B4 changed, one more inspection has already been done;
                 // another pass cannot create new B3 by itself.
@@ -619,23 +749,23 @@ class B5AutomationService {
     }
 
     async #depositIntermediateRemainders(data, context, actions = []) {
-        this.#setLiveProgress({ running: true, state: 'STORING', currentStep: { kind: 'STORE', id: 'B2-B4' } });
+        this.progressTracker.set({ running: true, state: 'STORING', currentStep: { kind: 'STORE', id: 'B2-B4' } });
         for (const chain of data?.chains || []) {
             context.cancellation.token.throwIfCancelled();
-            const b3Count = this.#inventoryCount(chain.b3Id);
+            const b3Count = this.inventoryState.count(chain.b3Id);
             if (b3Count > 0) {
                 const result = await this.#runStep(context, {
                     subsystem: 'b5', step: 'store-irreducible-b3', action: 'deposit B3 only after all possible B4 compaction', resource: chain.b3Id,
                     details: { count: b3Count }
-                }, () => this.personalVault.deposit(chain.b3Id, { cancellationToken: context.cancellation.token }));
+                }, () => this.flows.deposit.deposit(chain.b3Id, this.#childOptions(context)));
                 actions.push({ status: 'b3-remainder-stored', id: chain.b3Id, data: result?.data });
             }
-            const b2Count = this.#inventoryCount(chain.b2Id);
+            const b2Count = this.inventoryState.count(chain.b2Id);
             if (b2Count > 0) {
                 const result = await this.#runStep(context, {
                     subsystem: 'b5', step: 'store-irreducible-b2', action: 'deposit B2 remainder smaller than one B3 craft', resource: chain.b2Id,
                     details: { count: b2Count, b3InputPerCraft: chain.b3InputPerCraft }
-                }, () => this.personalVault.deposit(chain.b2Id, { cancellationToken: context.cancellation.token }));
+                }, () => this.flows.deposit.deposit(chain.b2Id, this.#childOptions(context)));
                 actions.push({ status: 'b2-remainder-stored', id: chain.b2Id, data: result?.data });
             }
         }
@@ -652,6 +782,10 @@ class B5AutomationService {
         //   2) only the reserved empty slot remains.
         // Then B2 -> B3 uses ALL once, which compresses the inventory heavily.
         const minFreeForB3All = Math.max(1, Number(this.config?.b3AllMinEmptySlots || 1));
+        const accumulationSafetyFloor = Math.max(
+            minFreeForB3All + 1,
+            Math.max(0, Number(this.config?.inventorySafetyEmptySlots || 0))
+        );
         let b2Remaining = Number(chain.b2Crafts || 0);
         let b3Remaining = Number(chain.b3Crafts || 0);
         let vaultB2Remaining = Number(chain.vaultB2 || 0);
@@ -667,14 +801,14 @@ class B5AutomationService {
                 });
             }
 
-            let inventory = this.#inventorySnapshot();
+            let inventory = this.inventoryState.snapshot();
             let b2Count = this.inventoryCounter.count(inventory, chain.b2Id);
             const b3CraftableNow = Math.floor(b2Count / Math.max(1, chain.b3InputPerCraft));
             const enoughB2ForRemainingB3 = b3Remaining > 0 && b3CraftableNow >= b3Remaining;
             // Keep one extra buffer slot while Collector is standing on the pickup point.
             // A server pickup can consume a slot between the B2 check and the B3 ALL click.
             // Compress one step earlier so the required B3 output slot is not lost to that race.
-            const atB3SafetyFloor = Number(inventory.emptySlotCount || 0) <= (minFreeForB3All + 1);
+            const atB3SafetyFloor = Number(inventory.emptySlotCount || 0) <= accumulationSafetyFloor;
             const noMoreB2SupplyPlanned = b2Remaining <= 0 && vaultB2Remaining <= 0;
 
             // Compress only when it is useful to do so in one large ALL click:
@@ -705,7 +839,7 @@ class B5AutomationService {
                 }
                 if (b2Count < chain.b3InputPerCraft) continue;
 
-                const quantity = this.#allEnabled('useAllForB3')
+                const quantity = this.inventoryState.allEnabled('useAllForB3')
                     ? 'ALL'
                     : (b3Remaining >= 64 && b2Count >= chain.b3InputPerCraft * 64 ? 64 : 1);
                 this.#quantityTrace('B5 QUANTITY DECISION', {
@@ -717,13 +851,13 @@ class B5AutomationService {
                     emptySlotCount: inventory.emptySlotCount,
                     minFreeForB3All
                 });
-                this.#setLiveProgress({
+                this.progressTracker.set({
                     running: true,
                     state: 'CRAFTING_B3',
                     currentStep: { kind: 'B3', id: chain.b3Id, crafts: b3Remaining }
                 });
                 const crafted = await this.#craftOrThrow(chain.b3RecipeId, quantity, context, chain.b3Id);
-                const actualCrafts = this.#actualCrafts(crafted, quantity);
+                const actualCrafts = this.inventoryState.actualCrafts(crafted, quantity);
                 if (actualCrafts <= 0) {
                     throw new FlowError(`Craft ${chain.b3Id} reported no completed crafts.`, {
                         code: 'B5_ALL_CRAFT_ZERO', subsystem: 'b5', step: 'reserve-b3-chain', action: `craft quantity ${quantity}`,
@@ -735,11 +869,15 @@ class B5AutomationService {
                 continue;
             }
 
-            if (b3Remaining <= 0) break;
+            // A B2-only reserve pass is valid: the planner may intentionally ask
+            // us to produce B2 now and defer B2 -> B3 until a later re-plan. Do
+            // not stop merely because b3Remaining is zero; the while condition
+            // owns termination for the combined B2/B3 budget.
 
-            // Prefer already-owned B2 from /pv 2. Withdraw only as many stacks as
-            // fit while preserving the one empty slot required by B3 ALL.
-            if (vaultB2Remaining > 0 && Number(inventory.emptySlotCount || 0) > minFreeForB3All) {
+            // Prefer already-owned B2 from /pv 2 only when B3 is actually still
+            // required. A B2-only pass must produce its planned B2 from B1, not
+            // withdraw unrelated existing B2 and then report the stage complete.
+            if (b3Remaining > 0 && vaultB2Remaining > 0 && Number(inventory.emptySlotCount || 0) > minFreeForB3All) {
                 const freeStackSlots = Math.max(0, Number(inventory.emptySlotCount || 0) - minFreeForB3All);
                 const b2StillUseful = Math.max(0, b3Remaining * chain.b3InputPerCraft - b2Count);
                 const wantedStacks = Math.max(1, Math.ceil(Math.min(vaultB2Remaining, b2StillUseful || vaultB2Remaining) / 64));
@@ -748,11 +886,10 @@ class B5AutomationService {
                 const withdrawn = await this.#runStep(context, {
                     subsystem: 'b5', step: 'withdraw-existing-b2', action: 'withdraw B2 from /pv 2 while reserving one empty slot', resource: chain.b2Id,
                     details: { vaultB2Remaining, b2Count, b3Remaining, maxStacks, emptySlotCount: inventory.emptySlotCount, minFreeForB3All }
-                }, () => this.personalVault.withdraw(chain.b2Id, {
+                }, () => this.flows.withdraw.withdraw(chain.b2Id, this.#childOptions(context, {
                     maxStacks,
-                    cancellationToken: context.cancellation.token
-                }));
-                inventory = this.#inventorySnapshot();
+                })));
+                inventory = this.inventoryState.snapshot();
                 b2Count = this.inventoryCounter.count(inventory, chain.b2Id);
                 const gained = Math.max(0, b2Count - before);
                 if (gained > 0) vaultB2Remaining = Math.max(0, vaultB2Remaining - gained);
@@ -777,13 +914,15 @@ class B5AutomationService {
                     minFreeAfterCraft: minFreeForB3All,
                     storageSafetyGuarded: quantity === 'ALL'
                 });
-                this.#setLiveProgress({
+                this.progressTracker.set({
                     running: true,
                     state: 'CRAFTING_B2',
                     currentStep: { kind: 'B2', id: chain.b2Id, crafts: b2Remaining }
                 });
-                const crafted = await this.#craftOrThrow(chain.b2RecipeId, quantity, context, chain.b2Id);
-                const actualCrafts = this.#actualCrafts(crafted, quantity);
+                const crafted = await this.#craftOrThrow(chain.b2RecipeId, quantity, context, chain.b2Id, {
+                    reconciliationBaseline: chain.reconciliationBaseline || null
+                });
+                const actualCrafts = this.inventoryState.actualCrafts(crafted, quantity);
                 if (actualCrafts <= 0) {
                     throw new FlowError(`Craft ${chain.b2Id} reported no completed crafts.`, {
                         code: 'B5_B2_CRAFT_ZERO', subsystem: 'b5', step: 'reserve-b3-chain', action: `craft quantity ${quantity}`,
@@ -791,6 +930,24 @@ class B5AutomationService {
                     });
                 }
                 b2Remaining = Math.max(0, b2Remaining - actualCrafts);
+                if (quantity === 'ALL') {
+                    // B1 -> B2 ALL is a storage-backed irreversible transaction.
+                    // Do not issue the same ALL again from this stale plan just
+                    // because plannedB2 was larger than the loose B1 available
+                    // for the first click. Return to the caller, compact/refresh
+                    // /kho, and let the normal top-down re-plan decide whether
+                    // more B2 or an immediate B2 -> B3 promotion is appropriate.
+                    return {
+                        b2Id: chain.b2Id,
+                        b3Id: chain.b3Id,
+                        deferred: deferIntermediateDeposit,
+                        deferredForFreshReplan: true,
+                        reason: 'b1-b2-all-transaction-boundary',
+                        craftedB2Count: actualCrafts,
+                        b2Remaining,
+                        b3Remaining
+                    };
+                }
                 continue;
             }
 
@@ -844,10 +1001,10 @@ class B5AutomationService {
         if (!deferIntermediateDeposit) {
             await this.#runStep(context, {
                 subsystem: 'b5', step: 'deposit-b3-reserve', action: 'deposit completed B3 reserve to /pv 2 before next material', resource: chain.b3Id
-            }, () => this.personalVault.deposit(chain.b3Id, { cancellationToken: context.cancellation.token }));
+            }, () => this.flows.deposit.deposit(chain.b3Id, this.#childOptions(context)));
             await this.#runStep(context, {
                 subsystem: 'b5', step: 'deposit-b2-leftover', action: 'deposit B2 leftover to /pv 2 before next material', resource: chain.b2Id
-            }, () => this.personalVault.deposit(chain.b2Id, { cancellationToken: context.cancellation.token }));
+            }, () => this.flows.deposit.deposit(chain.b2Id, this.#childOptions(context)));
         }
         return { b2Id: chain.b2Id, b3Id: chain.b3Id, deferred: deferIntermediateDeposit };
     }
@@ -857,72 +1014,91 @@ class B5AutomationService {
         if (inspection?.success === false) throw inspection.error || new Error(inspection.message || 'B5 inspection failed during B4 compaction.');
         const compacted = [];
         const targetId = inspection.data?.fullPlan?.targetId || this.config?.targetId || 'super_alloy';
-        const targetRecipe = this.#recipeForOutput(targetId, inspection.data?.finalSteps || []);
+        const targetRecipe = this.recipeResolver.recipeForOutput(targetId, inspection.data?.finalSteps || []);
         if (!targetRecipe?.recipe) return compacted;
         const b4Ids = Object.keys(targetRecipe.recipe.inputs || {});
 
-        // TARGET pass fills the exact B4 shortage for the next B5 first.
-        // SURPLUS pass keeps compressing any remaining B3 into any B4 that can
-        // be made. Batches are capped at 32 B4 so all recipe inputs fit safely
-        // in a normal player inventory; the loop repeats until no more progress.
-        for (const phase of ['TARGET', 'SURPLUS']) {
-            for (const outputId of b4Ids) {
-                let batchGuard = 0;
-                while (batchGuard < 128) {
-                    batchGuard += 1;
-                    context.cancellation.token.throwIfCancelled();
-                    if (stopAtB5Ready && this.#isB5DirectlyReady(inspection.data, 1)) return compacted;
-
-                    const recipeEntry = this.#recipeForOutput(outputId, inspection.data?.finalSteps || []);
-                    if (!recipeEntry?.recipe) break;
-                    const recipe = recipeEntry.recipe;
-                    const entries = Object.entries(recipe.inputs || {}).filter(([, amount]) => Number(amount) > 0);
-                    if (entries.length === 0) break;
-
-                    const available = inspection.data?.nonStorageAvailable || {};
-                    let craftableNow = Number.MAX_SAFE_INTEGER;
-                    for (const [logicalId, perCraft] of entries) {
-                        craftableNow = Math.min(craftableNow,
-                            Math.floor(Math.max(0, Number(available[logicalId] || 0)) / Number(perCraft))
-                        );
-                    }
-                    craftableNow = Math.max(0, Number.isFinite(craftableNow) ? Math.floor(craftableNow) : 0);
-                    if (craftableNow <= 0) break;
-
-                    const perTarget = Number(targetRecipe.recipe.inputs?.[outputId] || 0);
-                    const requiredForNextB5 = Math.max(0, perTarget);
-                    const existingB4 = Math.max(0, Number(available[outputId] || 0));
-                    const missingForNextB5 = Math.max(0, requiredForNextB5 - existingB4);
-                    let crafts = 0;
-                    if (phase === 'TARGET') {
-                        crafts = Math.min(craftableNow, missingForNextB5);
-                    } else {
-                        crafts = Math.min(craftableNow, 32);
-                    }
-                    crafts = Math.max(0, Math.floor(crafts));
-                    if (crafts <= 0) break;
-
-                    await this.#executeFinalSteps([{
-                        recipeId: recipeEntry.recipeId,
-                        outputId,
-                        crafts
-                    }], context);
-                    await this.personalVault.deposit(outputId, { cancellationToken: context.cancellation.token });
-                    compacted.push({
-                        outputId,
-                        recipeId: recipeEntry.recipeId,
-                        crafts,
-                        phase: phase === 'TARGET' ? 'b5-priority' : 'storage-compaction'
-                    });
-
-                    inspection = await inspect();
-                    if (inspection?.success === false) throw inspection.error || new Error(inspection.message || 'B5 inspection failed after B4 compaction.');
-                    if (phase === 'TARGET') {
-                        const nextAvailable = Number(inspection.data?.nonStorageAvailable?.[outputId] || 0);
-                        if (nextAvailable >= requiredForNextB5) break;
-                    }
-                }
+        const candidateFor = outputId => {
+            const recipeEntry = this.recipeResolver.recipeForOutput(outputId, inspection.data?.finalSteps || []);
+            if (!recipeEntry?.recipe) return null;
+            const entries = Object.entries(recipeEntry.recipe.inputs || {}).filter(([, amount]) => Number(amount) > 0);
+            if (entries.length === 0) return null;
+            const available = inspection.data?.nonStorageAvailable || {};
+            let craftableNow = Number.MAX_SAFE_INTEGER;
+            for (const [logicalId, perCraft] of entries) {
+                craftableNow = Math.min(craftableNow,
+                    Math.floor(Math.max(0, Number(available[logicalId] || 0)) / Number(perCraft))
+                );
             }
+            const perTarget = Math.max(0, Number(targetRecipe.recipe.inputs?.[outputId] || 0));
+            const existingB4 = Math.max(0, Number(available[outputId] || 0));
+            return {
+                outputId,
+                recipeEntry,
+                craftableNow: Math.max(0, Number.isFinite(craftableNow) ? Math.floor(craftableNow) : 0),
+                perTarget,
+                existingB4,
+                normalizedCoverage: perTarget > 0 ? existingB4 / perTarget : Number.POSITIVE_INFINITY
+            };
+        };
+        const craftCandidate = async (candidate, crafts, phase) => {
+            await this.#executeFinalSteps([{
+                recipeId: candidate.recipeEntry.recipeId,
+                outputId: candidate.outputId,
+                crafts
+            }], context);
+            await this.flows.deposit.deposit(candidate.outputId, this.#childOptions(context));
+            compacted.push({
+                outputId: candidate.outputId,
+                recipeId: candidate.recipeEntry.recipeId,
+                crafts,
+                phase
+            });
+            inspection = await inspect();
+            if (inspection?.success === false) {
+                throw inspection.error || new Error(inspection.message || 'B5 inspection failed after B4 compaction.');
+            }
+        };
+
+        // First fill the exact shortage for one B5. This is deterministic and
+        // keeps the global B5 > B4 priority intact.
+        for (const outputId of b4Ids) {
+            let guard = 0;
+            while (guard < 128) {
+                guard += 1;
+                context.cancellation.token.throwIfCancelled();
+                if (stopAtB5Ready && this.recipeResolver.isB5DirectlyReady(inspection.data, 1)) return compacted;
+                const candidate = candidateFor(outputId);
+                if (!candidate || candidate.craftableNow <= 0) break;
+                const missing = Math.max(0, candidate.perTarget - candidate.existingB4);
+                const crafts = Math.max(0, Math.floor(Math.min(candidate.craftableNow, missing)));
+                if (crafts <= 0) break;
+                await craftCandidate(candidate, crafts, 'b5-priority');
+            }
+        }
+
+        // Surplus B3 can be shared by multiple B4 recipes. Re-rank after every
+        // bounded batch by owned/per-B5 ratio so the first recipe cannot drain
+        // all shared inputs and strand an unusable mix. A quantum is at most one
+        // target's requirement (and never above 32 for inventory safety).
+        let surplusGuard = 0;
+        while (surplusGuard < 512) {
+            surplusGuard += 1;
+            context.cancellation.token.throwIfCancelled();
+            if (stopAtB5Ready && this.recipeResolver.isB5DirectlyReady(inspection.data, 1)) break;
+            const candidates = b4Ids
+                .map(candidateFor)
+                .filter(candidate => candidate && candidate.craftableNow > 0 && candidate.perTarget > 0)
+                .sort((a, b) =>
+                    a.normalizedCoverage - b.normalizedCoverage
+                    || b.perTarget - a.perTarget
+                    || a.outputId.localeCompare(b.outputId));
+            const candidate = candidates[0];
+            if (!candidate) break;
+            const quantum = Math.max(1, Math.min(32, candidate.perTarget));
+            const crafts = Math.max(0, Math.floor(Math.min(candidate.craftableNow, quantum)));
+            if (crafts <= 0) break;
+            await craftCandidate(candidate, crafts, 'storage-compaction-balanced');
         }
         return compacted;
     }
@@ -933,13 +1109,13 @@ class B5AutomationService {
         preferCurrentB2 = false,
         allChains = []
     } = {}) {
-        this.#setLiveProgress({
+        this.progressTracker.set({
             running: true,
             state: 'FREEING_SPACE',
             currentStep: { kind: 'SPACE', id: chain.b3Id }
         });
 
-        let snapshot = this.#inventorySpaceSnapshot();
+        let snapshot = this.inventoryState.spaceSnapshot();
         let depositedB2Count = 0;
         let attempts = 0;
         let emergencyParkedCurrentB2 = false;
@@ -951,19 +1127,18 @@ class B5AutomationService {
         // Do this before considering unrelated intermediates so the carry stack
         // is explicit and can be recovered by the next plan from PV2.
         if (preferCurrentB2 && Number(snapshot.emptySlotCount || 0) < minFreeSlots) {
-            const beforeCount = this.#inventoryCount(chain.b2Id);
+            const beforeCount = this.inventoryState.count(chain.b2Id);
             if (beforeCount >= 64) {
                 attempts += 1;
                 attemptedIds.add(chain.b2Id);
-                const parked = await this.personalVault.deposit(chain.b2Id, {
+                const parked = await this.flows.deposit.deposit(chain.b2Id, this.#childOptions(context, {
                     maxStacks: 1,
-                    cancellationToken: context.cancellation.token
-                });
+                }));
                 if (parked?.success !== false) {
-                    const afterCount = this.#inventoryCount(chain.b2Id);
+                    const afterCount = this.inventoryState.count(chain.b2Id);
                     const moved = Math.max(0, beforeCount - afterCount);
                     depositedB2Count += moved > 0 ? moved : Math.max(0, Number(parked?.data?.movedStacks || 0)) * 64;
-                    snapshot = await this.#waitForFreeInventorySlots(minFreeSlots, context.cancellation.token);
+                    snapshot = await this.inventoryState.waitForFreeSlots(minFreeSlots, context.cancellation.token);
                     if (Number(snapshot.emptySlotCount || 0) >= minFreeSlots) {
                         return { snapshot, depositedB2Count, emergencyParkedCurrentB2: true };
                     }
@@ -986,23 +1161,22 @@ class B5AutomationService {
             if (!logicalId || attemptedIds.has(logicalId)) continue;
             attemptedIds.add(logicalId);
 
-            const beforeCount = this.#inventoryCount(logicalId);
+            const beforeCount = this.inventoryState.count(logicalId);
             if (beforeCount <= 0) continue;
             if (logicalId === chain.b2Id && beforeCount - 64 < preserveAtLeastB2) continue;
 
             attempts += 1;
-            const result = await this.personalVault.deposit(logicalId, {
+            const result = await this.flows.deposit.deposit(logicalId, this.#childOptions(context, {
                 maxStacks: 1,
-                cancellationToken: context.cancellation.token
-            });
+            }));
             if (result?.success === false) continue;
 
-            const afterCount = this.#inventoryCount(logicalId);
+            const afterCount = this.inventoryState.count(logicalId);
             if (logicalId === chain.b2Id) {
                 depositedB2Count += Math.max(0, beforeCount - afterCount);
             }
 
-            snapshot = await this.#waitForFreeInventorySlots(minFreeSlots, context.cancellation.token);
+            snapshot = await this.inventoryState.waitForFreeSlots(minFreeSlots, context.cancellation.token);
             if (Number(snapshot.emptySlotCount || 0) >= minFreeSlots) break;
         }
 
@@ -1014,20 +1188,19 @@ class B5AutomationService {
         // re-plan from the now-safe PV2 state instead of immediately withdrawing
         // the parked stack back into the only free slot.
         if (Number(snapshot.emptySlotCount || 0) < minFreeSlots) {
-            const currentB2Before = this.#inventoryCount(chain.b2Id);
+            const currentB2Before = this.inventoryState.count(chain.b2Id);
             if (currentB2Before > 0) {
                 attempts += 1;
-                const parked = await this.personalVault.deposit(chain.b2Id, {
+                const parked = await this.flows.deposit.deposit(chain.b2Id, this.#childOptions(context, {
                     maxStacks: 1,
-                    cancellationToken: context.cancellation.token
-                });
+                }));
                 if (parked?.success !== false) {
-                    const currentB2After = this.#inventoryCount(chain.b2Id);
+                    const currentB2After = this.inventoryState.count(chain.b2Id);
                     const moved = Math.max(0, currentB2Before - currentB2After);
                     if (moved > 0 || Number(parked?.data?.movedStacks || 0) > 0) {
                         depositedB2Count += moved > 0 ? moved : Number(parked?.data?.movedStacks || 0) * 64;
                         emergencyParkedCurrentB2 = true;
-                        snapshot = await this.#waitForFreeInventorySlots(minFreeSlots, context.cancellation.token);
+                        snapshot = await this.inventoryState.waitForFreeSlots(minFreeSlots, context.cancellation.token);
                     }
                 }
             }
@@ -1040,8 +1213,8 @@ class B5AutomationService {
                 details: {
                     minFreeSlots,
                     emptySlotCount: snapshot.emptySlotCount,
-                    b2Count: this.#inventoryCount(chain.b2Id),
-                    b3Count: this.#inventoryCount(chain.b3Id),
+                    b2Count: this.inventoryState.count(chain.b2Id),
+                    b3Count: this.inventoryState.count(chain.b3Id),
                     preserveAtLeastB2,
                     attemptedIds: [...attemptedIds],
                     attempts,
@@ -1063,7 +1236,7 @@ class B5AutomationService {
         // B4 is already maximally compact for the final recipe, so moving one
         // B4 stack to PV2 frees a slot without creating more intermediate load.
         const targetId = this.config?.targetId || 'super_alloy';
-        const targetRecipe = this.#recipeForOutput(targetId);
+        const targetRecipe = this.recipeResolver.recipeForOutput(targetId);
         for (const b4Id of Object.keys(targetRecipe?.recipe?.inputs || {})) push(b4Id);
 
         // Then offload B3 from the current/other chains, followed by other B2.
@@ -1076,33 +1249,9 @@ class B5AutomationService {
         for (const candidate of allChains || []) {
             if (candidate?.b2Id !== chain.b2Id) push(candidate?.b2Id);
         }
-        const currentB2 = this.#inventoryCount(chain.b2Id);
+        const currentB2 = this.inventoryState.count(chain.b2Id);
         if (currentB2 - 64 >= preserveAtLeastB2) push(chain.b2Id);
         return candidates;
-    }
-
-    #inventorySpaceSnapshot() {
-        const views = typeof this.inventoryReader.readViews === 'function'
-            ? this.inventoryReader.readViews()
-            : [this.#inventorySnapshot()];
-        let best = null;
-        for (const view of views || []) {
-            if (!view) continue;
-            if (!best || Number(view.emptySlotCount || 0) > Number(best.emptySlotCount || 0)) best = view;
-        }
-        return best || this.#inventorySnapshot();
-    }
-
-    async #waitForFreeInventorySlots(minFreeSlots, cancellationToken, timeoutMs = 1400) {
-        const deadline = Date.now() + Math.max(100, Number(timeoutMs) || 1400);
-        let best = this.#inventorySpaceSnapshot();
-        while (Date.now() < deadline && Number(best.emptySlotCount || 0) < minFreeSlots) {
-            cancellationToken?.throwIfCancelled?.();
-            await Timeout.delay(Math.min(75, Math.max(1, deadline - Date.now())), { cancellationToken });
-            const current = this.#inventorySpaceSnapshot();
-            if (Number(current.emptySlotCount || 0) > Number(best.emptySlotCount || 0)) best = current;
-        }
-        return best;
     }
 
     async #executeFinalSteps(steps, context) {
@@ -1111,7 +1260,7 @@ class B5AutomationService {
             const recipe = this.recipeRegistry.require(step.recipeId);
             const outputId = step.outputId || recipe.output;
             const plannedCrafts = Number(step.crafts || 0);
-            this.#setLiveProgress({
+            this.progressTracker.set({
                 running: true,
                 state: outputId === targetId ? 'CRAFTING_B5' : 'CRAFTING_B4',
                 currentStep: { kind: outputId === targetId ? 'B5' : 'B4', id: outputId, crafts: plannedCrafts }
@@ -1126,11 +1275,11 @@ class B5AutomationService {
                 // deterministic 64/1 buttons. This prevents ALL from consuming
                 // B3 reserved for a different B4 recipe.
                 await this.#ensureInputs(recipe.inputs || {}, remaining, context, step.recipeId);
-                const maxCraftable = this.#maxCraftableFromInventory(recipe.inputs || {});
+                const maxCraftable = this.inventoryState.maxCraftable(recipe.inputs || {});
                 let quantity = 1;
                 let reason = 'exact-one';
                 if ((step.outputId || recipe.output) !== targetId
-                    && this.#allEnabled('useAllForB4WhenExact')
+                    && this.inventoryState.allEnabled('useAllForB4WhenExact')
                     && remaining > 1
                     && maxCraftable === remaining) {
                     quantity = 'ALL';
@@ -1142,7 +1291,7 @@ class B5AutomationService {
 
                 // Preserve the current one-B5-per-cycle contract. ALL is only
                 // allowed for the final target if explicitly enabled later.
-                if ((step.outputId || recipe.output) === targetId && !this.#allEnabled('useAllForB5')) {
+                if ((step.outputId || recipe.output) === targetId && !this.inventoryState.allEnabled('useAllForB5')) {
                     quantity = remaining >= 64 ? 64 : 1;
                     reason = 'final-target-exact-cycle';
                 }
@@ -1152,7 +1301,7 @@ class B5AutomationService {
                     quantity, reason, remaining, maxCraftable
                 });
                 const crafted = await this.#craftOrThrow(step.recipeId, quantity, context, step.outputId || recipe.output);
-                const actualCrafts = this.#actualCrafts(crafted, quantity);
+                const actualCrafts = this.inventoryState.actualCrafts(crafted, quantity);
                 if (actualCrafts <= 0) {
                     throw new FlowError(`Craft ${step.outputId || recipe.output} reported no completed crafts.`, {
                         code: 'B5_FINAL_CRAFT_ZERO', subsystem: 'b5', step: 'craft-final-chain', action: `craft quantity ${quantity}`,
@@ -1161,14 +1310,14 @@ class B5AutomationService {
                 }
                 remaining = Math.max(0, remaining - actualCrafts);
             }
-            this.#advanceLiveProgress(1, plannedCrafts);
+            this.progressTracker.advance(1, plannedCrafts);
         }
     }
 
     async #ensureInputs(inputs, craftAmount, context, recipeId) {
         for (const [logicalId, perCraft] of Object.entries(inputs)) {
             const needed = Number(perCraft) * craftAmount;
-            let inInventory = this.#inventoryCount(logicalId);
+            let inInventory = this.inventoryState.count(logicalId);
             let shortage = Math.max(0, needed - inInventory);
             let attempts = 0;
             let lastWithdrawal = null;
@@ -1179,14 +1328,14 @@ class B5AutomationService {
                 const withdrawn = await this.#runStep(context, {
                     subsystem: 'b5', step: 'withdraw-final-input', action: 'withdraw from /pv 2', resource: logicalId,
                     details: { recipeId, needed, inInventory, shortage, maxStacks, attempt: attempts }
-                }, () => this.personalVault.withdraw(logicalId, { maxStacks, cancellationToken: context.cancellation.token }));
+                }, () => this.flows.withdraw.withdraw(logicalId, this.#childOptions(context, { maxStacks })));
                 lastWithdrawal = withdrawn?.data || null;
 
                 // PersonalVaultService can verify a shift-click from the vault-side
                 // delta before Mineflayer's bot.inventory mirror catches up. Final-chain
                 // crafting needs the item in the player inventory, so wait briefly for
                 // either inventory representation to reflect the moved custom item.
-                const after = await this.#waitForInventoryIncrease(
+                const after = await this.inventoryState.waitForIncrease(
                     logicalId,
                     inInventory,
                     context.cancellation.token
@@ -1220,95 +1369,14 @@ class B5AutomationService {
         }
     }
 
-    async #waitForInventoryIncrease(logicalId, beforeCount, cancellationToken) {
-        const settleTimeoutMs = Math.max(0, Number(this.config?.pvInventorySettleTimeoutMs ?? 1600));
-        const settlePollMs = Math.max(10, Number(this.config?.pvInventorySettlePollMs ?? 50));
-        let best = this.#inventoryCount(logicalId);
-        if (best > beforeCount || settleTimeoutMs <= 0) return best;
-
-        const deadline = Date.now() + settleTimeoutMs;
-        while (Date.now() < deadline) {
-            cancellationToken?.throwIfCancelled?.();
-            await Timeout.delay(Math.min(settlePollMs, Math.max(1, deadline - Date.now())), { cancellationToken });
-            best = Math.max(best, this.#inventoryCount(logicalId));
-            if (best > beforeCount) break;
-        }
-        return best;
-    }
-
-    #maxCraftableFromInventory(inputs) {
-        const entries = Object.entries(inputs || {}).filter(([, amount]) => Number(amount) > 0);
-        if (entries.length === 0) return Number.MAX_SAFE_INTEGER;
-        let max = Number.MAX_SAFE_INTEGER;
-        for (const [logicalId, perCraft] of entries) {
-            const count = this.#inventoryCount(logicalId);
-            max = Math.min(max, Math.floor(count / Number(perCraft)));
-        }
-        return Math.max(0, max);
-    }
-
-    #allEnabled(key) {
-        const policy = this.config?.quantityOptimization || {};
-        return policy.enabled !== false && policy[key] === true;
-    }
-
-    #actualCrafts(crafted, requestedQuantity) {
-        const actual = Number(crafted?.actualCrafts || 0);
-        if (Number.isInteger(actual) && actual > 0) return actual;
-        if (requestedQuantity === 1 || requestedQuantity === 64) return requestedQuantity;
-        return 0;
-    }
-
-    #inventorySnapshot() {
-        if (typeof this.inventoryReader.readBotInventory === 'function') return this.inventoryReader.readBotInventory();
-        const views = typeof this.inventoryReader.readViews === 'function'
-            ? this.inventoryReader.readViews()
-            : [this.inventoryReader.read()];
-        return views.find(view => view?.source === 'bot-inventory') || views[0] || { items: [], emptySlotCount: 0 };
-    }
-
     #quantityTrace() {}
 
-    async #craftOrThrow(recipeId, amount, context, outputId = null) {
+    async #craftOrThrow(recipeId, amount, context, outputId = null, options = {}) {
         const result = await this.#runStep(context, {
             subsystem: 'crafting', step: 'craft-recipe', action: `craft quantity ${amount}`, resource: outputId || recipeId,
             details: { recipeId, amount }
-        }, () => this.crafting.craft(recipeId, amount));
+        }, () => this.flows.craft.craft(recipeId, amount, this.#childOptions(context, options)));
         return result.data;
-    }
-
-    async #relieveStoragePressureIfNeeded(context, actions, resource = 'B1', { legacyFallback = false } = {}) {
-        // Older test doubles and extensions may only implement the original
-        // sellLargestStoredBlock API. Keep that compatibility at the old end-of-
-        // B5 call site, while production uses capacity-aware protection.
-        if (typeof this.b1Materials?.inspectStoragePressure !== 'function') {
-            if (!legacyFallback || typeof this.b1Materials?.sellLargestStoredBlock !== 'function') return null;
-            this.#setLiveProgress({ running: true, state: 'SELLING', currentStep: { kind: 'SELL', id: resource } });
-            const sold = await this.#runStep(context, {
-                subsystem: 'b5', step: 'sell-largest-b1-legacy', action: 'legacy sell largest compacted /kho stock', resource
-            }, () => this.b1Materials.sellLargestStoredBlock({ cancellationToken: context.cancellation.token }));
-            actions?.push?.({ status: 'legacy-largest-b1-stock-evaluated', data: sold.data });
-            return sold.data;
-        }
-
-        const pressure = await this.#runStep(context, {
-            subsystem: 'b5',
-            step: 'check-kho-pressure',
-            action: 'check whether /kho is near full before selling',
-            resource
-        }, () => this.b1Materials.inspectStoragePressure({ cancellationToken: context.cancellation.token }));
-
-        if (!pressure.data?.known || pressure.data?.nearFull !== true) return pressure.data || null;
-
-        this.#setLiveProgress({ running: true, state: 'SELLING', currentStep: { kind: 'SELL', id: resource } });
-        const relieved = await this.#runStep(context, {
-            subsystem: 'b5',
-            step: 'relieve-kho-pressure',
-            action: 'sell largest compacted B1 stock until /kho is below pressure threshold',
-            resource
-        }, () => this.b1Materials.relieveStoragePressure({ cancellationToken: context.cancellation.token }));
-        actions?.push?.({ status: 'storage-pressure-relieved', data: relieved.data });
-        return relieved.data;
     }
 
     #runStep(context, meta, action, options = {}) {
@@ -1329,63 +1397,18 @@ class B5AutomationService {
         });
     }
 
-    #setLiveProgress(patch = {}) {
-        const current = this.liveProgress || {};
-        this.liveProgress = Object.freeze({
-            ...current,
-            ...patch,
-            updatedAt: new Date().toISOString()
-        });
-        const activity = this.#activityLabel(this.liveProgress);
-        if (activity && activity !== this.lastActivityLogKey) {
-            this.lastActivityLogKey = activity;
-            this.logger?.info?.(activity);
-        }
-        return this.liveProgress;
+    #childOptions(context, extra = {}) {
+        return {
+            ...extra,
+            cancellationToken: context?.cancellation?.token || null,
+            operationContext: context || null,
+            expectedGeneration: context?.connectionGeneration ?? null,
+            operationId: context?.operationId || null,
+            correlationId: context?.correlationId || null
+        };
     }
 
-    #activityLabel(progress) {
-        const kind = String(progress?.currentStep?.kind || '').toUpperCase();
-        const state = String(progress?.state || '').toUpperCase();
-        if (kind === 'SPACE' || state === 'FREEING_SPACE') return 'B5: Đang giải phóng chỗ trống.';
-        if (kind === 'B2' || state === 'CRAFTING_B2') return 'B5: Đang chế B2.';
-        if (kind === 'B3' || kind === 'B2/B3' || state === 'CRAFTING_B3' || state === 'CRAFTING_INTERMEDIATE') return 'B5: Đang chế B3.';
-        if (kind === 'B4' || state === 'CRAFTING_B4') return 'B5: Đang chế B4.';
-        if (kind === 'B5' || state === 'CRAFTING_B5') return 'B5: Đang chế B5.';
-        if (kind === 'DEPOSIT' || state === 'DEPOSITING') return 'B5: Đang cất B5.';
-        if (kind === 'VERIFY' || state === 'VERIFYING') return 'B5: Đang xác nhận B5.';
-        if (kind === 'CONVERT_BLOCKS' || state === 'COMPACTING') return 'B5: Đang đổi khối.';
-        if (kind === 'SELL' || state === 'SELLING') return 'B5: Đang bán.';
-        if (kind === 'STORE' || state === 'STORING') return 'B5: Đang cất nguyên liệu.';
-        if (kind === 'PLAN') return 'B5: Đang tính các bước còn lại.';
-        return null;
-    }
 
-    #advanceLiveProgress(stages = 1, crafts = 0) {
-        const currentStages = Number(this.liveProgress?.remainingStages);
-        const currentCrafts = Number(this.liveProgress?.remainingCrafts);
-        return this.#setLiveProgress({
-            remainingStages: Number.isFinite(currentStages) ? Math.max(0, currentStages - Math.max(0, Number(stages || 0))) : currentStages,
-            remainingCrafts: Number.isFinite(currentCrafts) ? Math.max(0, currentCrafts - Math.max(0, Number(crafts || 0))) : currentCrafts
-        });
-    }
-
-    #inventoryCount(logicalId) {
-        // During a custom GUI shift-click some servers update the player section
-        // of currentWindow before Mineflayer refreshes bot.inventory. Always compare
-        // every inventory view and use the freshest/highest logical count.
-        const views = typeof this.inventoryReader.readViews === 'function'
-            ? this.inventoryReader.readViews()
-            : (typeof this.inventoryReader.readBotInventory === 'function'
-                ? [this.inventoryReader.readBotInventory()]
-                : [this.inventoryReader.read()]);
-        let best = 0;
-        for (const snapshot of views || []) {
-            if (!snapshot) continue;
-            best = Math.max(best, this.inventoryCounter.count(snapshot, logicalId));
-        }
-        return best;
-    }
 }
 
 module.exports = B5AutomationService;

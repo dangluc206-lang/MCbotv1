@@ -8,5 +8,6 @@
   "login": "/login {password}",
   "skyblock": "/sky",
   "storageSell": "/kho sell",
-  "afk": "/afk"
+  "afk": "/afk",
+  "hub": "/hub"
 }

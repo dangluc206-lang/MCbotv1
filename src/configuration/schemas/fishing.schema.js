@@ -28,15 +28,20 @@ module.exports = value => {
     if (!finiteNumber(value.lookPitchDegrees) || value.lookPitchDegrees < 0 || value.lookPitchDegrees > 89) errors.push('lookPitchDegrees must be between 0 and 89');
     for (const key of ['occupancyPatterns','currentPatterns']) {
         if (!Array.isArray(value[key]) || value[key].some(entry => typeof entry !== 'string' || !entry)) errors.push(`${key} must be an array of regex strings`);
+        else for (const [index, pattern] of value[key].entries()) {
+            try { new RegExp(pattern, 'i'); } catch (error) { errors.push(`${key}[${index}] is invalid: ${error.message}`); }
+        }
     }
 
     const movement = value.movement;
-    const movementKeys = new Set(['timeoutMs','tickMs','arrivalRadius','verticalTolerance','arrivalStableMs','noProgressMs','progressDelta','lookIntervalMs','shoreFishingPitchDegrees']);
+    const movementKeys = new Set(['timeoutMs','tickMs','arrivalRadius','verticalTolerance','arrivalStableMs','noProgressMs','progressDelta','lookIntervalMs','shoreFishingPitchDegrees','localRetryLimit','localRetryDelayMs']);
     if (!object(movement)) errors.push('movement must be an object');
     else {
         for (const key of Object.keys(movement)) if (!movementKeys.has(key)) errors.push(`unknown movement key: ${key}`);
         for (const key of ['timeoutMs','tickMs','arrivalRadius','verticalTolerance','noProgressMs','progressDelta','lookIntervalMs']) if (!positive(movement[key])) errors.push(`movement.${key} must be positive`);
         if (!nonNegative(movement.arrivalStableMs)) errors.push('movement.arrivalStableMs must be non-negative');
+        if (!Number.isInteger(movement.localRetryLimit) || movement.localRetryLimit < 0) errors.push('movement.localRetryLimit must be a non-negative integer');
+        if (!nonNegative(movement.localRetryDelayMs)) errors.push('movement.localRetryDelayMs must be non-negative');
         if (!finiteNumber(movement.shoreFishingPitchDegrees) || movement.shoreFishingPitchDegrees < 0 || movement.shoreFishingPitchDegrees > 89) errors.push('movement.shoreFishingPitchDegrees must be between 0 and 89');
     }
 
@@ -69,9 +74,10 @@ module.exports = value => {
     const recovery = value.recovery;
     if (!object(recovery)) errors.push('recovery must be an object');
     else {
-        const allowed = new Set(['waitMs','retryMs','movementRetryMs','connectionRetryMs']);
+        const allowed = new Set(['waitMs','retryMs','movementRetryMs','connectionRetryMs','cycleRetryLimit']);
         for (const key of Object.keys(recovery)) if (!allowed.has(key)) errors.push(`unknown recovery key: ${key}`);
-        for (const key of allowed) if (!nonNegative(recovery[key])) errors.push(`recovery.${key} must be non-negative`);
+        for (const key of ['waitMs','retryMs','movementRetryMs','connectionRetryMs']) if (!nonNegative(recovery[key])) errors.push(`recovery.${key} must be non-negative`);
+        if (!Number.isInteger(recovery.cycleRetryLimit) || recovery.cycleRetryLimit < 1) errors.push('recovery.cycleRetryLimit must be a positive integer');
     }
 
     const probe = value.probe;
@@ -109,7 +115,10 @@ module.exports = value => {
             else if (priorities.has(area.priority)) errors.push(`duplicate area priority: ${area.priority}`); else priorities.add(area.priority);
             if (area.capacity !== null && (!Number.isInteger(area.capacity) || area.capacity < 0)) errors.push(`areas[${index}].capacity must be null or a non-negative integer`);
             if (!object(area.destination)) errors.push(`areas[${index}].destination must be an object`);
-            else for (const axis of ['x','y','z']) if (!finiteNumber(area.destination[axis])) errors.push(`areas[${index}].destination.${axis} must be a finite number`);
+            else {
+                for (const key of Object.keys(area.destination)) if (!['x','y','z'].includes(key)) errors.push(`areas[${index}].destination unknown key: ${key}`);
+                for (const axis of ['x','y','z']) if (!finiteNumber(area.destination[axis])) errors.push(`areas[${index}].destination.${axis} must be a finite number`);
+            }
         }
     }
 

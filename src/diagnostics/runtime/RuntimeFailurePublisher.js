@@ -29,6 +29,10 @@ class RuntimeFailurePublisher {
 
     async initialize() {
         if (!this.eventBus) return;
+        this.unsubscribers.push(this.eventBus.on('connection:attempt-failed', event => {
+            if (event?.botId !== this.botId) return;
+            this.#publishAttemptFailure(event);
+        }));
         for (const eventName of CONNECTION_EVENTS) {
             this.unsubscribers.push(this.eventBus.on(eventName, event => {
                 if (event?.botId && event.botId !== this.botId) return;
@@ -43,6 +47,35 @@ class RuntimeFailurePublisher {
 
     publish(input = {}, { failureId = null } = {}) {
         const failure = createFailureEvent(input, { botId: this.botId, failureId });
+        this.eventBus?.emit('runtime:failure', failure);
+        return failure;
+    }
+
+
+    #publishAttemptFailure(event) {
+        const diagnostic = event.diagnostic || event.error?.toDiagnostic?.() || event.error || null;
+        const failure = createFailureEvent({
+            botId: this.botId,
+            connectionGeneration: null,
+            source: 'connection-attempt',
+            subsystem: 'connection',
+            severity: 'error',
+            code: diagnostic?.code || event.error?.code || 'CONNECTION_ATTEMPT_FAILED',
+            operation: diagnostic?.operation || 'ConnectionManager',
+            step: event.stage || diagnostic?.step || 'connect-attempt',
+            action: diagnostic?.action || 'connect Minecraft bot',
+            resource: diagnostic?.resource || null,
+            message: diagnostic?.message || event.error?.message || 'Minecraft connection attempt failed.',
+            retryable: event.retryable !== false && diagnostic?.retryable !== false,
+            diagnostic,
+            details: {
+                attemptId: event.attemptId || null,
+                attemptEpoch: Number.isInteger(Number(event.attemptEpoch)) ? Number(event.attemptEpoch) : null,
+                stage: event.stage || diagnostic?.step || null,
+                failureClass: event.failureClass || diagnostic?.details?.failureClass || null,
+                ownerScope: 'attempt'
+            }
+        }, { botId: this.botId });
         this.eventBus?.emit('runtime:failure', failure);
         return failure;
     }
@@ -90,7 +123,11 @@ class RuntimeFailurePublisher {
     }
 
     #connectionCandidate(eventName, event, failureId) {
-        const diagnostic = event.diagnostic || event.error?.toDiagnostic?.() || null;
+        const detachedErrorDiagnostic = event.error && typeof event.error === 'object'
+            && ['code', 'operation', 'step', 'action', 'resource', 'details', 'trace'].some(key => event.error[key] !== undefined)
+            ? event.error
+            : null;
+        const diagnostic = event.diagnostic || event.error?.toDiagnostic?.() || detachedErrorDiagnostic || null;
         const reason = ['connection:kicked', 'connection:ended'].includes(eventName) ? event.reason : null;
         return createFailureEvent({
             ...event,

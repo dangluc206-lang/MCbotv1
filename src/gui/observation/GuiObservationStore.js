@@ -84,6 +84,10 @@ class GuiObservationStore {
         });
     }
 
+    async drain() {
+        await this.writeTail;
+    }
+
     async listRecords() {
         try {
             await fs.mkdir(this.directory, { recursive: true });
@@ -218,7 +222,7 @@ class GuiObservationStore {
             await fs.rename(temp, file);
         } catch (error) {
             if (!['EEXIST', 'EPERM'].includes(error.code)) {
-                await fs.rm(temp, { force: true }).catch(() => {});
+                await this.#cleanupTemp(temp, 'rename-failed');
                 throw error;
             }
             await fs.rm(file, { force: true });
@@ -226,9 +230,19 @@ class GuiObservationStore {
         }
     }
 
-    #serializeWrite(_key, task) {
-        const current = this.writeTail.catch(() => {}).then(task);
-        this.writeTail = current.catch(() => {});
+    async #cleanupTemp(temp, stage) {
+        try {
+            await fs.rm(temp, { force: true });
+        } catch (error) {
+            this.logger?.debug?.('GUI observation temp cleanup failed.', { stage, temp: path.basename(temp), error });
+        }
+    }
+
+    #serializeWrite(key, task) {
+        const current = this.writeTail.then(task);
+        this.writeTail = current.catch(error => {
+            this.logger?.warn?.('GUI observation write failed; queue recovered for the next write.', { key, error });
+        });
         return current;
     }
 }

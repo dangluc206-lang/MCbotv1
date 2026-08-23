@@ -1,10 +1,11 @@
 'use strict';
 
 class CollectorB5ModeCommand {
-    constructor({ botRegistry, config, allowedUserIds, logger = null }) {
+    constructor({ botRegistry, config, allowedUserIds, fleetControl = null, logger = null }) {
         this.botRegistry = botRegistry;
         this.config = config;
         this.allowedUserIds = new Set(allowedUserIds || []);
+        this.fleetControl = fleetControl;
         this.logger = logger;
     }
 
@@ -51,12 +52,20 @@ class CollectorB5ModeCommand {
         try {
             let result;
             if (action === 'on') {
-                if (!runtime.context.has()) throw new Error(`Bot chưa kết nối: ${botId}`);
-                const fishingMode = runtime.getService?.('fishingMode');
-                if (fishingMode?.status?.().enabled) throw new Error('Tắt mode câu cá trước khi bật Nhặt+B5.');
-                result = await mode.enable();
+                if (this.fleetControl) {
+                    result = await this.fleetControl.requestMode(botId, 'collector-b5', {
+                        state: 'ACTIVE',
+                        source: 'discord-command'
+                    });
+                } else {
+                    if (!runtime.context.has()) throw new Error(`Bot chưa kết nối: ${botId}`);
+                    result = await mode.enable();
+                }
             } else if (action === 'off') {
-                result = await mode.disable('Disabled from Discord /mode.');
+                const intent = this.fleetControl?.intent?.(botId);
+                result = this.fleetControl && (intent?.desiredMode === 'collector-b5' || mode.status().enabled)
+                    ? await this.fleetControl.requestMode(botId, null, { source: 'discord-command' })
+                    : await mode.disable('Disabled from Discord /mode.');
             } else if (action === 'status') {
                 result = { success: true, data: mode.status() };
             } else {
@@ -65,7 +74,7 @@ class CollectorB5ModeCommand {
 
             if (!result.success) throw result.error || new Error(result.message || 'Mode operation failed.');
             await interaction.reply({
-                content: this.#formatStatus(botId, result.data),
+                content: this.#formatStatus(botId, mode.status()),
                 ephemeral: this.config.ephemeral
             });
             this.logger?.info?.('Discord collector+B5 mode command completed.', {

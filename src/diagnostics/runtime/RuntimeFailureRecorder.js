@@ -154,7 +154,8 @@ class RuntimeFailureRecorder {
                 await fs.rename(temp, this.lastFile);
             }
         } finally {
-            await fs.rm(temp, { force: true }).catch(() => {});
+            try { await fs.rm(temp, { force: true }); }
+            catch (error) { this.#logWriteFailure('temp-cleanup', error); }
         }
         await this.#appendJsonLineUnsafe(fittedRecord);
     }
@@ -438,8 +439,10 @@ class RuntimeFailureRecorder {
     #maxTotalBytes() { return this.config.maxTotalMb * 1024 * 1024; }
 
     #enqueue(task) {
-        const next = this.writeChain.catch(() => {}).then(task);
-        this.writeChain = next.catch(() => {});
+        const next = this.writeChain.then(task);
+        this.writeChain = next.catch(error => {
+            this.#logWriteFailure('queue', error);
+        });
         return next;
     }
 
@@ -479,7 +482,7 @@ class RuntimeFailureRecorder {
 
     async stop() {
         if (!this.config.enabled) return;
-        if (this.stopping) return this.writeChain.catch(() => {});
+        if (this.stopping) return this.writeChain;
         this.stopping = true;
         for (const off of this.unsubscribers.splice(0)) off();
         clearInterval(this.cleanupTimer);
@@ -490,7 +493,7 @@ class RuntimeFailureRecorder {
             await this.#flushExpiredUnsafe({ all: true });
             await this.#cleanupFilesUnsafe();
         }).catch(error => this.#logWriteFailure('stop', error));
-        await this.writeChain.catch(() => {});
+        await this.writeChain;
         this.repeatBuckets.clear();
         this.seenFailureIds.clear();
     }

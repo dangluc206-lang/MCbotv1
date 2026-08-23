@@ -1,0 +1,59 @@
+name: Build and Release Windows Desktop
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build and verify Windows installer
+        run: node scripts/build-windows.js
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MCbot-Windows-x64-${{ github.ref_name }}
+          path: |
+            out/make/squirrel.windows/x64/MCbot Setup.exe
+            out/make/squirrel.windows/x64/*.nupkg
+            out/make/squirrel.windows/x64/RELEASES
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub Release assets
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $setup = "out/make/squirrel.windows/x64/MCbot Setup.exe"
+          $releaseFile = "out/make/squirrel.windows/x64/RELEASES"
+          $packages = Get-ChildItem "out/make/squirrel.windows/x64/*.nupkg" | ForEach-Object { $_.FullName }
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $setup $releaseFile @packages --clobber
+          } else {
+            gh release create $tag $setup $releaseFile @packages --generate-notes --title "MCbot Desktop $tag"
+          }

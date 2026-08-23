@@ -3,13 +3,14 @@
 const LifecycleCoordinator = require('./LifecycleCoordinator');
 
 class Application {
-    constructor({ botRegistry, loggerFactory, lifecycleCoordinator = null, logger = null }) {
+    constructor({ botRegistry, loggerFactory, lifecycleCoordinator = null, controlPlane = null, logger = null }) {
         this.botRegistry = botRegistry;
         this.loggerFactory = loggerFactory;
         this.lifecycle = lifecycleCoordinator || new LifecycleCoordinator([], {
             name: 'ApplicationLifecycle',
             logger
         });
+        this.controlPlane = controlPlane;
         this.logger = logger || loggerFactory?.create?.('Application');
     }
 
@@ -42,6 +43,19 @@ class Application {
         const runtimes = this.botRegistry.list();
         const results = await Promise.allSettled(runtimes.map(runtime => runtime.start()));
         this.#logFailures('start', runtimes, results);
+        if (this.controlPlane) {
+            const reconciliation = await this.controlPlane.reconcileAll({ reason: 'application-start' });
+            const failed = reconciliation.filter(entry => entry.result?.success === false);
+            if (failed.length > 0) {
+                this.logger?.warn?.('Some durable fleet intents were not applied after runtime start.', {
+                    failed: failed.map(entry => ({
+                        botId: entry.botId,
+                        status: entry.result.status,
+                        message: entry.result.message
+                    }))
+                });
+            }
+        }
         return results;
     }
 

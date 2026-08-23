@@ -30,6 +30,15 @@ class GuiSnapshotSerializer {
             gui: Object.freeze({
                 sessionId: session.id,
                 definitionId: session.definitionId || null,
+                identity: session.identity ? this.#toSafeValue({
+                    id: session.identity.id || null,
+                    candidateId: session.identity.candidateId || null,
+                    confidence: session.identity.confidence ?? 0,
+                    margin: session.identity.margin ?? 0,
+                    ambiguous: session.identity.ambiguous === true,
+                    reason: session.identity.reason || null,
+                    evidence: session.identity.evidence || []
+                }) : null,
                 title: this.#toSafeValue(window.title),
                 titleText: this.titleTextExtractor.extract(window.title),
                 type: window.type || null,

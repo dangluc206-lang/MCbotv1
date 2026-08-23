@@ -1,4 +1,5 @@
 'use strict';
+const { normalizeConnectionGeneration } = require('../../core/events/EventEnvelope');
 
 const Redactor = require('../../shared/security/Redactor');
 
@@ -25,12 +26,13 @@ class ConnectionPacketObserver {
         this.unsubscribers.push(
             this.eventBus.on('connection:client-attached', event => {
                 if (event?.botId !== this.botId) return;
-                this.#bindCurrent(Number(event.connectionGeneration));
+                this.#bindCurrent(normalizeConnectionGeneration(event));
             }),
             this.eventBus.on('connection:ended', event => {
                 if (event?.botId !== this.botId) return;
-                const generation = Number(event.connectionGeneration ?? event.generation);
-                if (!Number.isFinite(generation) || generation === this.clientGeneration) this.#detachClient();
+                const generation = normalizeConnectionGeneration(event);
+                if (!Number.isInteger(generation) || generation <= 0) return;
+                if (generation === this.clientGeneration) this.#detachClient();
             })
         );
         if (this.context.has()) this.#bindCurrent(this.context.getGeneration());
@@ -44,7 +46,8 @@ class ConnectionPacketObserver {
 
     #bindCurrent(generation) {
         const client = this.context.get();
-        if (!client || !Number.isFinite(generation)) return;
+        if (!client || !Number.isInteger(Number(generation)) || Number(generation) <= 0) return;
+        generation = Number(generation);
         if (this.client === client && this.clientGeneration === generation) return;
         this.#detachClient();
         this.client = client;

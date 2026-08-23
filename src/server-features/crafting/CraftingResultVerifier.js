@@ -8,7 +8,7 @@ class CraftingResultVerifier {
         Object.assign(this, { inventoryReader, inventoryCounter, guiKnowledge, inventoryObservation, inventorySync });
     }
 
-    before(outputId, inputIds = [], { inventorySource = 'all' } = {}) {
+    before(outputId, inputIds = [], { inventorySource = 'all', connectionGeneration = null } = {}) {
         const views = this.#readViews(inventorySource);
         const counted = this.#countViews(views, outputId);
         const inputCounts = {};
@@ -25,7 +25,10 @@ class CraftingResultVerifier {
             mmoTotals: this.#aggregateMmoTotalsAcrossViews(views),
             capturedAt: Date.now(),
             verificationStartedAt: null,
-            inventorySource
+            inventorySource,
+            connectionGeneration: Number.isInteger(Number(connectionGeneration)) && Number(connectionGeneration) > 0
+                ? Number(connectionGeneration)
+                : null
         };
     }
 
@@ -41,7 +44,8 @@ class CraftingResultVerifier {
         retryMs = 300,
         expectedDelta = null,
         inputRequirements = null,
-        inventorySource = before?.inventorySource || 'all'
+        inventorySource = before?.inventorySource || 'all',
+        connectionGeneration = before?.connectionGeneration ?? null
     } = {}) {
         const maxAttempts = Math.max(1, Number(attempts) || 1);
         const delayMs = Math.max(0, Number(retryMs) || 0);
@@ -54,7 +58,8 @@ class CraftingResultVerifier {
                 reason: `craft:${outputId}`,
                 expectedIdentity,
                 expectedDelta,
-                inventorySource
+                inventorySource,
+                expectedGeneration: connectionGeneration
             })
             : null;
 
@@ -96,8 +101,23 @@ class CraftingResultVerifier {
                     candidate = this.#bestPositiveMmoDeltaFromEvents(
                         before?.verificationStartedAt || before?.capturedAt || 0,
                         expectedDelta,
-                        inventorySource
+                        inventorySource,
+                        connectionGeneration
                     );
+                }
+
+                if (candidate) {
+                    const configuredStrong = this.guiKnowledge?.getConfiguredStrongLogicalId?.(candidate.item, 'inventory')
+                        || this.guiKnowledge?.getConfiguredStrongLogicalId?.(candidate.item, 'personal-vault')
+                        || null;
+                    if (configuredStrong && configuredStrong !== outputId) {
+                        // A known MMOItems identity belongs to another logical
+                        // item (often the recipe input). It cannot be evidence
+                        // for this output, even if its count increased because
+                        // the wrong recipe was clicked or collector pickups
+                        // arrived during verification.
+                        candidate = null;
+                    }
                 }
 
                 if (candidate) {
@@ -117,7 +137,8 @@ class CraftingResultVerifier {
                 before?.verificationStartedAt || before?.capturedAt || 0,
                 outputId,
                 inputRequirements,
-                inventorySource
+                inventorySource,
+                connectionGeneration
             );
             const outputVerified = snapshotOutputDelta >= expectedOutput
                 || Number(eventEvidence.outputDelta || 0) >= expectedOutput;
@@ -278,10 +299,10 @@ class CraftingResultVerifier {
         };
     }
 
-    #eventEvidence(since, outputId, inputRequirements, inventorySource = 'all') {
+    #eventEvidence(since, outputId, inputRequirements, inventorySource = 'all', connectionGeneration = null) {
         const empty = { outputDelta: 0, outputBySource: {}, inputs: {}, eventCount: 0, mmoCandidates: [] };
         if (!this.inventoryObservation?.eventsSince) return empty;
-        const allEvents = this.inventoryObservation.eventsSince(since) || [];
+        const allEvents = this.inventoryObservation.eventsSince(since, { connectionGeneration }) || [];
         const events = inventorySource === 'all'
             ? allEvents
             : allEvents.filter(event => event?.source === inventorySource);
@@ -326,7 +347,7 @@ class CraftingResultVerifier {
             outputBySource: positiveOutput,
             inputs,
             eventCount: events.length,
-            mmoCandidates: this.#mmoEventCandidates(since, inventorySource).map(candidate => ({
+            mmoCandidates: this.#mmoEventCandidates(since, inventorySource, connectionGeneration).map(candidate => ({
                 identity: candidate.identity,
                 delta: candidate.delta,
                 bySource: candidate.bySource
@@ -400,9 +421,9 @@ class CraftingResultVerifier {
         return { ...best, countsBySource };
     }
 
-    #mmoEventCandidates(since, inventorySource = 'all') {
+    #mmoEventCandidates(since, inventorySource = 'all', connectionGeneration = null) {
         if (!this.inventoryObservation?.eventsSince) return [];
-        const allEvents = this.inventoryObservation.eventsSince(since) || [];
+        const allEvents = this.inventoryObservation.eventsSince(since, { connectionGeneration }) || [];
         const events = inventorySource === 'all'
             ? allEvents
             : allEvents.filter(event => event?.source === inventorySource);
@@ -468,8 +489,8 @@ class CraftingResultVerifier {
         return candidates.sort((a, b) => b.delta - a.delta || a.identity.localeCompare(b.identity));
     }
 
-    #bestPositiveMmoDeltaFromEvents(since, expectedDelta = null, inventorySource = 'all') {
-        const candidates = this.#mmoEventCandidates(since, inventorySource);
+    #bestPositiveMmoDeltaFromEvents(since, expectedDelta = null, inventorySource = 'all', connectionGeneration = null) {
+        const candidates = this.#mmoEventCandidates(since, inventorySource, connectionGeneration);
         if (candidates.length === 0) return null;
 
         const expected = Number(expectedDelta);

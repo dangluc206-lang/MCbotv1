@@ -16,13 +16,22 @@ class DiscordPanelStore {
         return state[key] || null;
     }
 
-    async set(key, value) {
-        const state = await this.#load();
-        state[key] = value;
-        const snapshot = JSON.parse(JSON.stringify(state));
-        this.writeQueue = this.writeQueue.catch(() => {}).then(() => this.#write(snapshot));
+    set(key, value) {
+        const current = this.writeQueue.then(async () => {
+            const state = await this.#load();
+            const snapshot = JSON.parse(JSON.stringify({ ...state, [key]: value }));
+            await this.#write(snapshot);
+            this.state = snapshot;
+            return value;
+        });
+        this.writeQueue = current.catch(error => {
+            this.logger?.warn?.('Discord panel persistence failed; queue recovered for the next write.', { error, filePath: this.filePath });
+        });
+        return current;
+    }
+
+    async drain() {
         await this.writeQueue;
-        return value;
     }
 
     async #load() {

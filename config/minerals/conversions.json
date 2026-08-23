@@ -71,22 +71,5 @@
       "toBaseMenuItemId": "emerald"
     }
   },
-  "storagePressure": {
-    "watchRatio": 0.7,
-    "highRatio": 0.8,
-    "usedRatio": 0.8,
-    "criticalRatio": 0.92,
-    "growthHorizonMinutes": 0.5,
-    "fastGrowthPerMinute": 0.03,
-    "maxSalesPerPass": 8,
-    "decompressionMaxRatio": 0.8,
-    "requireKnownCapacityForDecompression": true,
-    "lowWaterRatio": 0.7,
-    "materialGrowthWeightMinutes": 2,
-    "maxProtectionPasses": 3,
-    "maxSellBurstsPerPass": 6,
-    "maxSellBurstClicks": 64,
-    "sellBurstEscalationFactor": 2,
-    "minPressureImprovementRatio": 0.002
-  }
+  "menuOptionReadyTimeoutMs": 1500
 }

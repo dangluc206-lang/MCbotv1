@@ -22,6 +22,8 @@
     "noProgressMs": 4000,
     "progressDelta": 0.05,
     "lookIntervalMs": 500,
+    "localRetryLimit": 2,
+    "localRetryDelayMs": 750,
     "shoreFishingPitchDegrees": 10
   },
   "worldReadiness": {
@@ -56,7 +58,8 @@
     "waitMs": 5000,
     "retryMs": 3000,
     "movementRetryMs": 3000,
-    "connectionRetryMs": 1000
+    "connectionRetryMs": 1000,
+    "cycleRetryLimit": 3
   },
   "occupancyPatterns": [
     "(?<current>\\d+)\\s*/\\s*(?<capacity>\\d+)"

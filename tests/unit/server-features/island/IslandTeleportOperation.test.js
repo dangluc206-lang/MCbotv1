@@ -13,6 +13,11 @@ const CommandGuard = require('../../../../src/commands/CommandGuard');
 const CommandExecutor = require('../../../../src/commands/CommandExecutor');
 const CommandService = require('../../../../src/commands/CommandService');
 const ConnectionStateView = require('../../../../src/modes/fishing/ConnectionStateView');
+const Operation = require('../../../../src/operations/Operation');
+const OperationManager = require('../../../../src/operations/OperationManager');
+const OperationQueue = require('../../../../src/operations/OperationQueue');
+const OperationLockPolicy = require('../../../../src/operations/OperationLockPolicy');
+const OperationTimeoutPolicy = require('../../../../src/operations/OperationTimeoutPolicy');
 
 function deferred() {
     let resolve;
@@ -134,8 +139,8 @@ test('IslandTeleportOperation ignores stale, foreign and generation-less telepor
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(settled, false, 'stale/foreign/missing generation must not verify /is');
 
-    emitTeleport(h, { generation: 2 });
-    assert.equal((await pending).connectionGeneration, 2, 'legacy generation field remains compatible');
+    emitTeleport(h, { connectionGeneration: 2 });
+    assert.equal((await pending).connectionGeneration, 2, 'canonical current-generation event verifies /is');
     await assertListenerCleanup(h);
 });
 
@@ -266,4 +271,39 @@ test('real /is waiter timeout cancels a throttled command before chat', async ()
     assert.equal(h.oldClient.chatCalls.length, 0);
     assert.equal(h.newClient.chatCalls.length, 0);
     await assertListenerCleanup({ eventBus: h.eventBus });
+});
+
+
+test('managed /is preserves generation captured before root queue and never sends on replacement client', async () => {
+    const h = realCommandHarness({ minimumIntervalMs: 0, timeoutMs: 100 });
+    let commandSendCalls = 0;
+    const originalSend = h.operation.commandService.send.bind(h.operation.commandService);
+    h.operation.commandService.send = (...args) => { commandSendCalls += 1; return originalSend(...args); };
+    const operationManager = new OperationManager({
+        botId: 'bot-01',
+        queue: new OperationQueue({ maxPending: 8 }),
+        lockPolicy: new OperationLockPolicy(),
+        timeoutPolicy: new OperationTimeoutPolicy(),
+        config: { defaultQueueWaitTimeoutMs: 200, defaultExecutionTimeoutMs: 200, shutdownDrainTimeoutMs: 100 }
+    });
+    const service = new IslandService({ operation: h.operation, operationManager, context: h.context });
+    const blocker = deferred();
+    const blockingRoot = operationManager.run(new Operation({ name: 'root-blocker', execute: () => blocker.promise }), { timeoutMs: 300 });
+    await waitFor(() => operationManager.snapshot().running === 1, 'root blocker running');
+
+    const pending = service.goHome(); // captures generation 1 before this root enters the queue
+    await waitFor(() => operationManager.snapshot().pending === 1, '/is root pending in queue');
+    h.replaceClient();
+    assert.equal(h.context.getGeneration(), 2);
+    blocker.resolve(true);
+    await blockingRoot;
+
+    const result = await pending;
+    assert.equal(result.status, 'DISCONNECTED');
+    assert.equal(result.error?.code, 'ISLAND_STALE_GENERATION');
+    assert.equal(commandSendCalls, 0);
+    assert.equal(h.oldClient.chatCalls.length, 0);
+    assert.equal(h.newClient.chatCalls.length, 0);
+    await assertListenerCleanup({ eventBus: h.eventBus });
+    await operationManager.destroy();
 });

@@ -14,6 +14,7 @@ const Status = require('../../../src/shared/result/Status');
 const RuntimeFailurePublisher = require('../../../src/diagnostics/runtime/RuntimeFailurePublisher');
 const RuntimeFailureRecorder = require('../../../src/diagnostics/runtime/RuntimeFailureRecorder');
 const DiscordErrorReporter = require('../../../src/discord/errors/DiscordErrorReporter');
+const ModeCoordinator = require('../../../src/modes/ModeCoordinator');
 const CollectorB5ModeService = require('../../../src/modes/collector-b5/CollectorB5ModeService');
 const FishingModeService = require('../../../src/modes/fishing/FishingModeService');
 const FishingRecoveryPolicy = require('../../../src/modes/fishing/FishingRecoveryPolicy');
@@ -32,24 +33,32 @@ async function records(baseDir) {
 }
 
 function collector({ eventBus, publisher, preprocess, policy = failurePolicy, delayFn = undefined, config = {}, b1Materials = {} }) {
+    const modeCoordinator = new ModeCoordinator({ botId: 'bot-01' });
     return new CollectorB5ModeService({
         botId: 'bot-01',
         context: { has: () => true, getGeneration: () => 1 },
         eventBus,
         island: { goHome: async () => ({ success: true }) },
         skyblock: {},
+        skyblockReadiness: {
+            requireTarget: () => ({ success: true }),
+            releaseTarget: () => ({ success: true }),
+            isGenerationReady: () => true
+        },
+        skyTarget: 'sky1',
         movementManager: { goTo: async () => {}, stop: async () => {} },
         positionService: { current: () => ({ x: 0, y: 64, z: 0 }), distance: () => 0 },
-        b1Materials: { preprocessForCraft: preprocess, ...b1Materials },
+        b1Materials: { protectForB5Batch: preprocess, ...b1Materials },
         b5Planning: { inspectAdditional: async () => ({ success: true, data: { fullPlan: { feasible: false }, finalSteps: [], chains: [] } }) },
         b5Automation: {
             runNext: async () => ({ success: true, data: { completedNewB5: false } }),
             runMaintenance: async () => ({ success: true, data: { waitingForMaterials: true } })
         },
+        modeCoordinator,
         failurePublisher: publisher,
         failurePolicy: policy,
         config: {
-            enabled: true, teleportHomeOnEnable: false, waitForSkyblockReady: false,
+            enabled: true, teleportHomeOnEnable: false,
             pickupLocation: { x: 0, y: 64, z: 0 }, arrivalRadius: 1, reanchorRadius: 2,
             moveTimeoutMs: 20, pollIntervalMs: 5, errorRetryMs: 2, craftLoopDelayMs: 2,
             ...config
@@ -339,6 +348,7 @@ function fishingMode({
         areas: [{ id: 'afk-test', destination: { x: 1, y: 64, z: 1 } }],
         ...config
     };
+    const modeCoordinator = new ModeCoordinator({ botId: 'bot-01' });
     return new FishingModeService({
         botId: 'bot-01',
         eventBus,
@@ -359,7 +369,7 @@ function fishingMode({
         },
         worldReadiness: { waitUntilReady: async () => ({ ready: true }), reconfigure: () => {} },
         recoveryPolicy: new FishingRecoveryPolicy({ config: baseConfig }),
-        collectorB5Mode: { status: () => ({ enabled: false }) },
+        modeCoordinator,
         failurePublisher: publisher,
         failurePolicy: policy,
         config: baseConfig,
@@ -653,7 +663,7 @@ test('fishing stale generation failure is discarded before breaker, cleanup, rec
         },
         worldReadiness: { waitUntilReady: async () => ({ ready: true }), reconfigure: () => {} },
         recoveryPolicy: new FishingRecoveryPolicy({ config: baseConfig }),
-        collectorB5Mode: { status: () => ({ enabled: false }) },
+        modeCoordinator: new ModeCoordinator({ botId: 'bot-01' }),
         failurePolicy,
         config: baseConfig
     });

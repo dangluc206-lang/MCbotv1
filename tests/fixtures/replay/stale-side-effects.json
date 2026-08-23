@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "name": "stale generation and cancellation block late side effects",
+  "clockStartMs": 1000,
+  "runtime": {
+    "botId": "bot-replay",
+    "minimumCommandIntervalMs": 50
+  },
+  "faults": [],
+  "entries": [
+    {
+      "id": "attach-old",
+      "atMs": 0,
+      "kind": "action",
+      "name": "connection.attach",
+      "payload": { "clientId": "old-client" }
+    },
+    {
+      "id": "open-old-window",
+      "atMs": 0,
+      "kind": "action",
+      "name": "gui.open",
+      "payload": { "windowId": "old-window", "slotCount": 54 }
+    },
+    {
+      "id": "capture-old",
+      "atMs": 0,
+      "kind": "action",
+      "name": "ownership.capture",
+      "payload": { "captureId": "old-owner" }
+    },
+    {
+      "id": "warmup-old-command",
+      "atMs": 0,
+      "kind": "action",
+      "name": "command.send",
+      "payload": { "command": "/warmup", "captureId": "old-owner" }
+    },
+    {
+      "id": "throttled-old-command",
+      "atMs": 1,
+      "kind": "action",
+      "name": "command.send",
+      "payload": { "command": "/must-not-send", "captureId": "old-owner" },
+      "expect": { "status": "rejected", "errorCode": "COMMAND_STALE_GENERATION" }
+    },
+    {
+      "id": "attach-replacement",
+      "atMs": 10,
+      "kind": "action",
+      "name": "connection.attach",
+      "payload": { "clientId": "replacement-client" }
+    },
+    {
+      "id": "open-replacement-window",
+      "atMs": 10,
+      "kind": "action",
+      "name": "gui.open",
+      "payload": { "windowId": "replacement-window", "slotCount": 54 }
+    },
+    {
+      "id": "stale-old-click",
+      "atMs": 11,
+      "kind": "action",
+      "name": "gui.click",
+      "payload": { "slot": 12, "captureId": "old-owner" },
+      "expect": { "status": "rejected", "errorCode": "GUI_CLICK_STALE_GENERATION" }
+    },
+    {
+      "id": "create-command-cancellation",
+      "atMs": 70,
+      "kind": "action",
+      "name": "cancellation.create",
+      "payload": { "cancellationId": "cancel-command" }
+    },
+    {
+      "id": "warmup-replacement-command",
+      "atMs": 70,
+      "kind": "action",
+      "name": "command.send",
+      "payload": { "command": "/replacement-warmup" }
+    },
+    {
+      "id": "throttled-cancelled-command",
+      "atMs": 71,
+      "kind": "action",
+      "name": "command.send",
+      "payload": { "command": "/cancelled-must-not-send", "cancellationId": "cancel-command" },
+      "expect": { "status": "rejected", "errorCode": "CANCELLED" }
+    },
+    {
+      "id": "cancel-throttled-command",
+      "atMs": 75,
+      "kind": "action",
+      "name": "cancellation.cancel",
+      "payload": { "cancellationId": "cancel-command", "reason": "scenario cancellation" }
+    },
+    {
+      "id": "final-snapshot",
+      "atMs": 130,
+      "kind": "action",
+      "name": "state.snapshot",
+      "payload": {}
+    }
+  ]
+}

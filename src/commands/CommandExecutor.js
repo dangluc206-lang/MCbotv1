@@ -4,9 +4,12 @@ const Timeout = require('../shared/time/Timeout');
 const FlowError = require('../shared/errors/FlowError');
 
 class CommandExecutor {
-    constructor({ context, guard }) {
+    constructor({ context, guard, delay = Timeout.delay, now = Date.now }) {
+        if (typeof delay !== 'function' || typeof now !== 'function') throw new TypeError('delay and now must be functions');
         this.context = context;
         this.guard = guard;
+        this.delay = delay;
+        this.now = now;
     }
 
     async execute(command, {
@@ -21,7 +24,7 @@ class CommandExecutor {
         this.#assertExpectedGeneration(expectedGeneration, capturedGeneration, capturedClient, 'before-throttle');
 
         const wait = this.guard.assert(command);
-        if (wait) await Timeout.delay(wait, { cancellationToken });
+        if (wait) await this.delay(wait, { cancellationToken });
 
         // Cancellation and connection identity are checked again after throttle.
         // No await is allowed between the final checks and bot.chat().
@@ -35,7 +38,7 @@ class CommandExecutor {
         this.guard.markSent();
         return {
             command: sensitive ? '[REDACTED]' : command,
-            sentAt: Date.now(),
+            sentAt: this.now(),
             sensitive: Boolean(sensitive)
         };
     }

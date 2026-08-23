@@ -15,7 +15,7 @@ class InventoryObservationStore {
     }
 
     async write(snapshot) {
-        const current = this.writeTail.catch(() => {}).then(async () => {
+        const current = this.writeTail.then(async () => {
             await this.#prepareDirectory();
             const temp = `${this.file}.${process.pid}.${Date.now()}.tmp`;
             const body = `${JSON.stringify(snapshot, null, 2)}\n`;
@@ -29,23 +29,37 @@ class InventoryObservationStore {
                     await fs.rename(temp, this.file);
                 }
             } finally {
-                await fs.rm(temp, { force: true }).catch(() => {});
+                await this.#cleanupTemp(temp, 'write-finally');
             }
             return this.file;
         });
-        this.writeTail = current.catch(() => {});
+        this.writeTail = current.catch(error => {
+            this.logger?.warn?.('Inventory observation write failed; queue recovered for the next write.', { error, file: this.file });
+        });
         return current;
+    }
+
+    async drain() {
+        await this.writeTail;
     }
 
     async read() {
         try {
             await this.#prepareDirectory();
-            await this.writeTail.catch(() => {});
+            await this.writeTail;
             return JSON.parse(await fs.readFile(this.file, 'utf8'));
         } catch (error) {
             if (error?.code === 'ENOENT') return null;
             this.logger?.warn?.('Failed to read inventory observation.', { error, file: this.file });
             return null;
+        }
+    }
+
+    async #cleanupTemp(temp, stage) {
+        try {
+            await fs.rm(temp, { force: true });
+        } catch (error) {
+            this.logger?.debug?.('Inventory observation temp cleanup failed.', { error, stage, temp: path.basename(temp) });
         }
     }
 
@@ -56,7 +70,7 @@ class InventoryObservationStore {
             const names = await fs.readdir(this.directory);
             await Promise.all(names
                 .filter(name => name.startsWith('inventory.json.') && name.endsWith('.tmp'))
-                .map(name => fs.rm(path.join(this.directory, name), { force: true }).catch(() => {})));
+                .map(name => this.#cleanupTemp(path.join(this.directory, name), 'startup-stale-temp')));
         } catch (error) {
             this.logger?.debug?.('Inventory observation temp cleanup skipped.', { error, directory: this.directory });
         }

@@ -2,6 +2,7 @@
 
 const FlowError = require('../../shared/errors/FlowError');
 const Timeout = require('../../shared/time/Timeout');
+const Operation = require('../../operations/Operation');
 const { Vec3 } = require('vec3');
 
 class FishingMovementOperation {
@@ -49,38 +50,45 @@ class FishingMovementOperation {
         const operationTimeout = this.#positive(timeoutMs, this.config.timeoutMs);
         const movementProfile = Object.freeze({
             name: String(profile?.name || 'shift-walk-continuous'),
-            forward: profile?.forward !== false,
-            sneak: profile?.sneak !== false,
-            sprint: profile?.sprint === true,
+            forward: true,
+            // Fishing travel from the AFK spawn to the configured shore point is
+            // intentionally shift-walking. Profiles/probes may tune other controls,
+            // but they are not allowed to disable sneak for this route.
+            sneak: true,
+            sprint: false,
             jump: profile?.jump === true
         });
 
-        return this.operationManager.run({
-            run: async (operationContext, { lockPolicy }) => {
-                const locks = ['movement'];
-                if (!lockPolicy.acquire(locks, operationContext.operationId)) {
-                    throw new FlowError('Fishing movement lock is busy.', {
-                        code: 'FISHING_MOVEMENT_BUSY', subsystem: 'fishing-movement', operation: 'FishingMovementOperation',
-                        step: 'acquire-lock', retryable: true
-                    });
-                }
-                try {
-                    return await this.#execute({
-                        operationId: operationContext.operationId,
-                        destination: target,
-                        expectedGeneration: generation,
-                        timeoutMs: operationTimeout,
-                        cancellationToken: operationContext.cancellation.token,
-                        profile: movementProfile
-                    });
-                } finally {
-                    lockPolicy.release(locks, operationContext.operationId);
-                }
-            }
-        }, {
+        const operation = new Operation({
+            name: 'FishingMovementOperation',
+            lockKeys: ['movement'],
+            execute: operationContext => this.#execute({
+                operationId: operationContext.operationId,
+                destination: target,
+                expectedGeneration: generation,
+                timeoutMs: operationTimeout,
+                cancellationToken: operationContext.cancellation.token,
+                profile: movementProfile
+            })
+        });
+        const result = await this.operationManager.run(operation, {
             timeoutMs: operationTimeout,
             cancellationToken,
+            connectionGeneration: generation,
             metadata: { subsystem: 'fishing-movement', destination: target, expectedGeneration: generation }
+        });
+        if (result?.success) return result.data;
+        if (result?.status === 'BUSY') {
+            throw new FlowError('Fishing movement is blocked by another movement operation.', {
+                code: 'FISHING_MOVEMENT_BUSY', subsystem: 'fishing-movement', operation: 'FishingMovementOperation',
+                step: 'acquire-lock', retryable: true,
+                details: { expectedGeneration: generation, operation: result?.meta?.operationId || null }
+            });
+        }
+        throw result?.error || new FlowError(result?.message || 'Fishing movement failed.', {
+            code: result?.status === 'TIMEOUT' ? 'FISHING_MOVEMENT_TIMEOUT' : 'FISHING_MOVEMENT_FAILED',
+            subsystem: 'fishing-movement', operation: 'FishingMovementOperation', step: 'move', retryable: true,
+            details: { expectedGeneration: generation }
         });
     }
 

@@ -224,3 +224,91 @@ test('KhoService waits for an unrelated GUI to actually close before sending /kh
     assert.equal(closes, 1);
     assert.equal(sends, 1);
 });
+
+test('KhoService rejects empty fallback capacity from /pv 2 and closes the vault before /kho', async () => {
+    let current = session('pv-2', {}, {
+        used: 0,
+        free: 800000,
+        limit: 800000,
+        total: 800000,
+        derivedFromItems: true
+    });
+    current.source = { commandKey: 'personalVault2', command: '/pv 2' };
+    let closes = 0;
+    let sends = 0;
+    const guiManager = {
+        current: () => current,
+        syncCurrentWindow: () => current,
+        async closeCurrentWindow() { closes += 1; current = null; return true; }
+    };
+    const service = new KhoService({
+        commandService: {
+            async send(key) {
+                sends += 1;
+                assert.equal(key, 'storage');
+                assert.equal(current, null, 'fallback capacity from /pv 2 must not be accepted as /kho');
+                current = session('kho-real', { coal: 123456 }, { used: 358256, free: 441744, limit: 800000 });
+                return Result.ok();
+            }
+        },
+        guiManager,
+        reader: reader(),
+        config: config()
+    });
+
+    const result = await service.read();
+    assert.equal(result.success, true);
+    assert.equal(result.data.items.coal, 123456);
+    assert.equal(result.data.capacity.used, 358256);
+    assert.equal(closes, 1);
+    assert.equal(sends, 1);
+});
+
+test('KhoService still accepts derived capacity after /kho command when real storage items are present', async () => {
+    let current = null;
+    const guiManager = {
+        current: () => current,
+        syncCurrentWindow: () => current,
+        async closeCurrentWindow() { current = null; return true; }
+    };
+    const service = new KhoService({
+        commandService: {
+            async send() {
+                current = session('kho-derived', { diamond: 777 }, {
+                    used: 777,
+                    free: 799223,
+                    limit: 800000,
+                    total: 800000,
+                    derivedFromItems: true
+                });
+                return Result.ok();
+            }
+        },
+        guiManager,
+        reader: reader(),
+        config: config()
+    });
+
+    const result = await service.read();
+    assert.equal(result.success, true);
+    assert.equal(result.data.items.diamond, 777);
+    assert.equal(result.data.capacity.derivedFromItems, true);
+});
+
+test('KhoService honors GuiManager post-close gate even when the previous GUI already closed server-side', async () => {
+    let current = null;
+    let gateWaited = false;
+    const guiManager = {
+        current: () => current,
+        syncCurrentWindow: () => current,
+        async closeCurrentWindow() { current = null; return true; },
+        async waitForPostCloseSettle(ms) { assert.equal(ms, 1000); gateWaited = true; return 250; }
+    };
+    const service = new KhoService({
+        commandService: { async send() { assert.equal(gateWaited, true, '/kho must pass the post-close gate before sending'); current = session('kho-gated', { coal: 321 }, { used: 321, limit: 800000 }); return Result.ok(); } },
+        guiManager, reader: reader(), config: { ...config(), openAfterCloseSettleMs: 1000 }
+    });
+    const result = await service.read({ refresh: true });
+    assert.equal(result.success, true);
+    assert.equal(result.data.items.coal, 321);
+});

@@ -98,7 +98,7 @@ function makeRuntime() {
     };
 }
 
-test('auto-renders control/config panels and exposes exactly six requested control buttons', async () => {
+test('auto-renders current generic remote control/config panels with connection, Sky and mode lifecycle actions', async () => {
     const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'mcbot-panel-'));
     const control = new FakeChannel('c1', 'bot-control');
     const configChannel = new FakeChannel('c2', 'bot-config');
@@ -153,12 +153,19 @@ test('auto-renders control/config panels and exposes exactly six requested contr
     assert.equal(control.sent.length, 1);
     assert.equal(configChannel.sent.length, 1);
     const payload = control.sent[0].payload;
-    const labels = payload.components.flatMap(row => row.toJSON().components.map(component => component.label));
-    assert.deepEqual(labels, ['Join Server', 'Sky thủ công', 'Mode', 'Dừng', 'Chạy tiếp', 'Về đảo']);
+    const labels = payload.components
+        .flatMap(row => row.toJSON().components)
+        .map(component => component.label)
+        .filter(Boolean);
+    assert.deepEqual(labels, [
+        'Kết nối', 'Ngắt bot', 'Vào Sky', 'Về HUB', '/is',
+        'Chạy mode', 'Tạm dừng', 'Chạy tiếp', 'Restart mode', 'Dừng mode'
+    ]);
     const embed = payload.embeds[0].toJSON();
-    assert.match(embed.fields.find(field => field.name === 'Tay trái').value, /Shield/);
-    assert.match(embed.fields.find(field => field.name === 'Tay phải').value, /Diamond/);
-    assert.match(embed.fields.find(field => field.name === 'Máu').value, /18\/20/);
+    const hands = embed.fields.find(field => field.name === 'Tay trái / phải').value;
+    assert.match(hands, /Shield/);
+    assert.match(hands, /Diamond/);
+    assert.match(embed.fields.find(field => field.name === 'Máu / Đói').value, /18\/20/);
 
     await manager.stop();
     await fs.rm(temp, { recursive: true, force: true });

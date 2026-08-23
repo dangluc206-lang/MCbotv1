@@ -6,6 +6,7 @@ const EventBus = require('../../../src/core/EventBus');
 const Result = require('../../../src/shared/result/Result');
 const Status = require('../../../src/shared/result/Status');
 const FlowError = require('../../../src/shared/errors/FlowError');
+const ModeCoordinator = require('../../../src/modes/ModeCoordinator');
 const FishingModeService = require('../../../src/modes/fishing/FishingModeService');
 const FishingRecoveryPolicy = require('../../../src/modes/fishing/FishingRecoveryPolicy');
 
@@ -94,12 +95,15 @@ function harness(overrides = {}) {
         isConnected: () => connected,
         generation: () => generation
     };
+    const modeCoordinator = overrides.modeCoordinator || new ModeCoordinator({ botId: 'bot-01' });
+    if (overrides.collectorActive) modeCoordinator.acquire('collector-b5');
     const mode = new FishingModeService({
         botId: 'bot-01', eventBus, connectionState,
         connectionControl: { requestReconnect: overrides.requestReconnect || (async (reason, options) => calls.push(['reconnect', reason, options])) },
+        skyblockReadiness: overrides.skyblockReadiness || null,
         ...capabilities,
         recoveryPolicy: new FishingRecoveryPolicy({ config: resolvedConfig }),
-        collectorB5Mode: { status: () => ({ enabled: Boolean(overrides.collectorActive) }) },
+        modeCoordinator,
         failurePublisher: overrides.failurePublisher || null,
         failurePolicy: overrides.failurePolicy || policy,
         config: resolvedConfig,
@@ -112,7 +116,7 @@ function harness(overrides = {}) {
         }))
     });
     return {
-        mode, eventBus, calls, capabilities,
+        mode, eventBus, calls, capabilities, modeCoordinator,
         setConnected: value => { connected = value; },
         setGeneration: value => { generation = value; },
         setArea: value => { currentArea = value; },
@@ -137,6 +141,69 @@ test('FishingModeService enable/config-disabled/mutual-exclusion/repeated-enable
     assert.equal(h.mode.publicConfig().areas[0].id, 'afk-11');
     await h.mode.disable('cleanup');
     assert.equal(h.mode.status().phase, 'OFF');
+});
+
+test('FishingModeService waits for the default Skyblock auto-join readiness before /is and /afk', async () => {
+    let ready = false;
+    const h = harness({
+        skyblockReadiness: { isGenerationReady: generation => ready && generation === 1 },
+        fishOnce: cancellableBlock()
+    });
+    await h.mode.initialize();
+    await h.mode.enable();
+    await waitFor(() => h.mode.status().phase === 'WAITING_SKYBLOCK', 'waiting skyblock');
+    assert.equal(h.calls.includes('home'), false);
+    assert.equal(h.calls.includes('join'), false);
+    ready = true;
+    await waitFor(() => h.calls.includes('home') && h.calls.includes('join'), 'fishing route after skyblock ready');
+    await h.mode.disable('cleanup');
+});
+
+test('FishingModeService retries shore movement locally with sneak before resetting the AFK route', async () => {
+    let moveCalls = 0;
+    let destinationChecks = 0;
+    const profiles = [];
+    const next = JSON.parse(JSON.stringify(config));
+    next.movement.localRetryLimit = 1;
+    next.movement.localRetryDelayMs = 0;
+    const h = harness({
+        config: next,
+        verifyDestination: () => ({ valid: ++destinationChecks >= 3, code: 'FISHING_DESTINATION_NOT_REACHED' }),
+        move: async ({ profile }) => {
+            moveCalls += 1;
+            profiles.push(profile);
+            if (moveCalls === 1) throw new FlowError('stuck', { code: 'FISHING_MOVEMENT_STUCK', retryable: true });
+            return { operationId: `move-${moveCalls}` };
+        },
+        fishOnce: cancellableBlock()
+    });
+    await h.mode.initialize();
+    await h.mode.enable();
+    await waitFor(() => moveCalls >= 2, 'second local movement attempt');
+    assert.equal(h.calls.filter(value => value === 'home').length, 1);
+    assert.equal(h.calls.filter(value => value === 'join').length, 1);
+    assert.equal(profiles.every(profile => profile.sneak === true), true);
+    await h.mode.disable('cleanup');
+});
+
+test('FishingModeService bounds ordinary fishing-cycle retries before publishing a retryable failure', async () => {
+    const failures = [];
+    let fishCalls = 0;
+    const next = JSON.parse(JSON.stringify(config));
+    next.recovery.cycleRetryLimit = 2;
+    const h = harness({
+        config: next,
+        fishOnce: async () => {
+            fishCalls += 1;
+            return { caught: false, completed: false, retry: true, signal: 'fish-cycle-error', error: 'boom' };
+        }
+    });
+    h.eventBus.on('runtime:failure', event => failures.push(event));
+    await h.mode.initialize();
+    await h.mode.enable();
+    await waitFor(() => fishCalls >= 2 && failures.some(event => event.code === 'FISHING_CYCLE_RETRY_EXHAUSTED'), 'cycle retry budget failure');
+    assert.equal(h.mode.status().currentAreaId, 'afk-11');
+    await h.mode.disable('cleanup');
 });
 
 test('FishingModeService successful route orders home/AFK/world/movement/equip before fishing and verified catch resets breaker', async () => {
@@ -196,6 +263,7 @@ test('FishingModeService disable/stop/destroy are idempotent and clean loop/rest
     assert.equal(h.mode.status().phase, 'OFF');
     await h.mode.stop(); await h.mode.destroy();
     assert.equal(h.mode.unsubscribers.length, 0);
+    assert.equal(h.mode.restartSupervisor.snapshot().closed, true);
 });
 
 test('FishingModeService ignores stale connection:ended without mutating current generation state', async () => {
@@ -426,4 +494,54 @@ test('FishingModeService reconfigure propagates validated config to every capabi
         assert.equal(h.calls.some(value => Array.isArray(value) && value[0] === owner), true, owner);
     }
     await h.mode.disable('cleanup');
+});
+
+test('FishingModeService catch event is connection-scoped and preserves the cycle generation', async () => {
+    let caught = false;
+    const events = [];
+    const h = harness({
+        fishOnce: async ({ cancellationToken }) => {
+            if (!caught) { caught = true; return { caught: true, signal: 'generation-catch' }; }
+            return cancellableBlock()({ cancellationToken });
+        }
+    });
+    h.eventBus.on('mode:fishing:catch', event => events.push(event));
+    await h.mode.initialize();
+    await h.mode.enable();
+    try {
+        await waitFor(() => h.mode.status().catches === 1, 'verified catch counter');
+        assert.equal(events.length, 1);
+        assert.equal(events[0].connectionGeneration, 1);
+        assert.equal(events[0].catches, 1);
+        assert.equal(h.eventBus.emit('mode:fishing:catch', { botId: 'bot-01', catches: 99 }), false);
+        assert.equal(events.length, 1, 'genless fishing catch must not fan out');
+    } finally {
+        await h.mode.disable('cleanup');
+    }
+});
+
+test('FishingModeService replacement before catch emit discards old cycle instead of recapturing new generation', async () => {
+    const events = [];
+    let fishCalls = 0;
+    let h;
+    h = harness({
+        fishOnce: async ({ cancellationToken }) => {
+            fishCalls += 1;
+            if (fishCalls === 1) {
+                h.setGeneration(2);
+                return { caught: true, signal: 'old-cycle' };
+            }
+            return cancellableBlock()({ cancellationToken });
+        }
+    });
+    h.eventBus.on('mode:fishing:catch', event => events.push(event));
+    await h.mode.initialize();
+    await h.mode.enable();
+    try {
+        await waitFor(() => fishCalls >= 2, 'replacement cycle to begin');
+        assert.equal(events.length, 0);
+        assert.equal(h.mode.status().catches, 0);
+    } finally {
+        await h.mode.disable('cleanup');
+    }
 });

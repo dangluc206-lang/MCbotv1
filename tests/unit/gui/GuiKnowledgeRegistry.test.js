@@ -32,14 +32,14 @@ test('bootstrap slot learns item identity and later follows the item when its sl
         await knowledge.initialize();
         const source = { commandKey: 'minerals', command: '/ks', clicks: [], actions: [], source: 'operation' };
 
-        const first = new GuiSession({ botId: 'bot-01', generation: 1, window: makeWindow(16), source });
+        const first = new GuiSession({ botId: 'bot-01', connectionGeneration: 1, window: makeWindow(16), source });
         assert.equal(await knowledge.resolveSlot(first, {
             source,
             roleId: 'menu_crafting',
             bootstrapSlot: 16
         }), 16);
 
-        const moved = new GuiSession({ botId: 'bot-01', generation: 1, window: makeWindow(20), source });
+        const moved = new GuiSession({ botId: 'bot-01', connectionGeneration: 1, window: makeWindow(20), source });
         assert.equal(await knowledge.resolveSlot(moved, {
             source,
             roleId: 'menu_crafting',
@@ -67,7 +67,7 @@ test('semantic GUI data is persisted and can be restored into a fresh registry',
         const normalizer = new GuiStructureNormalizer({ itemNormalizer: new ItemNormalizer() });
         const store = new GuiObservationStore({ baseDir: directory, botId: 'bot-01' });
         const source = { commandKey: 'personalVault2', command: '/pv 2', clicks: [], actions: [], source: 'operation' };
-        const session = new GuiSession({ botId: 'bot-01', generation: 1, window: { title: 'PV', type: 'generic', slots: [] }, source });
+        const session = new GuiSession({ botId: 'bot-01', connectionGeneration: 1, window: { title: 'PV', type: 'generic', slots: [] }, source });
         const first = new GuiKnowledgeRegistry({ botId: 'bot-01', normalizer, store });
         await first.initialize();
         await first.observe(session, { source });
@@ -92,7 +92,7 @@ test('weak recipe fingerprint does not cross-classify /pv 2 without a strong cus
         const source = { commandKey: 'minerals', command: '/ks', clicks: [16], actions: ['menu_crafting'], source: 'operation' };
         const slots = Array(54).fill(null);
         slots[14] = { name: 'diamond', displayName: '§bKim cương tinh luyện', count: 1, lore: ['§7B2'] };
-        const crafting = new GuiSession({ botId: 'bot-01', generation: 1, window: { title: 'Craft', type: 'generic', slots }, source });
+        const crafting = new GuiSession({ botId: 'bot-01', connectionGeneration: 1, window: { title: 'Craft', type: 'generic', slots }, source });
         await knowledge.learnSlot(crafting, {
             source,
             roleId: 'recipe:refined_diamond',
@@ -117,7 +117,7 @@ test('stored weak crafting bootstrap remains GUI knowledge and does not classify
         const store = new GuiObservationStore({ baseDir: directory, botId: 'bot-01' });
         const slots = Array(54).fill(null);
         slots[14] = { name: 'diamond', displayName: 'Server B2 Diamond', count: 1, lore: [] };
-        const session = new GuiSession({ botId: 'bot-01', generation: 1, window: { title: 'Craft', type: 'generic', slots } });
+        const session = new GuiSession({ botId: 'bot-01', connectionGeneration: 1, window: { title: 'Craft', type: 'generic', slots } });
         const normalized = normalizer.normalize(session);
         await store.upsert('ks__slot-16', normalized, {
             source: { commandKey: 'minerals', command: '/ks', clicks: [16], source: 'discord-gui' }
@@ -155,7 +155,7 @@ test('stale learned fingerprint self-heals from bootstrap slot and updates globa
 
         const oldSlots = Array(54).fill(null);
         oldSlots[13] = { name: 'lapis_lazuli', displayName: 'Old Lapis Recipe', count: 1, lore: [] };
-        const oldSession = new GuiSession({ botId: 'bot-01', generation: 1, window: { title: 'Craft', type: 'generic', slots: oldSlots }, source });
+        const oldSession = new GuiSession({ botId: 'bot-01', connectionGeneration: 1, window: { title: 'Craft', type: 'generic', slots: oldSlots }, source });
         await knowledge.learnSlot(oldSession, {
             source,
             roleId: 'recipe:refined_lapis',
@@ -167,7 +167,7 @@ test('stale learned fingerprint self-heals from bootstrap slot and updates globa
 
         const newSlots = Array(54).fill(null);
         newSlots[13] = { name: 'lapis_lazuli', displayName: 'New Lapis Recipe', count: 1, lore: ['changed'] };
-        const newSession = new GuiSession({ botId: 'bot-01', generation: 1, window: { title: 'Craft', type: 'generic', slots: newSlots }, source });
+        const newSession = new GuiSession({ botId: 'bot-01', connectionGeneration: 1, window: { title: 'Craft', type: 'generic', slots: newSlots }, source });
         assert.equal(await knowledge.resolveSlot(newSession, {
             source,
             roleId: 'recipe:refined_lapis',
@@ -198,7 +198,7 @@ test('null bootstrap slot is not coerced into slot zero', async () => {
         const source = { commandKey: 'minerals', command: '/ks', clicks: [16], actions: ['menu_crafting'], source: 'operation' };
         const slots = Array(54).fill(null);
         slots[0] = { name: 'barrier', displayName: 'Decoration', count: 1, lore: [] };
-        const session = new GuiSession({ botId: 'bot-01', generation: 1, window: { title: 'Craft', type: 'generic', slots }, source });
+        const session = new GuiSession({ botId: 'bot-01', connectionGeneration: 1, window: { title: 'Craft', type: 'generic', slots }, source });
         assert.equal(await knowledge.resolveSlot(session, {
             source,
             roleId: 'recipe:unknown',
@@ -235,7 +235,7 @@ test('MMOItems identity learned from crafting GUI recognizes vanilla-looking inv
             lore: ['§7B2'],
             componentMap
         };
-        const session = new GuiSession({ botId: 'bot-01', generation: 1, window: { title: 'Craft', type: 'generic', slots }, source });
+        const session = new GuiSession({ botId: 'bot-01', connectionGeneration: 1, window: { title: 'Craft', type: 'generic', slots }, source });
         await knowledge.learnSlot(session, {
             source,
             roleId: 'recipe:refined_redstone',
@@ -271,7 +271,7 @@ test('legacy display-name fingerprint is upgraded with custom identity when GUI 
 
         const oldSlots = Array(54).fill(null);
         oldSlots[12] = { name: 'redstone', displayName: '§cĐá đỏ tinh luyện', count: 1, lore: ['§7B2'] };
-        await knowledge.learnSlot(new GuiSession({ botId: 'bot-01', generation: 1, window: { title: 'Craft', type: 'generic', slots: oldSlots }, source }), {
+        await knowledge.learnSlot(new GuiSession({ botId: 'bot-01', connectionGeneration: 1, window: { title: 'Craft', type: 'generic', slots: oldSlots }, source }), {
             source,
             roleId: 'recipe:refined_redstone',
             slot: 12,
@@ -289,7 +289,7 @@ test('legacy display-name fingerprint is upgraded with custom identity when GUI 
         }]]);
         const newSlots = Array(54).fill(null);
         newSlots[12] = { name: 'redstone', displayName: '§cĐá đỏ tinh luyện', count: 1, lore: ['§7B2'], componentMap };
-        const current = new GuiSession({ botId: 'bot-01', generation: 2, window: { title: 'Craft', type: 'generic', slots: newSlots }, source });
+        const current = new GuiSession({ botId: 'bot-01', connectionGeneration: 2, window: { title: 'Craft', type: 'generic', slots: newSlots }, source });
         assert.equal(await knowledge.resolveSlot(current, {
             source,
             roleId: 'recipe:refined_redstone',
@@ -341,7 +341,7 @@ test('legacy bare MMOItems knowledge matches canonical full inventory identity a
 
         const slots = Array(54).fill(null);
         slots[12] = { name: 'redstone', displayName: '§cĐá đỏ tinh luyện', count: 1, lore: ['§7B2'], componentMap };
-        const session = new GuiSession({ botId: 'bot-01', generation: 3, window: { title: 'Craft', type: 'generic', slots }, source });
+        const session = new GuiSession({ botId: 'bot-01', connectionGeneration: 3, window: { title: 'Craft', type: 'generic', slots }, source });
         await knowledge.learnSlot(session, {
             source,
             roleId: 'recipe:refined_redstone',
@@ -355,4 +355,114 @@ test('legacy bare MMOItems knowledge matches canonical full inventory identity a
     } finally {
         await fs.rm(directory, { recursive: true, force: true });
     }
+});
+
+test('crafting recipe knowledge never resolves a GUI role from appended player inventory', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'mcbot-gui-container-boundary-'));
+    try {
+        const normalizer = new GuiStructureNormalizer({ itemNormalizer: new ItemNormalizer() });
+        const store = new GuiObservationStore({ baseDir: directory, botId: 'bot-01' });
+        const itemResolver = { resolve: () => null, matches: () => ({ matched: false }) };
+        const source = { commandKey: 'minerals', command: '/ks', clicks: [16], actions: ['menu_crafting'], source: 'operation' };
+        const customData = new Map([['minecraft:custom_data', {
+            type: 'compound',
+            value: { MMOITEMS_ITEM_ID: { type: 'string', value: 'KHOISIEUDACUOI' } }
+        }]]);
+        const menuItem = { name: 'cobblestone', displayName: '§aKhối siêu đá cuội', count: 1, lore: [] };
+        const inventoryOutput = { name: 'cobblestone', displayName: 'Cobblestone', count: 48, lore: [], componentMap: customData };
+        const slots = Array(90).fill(null);
+        slots[20] = menuItem;
+        slots[89] = inventoryOutput;
+        const window = { title: 'ᴄʜế ᴛạᴏ', type: 'minecraft:generic_9x6', slots, inventoryStart: 54, inventoryEnd: 90 };
+        const session = new GuiSession({ botId: 'bot-01', connectionGeneration: 1, window, source });
+
+        // Reproduce the persisted 2.6.5 corruption: the recipe role/global item
+        // was learned from the real output sitting in player slot 89.
+        const seed = new GuiKnowledgeRegistry({ botId: 'bot-01', normalizer, store, itemResolver });
+        await seed.initialize();
+        const observed = await seed.observe(session, { source });
+        const badFingerprint = normalizer.fingerprintItem(inventoryOutput);
+        await store.updateLearned(observed.key, 'recipe:super_cobblestone_block', {
+            roleId: 'recipe:super_cobblestone_block',
+            logicalItemId: 'super_cobblestone_block',
+            context: 'crafting-menu',
+            bootstrapSlot: 20,
+            currentSlot: 89,
+            fingerprint: badFingerprint,
+            learnedAt: new Date().toISOString(),
+            lastMatchedAt: new Date().toISOString(),
+            relearnCount: 0
+        });
+        await store.updateGlobalItem('super_cobblestone_block', {
+            logicalItemId: 'super_cobblestone_block',
+            fingerprint: badFingerprint,
+            fingerprints: [badFingerprint],
+            learnedFrom: { route: observed.key, roleId: 'recipe:super_cobblestone_block', slot: 89 },
+            learnedAt: new Date().toISOString(),
+            lastSeenAt: new Date().toISOString()
+        });
+
+        const knowledge = new GuiKnowledgeRegistry({ botId: 'bot-01', normalizer, store, itemResolver });
+        await knowledge.initialize();
+        const resolved = await knowledge.resolveSlot(session, {
+            source,
+            roleId: 'recipe:super_cobblestone_block',
+            bootstrapSlot: 20,
+            logicalItemId: 'super_cobblestone_block',
+            context: 'crafting-menu'
+        });
+
+        assert.equal(resolved, 20, 'player inventory slot 89 must never win GUI role resolution');
+        const saved = await store.readRecord(observed.key);
+        assert.equal(saved.learned['recipe:super_cobblestone_block'].currentSlot, 20);
+        assert.equal(saved.learned['recipe:super_cobblestone_block'].bootstrapSlot, 20);
+    } finally {
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('learnSlot rejects player inventory coordinates appended to a GUI window', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'mcbot-gui-learn-boundary-'));
+    try {
+        const normalizer = new GuiStructureNormalizer({ itemNormalizer: new ItemNormalizer() });
+        const store = new GuiObservationStore({ baseDir: directory, botId: 'bot-01' });
+        const knowledge = new GuiKnowledgeRegistry({ botId: 'bot-01', normalizer, store });
+        await knowledge.initialize();
+        const slots = Array(90).fill(null);
+        slots[89] = { name: 'cobblestone', displayName: 'Cobblestone', count: 48, lore: [] };
+        const session = new GuiSession({
+            botId: 'bot-01', connectionGeneration: 1,
+            window: { title: 'Craft', type: 'minecraft:generic_9x6', slots, inventoryStart: 54, inventoryEnd: 90 }
+        });
+        await assert.rejects(() => knowledge.learnSlot(session, {
+            source: { command: '/ks', actions: ['menu_crafting'], source: 'operation' },
+            roleId: 'recipe:bad',
+            slot: 89,
+            logicalItemId: 'bad',
+            context: 'crafting-menu'
+        }), /outside the container region/);
+    } finally {
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});
+
+
+test('GUI resolver fallback records resolver exceptions without making slot matching fatal', () => {
+    const normalizer = new GuiStructureNormalizer({ itemNormalizer: new ItemNormalizer() });
+    const logs = [];
+    const knowledge = new GuiKnowledgeRegistry({
+        botId: 'bot-01',
+        normalizer,
+        store: {},
+        itemResolver: {
+            resolve() { throw Object.assign(new Error('resolver resolve failed'), { code: 'RESOLVE_FAIL' }); },
+            matches() { throw Object.assign(new Error('resolver matches failed'), { code: 'MATCH_FAIL' }); }
+        },
+        logger: { debug: (message, meta) => logs.push({ message, meta }) }
+    });
+    assert.equal(knowledge.matchesLogical({ name: 'stone', displayName: 'Stone', lore: [] }, 'logical:test', 'inventory'), false);
+    assert.ok(logs.length >= 2);
+    assert.ok(logs.every(entry => /resolver fallback failed/i.test(entry.message)));
+    assert.ok(logs.some(entry => entry.meta.error.code === 'RESOLVE_FAIL'));
+    assert.ok(logs.some(entry => entry.meta.error.code === 'MATCH_FAIL'));
 });

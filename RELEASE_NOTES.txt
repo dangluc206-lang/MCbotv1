@@ -1,0 +1,439 @@
+MCbot 2.7.67 — Architecture Baseline Closure Recovery
+
+- Restores and regenerates the governed WP-001 human gap report from the committed machine-readable architecture baseline instead of carrying a missing/stale handoff copy.
+- Re-captures `architecture/baseline/current.json` only after final release metadata is in place, then regenerates `docs/architecture-roadmap/baseline/WP-001_GAP_REPORT.md` from that exact committed baseline.
+- Keeps the 2.7.66 runtime/gameplay implementation unchanged; this release is closure/evidence-only and does not change dependencies, config schema or server behavior.
+- Re-runs static, fast, full, installed-compatible, coverage and extracted-artifact verification before handoff.
+
+MCbot 2.7.66 — Local ZIP Inspect/Handoff Isolation
+
+- LocalZipUpdateService now owns inspect transactions synchronously, so concurrent inspect callers cannot race staging extraction/selection.
+- Internal selection cleanup is separated from public clear(); INSPECTING remains observable for the whole operation instead of being reset to IDLE mid-inspection.
+- Public clear/inspect are rejected while a prepare transaction is active or after helper handoff is INSTALL_PENDING, preventing deletion/replacement of staging still owned by the updater helper.
+- Adds deterministic regressions for concurrent inspect and clear-after-handoff races in the fast update-safety lane.
+
+MCbot 2.7.65 — Local ZIP Handoff Rollback
+
+- LocalZipUpdateService now owns prepared-install state explicitly and can cancel only the currently owned plan before helper handoff commits.
+- If the local update helper is missing or fails to spawn, Desktop cancels the prepared transaction, removes its plan/backup staging best-effort, returns the service to READY, and attempts to restore a backend that was running before update preparation.
+- A mismatched plan path cannot cancel another prepared transaction; successful helper spawn remains the commit point followed by normal app quit.
+- Adds deterministic service ownership and Desktop handoff-ordering regressions in the fast update/persistence lanes.
+
+MCbot 2.7.64 — Local ZIP Prepare Serialization
+
+- LocalZipUpdateService now acquires prepare-install ownership synchronously before the first await, so double-click/concurrent callers cannot create two apply plans for one READY staged update.
+- A competing prepareInstall caller fails with LOCAL_UPDATE_INSTALL_BUSY before filesystem or helper-launch side effects; the winning transaction preserves the existing schema-v2 staged integrity contract.
+- The prepare ownership flag is released in finally so preparation exceptions cannot poison the service instance.
+- Adds a deterministic concurrent prepare regression in the fast update-safety lane.
+
+MCbot 2.7.63 — Local ZIP Staging Integrity
+
+- LocalZipUpdateService now records SHA-256 and size for every staged update file immediately after inspect/extract validation, before the update reaches READY.
+- Local update plans use schema v2 and carry the immutable staged integrity set; the helper preflights every staged file before target mutation and re-checks each file immediately before copy.
+- A staged file changed, removed, replaced by a symlink or otherwise mismatched after inspection now aborts before target mutation instead of being silently applied.
+- Adds deterministic staging-tamper regressions and promotes LocalZipUpdateService/local-update-helper into the fast update-safety gate.
+
+MCbot 2.7.62 — Installer Launch Integrity Reverification
+
+- GitHubUpdateService now stores a local SHA-256/size integrity baseline when an installer download completes, including releases whose GitHub asset metadata omits a digest.
+- Desktop install flow must re-hash and re-check the downloaded installer immediately before launch; tampered/missing/mismatched artifacts are invalidated and never spawned.
+- The pending-update record now captures the installer digest and size that were verified at the install boundary.
+- Adds deterministic tamper regressions plus a desktop source contract proving verification occurs before installer spawn; updater trust/redirect/download semantics remain unchanged.
+
+MCbot 2.7.61 — Updater Configuration Transaction Isolation
+
+- GitHubUpdateService now treats repository/channel changes as updater transaction boundaries: a real source/channel change invalidates checked release/download metadata and returns the updater to IDLE.
+- Configuration changes are rejected while CHECKING or DOWNLOADING is active, while an identical configuration remains a safe no-op so unrelated preference writes do not fail.
+- Prevents an in-flight request or previously checked asset from being presented under different source/channel metadata; trust, digest, redirect and download-ownership rules remain unchanged.
+- Adds deterministic red-to-green regressions for stale release invalidation and check-vs-config exclusion in the fast update-safety lane.
+
+MCbot 2.7.60 — GitHub Update Download Serialization
+
+- GitHubUpdateService now acquires download ownership synchronously before the first await, so concurrent callers cannot start duplicate setup transports or race on the same partial file.
+- Download staging uses a per-transaction UUID temp path; `clearDownloaded()` is rejected while a download owns the transaction, preserving updater phase and filesystem ordering.
+- GitHub repository trust, HTTPS/redirect bounds, size limits, SHA-256 verification and existing-file verification semantics are unchanged.
+- Adds deterministic red-to-green regressions for concurrent download transport ownership and clear-during-download exclusion; updater concurrency joins the fast update-safety lane.
+
+MCbot 2.7.59 — Collector Stale Outcome Isolation
+
+- RuntimeResultClassifier now exposes contract-level `STALE` outcomes explicitly instead of collapsing them into generic runtime failure.
+- Collector+B5 treats stale-generation boundaries as connection churn: it invalidates prepared generation/storage-protection state and re-synchronizes without charging the business failure breaker or publishing a current-generation runtime failure.
+- Fishing behavior remains domain-policy driven; cancellation, expected waits and genuine retryable business failures are unchanged.
+- Adds deterministic regressions for stale classification and Collector failure-budget isolation; Collector lifecycle coverage joins the fast contract lane.
+
+MCbot 2.7.58 — B5 Planning Status Convergence
+
+- B5PlanningService now preserves stable lower-layer operation classifications when a dependency throws before returning a Result.
+- Stale/disconnected generation guards from storage or personal-vault reads now remain `DISCONNECTED` instead of being collapsed by the planner's outer catch to generic `FAILED`.
+- Dependency Results that already carry an explicit status continue to be contextualized without changing their status; pure planning/calculation failures remain `FAILED`.
+- Adds a deterministic red-to-green regression to the fast planner/reference lane.
+
+MCbot 2.7.57 — Sky Command Status Convergence
+
+- SkyCommandService now preserves shared lower-layer Result/Status semantics from SlashCommandService instead of collapsing stable transport errors to generic `FAILED`.
+- `BOT_NOT_READY` now remains `NOT_READY` with its original error code; stale-generation/cancel behavior continues to use the shared operation classifier.
+- Sky-domain readiness (`SKY_COMMAND_NOT_IN_SKY`) remains explicitly `NOT_READY`; wrong-sky/disabled/invalid command behavior is unchanged.
+- Adds a deterministic red-to-green regression to the fast event-generation/command contract lane.
+
+MCbot 2.7.56 — Command Transport Status Convergence
+
+- CommandService now preserves stable non-FAILED transport classifications such as `BOT_NOT_READY` instead of rewriting them as `COMMAND_SEND_FAILED`/`FAILED`.
+- A disconnected/not-attached BotContext at the CommandExecutor boundary now returns `NOT_READY` with the original `BOT_NOT_READY` error code.
+- Generic transport exceptions remain `COMMAND_SEND_FAILED`/`FAILED`; confirmation timeout, cancellation, stale-generation and confirmation-disconnect semantics are unchanged.
+- Adds a deterministic red-to-green regression to the existing fast event-generation contract gate.
+
+MCbot 2.7.55 — Mode Control Status Convergence
+
+- ModeControlService no longer rewrites thrown runtime/readiness failures as `INVALID_INPUT`.
+- Capability readiness/service-binding failures remain `NOT_READY`; missing/invalid mode definitions remain `INVALID_INPUT`; stable runtime codes such as stale generation, timeout and lock busy use the shared operation status classifier.
+- Mode transition execution and registry behavior are unchanged; this release converges control-plane Result/Status semantics only.
+- Adds deterministic ModePlatform regressions and includes them in the fast contract gate.
+
+MCbot 2.7.54 — Fleet Reconcile Status Convergence
+
+- FleetControlService now preserves the shared operation status classification for scheduler and mode failures instead of collapsing every non-cancelled reconciliation error to generic `FAILED`.
+- Scheduler `TIMEOUT` remains `TIMEOUT`; stale-generation/disconnect failures propagated from managed modes remain `DISCONNECTED`.
+- Durable intent, scheduler ordering, deduplication, reconnect/reset behavior and retry boundaries are unchanged.
+- Adds deterministic FleetControl regressions for timeout and stale-generation propagation and keeps them in the fast quality lane.
+
+MCbot 2.7.53 — Managed Mode Status Convergence
+
+- ManagedMode lifecycle hook failures now preserve the same shared operation status classification used by OperationManager instead of collapsing disconnect/timeout/busy errors to generic `FAILED`.
+- Capability readiness errors remain explicitly `NOT_READY`; lease acquisition, cleanup, pause/resume and task ownership semantics are unchanged.
+- Adds deterministic red-to-green lifecycle coverage for stale-generation, GUI disconnect, timeout and operation-lock busy failures.
+
+MCbot 2.7.52 — Direct Service Status Convergence
+
+- SkyblockService, DungeonService and IslandService direct/no-OperationManager paths now use the same `Operation.statusForError()` classifier as managed operations.
+- Stable lower-layer codes such as GUI/command disconnect, verification timeout and operation-lock busy no longer collapse to generic `FAILED` only because the service is invoked directly.
+- Execution, locking and server behavior are unchanged; this release converges only Result/Status classification semantics.
+- Adds deterministic regression coverage across DISCONNECTED/TIMEOUT/BUSY classes and keeps the contract in the fast quality lane.
+
+MCbot 2.7.51 — Command Confirmation Disconnect Semantics
+
+- CommandService now preserves `COMMAND_CONFIRM_DISCONNECTED` as a `DISCONNECTED` result instead of wrapping a lost connection during confirmation as `COMMAND_SEND_FAILED`/`FAILED`.
+- Keeps command-confirmation pre-arming, timeout/cancellation cleanup, transport send failure handling and stale-generation semantics unchanged.
+- Adds a deterministic synchronous connection-end regression to the existing fast event-generation contract gate.
+
+MCbot 2.7.50 — GUI Click Verification Convergence
+
+- `ClickVerifier` now distinguishes clicked-session freshness from captured connection/generation freshness, so legitimate GUI open/close transitions are accepted after the old session is invalidated.
+- `GuiManager.click(..., { verifyGui: true })` reconciles already-visible replacement and closed `currentWindow` state when `windowOpen/windowClose` bridge events are missed.
+- `gui:updated` verification still requires the original session to remain active/current; open/close verification remains generation- and client-bound and therefore fails closed across reconnects.
+- Adds runtime-like regressions for real open, real close, missed open and missed close; the broader GUI contract suite now runs in the fast quality lane.
+
+MCbot 2.7.49 — GUI CurrentWindow Waiter Convergence
+
+- `GuiManager.waitFor()` now reconciles an already-visible Mineflayer `currentWindow` before arming an event-only wait, preventing missed `gui:opened` delivery from manufacturing a timeout.
+- `waitForFresh()` likewise adopts a replacement current window as fresh-session evidence while preserving same-window revision/update requirements.
+- Does not infer in-place freshness from mutable item contents; same-window transitions remain verified by the existing update event/revision path.
+- Adds deterministic 1 ms regressions for both generic waiters and keeps them in the fast GUI contract suite.
+
+MCbot 2.7.48 — GUI Click Transition Reconciliation
+
+- `GuiManager.clickAndWaitForTransition()` now reconciles a Mineflayer `currentWindow` replacement immediately after click transport completion when `windowOpen/gui:opened` delivery was missed or delayed.
+- Closes the direct-click path that bypassed the 2.7.47 transition reconciliation, including `requireNewWindow` flows.
+- Keeps in-place `updateSlot` transitions event-driven and preserves click transport/business verification separation.
+- Adds a deterministic 1 ms regression that fails on 2.7.47 and succeeds only when the already-visible replacement window is adopted synchronously.
+
+MCbot 2.7.47 — GUI Transition Waiter Reconciliation
+
+- `GuiManager.performAndWaitForTransition()` now reconciles a Mineflayer `currentWindow` replacement synchronously after a successful action when `windowOpen/gui:opened` delivery is missed or delayed.
+- Keeps in-place slot transitions event-driven through the existing bound `updateSlot` path; no item-state guessing or polling-only success heuristic was introduced.
+- Preserves generation guards and the pre-bound waiter ordering so a stale connection still fails closed.
+- Adds a deterministic regression with a 1 ms timeout that fails on 2.7.46 and passes only when the already-visible replacement window is adopted immediately.
+
+MCbot 2.7.46 — Immediate GUI CurrentWindow Adoption
+
+- `GuiManager.performAndWaitForOpen()` now reconciles Mineflayer `currentWindow` synchronously after a successful action when the internal `gui:opened` bridge event was missed or delayed.
+- Removes correctness dependence on the polling interval winning a race against short GUI-open timeouts under full test/runtime load.
+- Keeps generation guards and existing event/polling fallbacks unchanged; adoption occurs only when Mineflayer exposes a different current window than the pre-action window.
+- Adds deterministic regression coverage with a timeout shorter than the polling interval and removes scheduler-dependent timing from the event-subscription test.
+
+MCbot 2.7.45 — Custom Mode Mutation Coordination
+
+- Custom-mode save/delete operations now share the process-wide `config-set` mutation boundary when invoked from Desktop, preventing interleaved writes and delete/save ordering races.
+- CustomModeStore atomic temp files use per-operation UUID ownership instead of `Date.now()`, so same-millisecond saves cannot collide on one temp path.
+- Preserves async public behavior, validation-before-mutation, repair backups and cleanup-warning semantics.
+- Adds deterministic concurrency coverage for ordered save/delete and forced wall-clock temp collisions; the composable platform contract is now part of the fast quality lane.
+
+MCbot 2.7.44 — Discord Panel Durable Commit Ordering
+
+- Moves DiscordPanelStore state mutation inside its serialized persistence transaction; in-memory panel state advances only after the durable write succeeds.
+- A rejected panel write can no longer survive in memory and be resurrected by a later successful write.
+- Keeps the recovery-safe write queue and shutdown drain semantics unchanged while making caller success/failure match durable state.
+- Adds regression coverage for failed-write non-resurrection and retains Discord shutdown drain parity.
+
+MCbot 2.7.43 — Generic Config Transaction Serialization
+
+- Serializes Desktop generic config read/merge/validate/write/reload transactions through the shared `config-set` mutation key instead of only serializing individual file writes.
+- Sky command insert/delete, B5 rules, B5 craft settings, storage protection and Sky gateway timing updates now read the latest committed registry state inside the transaction boundary.
+- Collector+B5 config editing joins the same `config-set` key, closing cross-surface races where a Desktop multi-file storage-protection update could overwrite a concurrent Collector edit.
+- Adds deterministic regression coverage proving 2.7.42 loses a concurrent Sky command and Collector field while 2.7.43 preserves both.
+- Fast/source-only quality locks the structural boundary; installed-compatible tests execute the real Desktop behavior path.
+
+MCbot 2.7.42 — Cross-Surface Config Transaction Coordination
+
+- Adds one shared `KeyedMutationCoordinator` to serialize read/validate/write/runtime-apply transactions across Discord and Desktop editor instances without serializing unrelated keys.
+- Bot profile admin and per-bot fishing edits now share the `bot-profile-set` transaction key, closing cross-service lost-update races on `config/bots/*.json`.
+- Collector+B5 configuration edits share a dedicated transaction key; Desktop multi-field Collector edits now commit as one transaction instead of several interleavable writes/reloads.
+- The shared coordinator is lifecycle-owned and drains after Discord stops but before bot runtimes are destroyed.
+- Adds source-only multi-instance race tests plus installed cross-service BotProfileAdmin/Fishing regression coverage.
+
+MCbot 2.7.41 — Bot Profile Transaction Serialization
+
+- Serializes create/update/delete/clone/reload profile mutations across the full read → validate → atomic write → runtime replacement transaction.
+- Prevents deterministic lost updates when concurrent Discord/Desktop admin requests edit different fields of the same bot profile.
+- Keeps the filesystem write queue separate so rollback writes cannot deadlock the mutation transaction queue.
+- `BotProfileAdminService.drain()` now waits active mutation transactions before draining filesystem writes.
+- Adds source-only architecture coverage plus installed integration regression for concurrent mutation, failure recovery and shutdown drain ordering.
+
+MCbot 2.7.40 — Discord Shutdown Drain
+
+- DiscordService now owns accepted interaction promises and removes the listener before draining them; the client is destroyed only after accepted work settles or the bounded drain timeout expires.
+- DiscordPanelManager stop waits for an in-flight refresh, error-reporter flush, panel-store queue and bot-profile admin queue before releasing Discord client/guild references.
+- DiscordPanelStore and BotProfileAdminService expose explicit drain contracts for shutdown coordination.
+- Added fast deterministic shutdown tests for interaction/client ordering and panel/admin persistence drain.
+
+MCbot 2.7.39 — Observation Persistence Drain
+
+- GUI and inventory observation stores now expose lifecycle `drain()` semantics for their recovery-safe write queues.
+- GuiKnowledgeRegistry and direct GuiObservationService shutdown paths wait for pending observation persistence before completing stop/destroy.
+- InventoryObservationService detaches event/window listeners, then drains pending snapshot writes before runtime lifecycle stop returns.
+- Added fast regression coverage proving lifecycle stop cannot outrun these persistence queues.
+
+MCbot 2.7.38 — Desktop Shutdown Drain Consistency
+
+- System-tray and update-triggered quits no longer set the final quitting flag before Electron `before-quit`; every normal exit now traverses one shutdown sequence.
+- Shutdown persists the final window state, drains serialized preferences, then stops the backend before allowing the second `app.quit()` to complete.
+- Shutdown failures remain best-effort but are reported per step; one failed persistence/stop operation cannot skip the remaining cleanup sequence.
+- Removed duplicate Tray construction and added source/behavior regression coverage for quit ownership and shutdown ordering.
+
+MCbot 2.7.37 — Desktop Preference Persistence Ordering
+
+- DesktopPreferenceStore mutations now commit through one recovery-safe serialization queue; concurrent set/update calls resolve in durable order instead of racing a shared `.tmp` file.
+- In-memory preference state advances only after atomic rename succeeds, so a failed write cannot leak an uncommitted preference into later snapshots or persistence.
+- Atomic preference temp files use per-operation UUID ownership and the store exposes `drain()` for shutdown coordination plus bounded cleanup diagnostics.
+- Added deterministic concurrency/failure regression tests and included preference ordering in `quality:fast`.
+
+MCbot 2.7.36 — Renderer Failure Telemetry
+
+- Desktop renderer runAction failures remain toast-visible/rejected but are now also reported through DesktopController diagnostics before terminal UI promise sinks.
+- Renderer error-report transport failure falls back to console evidence instead of disappearing.
+- Initial log/app-info loads and AI workspace/model auto-refresh failures now emit renderer diagnostics.
+- Added source contract tests for renderer error visibility without changing button/action semantics.
+
+MCbot 2.7.35 — Desktop Main Failure Visibility
+
+- Electron main-process backend restart/autostart/quit-stop failures now flow through bounded DesktopController renderer-error diagnostics with stderr fallback.
+- Periodic snapshot and window-preference persistence failures are visible without interrupting the UI event loop.
+- Windows update-package staging cleanup now warns instead of silently swallowing removal failure.
+- Renderer runAction terminal catches remain intentionally UI-isolated; this pass changes no UI action or gameplay semantics.
+
+MCbot 2.7.34 — Atomic Writer Cleanup Evidence
+
+- CustomModeStore and Local AI ProjectWorkspace no longer silently discard atomic temp-file cleanup failures.
+- Successful writes expose a bounded frozen cleanupWarning record while preserving the existing success contract.
+- When a primary write/rename fails at the same time as cleanup, the primary error remains authoritative and cleanup evidence is retained separately.
+- Expanded best-effort architecture regression coverage to these user-authored/AI mutation boundaries.
+
+MCbot 2.7.33 — Persistence Queue Failure Visibility
+
+- GUI/inventory observation write queues now preserve caller-visible write rejection while logging the failure and recovering queue availability for the next write.
+- Runtime failure persistence and Discord panel/error queues no longer discard prior task rejection silently; best-effort drains retain their non-fatal semantics with diagnostics.
+- Atomic temp-file cleanup failures in observation/runtime-failure persistence are diagnostic instead of disappearing.
+- Added behavioral queue-recovery tests and architecture regression coverage for critical persistence/send queues.
+
+MCbot 2.7.32 — Core Fail-Soft Diagnostics
+
+- CancellationToken listener failures remain isolated but are now retained as bounded diagnostics; TaskSupervisor snapshots expose the listener-failure count.
+- GUI item-resolver fallback paths now record resolver exceptions while preserving learned/bootstrap fallback semantics.
+- Sprint+jump periodic look and control-release failures are diagnostic instead of silently swallowed; cleanup remains best-effort and does not replace the primary movement result.
+- Expanded best-effort architecture regression coverage across cancellation, GUI knowledge and direct movement boundaries.
+
+MCbot 2.7.31 — Best-Effort Failure Visibility
+
+- Critical process/update/supervision/logging boundaries no longer use empty catch blocks or unconditional swallowed promise rejections.
+- Local ZIP updater cleanup failures are diagnostic-only and preserve the primary update outcome; GitHub updater exposes cleanup warnings in status.
+- Desktop startup cleanup, log persistence/listener isolation, logger retention deletion and supervised task drains now surface bounded diagnostics without turning secondary cleanup failures into primary failures.
+- Added architecture regression coverage that forbids silent best-effort swallowing from returning in these critical boundaries.
+
+MCbot 2.7.30 — Legacy Task Lifecycle Convergence
+
+- Collector+B5 and Fishing main-loop cancellation lifetime now runs inside the shared `TaskSupervisor`; neither legacy mode constructs its own `CancellationSource`.
+- Bounded restart scheduling remains supervised and Fishing retains no raw restart `setTimeout`; lease/public-control convergence from 2.7.28/2.7.29 is preserved.
+- Recovery classification, circuit-breaker policy, B5 planning and fishing gameplay decisions remain mode-local and behavior-compatible.
+- Added a fast architecture regression that rejects reintroduction of raw `CancellationSource`/`setTimeout` ownership in the two strangler modes.
+
+MCbot 2.7.29 — Legacy Restart Supervision Convergence
+
+- Fishing no longer owns a raw `setTimeout` restart timer; Collector+B5 and Fishing now share `TaskSupervisor` for bounded restart scheduling and cancellation.
+- Legacy public control remains adapter-backed and lease ownership remains centralized in `ModeLeaseSession`; this pass changes no B5 planner, fishing packet, command, GUI or server timing behavior.
+- Legacy debt is narrowed to domain gameplay/recovery loop decisions; restart timer ownership is no longer duplicated.
+- Added `TaskSupervisor` to quality:fast targeted contracts and verified lifecycle destroy drains the Fishing restart supervisor.
+
+MCbot 2.7.28 — Legacy Mode Lease Convergence / Scale Evidence
+
+- Public `collectorB5Mode`/`fishingMode` runtime service names now resolve through `LegacyModeAdapter`; raw legacy gameplay services remain lifecycle-internal.
+- Added shared `ModeLeaseSession` and migrated ManagedMode, Collector+B5 and Fishing exact lease mechanics to the same primitive without changing gameplay state machines.
+- Added read-only pre-WP-500 scale baseline using current Application/BotRegistry/BotRuntime/Lifecycle/EventBus primitives, with committed machine-readable evidence and crash-isolation checks.
+- Synthetic 64-runtime evidence shows one injected runtime start failure remains isolated to one runtime; WP-500 remains DEFERRED because no product bot-count/SLO/failure-tolerance driver exists.
+- Added scale evidence validation and lease/adapter contracts to quality:fast.
+
+MCbot 2.7.27 — Semantic Baseline Closure
+
+- Reconciled WP-001 machine-readable findings with the completed P0-P5 architecture instead of continuing to report historical WP-002/003/004/005 pending labels.
+- ServerProfile extraction is now reported as CURRENT; generic server-feature consumers are no longer misclassified as distributed server-fact authority.
+- Collector+B5/Fishing direct ManagedMode absence remains explicit STRANGLER debt with WP-203 exit triggers rather than a false phase failure.
+- baseline:check now validates semantic findings and emits BASELINE_FINDINGS_STALE when committed gap evidence no longer matches the current architecture.
+- Release ZIP contract from 2.7.26 remains active in quality:fast.
+
+MCbot 2.7.26 — Release Qualification / Artifact Closure
+
+- Restored four `scripts/build/*` helpers that were accidentally omitted from the 2.7.25 final source ZIP while still referenced by baseline/tests.
+- Updated the Discord panel regression test to the governed generic remote-control contract (connect/disconnect, Sky/HUB, /is and mode lifecycle) instead of the obsolete six-button UI.
+- Added `release-zip-contract/v1`: critical-file completeness, path canonicalization, traversal/case-collision detection and secret/runtime-data exclusion.
+- Windows update packaging now verifies ZIP contents before SHA-256/integrity metadata is emitted.
+- Installed dependency regression: 929/929 PASS with a compatible offline graph; coverage: 84.19% lines / 68.21% branches / 81.78% functions (thresholds 80/65/80).
+- Registry-backed npm ci remains environment-blocked by EAI_AGAIN in this execution environment; no dependency versions were changed to bypass that limitation.
+
+MCbot 2.7.25 — WP-402 CI Quality Gates / Phase 5 Gate
+
+- Added explicit fast/release quality lanes with PASS/FAIL/BLOCKED report contract; blocked installed dependencies return exit 2 and never count as PASS.
+- CI now runs the complete release lane after npm ci with shell pipefail and uploads the machine-readable quality report.
+- Windows local update packaging now emits SHA-256 and a versioned integrity manifest beside each ZIP.
+- Phase 5 simulation/observability gate is complete; mandatory P0-P5 roadmap packages are DONE.
+- Conditional WP-304/WP-500/WP-501 remain explicitly NOT ACTIVATED because their feature/measurement/GO triggers are absent; modular monolith remains the governed target.
+
+MCbot 2.7.24 — WP-401 Deterministic Simulation / Fault Matrix
+
+- Extended the existing replay harness with operation/path-aware before-error, after-error, resolve-wrong and read-transient fault semantics.
+- Added deterministic reference coverage for applied-click/response-loss, storage uncertainty, filesystem mutation faults, virtual backoff cancellation, stale generation and unowned cleanup.
+- Kept the simulator offline and contract-driven; no production scheduler, planner decision or Mineflayer/server behavior was copied into the harness.
+
+MCbot 2.7.23 — WP-400 Trace and Support Bundle Convergence
+
+- Added versioned correlation trace envelopes and compact B5 trace projection.
+- Added allowlist-only, bounded, redacted support bundle contract with protected-path rejection.
+- Reused existing operator log suppression rather than introducing a second logging path.
+
+MCbot 2.7.22 — WP-303 B5 Reference Conformance / Phase 4 Gate
+
+- B5 pure mode is now contract-tested as Mode SDK controlled, no movement/pathfinder, no raw command/click.
+- Added replay identity to B5 operator status and retained mandatory pre/post-campaign storage protection and generation-safe reconciliation.
+- Resolved the long-standing contradictory B1 telemetry test in favor of fail-closed server-state verification: click success without observed `/kho` delta is not business success.
+- Phase 4 planner/transaction gate is complete.
+
+MCbot 2.7.21 — WP-302 Storage Protection / Sell Planner Extraction
+
+- Extracted deterministic pure storage sell planning with fresh-snapshot/generation guards and decision replay identity.
+- Preserved mandatory iron/gold smelting, compaction, 1.5-B5 reserve, 64-only selling and immutable-baseline behavior.
+- Later inflow remains deferred; ambiguous sale evidence is reconciliation-blocked rather than blindly retried.
+
+MCbot 2.7.20 — WP-301 Shared Reconciliation Barrier
+
+- Added bounded shared reconciliation semantics for uncertain mutations with fresh evidence, generation/cancellation checks and optional resource ownership.
+- Only proven no-effect permits re-plan; applied/unresolved/stale outcomes remain duplicate-safe.
+- B5 craft reconciliation now consumes the common classifier without changing its existing evidence thresholds.
+
+MCbot 2.7.19 — WP-300 Decision / Result / Replay Envelope
+
+- Added deterministic `decision-replay-envelope/v1` with profile/policy revisions, canonical SHA-256 identity, immutable values and nested secret redaction.
+- B5 trace emits the generic envelope while keeping the legacy replay fixture readable through a compatibility adapter.
+- Unsupported envelope versions and digest mismatches fail explicitly; no planner/gameplay decision changed.
+
+MCbot Desktop 2.7.3 - Architecture Baseline and Gap Inventory (WP-001)
+
+- Thêm baseline machine-readable `architecture/baseline/current.json` và schema contract `architecture/baseline/schema.json`.
+- Thêm inspector/check read-only cho source areas, reachability, side-effect owners, event scopes/producers/guards, mode/capability bindings, MinerUA fact locations và config consumers/reload evidence; tool không tự ghi repo.
+- Baseline loại `.git/**`, `.env*`, `data/**`, `node_modules/**`, log; `config/bots/**` chỉ đếm/path-level, không content-scan.
+- Thêm gap report CURRENT/TARGET/DEBT/UNKNOWN và liên kết debt sang WP tiếp theo thay vì tự sửa.
+- WP-001 = DONE; WP-002 = READY.
+- Không thay đổi gameplay/runtime/dependency.
+
+MCbot Desktop 2.7.2 - Architecture Roadmap Governance (WP-000)
+
+- Tích hợp `docs/architecture-roadmap/**` vào repository dưới governed documentation root.
+- `architecture/catalog.json` v2 thêm `governedDocumentRoots` với exact root `docs/architecture-roadmap`.
+- Architecture validator normalize Windows path separator, reject absolute/traversal, kiểm tra exact casing, root tồn tại và symlink fail-closed.
+- Markdown ngoài `officialDocuments` và governed root vẫn bị `MARKDOWN_UNAUTHORIZED`.
+- Thêm ADR-000, cập nhật WP-000 = DONE và WP-001 = READY.
+- Không thay đổi gameplay/B5/runtime/dependency.
+
+MCbot Desktop 2.7.1 - Local AI Tool Loop Fix
+
+- Tăng tool-round budget mặc định lên 24 và total tool-call budget lên 48.
+- Khi hết budget, AgentSession buộc final synthesis với tools=[] thay vì ném AI_TOOL_ROUND_LIMIT ngay.
+- Chặn identical repeated tool calls trong cùng turn và thêm guidance giảm broad exploration.
+- Không thay đổi gameplay/B5/runtime/dependency.
+
+MCbot Desktop 2.7.0 - Local AI Agent
+
+- Thêm trang AI Local vào Desktop.
+- Hỗ trợ Ollama qua OpenAI-compatible API trên loopback.
+- Agent dùng toàn bộ source/docs/config đọc được trong project workspace làm nguồn, nhưng chặn .env/secret/node_modules/data/out/build.
+- Tool: workspace info, list/search/read file, runtime snapshot, recent logs.
+- PATCH: apply_patch/write_file có workspace guard.
+- DEVELOP: validator/test/git status/diff theo allowlist, không arbitrary shell.
+- ADMIN: điều khiển bot qua DesktopController whitelist, không raw chat.
+- Tool-calling bounded và có trace hiển thị trong UI.
+- Không thêm dependency npm mới; gameplay/B5 deterministic core không bị chuyển authority sang AI.
+
+2.7.4 — WP-002 Common Contracts ADR
+- Accepted additive Event/Result/Error contract ADR.
+- Added versioned operation result and stable error façades without removing legacy fields.
+- Defined UNCERTAIN/STALE/CANCELLED semantics and generation-safe application rule.
+
+2.7.5 — WP-003 Runtime Config Transaction Closure
+- Closed the roadmap transaction package against the existing Round 6–10 hardened migrator.
+- Verified 94/94 dedicated transaction fault/recovery tests; no transaction-core rewrite required.
+
+2.7.6 — WP-004 Side-effect and Artifact Ownership
+- Added fail-closed static ownership audit for raw game side effects and destructive filesystem mutation callers.
+- Catalogued artifact scopes/cleanup policy with zero hidden exceptions.
+
+2.7.7 — WP-005 Generation/Cancellation Audit
+- Closed Phase 1 generation, cancellation and stale-callback gate against existing generation-owned runtime paths.
+- No reconnect timing or gameplay policy changes.
+
+2.7.8 — WP-100 ServerProfile Contract
+- Added immutable server profile/registry/readiness contract and deterministic profile revision.
+- Runtime endpoint resolution now passes through ServerProfile while preserving current MinerUA endpoint behavior.
+
+2.7.9 — WP-101 MinerUA Knowledge Inventory
+- Added deterministic, secret-free MinerUA fact inventory for commands, GUI identities, items, recipes, B1-B5 and storage/conversion semantics.
+- Recorded unknown/conflict states explicitly and bounded extraction batches for WP-102/103/104.
+
+2.7.10 — WP-102 Command/Auth/Join Profile Extraction
+- Routed commands, response rules, authentication and Sky join facts through ServerProfile.
+- Added credential-field rejection and fake-profile raw-command parity contract.
+
+2.7.11 — WP-103 GUI/Item Profile Extraction
+- Moved GUI definitions/identity/slot facts and item catalog reads behind per-bot ServerProfile.
+- Preserved runtime observation overlay and fixed/learn-once identity policy; added profile revision to B5 traces.
+
+2.7.12 — WP-104 Recipe/Storage Profile Extraction
+- Profile-backed recipe/tier/storage/PV2/mineral/smelting/conversion facts and post-B5 server timing.
+- Kept B5 planning/reserve policy outside the server profile; added fake-profile quantity/capacity/timing tests.
+
+2.7.13 — WP-105 Fake Second Server Contract
+- Added deliberately different fake profile contract across command/join/GUI/item/recipe/storage/timing and unsupported capability.
+- Phase 2 ServerProfile gate PASS.
+
+2.7.14 — WP-200 Capability Contract Convergence
+- Extended the single CapabilityRegistry with additive descriptor version/scope/dependencies/readiness/result contract and fail-closed dependency validation.
+
+2.7.15 — WP-201 ManagedMode Lifecycle Parity
+- Added ready-capability revalidation and active-generation evidence to ManagedMode lifecycle; added rollback/idempotency contract tests.
+
+2.7.16 — WP-202 Task Supervisor and Resource Claims
+- Supervised Collector+B5 restart scheduling and documented proven atomic mode/operation claim ownership with stale-release tests.
+
+2.7.17 — WP-203 Legacy Mode Adapter Migration
+- Routed Collector+B5 and Fishing generic registry/control through a composition-only legacy strangler adapter with capability readiness/generation status.
+- Preserved legacy gameplay and explicit raw fishing protocol ownership; recorded remaining migration debt without source copies.
+
+2.7.18 — WP-204 Composable Mode Builder Hardening
+- Added static module descriptors, capability/resource contract validation, typed workflow outputs and bounded cancellation evidence.
+- Custom mode repairs now validate before mutation and preserve the replaced file as a backup; renderer remains backend-validation-only.
+- Phase 3 Mode SDK gate PASS.

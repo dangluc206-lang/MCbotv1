@@ -1,0 +1,598 @@
+'use strict';
+
+const fs = require('node:fs');
+const path = require('node:path');
+const { pathToFileURL } = require('node:url');
+const { app, BrowserWindow, ipcMain, shell, safeStorage, Tray, Menu, Notification, powerMonitor, powerSaveBlocker, screen, dialog } = require('electron');
+const { spawn } = require('node:child_process');
+const DesktopController = require('./DesktopController');
+const DesktopSecretStore = require('./DesktopSecretStore');
+const DesktopPreferenceStore = require('./DesktopPreferenceStore');
+const GitHubUpdateService = require('./update/GitHubUpdateService');
+const LocalZipUpdateService = require('./update/LocalZipUpdateService');
+require('./update/local-update-helper');
+const localUpdateHelperPath = require.resolve('./update/local-update-helper');
+const RuntimeConfigMigrator = require('./update/RuntimeConfigMigrator');
+const LocalAiService = require('../ai/LocalAiService');
+const { handleSquirrelLifecycle } = require('./update/SquirrelLifecycle');
+const { runDesktopShutdownSequence } = require('./DesktopShutdownSequence');
+
+const templateRoot = path.resolve(__dirname, '..', '..');
+const rendererFile = path.join(__dirname, 'renderer', 'index.html');
+const rendererUrl = pathToFileURL(rendererFile).href;
+const trayIcon = path.join(templateRoot, 'assets', process.platform === 'win32' ? 'mcbot.ico' : 'mcbot.png');
+
+let runtimeDir = templateRoot;
+let controller = null;
+let secretStore = null;
+let preferenceStore = null;
+let mainWindow = null;
+let tray = null;
+let quitting = false;
+let snapshotTimer = null;
+let powerBlockerId = null;
+let lastSnapshot = null;
+let windowStateTimer = null;
+let updateService = null;
+let localUpdateService = null;
+let runtimeMigrator = null;
+let automaticUpdateTimer = null;
+let aiService = null;
+const notificationHistory = new Map();
+const launchedHidden = process.argv.includes('--hidden');
+
+
+function reportDesktopFailure(error, source) {
+    const value = error instanceof Error ? error : new Error(String(error?.message || error || 'Unknown desktop failure'));
+    const payload = { message: value.message, stack: value.stack || null, source };
+    try {
+        if (controller?.reportRendererError) {
+            controller.reportRendererError(payload);
+            return;
+        }
+    } catch (reportError) {
+        console.error(`[MCbot desktop:${source}:report-failed]`, reportError?.stack || reportError);
+    }
+    console.error(`[MCbot desktop:${source}]`, value.stack || value);
+}
+
+const squirrelHandled = handleSquirrelLifecycle({ app });
+const hasSingleInstanceLock = squirrelHandled ? false : app.requestSingleInstanceLock();
+if (!squirrelHandled && !hasSingleInstanceLock) app.quit();
+
+async function prepareRuntimeDirectory() {
+    // Never run the backend directly from the immutable/default application
+    // tree. DEV gets its own AppData runtime so a local ZIP update can safely
+    // replace source/default files without overwriting operator configuration.
+    const runtimeName = app.isPackaged ? 'runtime' : 'runtime-dev';
+    const target = path.join(app.getPath('userData'), runtimeName);
+    runtimeMigrator = new RuntimeConfigMigrator({ templateRoot, runtimeRoot: target, appVersion: app.getVersion() });
+    const report = await runtimeMigrator.prepare();
+    if (report?.warnings?.length) console.warn('[MCbot migration] Cấu hình có cảnh báo khi migration:', report.warnings);
+    return target;
+}
+
+function publishUpdateStatus() {
+    const status = updateService?.status?.() || null;
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mcbot:update:status', status);
+    return status;
+}
+
+async function checkForUpdates({ automatic = false } = {}) {
+    if (!updateService) throw new Error('Dịch vụ cập nhật chưa sẵn sàng.');
+    const status = await updateService.check();
+    publishUpdateStatus();
+    if (automatic && status.available && preferenceStore?.get('autoDownloadUpdates')) {
+        const downloaded = await updateService.download();
+        publishUpdateStatus();
+        if (downloaded.downloaded && preferenceStore?.get('autoInstallUpdatesWhenIdle') && app.isPackaged && process.platform === 'win32') {
+            const snapshot = controller?.snapshot?.();
+            const busy = snapshot?.lifecycle === 'STARTING' || snapshot?.lifecycle === 'STOPPING'
+                || (snapshot?.bots || []).some(bot => bot.modeOwner || ['CONNECTED','CONNECTING','RECONNECTING'].includes(bot.state?.connectionState));
+            if (!busy) await installDownloadedUpdate({ automatic: true });
+        }
+    }
+    return status;
+}
+
+async function installDownloadedUpdate({ automatic = false } = {}) {
+    if (!app.isPackaged || process.platform !== 'win32') throw new Error('Cài cập nhật tự động chỉ khả dụng trên bản MCbot đã cài trên Windows.');
+    const status = updateService?.status?.();
+    if (!status?.downloaded || !status.downloadedPath || !fs.existsSync(status.downloadedPath)) throw new Error('Chưa tải xong MCbot Setup.exe của bản cập nhật.');
+    const release = status.release;
+    let backup = null;
+    if (controller?.lifecycle === 'RUNNING') backup = await controller.backupConfig();
+    if (controller && controller.lifecycle !== 'STOPPED') await controller.stop('Đang chuẩn bị cài bản cập nhật phần mềm.');
+    const verifiedInstaller = await updateService.verifyDownloadedArtifact();
+    const installRecord = {
+        fromVersion: app.getVersion(),
+        toVersion: release?.version || null,
+        requestedAt: new Date().toISOString(),
+        automatic: Boolean(automatic),
+        configBackup: backup?.path || null,
+        installer: verifiedInstaller.path,
+        installerSize: verifiedInstaller.size,
+        installerDigest: verifiedInstaller.digest
+    };
+    const recordPath = path.join(app.getPath('userData'), 'pending-update.json');
+    await fs.promises.writeFile(recordPath, `${JSON.stringify(installRecord, null, 2)}
+`, 'utf8');
+    const child = spawn(verifiedInstaller.path, [], { detached: true, stdio: 'ignore', windowsHide: false });
+    await new Promise((resolve, reject) => {
+        child.once('spawn', resolve);
+        child.once('error', reject);
+    }).catch(error => {
+        notify('Cập nhật MCbot', `Không thể mở bộ cài: ${error.message}`, 'update-installer-launch');
+        throw error;
+    });
+    child.unref();
+    setTimeout(() => app.quit(), 200).unref?.();
+    return { launched: true, release: release?.version || null, backup: backup?.path || null };
+}
+
+
+async function selectLocalUpdateZip() {
+    if (!localUpdateService) throw new Error('Dịch vụ cập nhật ZIP chưa sẵn sàng.');
+    const result = await dialog.showOpenDialog(mainWindow || undefined, {
+        title: 'Chọn gói cập nhật MCbot',
+        properties: ['openFile'],
+        filters: [{ name: 'Gói cập nhật MCbot', extensions: ['zip'] }]
+    });
+    if (result.canceled || !result.filePaths?.[0]) return localUpdateService.status();
+    return localUpdateService.inspect(result.filePaths[0]);
+}
+
+async function installLocalUpdateZip() {
+    if (!localUpdateService) throw new Error('Dịch vụ cập nhật ZIP chưa sẵn sàng.');
+    const localStatus = localUpdateService.status();
+    if (localStatus.phase !== 'READY' || !localStatus.selected) throw new Error('Chưa chọn gói ZIP cập nhật hợp lệ.');
+
+    const wasRunning = controller?.lifecycle === 'RUNNING';
+    let backup = null;
+    if (wasRunning) backup = await controller.backupConfig();
+    const restartArgs = app.isPackaged ? [] : [templateRoot];
+    const prepared = await localUpdateService.prepareInstall({
+        parentPid: process.pid,
+        restartExe: process.execPath,
+        restartArgs,
+        configBackup: backup?.path || null
+    });
+
+    try {
+        if (controller && controller.lifecycle !== 'STOPPED') {
+            await controller.stop('Đang chuẩn bị cập nhật MCbot từ file ZIP.');
+        }
+
+        if (!fs.existsSync(localUpdateHelperPath)) throw new Error('Thiếu tiến trình trợ giúp cập nhật ZIP.');
+        const child = spawn(process.execPath, [localUpdateHelperPath, prepared.planPath], {
+            detached: true,
+            stdio: 'ignore',
+            windowsHide: true,
+            env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
+        });
+        await new Promise((resolve, reject) => {
+            child.once('spawn', resolve);
+            child.once('error', reject);
+        });
+        child.unref();
+    } catch (error) {
+        await localUpdateService.cancelPreparedInstall(prepared.planPath).catch(cancelError => reportDesktopFailure(cancelError, 'local-update-cancel-prepared'));
+        if (wasRunning && controller?.lifecycle === 'STOPPED') {
+            await controller.start().catch(startError => reportDesktopFailure(startError, 'local-update-backend-restore'));
+        }
+        throw error;
+    }
+
+    setTimeout(() => app.quit(), 200).unref?.();
+    return {
+        launched: true,
+        version: prepared.version,
+        backup: backup?.path || null,
+        programBackup: prepared.backupRoot
+    };
+}
+
+async function rollbackLastConfigMigration() {
+    if (!runtimeMigrator) throw new Error('Khôi phục migration chỉ khả dụng trên bản đã cài.');
+    const wasRunning = controller?.lifecycle === 'RUNNING';
+    if (wasRunning) await controller.stop('Khôi phục cấu hình trước migration.');
+    const result = await runtimeMigrator.rollbackLastConfig();
+    if (wasRunning) await controller.start();
+    publishSnapshot();
+    return result;
+}
+
+function serializeFailure(error) {
+    return { success: false, error: { name: error?.name || 'Error', code: error?.code || null, message: error?.message || String(error) } };
+}
+
+function isTrustedSender(event) {
+    const url = event?.senderFrame?.url || event?.sender?.getURL?.() || '';
+    return url === rendererUrl;
+}
+
+function safeHandle(channel, handler) {
+    ipcMain.handle(channel, async (event, ...args) => {
+        try {
+            if (!isTrustedSender(event)) {
+                const error = new Error(`Rejected IPC from untrusted sender for ${channel}.`);
+                error.code = 'DESKTOP_IPC_UNTRUSTED_SENDER';
+                throw error;
+            }
+            return { success: true, data: await handler(...args) };
+        } catch (error) {
+            return serializeFailure(error);
+        }
+    });
+}
+
+function showMainWindow() {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    publishSnapshot();
+}
+
+async function openPathChecked(target) {
+    await fs.promises.mkdir(target, { recursive: true });
+    const failure = await shell.openPath(target);
+    if (failure) throw new Error(failure);
+    return { path: target };
+}
+
+async function restartBackend() {
+    await controller.stop('Backend restart requested from desktop.').catch(error => reportDesktopFailure(error, 'backend-restart-stop'));
+    controller.environment = secretStore.environment(process.env);
+    const result = await controller.start();
+    publishSnapshot();
+    return result;
+}
+
+function loginItemOptions() {
+    if (process.platform !== 'win32' || !app.isPackaged) return null;
+    const appFolder = path.dirname(process.execPath);
+    const executableName = path.basename(process.execPath);
+    return { path: path.resolve(appFolder, '..', executableName), args: ['--hidden'] };
+}
+
+function getLoginItemSetting() {
+    const options = loginItemOptions();
+    if (!options) return { supported: false, openAtLogin: false };
+    const state = app.getLoginItemSettings(options);
+    return { supported: true, openAtLogin: Boolean(state.openAtLogin), executableWillLaunchAtLogin: Boolean(state.executableWillLaunchAtLogin) };
+}
+
+function applyLoginItemSetting(enabled) {
+    const options = loginItemOptions();
+    if (!options) return { supported: false, openAtLogin: false };
+    app.setLoginItemSettings({ openAtLogin: Boolean(enabled), ...options });
+    return getLoginItemSetting();
+}
+
+function registerIpc() {
+    safeHandle('mcbot:backend:start', async () => { const value = await controller.start(); publishSnapshot(); return value; });
+    safeHandle('mcbot:backend:stop', async () => { const value = await controller.stop('Stopped from desktop UI.'); publishSnapshot(); return value; });
+    safeHandle('mcbot:backend:restart', () => restartBackend());
+    safeHandle('mcbot:snapshot', () => controller.snapshot());
+    safeHandle('mcbot:profiles:list', () => controller.listProfiles());
+    safeHandle('mcbot:profiles:update', (botId, fields) => controller.updateProfile(botId, fields));
+    safeHandle('mcbot:profiles:create', fields => controller.createProfile(fields));
+    safeHandle('mcbot:profiles:clone', (botId, newId) => controller.cloneProfile(botId, newId));
+    safeHandle('mcbot:profiles:delete', botId => controller.deleteProfile(botId));
+    safeHandle('mcbot:app:info', () => ({ version: app.getVersion(), name: app.getName(), packaged: app.isPackaged, platform: process.platform, arch: process.arch }));
+    safeHandle('mcbot:update:status', () => updateService?.status?.() || null);
+    safeHandle('mcbot:update:check', () => checkForUpdates({ automatic: false }));
+    safeHandle('mcbot:update:download', async () => { const value = await updateService.download(); publishUpdateStatus(); return value; });
+    safeHandle('mcbot:update:install', () => installDownloadedUpdate({ automatic: false }));
+    safeHandle('mcbot:update:clear-download', async () => { const value = await updateService.clearDownloaded(); publishUpdateStatus(); return value; });
+    safeHandle('mcbot:update:migration-status', () => runtimeMigrator?.status?.() || null);
+    safeHandle('mcbot:update:rollback-config', () => rollbackLastConfigMigration());
+    safeHandle('mcbot:update:local-status', () => localUpdateService?.status?.() || null);
+    safeHandle('mcbot:update:local-select', () => selectLocalUpdateZip());
+    safeHandle('mcbot:update:local-clear', () => localUpdateService?.clear?.());
+    safeHandle('mcbot:update:local-install', () => installLocalUpdateZip());
+    safeHandle('mcbot:update:open-release', async () => {
+        const target = updateService?.status?.().release?.htmlUrl;
+        if (!target) throw new Error('Không có trang bản phát hành để mở.');
+        const parsed = new URL(target);
+        if (parsed.protocol !== 'https:' || parsed.hostname !== 'github.com') throw new Error('Đường dẫn bản phát hành không được tin cậy.');
+        await shell.openExternal(target);
+        return { opened: true };
+    });
+    safeHandle('mcbot:ai:status', options => aiService.status(options || {}));
+    safeHandle('mcbot:ai:workspace:select', async () => {
+        const result = await dialog.showOpenDialog(mainWindow || undefined, {
+            title: 'Chọn thư mục project cho Local AI',
+            properties: ['openDirectory']
+        });
+        if (result.canceled || !result.filePaths?.[0]) return { canceled: true };
+        const workspace = await aiService.inspectWorkspace(result.filePaths[0]);
+        return { canceled: false, workspace };
+    });
+    safeHandle('mcbot:ai:workspace:inspect', workspaceRoot => aiService.inspectWorkspace(workspaceRoot));
+    safeHandle('mcbot:ai:chat', request => aiService.runAgent(request || {}));
+    safeHandle('mcbot:renderer:error', payload => controller.reportRendererError(payload));
+    safeHandle('mcbot:bot:connect', botId => controller.connect(botId));
+    safeHandle('mcbot:bot:disconnect', botId => controller.disconnect(botId));
+    safeHandle('mcbot:mode:start', (botId, mode) => controller.startMode(botId, mode));
+    safeHandle('mcbot:mode:pause', botId => controller.pauseMode(botId));
+    safeHandle('mcbot:mode:resume', botId => controller.resumeMode(botId));
+    safeHandle('mcbot:mode:stop', botId => controller.stopMode(botId));
+    safeHandle('mcbot:mode:restart', botId => controller.restartMode(botId));
+    safeHandle('mcbot:bot:home', botId => controller.goHome(botId));
+    safeHandle('mcbot:fleet:action', action => controller.fleetAction(action));
+    safeHandle('mcbot:commands', () => controller.commandOptions());
+    safeHandle('mcbot:command:send', (botId, options) => controller.sendRegisteredCommand(botId, options));
+    safeHandle('mcbot:sky-commands:get', () => controller.skyCommandsConfig());
+    safeHandle('mcbot:sky-commands:save', definition => controller.upsertSkyCommand(definition));
+    safeHandle('mcbot:sky-commands:delete', (skyId, commandId) => controller.deleteSkyCommand(skyId, commandId));
+    safeHandle('mcbot:sky-commands:send', (botId, options) => controller.sendSkyCommand(botId, options));
+    safeHandle('mcbot:config:collector:get', botId => controller.collectorConfig(botId));
+    safeHandle('mcbot:config:collector:update', (botId, fields) => controller.updateCollectorConfig(botId, fields));
+    safeHandle('mcbot:config:fishing:get', botId => controller.fishingConfig(botId));
+    safeHandle('mcbot:config:fishing:update-area', (botId, fields) => controller.updateFishingArea(botId, fields));
+    safeHandle('mcbot:config:b5-craft:get', () => controller.b5CraftConfig());
+    safeHandle('mcbot:config:b5-rules:get', () => controller.b5RulesConfig());
+    safeHandle('mcbot:config:b5-rules:update', fields => controller.updateB5RulesConfig(fields));
+    safeHandle('mcbot:config:b5-craft:update', fields => controller.updateB5CraftConfig(fields));
+    safeHandle('mcbot:config:storage-protection:get', () => controller.storageProtectionConfig());
+    safeHandle('mcbot:config:storage-protection:update', fields => controller.updateStorageProtectionConfig(fields));
+    safeHandle('mcbot:config:sky-auto-join:get', () => controller.skyAutoJoinConfig());
+    safeHandle('mcbot:config:sky-auto-join:update', fields => controller.updateSkyAutoJoinConfig(fields));
+    safeHandle('mcbot:config:groups', () => controller.configGroups());
+    safeHandle('mcbot:config:group:get', key => controller.configGroup(key));
+    safeHandle('mcbot:config:group:save', (key, value) => controller.saveConfigGroup(key, value));
+    safeHandle('mcbot:custom-mode:modules', () => controller.customModeModules());
+    safeHandle('mcbot:custom-mode:list', () => controller.customModes());
+    safeHandle('mcbot:custom-mode:save', definition => controller.saveCustomMode(definition));
+    safeHandle('mcbot:custom-mode:delete', modeId => controller.deleteCustomMode(modeId));
+    safeHandle('mcbot:config:backup', () => controller.backupConfig());
+    safeHandle('mcbot:gui:inspect', (botId, options) => controller.inspectGui(botId, options));
+    safeHandle('mcbot:logs', limit => controller.logSnapshot({ limit }));
+    safeHandle('mcbot:diagnostics:list', limit => controller.diagnostics({ limit }));
+    safeHandle('mcbot:diagnostics:read', name => controller.readDiagnostic(name));
+    safeHandle('mcbot:support:export', () => controller.exportSupportBundle());
+    safeHandle('mcbot:secrets:status', () => secretStore.status());
+    safeHandle('mcbot:secrets:set', (key, value) => secretStore.set(key, value));
+    safeHandle('mcbot:secrets:clear', key => secretStore.clear(key));
+    safeHandle('mcbot:preferences:get', () => ({ ...preferenceStore.snapshot(), loginItem: getLoginItemSetting() }));
+    safeHandle('mcbot:preferences:set', async patch => {
+        const values = await preferenceStore.update(patch || {});
+        const loginItem = applyLoginItemSetting(values.launchAtLogin);
+        updateService?.configure?.({ repository: values.updateRepository, channel: values.updateChannel });
+        updateTray();
+        updatePowerBlocker();
+        scheduleSnapshotLoop(true);
+        publishUpdateStatus();
+        return { ...values, loginItem };
+    });
+    safeHandle('mcbot:shell:project', () => openPathChecked(runtimeDir));
+    safeHandle('mcbot:shell:logs', () => openPathChecked(path.join(runtimeDir, 'data', 'logs')));
+    safeHandle('mcbot:shell:backups', () => openPathChecked(path.join(runtimeDir, 'data', 'backups')));
+    safeHandle('mcbot:shell:support', () => openPathChecked(path.join(runtimeDir, 'data', 'support')));
+}
+
+function usableWindowBounds(savedBounds) {
+    if (!savedBounds) return null;
+    const visible = screen.getAllDisplays().some(display => {
+        const area = display.workArea;
+        const overlapWidth = Math.max(0, Math.min(savedBounds.x + savedBounds.width, area.x + area.width) - Math.max(savedBounds.x, area.x));
+        const overlapHeight = Math.max(0, Math.min(savedBounds.y + savedBounds.height, area.y + area.height) - Math.max(savedBounds.y, area.y));
+        return overlapWidth >= 160 && overlapHeight >= 120;
+    });
+    return visible ? savedBounds : null;
+}
+
+async function persistWindowStateNow() {
+    if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMaximized()) return null;
+    return preferenceStore?.update({ windowBounds: mainWindow.getBounds(), windowMaximized: false }) || null;
+}
+
+function persistWindowStateSoon() {
+    if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMaximized()) return;
+    clearTimeout(windowStateTimer);
+    windowStateTimer = setTimeout(() => {
+        windowStateTimer = null;
+        persistWindowStateNow().catch(error => reportDesktopFailure(error, 'window-state-persist'));
+    }, 250);
+    windowStateTimer.unref?.();
+}
+
+function createWindow() {
+    const savedBounds = usableWindowBounds(preferenceStore?.get('windowBounds'));
+    mainWindow = new BrowserWindow({
+        ...(savedBounds || { width: 1460, height: 920 }),
+        minWidth: 1080,
+        minHeight: 700,
+        show: false,
+        backgroundColor: '#0b1020',
+        title: 'MCbot Desktop',
+        autoHideMenuBar: true,
+        icon: path.join(templateRoot, 'assets', 'mcbot.png'),
+        webPreferences: {
+            preload: path.join(__dirname, 'preload.js'),
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: true
+        }
+    });
+    mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    mainWindow.webContents.on('will-navigate', event => event.preventDefault());
+    mainWindow.webContents.on('render-process-gone', (_event, details) => {
+        notify('MCbot Desktop', `Giao diện đã dừng: ${details.reason}`, 'renderer-gone');
+    });
+    mainWindow.on('unresponsive', () => notify('MCbot Desktop', 'Giao diện đang không phản hồi.', 'renderer-unresponsive'));
+    mainWindow.on('close', event => {
+        if (quitting || preferenceStore?.get('closeToTray') === false) return;
+        event.preventDefault();
+        mainWindow.hide();
+    });
+    mainWindow.on('show', () => publishSnapshot());
+    mainWindow.on('resize', persistWindowStateSoon);
+    mainWindow.on('move', persistWindowStateSoon);
+    mainWindow.on('maximize', () => preferenceStore?.set('windowMaximized', true).catch(error => reportDesktopFailure(error, 'window-maximized-persist')));
+    mainWindow.on('unmaximize', () => { preferenceStore?.set('windowMaximized', false).catch(error => reportDesktopFailure(error, 'window-unmaximized-persist')); persistWindowStateSoon(); });
+    mainWindow.on('closed', () => { clearTimeout(windowStateTimer); windowStateTimer = null; mainWindow = null; });
+    mainWindow.once('ready-to-show', () => {
+        if (preferenceStore?.get('windowMaximized')) mainWindow?.maximize();
+        if (!launchedHidden) mainWindow?.show();
+    });
+    mainWindow.loadFile(rendererFile);
+}
+
+function createTray() {
+    if (tray || !fs.existsSync(trayIcon)) return;
+    tray = new Tray(trayIcon);
+    tray.setToolTip('MCbot Desktop');
+    tray.on('click', () => showMainWindow());
+    updateTray();
+}
+
+function updateTray() {
+    if (!tray || tray.isDestroyed()) return;
+    const snapshot = lastSnapshot || controller?.snapshot?.() || { lifecycle: 'STOPPED', bots: [] };
+    const bots = snapshot.bots || [];
+    const connected = bots.filter(bot => bot.state?.connectionState === 'CONNECTED').length;
+    const modes = bots.filter(bot => bot.modeOwner).length;
+    tray.setToolTip(`MCbot Desktop · ${snapshot.lifecycle} · ${connected}/${bots.length} connected · ${modes} mode`);
+    tray.setContextMenu(Menu.buildFromTemplate([
+        { label: 'Mở MCbot', click: () => showMainWindow() },
+        { label: `Backend: ${snapshot.lifecycle}`, enabled: false },
+        { type: 'separator' },
+        { label: 'Start backend', enabled: snapshot.lifecycle !== 'RUNNING' && snapshot.lifecycle !== 'STARTING', click: () => controller.start().then(publishSnapshot).catch(error => notify('Backend start failed', error.message, 'backend-start')) },
+        { label: 'Stop backend', enabled: snapshot.lifecycle === 'RUNNING', click: () => controller.stop('Stopped from system tray.').then(publishSnapshot).catch(error => notify('Backend stop failed', error.message, 'backend-stop')) },
+        { type: 'separator' },
+        { label: 'Thoát hoàn toàn', click: () => app.quit() }
+    ]));
+}
+
+function updatePowerBlocker(snapshot = lastSnapshot) {
+    const shouldBlock = preferenceStore?.get('preventSystemSleepWhileActive') !== false
+        && snapshot?.lifecycle === 'RUNNING'
+        && (snapshot?.bots || []).some(bot => bot.state?.connectionState === 'CONNECTED' || bot.modeOwner);
+    if (shouldBlock && powerBlockerId === null) {
+        powerBlockerId = powerSaveBlocker.start('prevent-app-suspension');
+    } else if (!shouldBlock && powerBlockerId !== null) {
+        powerSaveBlocker.stop(powerBlockerId);
+        powerBlockerId = null;
+    }
+}
+
+function notify(title, body, dedupeKey = `${title}:${body}`) {
+    if (preferenceStore?.get('notifyErrors') === false || !Notification.isSupported()) return;
+    const now = Date.now();
+    const previous = notificationHistory.get(dedupeKey) || 0;
+    if (now - previous < 30000) return;
+    notificationHistory.set(dedupeKey, now);
+    const notification = new Notification({ title, body: String(body || '').slice(0, 240), silent: false });
+    notification.on('click', () => showMainWindow());
+    notification.show();
+}
+
+function publishSnapshot() {
+    if (!controller) return null;
+    const snapshot = controller.snapshot();
+    lastSnapshot = snapshot;
+    updateTray();
+    updatePowerBlocker(snapshot);
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+        mainWindow.webContents.send('mcbot:snapshot', snapshot);
+    }
+    return snapshot;
+}
+
+function scheduleSnapshotLoop(reset = false) {
+    if (reset && snapshotTimer) clearTimeout(snapshotTimer);
+    if (snapshotTimer && !reset) return;
+    const tick = () => {
+        snapshotTimer = null;
+        try { publishSnapshot(); } catch (error) { reportDesktopFailure(error, 'snapshot-loop'); }
+        const configured = Number(preferenceStore?.get('snapshotIntervalMs') || 900);
+        const interval = mainWindow?.isVisible?.() ? configured : Math.max(2500, configured);
+        snapshotTimer = setTimeout(tick, interval);
+        snapshotTimer.unref?.();
+    };
+    snapshotTimer = setTimeout(tick, 50);
+    snapshotTimer.unref?.();
+}
+
+if (hasSingleInstanceLock) {
+    app.on('second-instance', () => showMainWindow());
+
+    app.whenReady().then(async () => {
+        runtimeDir = await prepareRuntimeDirectory();
+        secretStore = new DesktopSecretStore({ filePath: path.join(app.getPath('userData'), 'secrets.json'), safeStorage });
+        preferenceStore = new DesktopPreferenceStore({ filePath: path.join(app.getPath('userData'), 'preferences.json') });
+        await preferenceStore.load();
+        applyLoginItemSetting(preferenceStore.get('launchAtLogin'));
+        updateService = new GitHubUpdateService({
+            currentVersion: app.getVersion(),
+            repository: preferenceStore.get('updateRepository'),
+            trustedRepository: DesktopPreferenceStore.DEFAULTS.updateRepository,
+            channel: preferenceStore.get('updateChannel'),
+            updatesDir: path.join(app.getPath('userData'), 'updates')
+        });
+        updateService.on('status', () => publishUpdateStatus());
+        localUpdateService = new LocalZipUpdateService({
+            currentVersion: app.getVersion(),
+            applicationRoot: templateRoot,
+            userDataRoot: app.getPath('userData')
+        });
+        controller = new DesktopController({ baseDir: runtimeDir, environment: secretStore.environment(process.env) });
+        aiService = new LocalAiService({ controllerProvider: () => controller });
+        registerIpc();
+        controller.onLog(record => {
+            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mcbot:log', record);
+            if (record?.level === 'error') notify('MCbot error', `${record.scope || 'Application'}: ${record.message || 'Unknown error'}`, `${record.scope}:${record.message}`);
+        });
+        createTray();
+        createWindow();
+        powerMonitor.on('resume', () => {
+            if (controller?.lifecycle !== 'RUNNING') return;
+            controller.reconcileFleet('desktop-system-resume').catch(error => notify('MCbot resume recovery', error.message, 'resume-reconcile'));
+            setTimeout(() => publishSnapshot(), 1200).unref?.();
+        });
+        powerMonitor.on('suspend', () => {
+            if (controller?.lifecycle === 'RUNNING') notify('MCbot Desktop', 'Hệ thống đang chuyển sang trạng thái suspend.', 'system-suspend');
+        });
+        scheduleSnapshotLoop();
+        if (preferenceStore.get('startBackendOnLaunch')) {
+            try { await controller.start(); } catch (error) { reportDesktopFailure(error, 'backend-autostart'); }
+            publishSnapshot();
+        }
+        if (app.isPackaged && preferenceStore.get('autoCheckUpdates')) {
+            automaticUpdateTimer = setTimeout(() => {
+                automaticUpdateTimer = null;
+                checkForUpdates({ automatic: true }).catch(error => {
+                    controller?.reportRendererError?.({ message: `Kiểm tra cập nhật tự động thất bại: ${error.message}`, source: 'update-auto-check' });
+                    publishUpdateStatus();
+                });
+            }, 8000);
+            automaticUpdateTimer.unref?.();
+        }
+        app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); else showMainWindow(); });
+    });
+}
+
+app.on('before-quit', event => {
+    if (quitting) return;
+    event.preventDefault();
+    quitting = true;
+    runDesktopShutdownSequence({
+        cleanupSchedulers: () => {
+            if (snapshotTimer) { clearTimeout(snapshotTimer); snapshotTimer = null; }
+            if (automaticUpdateTimer) { clearTimeout(automaticUpdateTimer); automaticUpdateTimer = null; }
+            if (windowStateTimer) { clearTimeout(windowStateTimer); windowStateTimer = null; }
+            if (powerBlockerId !== null) { powerSaveBlocker.stop(powerBlockerId); powerBlockerId = null; }
+        },
+        persistWindowState: () => persistWindowStateNow(),
+        drainPreferences: () => preferenceStore?.drain?.(),
+        stopController: () => controller?.stop?.('Electron application is quitting.'),
+        reportFailure: reportDesktopFailure
+    }).finally(() => app.quit());
+});
+
+app.on('window-all-closed', () => {
+    if (quitting || preferenceStore?.get('closeToTray') === false) app.quit();
+});

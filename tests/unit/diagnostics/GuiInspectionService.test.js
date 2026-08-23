@@ -18,6 +18,7 @@ test('captures the next GUI after sending a configured command', async () => {
             commands.push({ key, options });
             currentSession = {
                 id: 'bot-01:1:123',
+                connectionGeneration: 1,
                 definitionId: 'sky-menu',
                 window: {
                     id: 1,
@@ -48,6 +49,7 @@ test('captures the next GUI after sending a configured command', async () => {
             };
             queueMicrotask(() => eventBus.emit('gui:opened', {
                 botId: 'bot-01',
+                connectionGeneration: 1,
                 sessionId: currentSession.id,
                 definitionId: currentSession.definitionId
             }));
@@ -117,6 +119,7 @@ test('clicks configured slots in order, records the route, and serializes only t
             clicked.push(slot);
             currentSession = {
                 id: `session-${slot}`,
+                connectionGeneration: 1,
                 definitionId: null,
                 window: { title: `GUI after ${slot}`, type: 'generic', slots: [null] }
             };
@@ -127,11 +130,12 @@ test('clicks configured slots in order, records the route, and serializes only t
         async send() {
             currentSession = {
                 id: 'session-initial',
+                connectionGeneration: 1,
                 definitionId: 'minerals',
                 window: { title: 'Minerals', type: 'generic', slots: [null] }
             };
             queueMicrotask(() => eventBus.emit('gui:opened', {
-                botId: 'bot-01', sessionId: currentSession.id, definitionId: 'minerals'
+                botId: 'bot-01', connectionGeneration: 1, sessionId: currentSession.id, definitionId: 'minerals'
             }));
             return { success: true };
         }

@@ -1,25 +1,63 @@
 {
   "name": "mcbot-complete",
-  "version": "2.0.1",
+  "version": "2.7.67",
   "private": true,
-  "description": "Config-driven multi-bot Mineflayer framework",
-  "main": "src/index.js",
+  "description": "MCbot Desktop - multi-bot Minecraft automation control application and Mineflayer runtime",
+  "main": "src/desktop/main.js",
   "type": "commonjs",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "start": "node src/index.js",
-    "test": "node --test tests/**/*.test.js",
-    "validate": "node scripts/validate-structure.js",
+    "test": "node scripts/run-tests.js",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=src/**/*.js --test-coverage-lines=80 --test-coverage-branches=65 --test-coverage-functions=80 tests/**/*.test.js",
+    "validate": "npm run validate:structure && npm run validate:architecture",
+    "validate:structure": "node scripts/validate-structure.js",
+    "validate:architecture": "node scripts/validate-architecture.js",
+    "baseline:inspect": "node scripts/inspect-architecture-baseline.js",
+    "baseline:report": "node scripts/inspect-architecture-baseline.js --report",
+    "baseline:check": "node scripts/inspect-architecture-baseline.js --check",
     "inspect:config": "node scripts/validate-config.js",
+    "inspect:architecture": "node scripts/validate-architecture.js --json",
+    "replay": "node scripts/replay-scenario.js tests/fixtures/replay/stale-side-effects.json",
     "cleanup:stale:dry": "node scripts/cleanup-stale.js",
-    "cleanup:stale": "node scripts/cleanup-stale.js --apply"
+    "cleanup:stale": "node scripts/cleanup-stale.js --apply",
+    "core:start": "node src/index.js",
+    "desktop:start": "electron .",
+    "desktop:make:win": "node scripts/build-windows.js",
+    "desktop:build:win": "node scripts/build-windows.js",
+    "mode:scaffold": "node scripts/scaffold-mode.js",
+    "update:package": "node scripts/create-local-update-package.js",
+    "replay:b5": "node scripts/replay-b5-plan.js tests/fixtures/replay/b5-planner-basic.json",
+    "test:installed": "node scripts/run-tests.js --installed",
+    "audit:ownership": "node scripts/audit-side-effect-ownership.js",
+    "profile:minerua:inspect": "node scripts/inspect-minerua-knowledge.js",
+    "profile:minerua:check": "node scripts/inspect-minerua-knowledge.js --check",
+    "support:bundle": "node scripts/build-support-bundle.js",
+    "replay:fault": "node scripts/replay-scenario.js tests/fixtures/replay/click-response-lost.json",
+    "quality:fast": "node scripts/run-quality-gates.js --lane fast",
+    "quality:release": "node scripts/run-quality-gates.js --lane release",
+    "artifact:integrity": "node scripts/release-artifact-integrity.js",
+    "artifact:verify": "node scripts/verify-release-zip.js",
+    "scale:measure": "node --expose-gc scripts/measure-scale-baseline.js",
+    "scale:check": "node --expose-gc scripts/measure-scale-baseline.js --check",
+    "scale:baseline:check": "node scripts/measure-scale-baseline.js --validate-file architecture/scale/current.json"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
     "mineflayer": "^4.37.1",
     "mineflayer-pathfinder": "^2.4.5",
-    "discord.js": "^14.25.1"
-  }
+    "discord.js": "^14.25.1",
+    "extract-zip": "2.0.1",
+    "yauzl": "2.10.0"
+  },
+  "devDependencies": {
+    "electron": "43.4.0",
+    "@electron-forge/cli": "7.11.2",
+    "@electron-forge/maker-squirrel": "7.11.2",
+    "electron-winstaller": "5.4.4"
+  },
+  "productName": "MCbot Desktop",
+  "author": "MCbot"
 }

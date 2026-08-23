@@ -57,6 +57,10 @@ class PersonalVaultReader {
             slot,
             logicalId,
             count,
+            maxStackSize: Number.isInteger(Number(raw.stackSize ?? raw.maxStackSize))
+                && Number(raw.stackSize ?? raw.maxStackSize) > 0
+                ? Number(raw.stackSize ?? raw.maxStackSize)
+                : null,
             rawName: raw.name,
             identityComponents: normalized?.identityComponents || fingerprint?.identityComponents || [],
             identityNbt: normalized?.identityNbt || fingerprint?.identityNbt || [],

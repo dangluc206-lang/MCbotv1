@@ -8,3 +8,4 @@ data/snapshots/**/*
 coverage/
 .tmp/
 tmp-*/
+out/

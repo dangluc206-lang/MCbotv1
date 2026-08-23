@@ -131,3 +131,47 @@ test('KhoReader derives capacity from parsed item totals when indicator telemetr
     assert.equal(snapshot.capacity.limit, 800000);
     assert.equal(snapshot.capacity.usageRatio, 0.9);
 });
+
+test('KhoReader rejects percent-only capacity telemetry instead of parsing 100.0% as 1000', () => {
+    const itemResolver = resolver();
+    const percentConfig = {
+        ...config,
+        capacityIndicator: { ...config.capacityIndicator, slot: 49, scanAllSlots: true, fallbackLimit: 800000 }
+    };
+    const capacityReader = new KhoCapacityReader({ itemResolver, config: percentConfig });
+    const reader = new KhoReader({ itemResolver, capacityReader, config: percentConfig });
+    const slots = Array(54).fill(null);
+    slots[10] = { logicalId: 'coal', name: 'coal', count: 1, lore: ['Đang có: 14,943'] };
+    slots[49] = {
+        logicalId: 'storage_capacity', name: 'paper', count: 1, displayName: 'Thông tin kho',
+        components: ['Đã sử dụng:', '100.0%', 'Đang trống:', '0.0%']
+    };
+
+    const snapshot = reader.read({ slots });
+    assert.equal(snapshot.capacity.derivedFromItems, true);
+    assert.equal(snapshot.capacity.used, 14943);
+    assert.equal(snapshot.capacity.free, 785057);
+    assert.equal(snapshot.capacity.limit, 800000);
+});
+
+test('KhoReader rejects absolute capacity telemetry that cannot contain visible item totals', () => {
+    const itemResolver = resolver();
+    const inconsistentConfig = {
+        ...config,
+        capacityIndicator: { ...config.capacityIndicator, slot: 49, scanAllSlots: true, fallbackLimit: 800000 }
+    };
+    const capacityReader = new KhoCapacityReader({ itemResolver, config: inconsistentConfig });
+    const reader = new KhoReader({ itemResolver, capacityReader, config: inconsistentConfig });
+    const slots = Array(54).fill(null);
+    slots[10] = { logicalId: 'coal', name: 'coal', count: 1, lore: ['Đang có: 14,943'] };
+    slots[49] = {
+        logicalId: 'storage_capacity', name: 'paper', count: 1, displayName: 'Thông tin kho',
+        components: ['Dung lượng: 1,000', 'Đã sử dụng: 1,000', 'Còn trống: 0']
+    };
+
+    const snapshot = reader.read({ slots });
+    assert.equal(snapshot.capacity.derivedFromItems, true);
+    assert.equal(snapshot.capacity.rejectedTelemetry, true);
+    assert.equal(snapshot.capacity.used, 14943);
+    assert.equal(snapshot.capacity.limit, 800000);
+});

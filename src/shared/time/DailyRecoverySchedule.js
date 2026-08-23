@@ -6,8 +6,8 @@ class DailyRecoverySchedule {
         this.timezoneOffsetMinutes = Number.isFinite(Number(config.timezoneOffsetMinutes))
             ? Number(config.timezoneOffsetMinutes)
             : 420;
-        this.sky = this.#normalizeWindow(config.sky, { hour: 3, minute: 0, waitMinutes: 10, retryWindowMinutes: 20 });
-        this.server = this.#normalizeWindow(config.server, { hour: 5, minute: 0, waitMinutes: 10, retryWindowMinutes: 20 });
+        this.sky = this.#normalizeWindow(config.sky, { hour: 3, minute: 0, waitMinutes: 5, retryWindowMinutes: 20 });
+        this.server = this.#normalizeWindow(config.server, { hour: 5, minute: 0, waitMinutes: 5, retryWindowMinutes: 20 });
     }
 
     nowParts(nowMs = Date.now()) {

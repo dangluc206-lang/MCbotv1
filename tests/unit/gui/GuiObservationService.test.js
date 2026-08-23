@@ -39,3 +39,20 @@ test('GUI observation keeps dynamic numbers out of structural revision while upd
         await fs.rm(directory, { recursive: true, force: true });
     }
 });
+
+test('GUI observation excludes appended player inventory from structural and latest GUI items', () => {
+    const normalizer = new GuiStructureNormalizer({ itemNormalizer: new ItemNormalizer() });
+    const slots = Array(90).fill(null);
+    slots[20] = { name: 'cobblestone', displayName: 'Recipe icon', count: 1, lore: [] };
+    slots[89] = { name: 'cobblestone', displayName: 'Player inventory output', count: 48, lore: [] };
+    const normalized = normalizer.normalize({
+        definitionId: 'crafting',
+        window: { title: 'Craft', type: 'minecraft:generic_9x6', slots, inventoryStart: 54, inventoryEnd: 90 }
+    });
+
+    assert.equal(normalized.identity.slotCount, 90);
+    assert.equal(normalized.identity.inventoryStart, 54);
+    assert.equal(normalized.identity.containerSlotCount, 54);
+    assert.deepEqual(normalized.structure.items.map(item => item.slot), [20]);
+    assert.deepEqual(normalized.latest.items.map(item => item.slot), [20]);
+});

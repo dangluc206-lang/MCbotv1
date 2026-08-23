@@ -1,0 +1,116 @@
+MCbot Desktop 2.7.27 - HƯỚNG DẪN SỬ DỤNG
+=======================================
+
+1. TỔNG QUAN
+- Theo dõi toàn bộ bot, kết nối, ping, máu/thức ăn, inventory, tay chính/tay phụ, vị trí và connection generation.
+- Xem chế độ/phase, operation đang chạy, GUI hiện tại, trạng thái tự vào Skyblock, áp lực /kho và lỗi gần nhất.
+- Có điều khiển toàn fleet: kết nối, /is, pause/resume, stop mode, disconnect.
+
+2. BOT
+- Tạo, nhân bản, chỉnh và xóa hồ sơ bot từ giao diện.
+- Mật khẩu bot lưu qua kho secret của hệ điều hành, không ghi vào JSON profile.
+
+3. CHẾ B5 THUẦN
+- Mode ID: b5-craft.
+- Không movement/pathfinder/pickup.
+- Khi /kho cần bảo vệ: chỉ nung raw iron/raw gold -> nén base/phôi thành block -> bảo vệ/bán block dư.
+- Có /is, đọc /kho, smelting có verify, pressure protection, base/block conversion và crafting B1→B5; không tự di chuyển.
+- B2–B5 vẫn dùng GUI/inventory/PV2/crafting verification cần thiết.
+- Có thể chỉnh auto reconnect, poll/retry, startup reserve, quantity ALL, B2 batch và PV2 backpressure.
+
+4. BẢO VỆ KHO
+- Ngưỡng hiển thị theo %: cảnh báo, cao, nguy cấp, mục tiêu hạ xuống, trần bung khối.
+- Có thể bật/tắt bán B1 dư, chỉ bán block và chỉnh reserve.
+- Lưu sẽ qua schema/cross-validation; cấu hình cần restart sẽ được báo rõ.
+
+5. TỰ VÀO SKYBLOCK
+- Bật/tắt, chọn selection, delay, retry, số lần thử, fallback sau spawn và chờ resource pack.
+- Cấu hình này có hot-reload vào SkyblockAutoJoinService.
+
+6. TẠO CHẾ ĐỘ BẰNG MÔ-ĐUN
+- Mỗi custom mode có ID, tên, mô tả, enabled và vòng lặp.
+- Module hiện có:
+  + Lệnh đã đăng ký
+  + Lệnh / tùy chỉnh
+  + Click GUI / chờ GUI / đóng GUI
+  + Chờ
+  + Di chuyển
+  + Nhìn hướng
+  + /is
+  + Vào Skyblock
+  + Đọc /kho
+  + Bảo vệ kho
+  + Một chu kỳ B5
+  + Ghi trạng thái
+  + Điều kiện
+  + Lặp N lần
+- Có mẫu nhanh: lệnh + đợi, /is + B5, di chuyển + click.
+- Có JSON nâng cao nhưng schema chỉ cho module allowlist; không thực thi JavaScript.
+- File custom mode lỗi không chặn backend boot; vẫn có thể chọn và xóa/sửa trong Desktop.
+
+7. CẤU HÌNH NÂNG CAO
+- Desktop liệt kê toàn bộ ConfigSpecs (30 group hiện tại).
+- JSON được kiểm tra schema + cross-reference trước khi ghi.
+- Mỗi lần ghi tạo backup trong data/backups/config-editor.
+- Chỉ nhóm có hot-reload contract được áp dụng trực tiếp; nhóm khác cần restart backend.
+
+8. CÔNG CỤ
+- Trung tâm lệnh dùng command registry.
+- GUI Inspector mở GUI, click slot và chụp snapshot để debug.
+- Mode Builder slash-command chỉ nhận một lệnh bắt đầu `/` và chặn login/register/password.
+
+9. NHẬT KÝ / CHẨN ĐOÁN
+- Log realtime có lọc/search/pause/tự cuộn.
+- Diagnostics đọc runtime failure record.
+- Support Bundle xuất snapshot, profile, log và diagnostics đã redaction.
+
+10. CÀI ĐẶT / WINDOWS
+- Close-to-tray, notification lỗi, auto-start backend, prevent sleep, launch at login.
+- Single-instance và resume reconciliation giúp vận hành dài hạn.
+- Emergency Stop dừng mode trước rồi disconnect bot.
+
+11. BUILD WINDOWS
+- scripts\RUN_DESKTOP_WINDOWS.cmd: chạy source.
+- scripts\BUILD_SETUP_WINDOWS.cmd: build installer.
+- Builder 2.4 Direct Packager không dùng electron-forge package; Electron runtime được copy trực tiếp rồi electron-winstaller tạo Squirrel setup.
+
+
+12. BẬT MODE VÀ DESIRED STATE
+- Có thể bấm Bắt đầu mode khi bot đang ngắt kết nối. FleetControl lưu desired mode, yêu cầu kết nối rồi reconcile mode sau khi runtime sẵn sàng.
+- Trong lúc đó Dashboard hiện ĐANG CHUẨN BỊ/Đang kết nối để bật chế độ.
+- Lỗi từ core được truyền nguyên nhân về giao diện để biết mode bị chặn vì đâu.
+
+13. CẬP NHẬT PHẦN MỀM
+- Cài đặt → Cập nhật phần mềm: xem version hiện tại, version mới, release notes và tiến độ tải.
+- Kênh Stable bỏ prerelease; Beta có thể nhận prerelease.
+- Tùy chọn: tự kiểm tra, tự tải, tự cài khi không có bot/mode đang hoạt động.
+- Trước khi cài, Desktop backup config nếu backend đang chạy, dừng backend rồi mới mở Setup.
+- RuntimeConfigMigrator backup config trước khi merge default của version mới và giữ các giá trị người dùng đã chỉnh.
+- Khôi phục cấu hình trước migration chỉ rollback dữ liệu config; không hạ binary MCbot về version cũ.
+- Khi chạy từ source, chức năng cài tự động bị khóa; hãy build/cài MCbot Setup.exe để test quy trình cài thật.
+
+CẬP NHẬT BẰNG FILE ZIP (2.5+)
+- Vào Cài đặt -> Cập nhật phần mềm -> Chọn file ZIP.
+- Chỉ gói có mcbot-update.json hợp lệ mới được chấp nhận.
+- MCbot kiểm tra phiên bản/base version, dependency, đường dẫn, symlink và kích thước trước khi cho bấm Cập nhật.
+- Khi cập nhật: MCbot backup cấu hình, dừng mode/bot/backend, thoát, helper riêng backup file chương trình rồi thay file và tự khởi động lại.
+- Nếu thay file lỗi, helper tự rollback program files đã thay.
+- ZIP không được ghi .env, runtime, logs, backups, support hoặc custom mode của người dùng.
+- Bản DEV dùng runtime-dev trong AppData; bản cài dùng runtime trong AppData. Đây là dữ liệu người dùng, không nằm trong code tree.
+- Gói có thay đổi dependency không được hot-update bằng ZIP; phải dùng installer.
+
+PHIÊN BOT / MODE (2.5+)
+- Mở lại MCbot: bot profile đang bật sẽ tự kết nối và auto join Sky, nhưng mode luôn OFF.
+- Server kick trong lúc MCbot vẫn mở: bot tự reconnect và mode đang bật được tiếp tục/reconcile.
+- Bấm Ngắt trên một bot: chỉ bot đó bị OFF và auto reconnect của bot đó bị suspend. Bấm Kết nối để bật lại.
+
+NHẬT KÝ (2.5+)
+- Trang Nhật ký chỉ hiển thị hoạt động chính, cảnh báo và lỗi; không còn đổ JSON meta dài cho mỗi STEP/GUI/KHO/PV.
+- Các dòng lặp giống nhau trong thời gian ngắn được gộp.
+- Khi cần debug sâu, bấm Mở log chi tiết để xem JSONL đầy đủ.
+
+2.6.0 - GUI Identity/B5 replay:
+- /kho, /pv 2 và /ks được xác minh bằng GUI Identity V2 trước khi thao tác.
+- Dashboard B5 hiển thị trace/decision gần nhất ở dạng gọn.
+- Khi cần điều tra, xuất gói hỗ trợ: fixture replay B5 mới nhất được kèm tự động.
+- Developer có thể chạy `npm run replay:b5` để phát lại quyết định planner offline.

@@ -1,0 +1,74 @@
+MCbot Desktop 2.7.27 - BẮT ĐẦU
+=============================
+
+CHẠY PHẦN MỀM TỪ SOURCE TRÊN WINDOWS
+-------------------------------------
+1. Cài Node.js 22+.
+2. Extract source vào một thư mục sạch.
+3. Chạy: scripts\RUN_DESKTOP_WINDOWS.cmd
+4. Vào Cài đặt để nhập mật khẩu bot/Discord nếu cần.
+
+TẠO MCbot Setup.exe
+-------------------
+1. Chạy: scripts\BUILD_SETUP_WINDOWS.cmd
+2. Builder kiểm tra dependency → validate → coverage → Direct Packager → Squirrel installer.
+3. File cuối: out\make\squirrel.windows\x64\MCbot Setup.exe
+
+B5 THUẦN
+--------
+- Vào Chế độ → Chế B5 thuần.
+- Mode này KHÔNG nung và KHÔNG tự di chuyển.
+- Luồng: chờ Sky → /is → đọc/bảo vệ /kho → đổi phôi/khối khi cần → chế B2/B3/B4/B5.
+- Có thể chỉnh mức bảo vệ kho, reserve, quy tắc ALL/PV2 và auto-join Sky ngay trong giao diện.
+
+TẠO CHẾ ĐỘ KHÔNG VIẾT CODE
+---------------------------
+Vào Tạo chế độ và ghép mô-đun:
+- Lệnh / tùy chỉnh hoặc lệnh đã đăng ký
+- Click/chờ/đóng GUI
+- Di chuyển / nhìn hướng / chờ
+- /is / vào Skyblock
+- Đọc kho / bảo vệ kho
+- Một chu kỳ B5
+- Điều kiện / lặp / ghi trạng thái
+
+Không có eval/raw JavaScript. Lệnh / tùy chỉnh chỉ cho slash-command an toàn và chặn lệnh mật khẩu.
+Sau khi lưu/xóa custom mode, khởi động lại hệ thống nền để nạp ModeCatalog mới.
+
+CẤU HÌNH
+--------
+- Các panel phổ biến có form riêng.
+- Cài đặt → Cấu hình nâng cao cho phép chỉnh toàn bộ config group có schema.
+- Mọi lần lưu đều validate + cross-check + backup trước khi ghi.
+
+BẬT MODE / TỰ KẾT NỐI
+-----------------------
+- Không cần Connect bot thủ công trước khi bật mode.
+- Chọn bot → bấm Bắt đầu ở Chế độ. Nếu bot đang ngắt, Desktop ghi desired mode, tự kết nối rồi bật mode khi readiness đạt yêu cầu.
+- Nếu core từ chối, giao diện hiển thị đúng lý do thay vì báo thành công giả.
+
+CẬP NHẬT PHẦN MỀM
+-------------------
+- Cài đặt → Cập nhật phần mềm.
+- Chọn Stable/Beta rồi Kiểm tra cập nhật; nguồn phát hành chính thức được khóa trong app.
+- Có thể bật tự kiểm tra, tự tải và tự cài khi hệ thống rảnh.
+- Chỉ bản MCbot đã cài trên Windows mới tự chạy Setup để cập nhật; khi chạy từ source chỉ kiểm tra/tải để test an toàn.
+- Config người dùng được backup/migrate ngoài thư mục code; có nút khôi phục cấu hình trước migration.
+
+BUILD TROUBLESHOOTING
+---------------------
+- Build thường: scripts\BUILD_SETUP_WINDOWS.cmd
+- Log chi tiết: scripts\BUILD_SETUP_WINDOWS.cmd --verbose
+- Cài dependency sạch: scripts\BUILD_SETUP_WINDOWS.cmd --clean-install
+- Kiểm dependency: node scripts\build-windows.js --diagnose-deps
+- Builder 2.4 dùng DIRECT packager; không dùng electron-forge package/native rebuild.
+
+ZIP source không chứa .env, .git, node_modules, coverage hoặc dữ liệu runtime/log cũ.
+
+Từ 2.5.0: sau lần nâng cấp bootstrap này, các bản tiếp theo có thể cập nhật ngay trong phần mềm bằng Cài đặt -> Cập nhật phần mềm -> Chọn file ZIP. Phiên mới chỉ tự ON bot; mode không tự bật lại từ lần chạy trước.
+
+2.6.0 - GUI Identity/B5 replay:
+- /kho, /pv 2 và /ks được xác minh bằng GUI Identity V2 trước khi thao tác.
+- Dashboard B5 hiển thị trace/decision gần nhất ở dạng gọn.
+- Khi cần điều tra, xuất gói hỗ trợ: fixture replay B5 mới nhất được kèm tự động.
+- Developer có thể chạy `npm run replay:b5` để phát lại quyết định planner offline.

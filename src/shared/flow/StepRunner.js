@@ -106,7 +106,8 @@ class StepRunner {
                     });
                 }
                 if (attempt >= maxAttempts || lastError.retryable === false) {
-                    this.logger?.warn?.('STEP FAIL', {
+                    const terminalLog = lastError.code === 'CANCELLED' ? this.logger?.info : this.logger?.warn;
+                    terminalLog?.call(this.logger, lastError.code === 'CANCELLED' ? 'STEP CANCELLED' : 'STEP FAIL', {
                         operation: normalized.operation,
                         step: normalized.step,
                         action: normalized.action,

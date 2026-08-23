@@ -23,7 +23,7 @@ test('post-craft sync waits ticks and retries until expected MMOItems identity i
     const bot = { async waitForTicks(count) { ticks += count; } };
     const sync = new InventorySyncService({
         botId: 'bot-01',
-        context: { require: () => bot },
+        context: { require: () => bot, get: () => bot, has: () => true, getGeneration: () => 1 },
         reader,
         observation: { eventsSince: () => [], capture: async () => null },
         config: { minTicks: 2, pollTicks: 1, quietMs: 0, timeoutMs: 500, stablePasses: 1, debugMetadata: false }
@@ -34,7 +34,8 @@ test('post-craft sync waits ticks and retries until expected MMOItems identity i
         beforeViews: [view([])],
         expectedIdentity: 'MMOITEMS_ITEM_ID:THANTINHLUYEN',
         expectedDelta: 64,
-        reason: 'craft:refined_coal'
+        reason: 'craft:refined_coal',
+        expectedGeneration: 1
     });
 
     assert.equal(result.metadataReady, true);
@@ -61,7 +62,7 @@ test('InventoryReader metadata debug shows raw NBT state and normalized identiti
     };
     const reader = new InventoryReader({
         botId: 'bot-01',
-        context: { require: () => bot },
+        context: { require: () => bot, get: () => bot, has: () => true, getGeneration: () => 1 },
         normalizer: new ItemNormalizer(),
         logger
     });
@@ -72,4 +73,30 @@ test('InventoryReader metadata debug shows raw NBT state and normalized identiti
     assert.equal(sample.nbtState, 'undefined');
     assert.deepEqual(sample.identityComponents, ['MMOITEMS_ITEM_ID:THANTINHLUYEN']);
     assert.equal(sample.customMetadataPresent, true);
+});
+
+test('post-craft sync rejects replacement during in-flight tick wait and never reads evidence as the new generation', async () => {
+    const BotContext = require('../../../src/bot/BotContext');
+    const context = new BotContext('bot-01');
+    const oldClient = {
+        async waitForTicks() {
+            context.detach(oldClient);
+            context.attach(newClient);
+        }
+    };
+    const newClient = { async waitForTicks() {} };
+    context.attach(oldClient);
+    let reads = 0;
+    const sync = new InventorySyncService({
+        botId: 'bot-01', context,
+        reader: { readViews: () => { reads += 1; return [view([])]; } },
+        observation: { eventsSince: () => [] },
+        config: { minTicks: 1, pollTicks: 0, pollMs: 0, quietMs: 0, timeoutMs: 20, stablePasses: 1 }
+    });
+    await assert.rejects(
+        sync.waitForStable({ since: Date.now(), beforeViews: [view([])], expectedGeneration: 1 }),
+        error => error.code === 'INVENTORY_SYNC_STALE_GENERATION'
+    );
+    assert.equal(context.getGeneration(), 2);
+    assert.equal(reads, 0, 'old-generation sync must stop before reading evidence after replacement');
 });

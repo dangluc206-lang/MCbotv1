@@ -1,8 +1,6 @@
 {
   "enabled": true,
   "teleportHomeOnEnable": true,
-  "waitForSkyblockReady": true,
-  "skyblockReadyTimeoutMs": 30000,
   "pickupLocation": {
     "x": -23997,
     "y": 101,
@@ -13,5 +11,9 @@
   "moveTimeoutMs": 30000,
   "pollIntervalMs": 15000,
   "errorRetryMs": 5000,
-  "craftLoopDelayMs": 250
+  "craftLoopDelayMs": 250,
+  "b1Decompression": {
+    "maxUsageRatio": 0.8,
+    "requireKnownCapacity": true
+  }
 }

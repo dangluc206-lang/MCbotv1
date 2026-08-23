@@ -2,12 +2,23 @@
 
 const BOT_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{1,31}$/;
 
+function rejectUnknown(value, allowed, label, errors) {
+    const keys = new Set(allowed);
+    for (const key of Object.keys(value || {})) {
+        if (!keys.has(key)) errors.push(`${label}.${key} is not allowed`);
+    }
+}
+
 module.exports = value => {
     const errors = [];
 
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
         return { valid: false, errors: ['bot profile must be an object'] };
     }
+    rejectUnknown(value, [
+        'id', 'enabled', 'displayName', 'username', 'auth', 'version',
+        'serverProfile', 'skyblockSelection', 'role', 'readyTimeoutMs', 'reconnect', 'fishing'
+    ], 'bot', errors);
 
     if (typeof value.id !== 'string' || !BOT_ID_PATTERN.test(value.id)) {
         errors.push('id must match ^[a-z0-9][a-z0-9_-]{1,31}$');
@@ -30,6 +41,12 @@ module.exports = value => {
     if (value.serverProfile !== undefined && (typeof value.serverProfile !== 'string' || !value.serverProfile.trim())) {
         errors.push('serverProfile must be a non-empty string');
     }
+    if (value.skyblockSelection !== undefined && (typeof value.skyblockSelection !== 'string' || !value.skyblockSelection.trim())) {
+        errors.push('skyblockSelection must be a non-empty string');
+    }
+    if (value.role !== undefined && (typeof value.role !== 'string' || !value.role.trim())) {
+        errors.push('role must be a non-empty string');
+    }
     if (value.readyTimeoutMs !== undefined && (!Number.isFinite(value.readyTimeoutMs) || value.readyTimeoutMs <= 0)) {
         errors.push('readyTimeoutMs must be positive');
     }
@@ -38,6 +55,7 @@ module.exports = value => {
         if (!value.reconnect || typeof value.reconnect !== 'object' || Array.isArray(value.reconnect)) {
             errors.push('reconnect must be an object');
         } else {
+            rejectUnknown(value.reconnect, ['enabled', 'maxAttempts', 'baseDelayMs', 'maxDelayMs'], 'reconnect', errors);
             if (value.reconnect.enabled !== undefined && typeof value.reconnect.enabled !== 'boolean') {
                 errors.push('reconnect.enabled must be boolean');
             }

@@ -4,12 +4,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 const Logger = require('./Logger');
 const CompactLogFormatter = require('./CompactLogFormatter');
+const VietnamTime = require('../time/VietnamTime');
 
 const LEVELS = Logger.LEVELS;
 
 const LOW_LEVEL_OPERATIONAL_MESSAGES = Object.freeze([
     /^Inventory metadata /,
-    /^STEP (START|OK|RETRY|FAIL)$/,
+    /^STEP (START|OK|RETRY|FAIL|CANCELLED)$/,
     /^GUI (OPEN|CLOSE|ACTION START|ACTION OK|CLICK START|CLICK OK)$/,
     /^PV (OPEN START|OPEN OK|READ START|READ OK|TRANSFER START|TRANSFER OK|WITHDRAW CLICK|DEPOSIT CLICK)$/,
     /^KHO (READ START|READ OK|READ CACHE|FORCE REOPEN|OPEN ATTEMPT|COMMAND SEND|COMMAND SENT|GUI VERIFIED)$/,
@@ -55,9 +56,7 @@ function lowestLevel(...levels) {
 }
 
 function fileDate(timestamp) {
-    const date = new Date(timestamp);
-    if (Number.isNaN(date.getTime())) return new Date().toISOString().slice(0, 10);
-    return date.toISOString().slice(0, 10);
+    return VietnamTime.dateKey(timestamp);
 }
 
 function finiteNumber(value, fallback, minimum = 0) {
@@ -234,7 +233,7 @@ class RuntimeLogOutput {
         const durationMs = Math.max(0, Number(bucket.lastAt || 0) - Number(bucket.firstAt || 0));
         const summary = Object.freeze({
             ...bucket.lastRecord,
-            timestamp: new Date(bucket.lastAt || Date.now()).toISOString(),
+            timestamp: VietnamTime.iso(bucket.lastAt || Date.now()),
             repeatCount: suppressed,
             repeatDurationMs: durationMs,
             meta: Object.freeze({
@@ -298,7 +297,7 @@ class RuntimeLogOutput {
         try {
             if (!fs.existsSync(this.fileDirectory)) return;
             const now = Date.now();
-            const currentFile = path.join(this.fileDirectory, `${this.filePrefix}-${fileDate(new Date().toISOString())}.jsonl`);
+            const currentFile = path.join(this.fileDirectory, `${this.filePrefix}-${fileDate(VietnamTime.iso())}.jsonl`);
             const files = fs.readdirSync(this.fileDirectory, { withFileTypes: true })
                 .filter(entry => entry.isFile() && entry.name.startsWith(`${this.filePrefix}-`) && entry.name.endsWith('.jsonl'))
                 .map(entry => {
@@ -318,7 +317,10 @@ class RuntimeLogOutput {
                 try {
                     fs.rmSync(file.filePath, { force: true });
                     total -= file.size;
-                } catch {}
+                } catch (error) {
+                    const writer = typeof this.consoleRef?.warn === 'function' ? this.consoleRef.warn : this.consoleRef?.log;
+                    writer?.call(this.consoleRef, `MCbot logger could not remove retained file ${file.name}: ${error?.message || error}`);
+                }
             }
         } catch (error) {
             const writer = typeof this.consoleRef?.warn === 'function' ? this.consoleRef.warn : this.consoleRef?.log;

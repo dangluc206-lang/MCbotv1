@@ -5,6 +5,15 @@ const assert = require('node:assert/strict');
 const EventBus = require('../../../../src/core/EventBus');
 const CancellationSource = require('../../../../src/shared/cancellation/CancellationSource');
 const AfkAreaService = require('../../../../src/server-features/afk/AfkAreaService');
+const { EventEmitter } = require('node:events');
+const BotContext = require('../../../../src/bot/BotContext');
+const GuiState = require('../../../../src/gui/GuiState');
+const GuiManager = require('../../../../src/gui/GuiManager');
+const ClickQueue = require('../../../../src/gui/click/ClickQueue');
+const ClickGuard = require('../../../../src/gui/click/ClickGuard');
+const ClickExecutor = require('../../../../src/gui/click/ClickExecutor');
+const ClickVerifier = require('../../../../src/gui/click/ClickVerifier');
+const SlotValidator = require('../../../../src/gui/slots/SlotValidator');
 
 const areas = [
     { id: 'afk-11', menuSlot: 11, priority: 1, capacity: 30, destination: { x: 74, y: 70, z: 90 } },
@@ -45,7 +54,7 @@ function harness({ occupancy = [30, 4], generation = 1, click = null, teleportTi
         click: async slot => {
             if (click) return click({ slot, eventBus, generation: currentGeneration });
             position = { x: 74, y: 70, z: 90 };
-            eventBus.emit('movement:teleport', { botId: 'bot-01', generation: currentGeneration, position });
+            eventBus.emit('movement:teleport', { botId: 'bot-01', connectionGeneration: currentGeneration, position });
         }
     };
     const service = new AfkAreaService({
@@ -61,6 +70,63 @@ function harness({ occupancy = [30, 4], generation = 1, click = null, teleportTi
         setGeneration: value => { currentGeneration = value; },
         setConnected: value => { connected = value; },
         setPosition: value => { position = value; }
+    };
+}
+
+
+
+async function realQueuedAfkHarness({ teleportTimeoutMs = 15 } = {}) {
+    const eventBus = new EventBus();
+    const context = new BotContext('bot-01');
+    const makeClient = name => {
+        const client = new EventEmitter();
+        client.name = name;
+        client.clickCalls = [];
+        client.clickWindow = async (...args) => { client.clickCalls.push(args); };
+        client.closeWindow = () => { client.currentWindow = null; };
+        client.inventory = new EventEmitter();
+        return client;
+    };
+    const oldClient = makeClient('old');
+    const newClient = makeClient('new');
+    context.attach(oldClient);
+    const clickQueue = new ClickQueue({ maxPending: 8 });
+    const state = new GuiState();
+    const guiManager = new GuiManager({
+        botId: 'bot-01', context, state,
+        detector: { detect: () => ({ id: 'afk' }) },
+        clickQueue,
+        clickGuard: new ClickGuard({ context, slotValidator: new SlotValidator() }),
+        clickExecutor: new ClickExecutor({ context }),
+        clickVerifier: new ClickVerifier({ eventBus, context }),
+        eventBus
+    });
+    await guiManager.initialize();
+    const slots = new Array(54).fill(null);
+    slots[11] = { occupancy: 1, name: 'available' };
+    slots[13] = { occupancy: 30, name: 'full' };
+    const window = new EventEmitter();
+    Object.assign(window, { id: 91, title: 'AFK', type: 'chest', slots, inventoryStart: 18, inventoryEnd: 54 });
+    const commandService = {
+        async send() {
+            oldClient.currentWindow = window;
+            guiManager.open(window, { client: oldClient, connectionGeneration: 1 });
+            return { success: true };
+        }
+    };
+    const service = new AfkAreaService({
+        botId: 'bot-01', context, eventBus, guiManager, commandService,
+        positionService: { current: () => ({ x: 0, y: 64, z: 0 }), distance: () => 0 },
+        occupancyParser: { parse: item => ({ current: item?.occupancy ?? null, capacity: 30, full: item ? item.occupancy >= 30 : null, known: Boolean(item) }) },
+        config: { commandKey: 'afk', guiTimeoutMs: 100, openSettleMs: 0, teleportTimeoutMs, teleportMinDistance: 1, areas }
+    });
+    const blocker = deferred();
+    const blockerRun = clickQueue.enqueue(() => blocker.promise, { id: 'test-blocker' });
+    await waitFor(() => clickQueue.running === 1, 'click blocker running');
+    return {
+        service, eventBus, context, guiManager, clickQueue, blocker, blockerRun, oldClient, newClient,
+        async release() { blocker.resolve(true); await blockerRun; await new Promise(resolve => setImmediate(resolve)); },
+        replace() { context.detach(oldClient); context.attach(newClient); }
     };
 }
 
@@ -208,4 +274,130 @@ test('AfkAreaService reconfigure keeps existing server coordinates and validates
     const updated = h.service.reconfigure({ commandKey: 'afk', guiTimeoutMs: 120, openSettleMs: 0, teleportTimeoutMs: 100, teleportMinDistance: 1, areas });
     assert.deepEqual(updated[0].destination, areas[0].destination);
     assert.throws(() => h.service.reconfigure({ commandKey: '', areas }), /commandKey/);
+});
+
+
+test('AFK timeout cancels a real queued GUI click before public settle and prevents late clickWindow', async () => {
+    const h = await realQueuedAfkHarness({ teleportTimeoutMs: 12 });
+    const result = await h.service.joinBestAvailable();
+    assert.equal(result.status, 'TIMEOUT');
+    assert.equal(result.error?.code, 'AFK_TELEPORT_VERIFY_TIMEOUT');
+    assert.equal(h.clickQueue.pending, 0, 'cancelled AFK click must be removed from queue before return');
+    assert.equal(h.eventBus.listenerCount('movement:teleport'), 0);
+    await h.release();
+    assert.equal(h.oldClient.clickCalls.length, 0);
+    assert.equal(h.newClient.clickCalls.length, 0);
+    await h.guiManager.destroy();
+});
+
+test('AFK cancellation cancels a real queued GUI click and leaves no late side effect', async () => {
+    const h = await realQueuedAfkHarness({ teleportTimeoutMs: 500 });
+    const source = new CancellationSource();
+    const pending = h.service.joinBestAvailable({ cancellationToken: source.token });
+    await waitFor(() => h.clickQueue.pending === 1, 'AFK click queued');
+    source.cancel('pause');
+    const result = await pending;
+    assert.equal(result.status, 'CANCELLED');
+    assert.equal(h.clickQueue.pending, 0);
+    await h.release();
+    assert.equal(h.oldClient.clickCalls.length, 0);
+    assert.equal(h.newClient.clickCalls.length, 0);
+    await h.guiManager.destroy();
+});
+
+test('AFK stale generation cancels a real queued GUI click before replacement can receive it', async () => {
+    const h = await realQueuedAfkHarness({ teleportTimeoutMs: 500 });
+    const pending = h.service.joinBestAvailable();
+    await waitFor(() => h.clickQueue.pending === 1, 'AFK click queued');
+    h.replace();
+    h.eventBus.emit('connection:client-attached', { botId: 'bot-01', connectionGeneration: 2 });
+    const result = await pending;
+    assert.equal(result.status, 'DISCONNECTED');
+    assert.equal(result.error?.code, 'AFK_STALE_GENERATION');
+    assert.equal(h.clickQueue.pending, 0);
+    await h.release();
+    assert.equal(h.oldClient.clickCalls.length, 0);
+    assert.equal(h.newClient.clickCalls.length, 0);
+    await h.guiManager.destroy();
+});
+
+test('AFK disconnect cancels a real queued GUI click before executor', async () => {
+    const h = await realQueuedAfkHarness({ teleportTimeoutMs: 500 });
+    const pending = h.service.joinBestAvailable();
+    await waitFor(() => h.clickQueue.pending === 1, 'AFK click queued');
+    h.context.detach(h.oldClient);
+    h.eventBus.emit('connection:ended', { botId: 'bot-01', connectionGeneration: 1 });
+    const result = await pending;
+    assert.equal(result.status, 'DISCONNECTED');
+    assert.equal(h.clickQueue.pending, 0);
+    await h.release();
+    assert.equal(h.oldClient.clickCalls.length, 0);
+    assert.equal(h.newClient.clickCalls.length, 0);
+    await h.guiManager.destroy();
+});
+
+test('AFK teleport success cancels sibling queued click before public success settles', async () => {
+    const h = await realQueuedAfkHarness({ teleportTimeoutMs: 500 });
+    const pending = h.service.joinBestAvailable();
+    await waitFor(() => h.clickQueue.pending === 1, 'AFK click queued');
+    h.eventBus.emit('movement:teleport', { botId: 'bot-01', connectionGeneration: 1, position: { x: 74, y: 70, z: 90 } });
+    const result = await pending;
+    assert.equal(result.success, true);
+    assert.equal(h.clickQueue.pending, 0);
+    await h.release();
+    assert.equal(h.oldClient.clickCalls.length, 0);
+    assert.equal(h.newClient.clickCalls.length, 0);
+    await h.guiManager.destroy();
+});
+
+test('AfkAreaService.inspect preserves stale, cancellation and unknown parser domain semantics', async () => {
+    const stale = harness({ occupancy: [1, 2] });
+    const staleResult = await stale.service.inspect({ expectedGeneration: 2 });
+    assert.equal(staleResult.status, 'DISCONNECTED');
+    assert.equal(staleResult.error.code, 'AFK_STALE_GENERATION');
+
+    const cancelled = harness({ occupancy: [1, 2] });
+    cancelled.service.guiManager.performAndWaitForOpen = async () => {
+        const OperationCancelledError = require('../../../../src/shared/errors/OperationCancelledError');
+        throw new OperationCancelledError('cancel inspect');
+    };
+    const cancelledResult = await cancelled.service.inspect();
+    assert.equal(cancelledResult.status, 'CANCELLED');
+    assert.equal(cancelledResult.error.code, 'CANCELLED');
+
+    const unknown = harness({ occupancy: [1, 2] });
+    unknown.service.occupancyParser.parse = () => { throw new Error('bad occupancy payload'); };
+    const unknownResult = await unknown.service.inspect();
+    assert.equal(unknownResult.status, 'FAILED');
+    assert.equal(unknownResult.error.code, 'AFK_MENU_INSPECT_FAILED');
+});
+
+test('AfkAreaService.inspect managed path preserves the same stale and unknown statuses as direct path', async () => {
+    const OperationManager = require('../../../../src/operations/OperationManager');
+    const OperationQueue = require('../../../../src/operations/OperationQueue');
+    const OperationLockPolicy = require('../../../../src/operations/OperationLockPolicy');
+    const OperationTimeoutPolicy = require('../../../../src/operations/OperationTimeoutPolicy');
+    const createManager = () => new OperationManager({
+        botId: 'bot-01', queue: new OperationQueue({ maxPending: 8 }), lockPolicy: new OperationLockPolicy(),
+        timeoutPolicy: new OperationTimeoutPolicy(), config: { defaultQueueWaitTimeoutMs: 100, defaultExecutionTimeoutMs: 100, shutdownDrainTimeoutMs: 100 }
+    });
+
+    const stale = harness({ occupancy: [1, 2] });
+    stale.service.operationManager = createManager();
+    const originalOpen = stale.service.guiManager.performAndWaitForOpen;
+    stale.service.guiManager.performAndWaitForOpen = async (...args) => {
+        const opened = await originalOpen(...args);
+        stale.setGeneration(2);
+        return opened;
+    };
+    const staleResult = await stale.service.inspect();
+    assert.equal(staleResult.status, 'DISCONNECTED');
+    assert.equal(staleResult.error.code, 'AFK_STALE_GENERATION');
+
+    const unknown = harness({ occupancy: [1, 2] });
+    unknown.service.operationManager = createManager();
+    unknown.service.occupancyParser.parse = () => { throw new Error('bad managed occupancy'); };
+    const unknownResult = await unknown.service.inspect();
+    assert.equal(unknownResult.status, 'FAILED');
+    assert.equal(unknownResult.error.code, 'AFK_MENU_INSPECT_FAILED');
 });

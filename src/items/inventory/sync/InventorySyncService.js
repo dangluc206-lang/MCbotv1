@@ -2,6 +2,7 @@
 
 const Timeout = require('../../../shared/time/Timeout');
 const { identitiesEquivalent } = require('../../ItemIdentity');
+const FlowError = require('../../../shared/errors/FlowError');
 
 class InventorySyncService {
     constructor({ botId, context, reader, observation = null, logger = null, config = {} }) {
@@ -15,16 +16,23 @@ class InventorySyncService {
         reason = 'post-action',
         expectedIdentity = null,
         expectedDelta = null,
-        inventorySource = 'all'
+        inventorySource = 'all',
+        expectedGeneration = null
     } = {}) {
         const startedAt = Date.now();
         const bot = this.context.require();
+        const generation = expectedGeneration == null ? Number(this.context.getGeneration?.()) : Number(expectedGeneration);
+        if (!Number.isInteger(generation) || generation <= 0 || Number(this.context.getGeneration?.()) !== generation) {
+            throw new TypeError('Inventory sync requires the current connection generation.');
+        }
+        this.#assertOwner(bot, generation, 'start');
         const targetDelta = Math.max(0, Number(expectedDelta) || 0);
         const beforeIdentityCount = expectedIdentity
             ? this.#countIdentity(beforeViews, expectedIdentity)
             : 0;
 
         await this.#waitTicks(bot, this.config.minTicks);
+        this.#assertOwner(bot, generation, 'after-min-ticks');
 
         let previousSignature = null;
         let stablePasses = 0;
@@ -33,8 +41,9 @@ class InventorySyncService {
         let firstSnapshot = true;
 
         while (Date.now() - startedAt <= this.config.timeoutMs) {
+            this.#assertOwner(bot, generation, 'poll');
             attempt += 1;
-            const eventsBeforeRead = this.#eventsSince(since, inventorySource);
+            const eventsBeforeRead = this.#eventsSince(since, inventorySource, generation);
             const debugSlots = this.#slotsFromEvents(eventsBeforeRead);
             const views = this.#readViews(inventorySource, {
                 debugMetadataReason: this.config.debugMetadata && firstSnapshot
@@ -50,7 +59,7 @@ class InventorySyncService {
             stablePasses = signature === previousSignature ? stablePasses + 1 : 1;
             previousSignature = signature;
 
-            const events = this.#eventsSince(since, inventorySource) || eventsBeforeRead;
+            const events = this.#eventsSince(since, inventorySource, generation) || eventsBeforeRead;
             const lastEventAt = events.reduce((max, event) => Math.max(max, Number(event?.at || 0)), Number(since) || 0);
             const quietForMs = Math.max(0, Date.now() - lastEventAt);
             const quiet = quietForMs >= this.config.quietMs;
@@ -83,7 +92,11 @@ class InventorySyncService {
 
             if (last.stable && metadataReady) {
                 if (this.config.persistStableSnapshot) {
-                    await this.observation?.capture?.(`${reason}:stable`).catch?.(() => {});
+                    try {
+                        await this.observation?.capture?.(`${reason}:stable`, { expectedGeneration: generation });
+                    } catch (error) {
+                        this.logger?.debug?.('Inventory stable snapshot persistence failed.', { botId: this.botId, reason, generation, error });
+                    }
                 }
                 if (this.config.debugMetadata) {
                     this.#readViews(inventorySource, {
@@ -93,21 +106,24 @@ class InventorySyncService {
                         debugSlots: this.#slotsFromEvents(events)
                     });
                 }
+                this.#assertOwner(bot, generation, 'return-stable');
                 return last;
             }
 
             if (this.config.pollTicks > 0) await this.#waitTicks(bot, this.config.pollTicks);
             else if (this.config.pollMs > 0) await Timeout.delay(this.config.pollMs);
             else await Promise.resolve();
+            this.#assertOwner(bot, generation, 'after-poll-wait');
         }
 
+        this.#assertOwner(bot, generation, 'timeout');
         const views = last?.views || this.#readViews(inventorySource);
         if (this.config.debugMetadata) {
             this.#readViews(inventorySource, {
                 debugMetadataReason: `${reason}:sync-timeout`,
                 debugMaxItems: this.config.debugMaxItems,
                 debugFocusIdentity: expectedIdentity,
-                debugSlots: this.#slotsFromEvents(this.#eventsSince(since, inventorySource))
+                debugSlots: this.#slotsFromEvents(this.#eventsSince(since, inventorySource, generation))
             });
         }
         this.logger?.warn?.('Inventory post-action sync timed out; verifier will use the freshest snapshot available.', {
@@ -143,8 +159,8 @@ class InventorySyncService {
         return this.reader.readViews(options);
     }
 
-    #eventsSince(since, inventorySource = 'all') {
-        const events = this.observation?.eventsSince?.(since) || [];
+    #eventsSince(since, inventorySource = 'all', connectionGeneration = null) {
+        const events = this.observation?.eventsSince?.(since, { connectionGeneration }) || [];
         if (inventorySource === 'all') return events;
         return events.filter(event => event?.source === inventorySource);
     }
@@ -204,6 +220,18 @@ class InventorySyncService {
             return;
         }
         await Timeout.delay(count * this.config.fallbackTickMs);
+    }
+
+    #assertOwner(bot, generation, stage) {
+        const current = this.context.get?.();
+        const currentGeneration = Number(this.context.getGeneration?.());
+        if (current !== bot || currentGeneration !== Number(generation) || this.context.has?.() === false) {
+            throw new FlowError('Inventory sync connection changed during verification.', {
+                code: 'INVENTORY_SYNC_STALE_GENERATION', subsystem: 'inventory', operation: 'InventorySyncService',
+                step: stage, retryable: true,
+                details: { expectedGeneration: Number(generation), currentGeneration }
+            });
+        }
     }
 
     #validateConfig(config) {

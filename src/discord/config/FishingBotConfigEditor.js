@@ -5,32 +5,20 @@ const path = require('node:path');
 const resolveFishingConfig = require('../../modes/fishing/resolveFishingConfig');
 
 class FishingBotConfigEditor {
-    constructor({ baseDir = process.cwd(), configuration, botRegistry, logger = null }) {
+    constructor({ baseDir = process.cwd(), configuration, botRegistry, logger = null, mutationCoordinator = null }) {
         this.baseDir = path.resolve(baseDir);
         this.configuration = configuration;
         this.botRegistry = botRegistry;
         this.logger = logger;
+        this.mutationCoordinator = mutationCoordinator;
         this.botConfigDir = path.resolve(this.baseDir, 'config/bots');
         this.backupDir = path.resolve(this.baseDir, 'data/runtime/discord/config-backups');
     }
 
     async listBotIds() {
-        let entries;
-        try {
-            entries = await fs.readdir(this.botConfigDir, { withFileTypes: true });
-        } catch (error) {
-            if (error?.code === 'ENOENT') return this.botRegistry?.ids?.() || [];
-            throw error;
-        }
-        const ids = [];
-        for (const entry of entries) {
-            if (!entry.isFile() || !entry.name.endsWith('.json')) continue;
-            try {
-                const profile = JSON.parse(await fs.readFile(path.join(this.botConfigDir, entry.name), 'utf8'));
-                if (typeof profile.id === 'string' && profile.id.trim()) ids.push(profile.id.trim());
-            } catch {}
-        }
-        return [...new Set(ids)].sort();
+        const profiles = await this.#readProfiles({ allowMissing: true });
+        if (profiles.length === 0) return this.botRegistry?.ids?.() || [];
+        return profiles.map(entry => entry.profile.id).sort();
     }
 
     async read(botId) {
@@ -45,7 +33,9 @@ class FishingBotConfigEditor {
         };
     }
 
-    async setAreaPosition({ botId, areaId, x, y, z, pitchDegrees }) {
+    setAreaPosition(args) { return this.#queueMutation(() => this.#setAreaPosition(args)); }
+
+    async #setAreaPosition({ botId, areaId, x, y, z, pitchDegrees }) {
         const parsed = {
             x: this.#finite(x, 'X'),
             y: this.#finite(y, 'Y'),
@@ -69,9 +59,24 @@ class FishingBotConfigEditor {
         });
     }
 
-    async reloadBot(botId) {
-        const { profile } = await this.#readProfile(botId);
+    reloadBot(botId) { return this.#queueMutation(() => this.#reloadBot(botId)); }
+
+    async #reloadBot(botId) {
+        const profiles = await this.#readProfiles();
+        const found = profiles.find(entry => entry.profile.id === botId);
+        if (!found) throw new Error(`Không tìm thấy config bot: ${botId}`);
+        this.configuration.crossValidator?.assertValid(this.configuration.registry.snapshot(), {
+            botProfiles: profiles.map(entry => entry.profile)
+        });
+        const { profile } = found;
         return this.#applyRuntime(botId, profile);
+    }
+
+
+    #queueMutation(work) {
+        return this.mutationCoordinator?.run
+            ? this.mutationCoordinator.run('bot-profile-set', work)
+            : work();
     }
 
     async #edit(botId, mutator) {
@@ -79,6 +84,11 @@ class FishingBotConfigEditor {
         const next = JSON.parse(JSON.stringify(current));
         mutator(next);
         this.configuration.validator.assertValid('bot', next);
+        const profiles = await this.#readProfiles();
+        const candidates = profiles.map(entry => entry.profile.id === botId ? next : entry.profile);
+        this.configuration.crossValidator?.assertValid(this.configuration.registry.snapshot(), {
+            botProfiles: candidates
+        });
 
         await fs.mkdir(this.backupDir, { recursive: true });
         const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -86,10 +96,10 @@ class FishingBotConfigEditor {
         await fs.writeFile(backupPath, `${JSON.stringify(current, null, 2)}\n`, 'utf8');
         await this.#pruneBackups(`${botId}-fishing`, 30);
 
-        const temp = `${filePath}.discord.tmp`;
+        let fileReplaced = false;
         try {
-            await fs.writeFile(temp, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
-            await fs.rename(temp, filePath);
+            await this.#atomicWrite(filePath, next);
+            fileReplaced = true;
             const resolved = await this.#applyRuntime(botId, next);
             this.logger?.info?.('Per-bot fishing config updated from Discord.', {
                 botId,
@@ -97,16 +107,35 @@ class FishingBotConfigEditor {
             });
             return resolved;
         } catch (error) {
-            await fs.writeFile(filePath, `${JSON.stringify(current, null, 2)}\n`, 'utf8').catch(() => {});
-            await this.#applyRuntime(botId, current).catch(() => {});
+            const rollbackErrors = [];
+            if (fileReplaced) {
+                try {
+                    await this.#atomicWrite(filePath, current);
+                } catch (caught) {
+                    rollbackErrors.push(caught);
+                    this.logger?.error?.('Fishing bot config file rollback failed.', { botId, file: filePath, error: caught });
+                }
+                try {
+                    await this.#applyRuntime(botId, current);
+                } catch (caught) {
+                    rollbackErrors.push(caught);
+                    this.logger?.error?.('Fishing bot runtime rollback failed.', { botId, error: caught });
+                }
+            }
+            if (rollbackErrors.length > 0) {
+                throw new AggregateError([error, ...rollbackErrors], 'Fishing bot config update and rollback failed.');
+            }
             throw error;
-        } finally {
-            await fs.rm(temp, { force: true }).catch(() => {});
         }
     }
 
     async #pruneBackups(prefix, keep) {
-        const entries = await fs.readdir(this.backupDir, { withFileTypes: true }).catch(() => []);
+        let entries = [];
+        try {
+            entries = await fs.readdir(this.backupDir, { withFileTypes: true });
+        } catch (error) {
+            if (error.code !== 'ENOENT') throw error;
+        }
         const names = entries.filter(entry => entry.isFile() && entry.name.startsWith(`${prefix}-`) && entry.name.endsWith('.json')).map(entry => entry.name).sort().reverse();
         await Promise.all(names.slice(keep).map(name => fs.rm(path.join(this.backupDir, name), { force: true })));
     }
@@ -129,19 +158,50 @@ class FishingBotConfigEditor {
 
     async #readProfile(botId) {
         if (typeof botId !== 'string' || !botId.trim()) throw new Error('botId không hợp lệ.');
-        const entries = await fs.readdir(this.botConfigDir, { withFileTypes: true });
+        const profiles = await this.#readProfiles();
+        const found = profiles.find(entry => entry.profile.id === botId);
+        if (found) return found;
+        throw new Error(`Không tìm thấy config bot: ${botId}`);
+    }
+
+    async #readProfiles({ allowMissing = false } = {}) {
+        let entries;
+        try {
+            entries = await fs.readdir(this.botConfigDir, { withFileTypes: true });
+        } catch (error) {
+            if (allowMissing && error.code === 'ENOENT') return [];
+            throw error;
+        }
+        const profiles = [];
         for (const entry of entries) {
             if (!entry.isFile() || !entry.name.endsWith('.json')) continue;
             const filePath = path.join(this.botConfigDir, entry.name);
-            let profile;
             try {
-                profile = JSON.parse(await fs.readFile(filePath, 'utf8'));
-            } catch {
-                continue;
+                const profile = JSON.parse(await fs.readFile(filePath, 'utf8'));
+                this.configuration.validator.assertValid('bot', profile);
+                if (path.basename(entry.name, '.json') !== profile.id) {
+                    throw new Error(`Bot profile filename/id mismatch: ${entry.name} contains ${profile.id}`);
+                }
+                profiles.push({ filePath, profile });
+            } catch (error) {
+                throw new Error(`Không đọc được bot profile ${entry.name}: ${error.message}`, { cause: error });
             }
-            if (profile?.id === botId) return { filePath, profile };
         }
-        throw new Error(`Không tìm thấy config bot: ${botId}`);
+        return profiles;
+    }
+
+    async #atomicWrite(filePath, value) {
+        const temp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+        try {
+            await fs.writeFile(temp, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+            await fs.rename(temp, filePath);
+        } finally {
+            try {
+                await fs.rm(temp, { force: true });
+            } catch (error) {
+                this.logger?.warn?.('Temporary fishing config file cleanup failed.', { file: temp, error });
+            }
+        }
     }
 
     #finite(value, label) {

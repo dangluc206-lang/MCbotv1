@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "inspection": {
+    "amount": 1,
+    "additional": true,
+    "storage": { "items": { "coal": 1024 }, "capacity": { "used": 360000, "free": 440000, "limit": 800000 } },
+    "personalVault": { "totals": {} },
+    "personalVaultPressure": { "critical": false, "emptySlotCount": 20 },
+    "inventoryTotals": {},
+    "fullPlan": { "targetId": "super_alloy", "feasible": false, "missing": { "diamond": 32 }, "steps": [] },
+    "chains": [],
+    "progress": {
+      "targetId": "super_alloy",
+      "amount": 1,
+      "state": "WAITING_MATERIALS",
+      "feasible": false,
+      "priority": ["B5", "B4", "B3", "B2"],
+      "remainingStages": 4,
+      "remainingCrafts": 64,
+      "nextStep": { "kind": "B2/B3", "id": "refined_coal", "b2Id": "coal_b2", "b2Crafts": 64, "b3Crafts": 1 }
+    }
+  },
+  "expected": {
+    "decisionKind": "B2/B3",
+    "decisionResource": "refined_coal",
+    "blockers": ["missing-material:diamond"]
+  }
+}

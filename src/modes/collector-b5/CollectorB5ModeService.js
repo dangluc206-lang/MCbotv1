@@ -1,6 +1,5 @@
 'use strict';
 
-const CancellationSource = require('../../shared/cancellation/CancellationSource');
 const Timeout = require('../../shared/time/Timeout');
 const Result = require('../../shared/result/Result');
 const Status = require('../../shared/result/Status');
@@ -9,6 +8,14 @@ const DailyRecoverySchedule = require('../../shared/time/DailyRecoverySchedule')
 const FailureCircuitBreaker = require('../../shared/resilience/FailureCircuitBreaker');
 const { classifyRuntimeResult } = require('../../shared/result/RuntimeResultClassifier');
 const { createFailureEvent } = require('../../diagnostics/runtime/RuntimeFailureEvent');
+const { normalizeConnectionGeneration } = require('../../core/events/EventEnvelope');
+const TaskSupervisor = require('../../core/TaskSupervisor');
+const ModeLeaseSession = require('../ModeLeaseSession');
+const CollectorMovementFlow = require('./flows/CollectorMovementFlow');
+const CollectorB5WorkPolicy = require('./CollectorB5WorkPolicy');
+const CollectorB5StatusPresenter = require('./CollectorB5StatusPresenter');
+
+const MODE_ID = 'collector-b5';
 
 class CollectorB5ModeService {
     constructor({
@@ -17,18 +24,23 @@ class CollectorB5ModeService {
         eventBus,
         island,
         skyblock,
+        skyblockReadiness,
+        skyTarget,
         movementManager,
         positionService,
         b1Materials,
         b5Planning,
         b5Automation,
+        modeCoordinator,
         failurePublisher = null,
         failurePolicy,
         config = {},
         dailyRecovery = {},
         logger = null,
-        delay = Timeout.delay
+        delay = Timeout.delay,
+        movementFlow = null
     }) {
+        if (!modeCoordinator) throw new TypeError('CollectorB5ModeService modeCoordinator is required.');
         Object.assign(this, {
             name: 'CollectorB5ModeService',
             botId,
@@ -36,17 +48,28 @@ class CollectorB5ModeService {
             eventBus,
             island,
             skyblock,
+            skyblockReadiness,
+            skyTarget,
             movementManager,
             positionService,
             b1Materials,
             b5Planning,
             b5Automation,
+            modeCoordinator,
             failurePublisher,
             logger,
             delay
         });
         this.failureBreaker = new FailureCircuitBreaker({ policy: failurePolicy });
+        this.workPolicy = new CollectorB5WorkPolicy();
+        this.statusPresenter = new CollectorB5StatusPresenter();
         this.config = this.#normalizeConfig(config);
+        this.movementFlow = movementFlow || new CollectorMovementFlow({
+            island,
+            movementManager,
+            positionService,
+            config: this.config
+        });
         this.dailyRecovery = new DailyRecoverySchedule(dailyRecovery);
         this.lastSkyDailyRecoveryDate = null;
         this.dailyHoldLogKey = null;
@@ -59,33 +82,36 @@ class CollectorB5ModeService {
         this.cycles = 0;
         this.b3Shortages = null;
         this.b5Progress = null;
-        this.storagePressure = null;
-        this.startupStorageSafetyDone = false;
-        this.startupStorageSafety = null;
+        this.batchProtectionRequired = true;
+        this.lastStorageProtection = null;
         this.source = null;
         this.loopPromise = null;
         this.restartTimer = null;
+        this.taskSupervisor = new TaskSupervisor({ name: `${botId}:collector-b5:tasks`, logger, historyLimit: 8, delay });
+        this.restartSupervisor = this.taskSupervisor; // Compatibility alias for diagnostics/tests.
         this.unsubscribers = [];
-        this.skyReadyGenerations = new Set();
         this.unhandledRetryCount = 0;
         this.lastUnhandledPhase = null;
         this.lastActivityLogKey = null;
         this.lastRemainingStepsLog = null;
+        this.leaseSession = new ModeLeaseSession({
+            modeId: MODE_ID,
+            modeCoordinator,
+            requestedResources: ['primary-mode'],
+            logger
+        });
     }
 
     async initialize() {
+        if (this.unsubscribers.length > 0) return;
         this.unsubscribers.push(
-            this.eventBus.on('skyblock:auto-join:succeeded', event => {
-                if (event.botId !== this.botId) return;
-                this.skyReadyGenerations.add(event.connectionGeneration);
-                const dailySky = this.dailyRecovery.state('sky');
-                if (dailySky.ready && dailySky.due) {
-                    this.lastSkyDailyRecoveryDate = dailySky.dateKey;
-                }
-            }),
+            this.modeCoordinator.onChange(change => this.#handleCoordinatorChange(change)),
             this.eventBus.on('connection:ended', event => {
                 if (event.botId !== this.botId) return;
-                this.skyReadyGenerations.delete(event.connectionGeneration);
+                const generation = normalizeConnectionGeneration(event);
+                if (!this.#isCurrentGeneration(generation, false)) return;
+                this.preparedGeneration = null;
+                this.batchProtectionRequired = true;
                 if (this.enabled && !this.paused) this.phase = 'WAITING_CONNECTION';
             })
         );
@@ -94,15 +120,25 @@ class CollectorB5ModeService {
     async start() {}
 
     async enable() {
+        let acquiredLease = null;
         try {
             if (!this.config.enabled) {
                 return Result.fail(Status.NOT_READY, 'Collector+B5 mode is disabled by config.');
             }
             this.#requirePickupLocation();
             if (this.enabled) {
+                if (!this.#hasModeLease()) {
+                    return Result.fail(Status.BUSY, 'Collector+B5 mode lease is no longer current.', null, {
+                        owner: this.leaseSession.owner()
+                    });
+                }
                 if (this.paused) return this.resume();
                 return Result.ok(this.status(), { alreadyEnabled: true });
             }
+
+            const acquired = this.leaseSession.acquire({ reason: 'Collector+B5 mode enabled.' });
+            if (!acquired.success) return acquired;
+            acquiredLease = acquired.data;
 
             this.enabled = true;
             this.paused = false;
@@ -113,19 +149,25 @@ class CollectorB5ModeService {
             this.cycles = 0;
             this.b3Shortages = null;
             this.b5Progress = null;
-            this.storagePressure = null;
-            this.startupStorageSafetyDone = false;
-            this.startupStorageSafety = null;
+            this.batchProtectionRequired = true;
+            this.lastStorageProtection = null;
             this.unhandledRetryCount = 0;
             this.lastUnhandledPhase = null;
             this.lastActivityLogKey = null;
             this.lastRemainingStepsLog = null;
             this.failureBreaker.reset();
+            const targetDemand = this.skyblockReadiness?.requireTarget?.(this.skyTarget, { owner: MODE_ID, trigger: 'collector-b5-enabled' });
+            if (targetDemand?.success === false) throw targetDemand.error || new Error(targetDemand.message || 'Unable to request Sky target.');
+            this.batchProtectionRequired = true;
             this.#startLoop();
 
             this.#logActivity('B5: Bắt đầu.');
-            return Result.ok(this.status());
+            return Result.ok(this.status(), { leaseId: this.leaseSession.leaseId() });
         } catch (error) {
+            if (acquiredLease) this.#releaseModeLease();
+            this.enabled = false;
+            this.paused = false;
+            this.phase = 'OFF';
             return Result.fail(Status.INVALID_INPUT, error.message, error);
         }
     }
@@ -136,13 +178,16 @@ class CollectorB5ModeService {
         }
         if (this.paused) return Result.ok(this.status(), { alreadyPaused: true });
 
+        const leasePause = this.leaseSession.pause();
+        if (!leasePause.success) return leasePause;
+
         this.paused = true;
         this.phase = 'PAUSING';
-        this.#clearRestartTimer();
+        await this.#clearRestartTimer(reason);
         const activeSource = this.source;
         activeSource?.cancel(reason);
-        try { await this.movementManager.stop(); } catch {}
-        if (this.loopPromise) await this.loopPromise.catch(() => {});
+        try { await this.movementManager.stop(); } catch (error) { this.logger?.debug?.('Collector movement stop cleanup failed.', { error }); }
+        if (this.loopPromise) await this.loopPromise.catch(error => { this.logger?.debug?.('Collector loop cleanup observed a rejection.', { error }); });
         this.phase = 'PAUSED';
         this.#logActivity('B5: Tạm dừng.');
         this.eventBus?.emit('mode:collector-b5:paused', { botId: this.botId, reason });
@@ -157,39 +202,49 @@ class CollectorB5ModeService {
             if (!this.paused) return Result.ok(this.status(), { alreadyRunning: true });
             this.#requirePickupLocation();
 
+            const leaseResume = this.leaseSession.resume();
+            if (!leaseResume.success) return leaseResume;
+
             const pausedForError = ['PAUSED_ERROR', 'DEGRADED'].includes(this.phase);
             this.paused = false;
             this.lastError = null;
             if (pausedForError) this.failureBreaker.reset();
             this.phase = 'RESUMING';
+            const targetDemand = this.skyblockReadiness?.requireTarget?.(this.skyTarget, { owner: MODE_ID, trigger: 'collector-b5-resumed' });
+            if (targetDemand?.success === false) throw targetDemand.error || new Error(targetDemand.message || 'Unable to request Sky target.');
             this.#startLoop();
             this.#logActivity('B5: Chạy tiếp.');
             this.eventBus?.emit('mode:collector-b5:resumed', { botId: this.botId });
             return Result.ok(this.status());
         } catch (error) {
+            this.leaseSession.pause();
             return Result.fail(Status.INVALID_INPUT, error.message, error);
         }
     }
 
     async disable(reason = 'Collector+B5 mode disabled.') {
-        if (!this.enabled && !this.loopPromise) return Result.ok(this.status(), { alreadyDisabled: true });
-        this.enabled = false;
-        this.paused = false;
-        this.phase = 'STOPPING';
-        this.#clearRestartTimer();
-        this.source?.cancel(reason);
-        try { await this.movementManager.stop(); } catch {}
-        if (this.loopPromise) await this.loopPromise.catch(() => {});
-        this.phase = 'OFF';
-        this.preparedGeneration = null;
-        this.b3Shortages = null;
-        this.b5Progress = null;
-        this.storagePressure = null;
-        this.startupStorageSafetyDone = false;
-        this.startupStorageSafety = null;
-        this.failureBreaker.reset();
-        this.#logActivity('B5: Đã dừng.');
-        return Result.ok(this.status());
+        const alreadyDisabled = !this.enabled && !this.loopPromise;
+        try {
+            this.enabled = false;
+            this.paused = false;
+            this.phase = 'STOPPING';
+            await this.#clearRestartTimer(reason);
+            this.source?.cancel(reason);
+            try { await this.movementManager.stop(); } catch (error) { this.logger?.debug?.('Collector movement stop cleanup failed.', { error }); }
+            if (this.loopPromise) await this.loopPromise.catch(error => { this.logger?.debug?.('Collector loop cleanup observed a rejection.', { error }); });
+            this.phase = 'OFF';
+            this.skyblockReadiness?.releaseTarget?.(MODE_ID);
+            this.preparedGeneration = null;
+            this.b3Shortages = null;
+            this.b5Progress = null;
+            this.batchProtectionRequired = true;
+            this.lastStorageProtection = null;
+            this.failureBreaker.reset();
+            this.#logActivity('B5: Đã dừng.');
+        } finally {
+            this.#releaseModeLease();
+        }
+        return Result.ok(this.status(), alreadyDisabled ? { alreadyDisabled: true } : null);
     }
 
     reconfigure(nextConfig) {
@@ -216,8 +271,8 @@ class CollectorB5ModeService {
         return Object.freeze({
             enabled: this.config.enabled,
             teleportHomeOnEnable: this.config.teleportHomeOnEnable,
-            waitForSkyblockReady: this.config.waitForSkyblockReady,
-            skyblockReadyTimeoutMs: this.config.skyblockReadyTimeoutMs,
+            skyTarget: this.skyTarget,
+            b1Decompression: this.config.b1Decompression,
             pickupLocation: this.#pickupLocationOrNull(),
             arrivalRadius: this.config.arrivalRadius,
             reanchorRadius: this.config.reanchorRadius,
@@ -247,10 +302,16 @@ class CollectorB5ModeService {
             craftLoopDelayMs: this.config.craftLoopDelayMs,
             b3Shortages: this.enabled ? this.b3Shortages : null,
             b5Progress: this.enabled ? b5Progress : null,
-            storagePressure: this.enabled ? this.storagePressure : null,
-            startupStorageSafetyDone: this.enabled ? this.startupStorageSafetyDone : false,
-            startupStorageSafety: this.enabled ? this.startupStorageSafety : null,
-            activity: this.#activityText(automationProgress, b5Progress),
+            skyTarget: this.skyTarget,
+            batchProtectionRequired: this.enabled ? this.batchProtectionRequired : false,
+            storageProtection: this.enabled ? this.lastStorageProtection : null,
+            activity: this.statusPresenter.activity({
+                enabled: this.enabled,
+                paused: this.paused,
+                phase: this.phase,
+                automationProgress,
+                b5Progress
+            }),
             remainingSteps: Number.isFinite(Number(b5Progress?.remainingStages)) ? Math.max(0, Number(b5Progress.remainingStages)) : null,
             startedAt: this.startedAt,
             dailyRecovery: {
@@ -263,37 +324,51 @@ class CollectorB5ModeService {
             lastErrorDetail: this.lastError ? this.#diagnostic(this.lastError) : null,
             unhandledRetryCount: this.unhandledRetryCount,
             lastUnhandledPhase: this.lastUnhandledPhase,
-            failureBudget: this.failureBreaker.snapshot()
+            failureBudget: this.failureBreaker.snapshot(),
+            modeLease: this.leaseSession.status()
         });
     }
 
     async stop() {
         await this.disable('Runtime stopping.');
         for (const unsubscribe of this.unsubscribers.splice(0)) unsubscribe();
-        this.skyReadyGenerations.clear();
     }
 
     async destroy() {
         await this.stop();
+        await this.taskSupervisor.close('Collector+B5 destroyed.');
     }
 
     #startLoop() {
         if (this.loopPromise) return;
-        this.#clearRestartTimer();
-        const source = new CancellationSource();
-        this.source = source;
+        if (!this.#hasModeLease()) {
+            this.#handleLostLease('Collector+B5 cannot start without its current mode lease.');
+            return;
+        }
+        void this.#clearRestartTimer('Collector loop started.');
         let restartAfterUnhandled = false;
         let restartExpectedWait = false;
         let retryDelayMs = this.config.errorRetryMs;
-
-        this.loopPromise = this.#run(source.token)
-            .catch(async error => {
-                const classification = classifyRuntimeResult({ error, token: source.token });
-                if (classification.kind === 'TOKEN_CANCELLED') return;
+        let loopToken = null;
+        const handle = this.taskSupervisor.start('loop', async ({ cancellationToken }) => {
+            loopToken = cancellationToken;
+            try {
+                return await this.#run(cancellationToken);
+            } catch (error) {
+                const classification = classifyRuntimeResult({ error, token: cancellationToken });
+                if (classification.kind === 'TOKEN_CANCELLED') throw error;
                 if (classification.kind === 'EXPECTED_CANCEL' || classification.kind === 'WAIT') {
                     this.lastError = null;
                     this.phase = 'COLLECTING';
-                    await this.delay(this.config.pollIntervalMs, { cancellationToken: source.token });
+                    await this.delay(this.config.pollIntervalMs, { cancellationToken });
+                    restartAfterUnhandled = this.enabled && !this.paused;
+                    restartExpectedWait = true;
+                    retryDelayMs = 0;
+                    return;
+                }
+
+                if (classification.kind === 'STALE') {
+                    await this.#handleStaleBoundary(cancellationToken);
                     restartAfterUnhandled = this.enabled && !this.paused;
                     restartExpectedWait = true;
                     retryDelayMs = 0;
@@ -319,16 +394,25 @@ class CollectorB5ModeService {
                     this.preparedGeneration = null;
                 }
 
-                try { await this.movementManager.stop(); } catch {}
-                if (this.#isStorageBoundaryPhase(failedPhase)) {
-                    await this.#stabilizeStorageBoundary(source.token, `unhandled-${failedPhase.toLowerCase()}`, { bestEffort: true });
-                }
+                try { await this.movementManager.stop(); } catch (cleanupError) { this.logger?.debug?.('Collector movement stop cleanup failed.', { error: cleanupError }); }
 
                 this.logger?.error?.(
                     `B5: Lỗi ${diagnostic.code || 'UNKNOWN'}${diagnostic.step ? ` tại ${diagnostic.step}` : ''} — ${errorMessage}`,
                     { code: diagnostic.code || 'UNKNOWN', step: diagnostic.step || null }
                 );
                 this.#emitFailure(errorMessage, error, diagnostic, failedPhase, retryDelayMs, { unhandled: true });
+            }
+        }, { metadata: { kind: 'main-loop' } });
+        const source = Object.freeze({
+            get token() { return loopToken; },
+            cancel: reason => handle.cancel(reason)
+        });
+        this.source = source;
+
+        this.loopPromise = handle.promise
+            .catch(error => {
+                if (source.token?.isCancelled || error?.code === 'CANCELLED') return;
+                throw error;
             })
             .finally(() => {
                 if (this.source === source) this.source = null;
@@ -344,11 +428,16 @@ class CollectorB5ModeService {
                         });
                         return;
                     }
-                    this.restartTimer = setTimeout(() => {
-                        this.restartTimer = null;
+                    const restartDelayMs = Math.max(50, retryDelayMs);
+                    const handle = this.taskSupervisor.start('restart', async ({ cancellationToken }) => {
+                        await this.delay(restartDelayMs, { cancellationToken });
+                        if (this.restartTimer === handle) this.restartTimer = null;
                         if (this.enabled && !this.paused && !this.loopPromise) this.#startLoop();
-                    }, Math.max(50, retryDelayMs));
-                    this.restartTimer.unref?.();
+                    }, { metadata: { phase: this.phase, retryDelayMs: restartDelayMs } });
+                    this.restartTimer = handle;
+                    handle.promise.catch(error => {
+                        if (error?.code !== 'CANCELLED') this.logger?.debug?.('Collector supervised restart ended with error.', { error });
+                    });
                 }
             });
     }
@@ -356,11 +445,15 @@ class CollectorB5ModeService {
     async #run(token) {
         while (this.enabled && !this.paused && !token.isCancelled) {
             token.throwIfCancelled();
+            if (!this.#hasModeLease()) {
+                this.#handleLostLease('Collector+B5 mode lease was lost while running.');
+                return;
+            }
 
             const breakerPermit = this.failureBreaker.beforeAttempt();
             if (!breakerPermit.allowed) {
                 this.phase = 'DEGRADED';
-                try { await this.movementManager.stop(); } catch {}
+                try { await this.movementManager.stop(); } catch (error) { this.logger?.debug?.('Collector movement stop cleanup failed.', { error }); }
                 await this.delay(Math.max(50, breakerPermit.retryInMs), { cancellationToken: token });
                 continue;
             }
@@ -375,98 +468,42 @@ class CollectorB5ModeService {
             }
 
             const generation = this.context.getGeneration();
+            const cycleOptions = { cancellationToken: token, expectedGeneration: generation };
             if (this.preparedGeneration !== generation) {
                 await this.#prepareGeneration(generation, token);
+                this.#assertCycleGeneration(generation, 'prepare-generation-complete');
                 this.preparedGeneration = generation;
             }
 
-            // One-time safety gate for each explicit mode enable. It is not tied
-            // to connection generation, so reconnect/resume does not repeatedly
-            // sell the reserve. Before any normal conversion/crafting, trim only
-            // B1 families whose /kho coverage is above the configured ~3 B5
-            // reserve. Full coverage comes from /kho because `/kho sell` does not
-            // expose raw materials.
-            if (!this.startupStorageSafetyDone && typeof this.b1Materials?.startupTrimToReserve === 'function') {
-                this.phase = 'STARTUP_STORAGE_SAFETY';
-                this.#logActivity('B5: Kiểm tra an toàn B1 đầu phiên (reserve 3 B5).');
-                const startupSafety = await this.b1Materials.startupTrimToReserve({ cancellationToken: token });
-                if (!startupSafety.success) {
-                    await this.#handleResultFailure('Startup B1 reserve trim failed.', startupSafety, token);
+            // Storage Protection is a B5 batch boundary. It owns the only
+            // smelting/selling pass: fresh /kho -> smelt iron/gold -> compact
+            // all B1 -> trim surplus to the configured B5 reserve. Once the
+            // batch begins, crafting may only expand/recompact B1; it must not
+            // sell or invoke protection again until the next completed B5.
+            if (this.batchProtectionRequired) {
+                this.phase = 'STORAGE_PROTECTION';
+                this.#logActivity('B5: Đang bảo vệ kho trước đợt chế.');
+                const protectedStorage = await this.b1Materials.protectForB5Batch({
+                    ...cycleOptions,
+                });
+                this.#assertCycleGeneration(generation, 'storage-protection-complete');
+                if (!protectedStorage.success) {
+                    await this.#handleResultFailure('B5 storage protection failed.', protectedStorage, token);
                     continue;
                 }
-                this.startupStorageSafety = startupSafety.data || null;
-                this.startupStorageSafetyDone = true;
-                this.#logActivity('B5: An toàn B1 đầu phiên hoàn tất.');
+                this.lastStorageProtection = protectedStorage.data || null;
+                this.batchProtectionRequired = false;
+                this.#logActivity('B5: Bảo vệ kho hoàn tất.');
             }
 
-            // After the initial arrival, Collector+B5 stays on the pickup point.
-            // Crafting/checking happens in place; do not navigate away and back.
-
-            // /kho is continuously fed by NPCs. Capacity protection is a hard
-            // gate in front of crafting: if high-water is reached, stop all B5
-            // work and drain the buffer to low-water before touching /nung or
-            // starting a potentially long crafting chain.
-            if (typeof this.b1Materials?.inspectStoragePressure === 'function') {
-                const preflightPressure = await this.b1Materials.inspectStoragePressure({ cancellationToken: token });
-                if (preflightPressure?.success) this.storagePressure = preflightPressure.data || null;
-                if (preflightPressure?.success && preflightPressure.data?.protectionRequired === true) {
-                    // High-water can be caused by raw iron/gold too. Smelting is
-                    // capacity-neutral but makes that stock compactable, so it
-                    // is part of protection rather than ordinary crafting.
-                    this.phase = 'PREPROCESSING';
-                    this.#logActivity('B5: /kho cao, đang nung và bảo vệ kho.');
-                    const protectionPreprocess = await this.b1Materials.preprocessForCraft({ cancellationToken: token });
-                    if (!protectionPreprocess.success) {
-                        await this.#handleResultFailure('High-water B1 preprocessing failed.', protectionPreprocess, token);
-                        continue;
-                    }
-                    this.phase = 'MAINTENANCE';
-                    const protectedStorage = await this.#stabilizeStorageBoundary(token, 'preprocess-high-water');
-                    if (!protectedStorage.success) {
-                        await this.#handleResultFailure('Preprocess /kho protection failed.', protectedStorage, token);
-                        continue;
-                    }
-                    const pressure = protectedStorage.data?.pressure || this.storagePressure;
-                    if (pressure?.known && pressure?.protectionRequired === true) {
-                        // NPC input is still outrunning the drain. Never start a
-                        // craft pass while the buffer remains above high-water.
-                        await Timeout.delay(this.config.errorRetryMs, { cancellationToken: token });
-                        continue;
-                    }
-                }
-            }
-
-            // Continuous production: there is no B5 cooldown. Process raw B1,
-            // then always compact loose B1 to blocks and re-apply capacity
-            // protection before planning. This handles NPC input arriving as
-            // raw, loose material, or blocks.
-            this.phase = 'PREPROCESSING';
-            this.#logActivity('B5: Đang nung / đổi khối.');
-            const preprocessed = await this.b1Materials.preprocessForCraft({ cancellationToken: token });
-            if (!preprocessed.success) {
-                await this.#handleResultFailure('B1 preprocessing failed.', preprocessed, token);
-                continue;
-            }
-
-            this.phase = 'MAINTENANCE';
-            const stabilizedAfterPreprocess = await this.#stabilizeStorageBoundary(token, 'after-preprocess');
-            if (!stabilizedAfterPreprocess.success) {
-                await this.#handleResultFailure('Post-preprocess /kho stabilization failed.', stabilizedAfterPreprocess, token);
-                continue;
-            }
-            if (stabilizedAfterPreprocess.data?.pressure) {
-                this.storagePressure = stabilizedAfterPreprocess.data.pressure;
-            }
-            if (this.storagePressure?.known && this.storagePressure?.protectionRequired === true) {
-                // Protection could not outrun the continuous source this pass.
-                // Keep craft locked and retry storage protection first.
-                await Timeout.delay(this.config.errorRetryMs, { cancellationToken: token });
-                continue;
-            }
+            // Re-anchor only at a transaction boundary. GUI/crafting operations
+            // are never interrupted by movement.
+            await this.#reanchorIfNeeded(token, generation);
 
             this.phase = 'CHECKING';
             this.#logActivity('B5: Đang tính các bước còn lại.');
-            let inspection = await this.b5Planning.inspectAdditional(1);
+            let inspection = await this.b5Planning.inspectAdditional(1, cycleOptions);
+            this.#assertCycleGeneration(generation, 'planning-inspection-complete');
             if (!inspection.success) {
                 await this.#handleResultFailure('B5 planning inspection failed.', inspection, token);
                 continue;
@@ -474,43 +511,45 @@ class CollectorB5ModeService {
 
             this.#updateB3Shortages(inspection.data);
             this.#updateB5Progress(inspection.data);
-            let actionable = this.#hasActionableWork(inspection.data);
+            let actionable = this.workPolicy.hasActionableWork(inspection.data);
             this.#logRemainingSteps(inspection.data?.progress?.remainingStages);
 
             // B3 shortage is not a gate. If a cached plan looks idle while its
             // B3 target counts are already satisfied, refresh once so the new
             // B5>B4>B3>B2 priority logic can see any immediately craftable B4.
-            if (!actionable && this.#allB3Satisfied(inspection.data)) {
+            if (!actionable && this.workPolicy.allB3Satisfied(inspection.data)) {
                 const fresh = typeof this.b5Planning.inspectAdditionalFresh === 'function'
-                    ? await this.b5Planning.inspectAdditionalFresh(1)
-                    : await this.b5Planning.inspectAdditional(1, { fresh: true });
+                    ? await this.b5Planning.inspectAdditionalFresh(1, cycleOptions)
+                    : await this.b5Planning.inspectAdditional(1, { ...cycleOptions, fresh: true });
+                this.#assertCycleGeneration(generation, 'fresh-planning-inspection-complete');
                 if (fresh?.success) {
                     inspection = fresh;
                     this.#updateB3Shortages(inspection.data);
                     this.#updateB5Progress(inspection.data);
-                    actionable = this.#hasActionableWork(inspection.data);
+                    actionable = this.workPolicy.hasActionableWork(inspection.data);
                 }
             }
 
-            const pv2AllowsNewB2 = inspection.data?.personalVaultPressure?.allowNewIntermediates !== false;
-            const allowMaintenanceB2 = Boolean(this.storagePressure?.shouldConsumeB1) && pv2AllowsNewB2;
-
-            // Idle is always a storage boundary. Even at NORMAL pressure, never
-            // enter the material wait with loose ingots/dust/gems left in /kho.
-            // runMaintenance promotes any owned intermediate first, then compacts
-            // all B1 and only sells if the refreshed capacity actually requires it.
-            if (!actionable && typeof this.b5Automation?.runMaintenance === 'function') {
+            // Idle is not a selling/protection boundary. Maintenance is limited
+            // to already-created intermediates; Collector headroom is enforced
+            // only when B1 must be expanded for the active craft step.
+            const maintenanceNeeded = this.workPolicy.hasMaintenanceWork(inspection.data);
+            if (!actionable && maintenanceNeeded && typeof this.b5Automation?.runMaintenance === 'function') {
                 this.phase = 'MAINTENANCE';
                 const maintained = await this.b5Automation.runMaintenance({
-                    cancellationToken: token,
-                    allowNewB2: allowMaintenanceB2
+                    ...cycleOptions,
+                    allowNewB2: false,
+                    decompressionPolicy: 'guarded',
+                    decompressionMaxUsageRatio: this.config.b1Decompression.maxUsageRatio,
+                    requireKnownCapacity: this.config.b1Decompression.requireKnownCapacity
                 });
+                this.#assertCycleGeneration(generation, 'maintenance-complete');
                 if (!maintained.success) {
                     await this.#handleResultFailure('B5 storage maintenance failed.', maintained, token);
                     continue;
                 }
                 this.lastError = null;
-                await this.#refreshB3ShortagesAfterAutomation(token);
+                await this.#refreshB3ShortagesAfterAutomation(token, generation);
                 await Timeout.delay(this.config.pollIntervalMs, { cancellationToken: token });
                 continue;
             }
@@ -525,7 +564,13 @@ class CollectorB5ModeService {
             // B5 automation runs at the same pickup position.
             this.phase = 'CRAFTING';
             this.#logActivity('B5: Đang chế tạo.');
-            const automated = await this.b5Automation.runNext({ cancellationToken: token });
+            const automated = await this.b5Automation.runNext({
+                ...cycleOptions,
+                decompressionPolicy: 'guarded',
+                decompressionMaxUsageRatio: this.config.b1Decompression.maxUsageRatio,
+                requireKnownCapacity: this.config.b1Decompression.requireKnownCapacity
+            });
+            this.#assertCycleGeneration(generation, 'automation-complete');
             if (!automated.success) {
                 await this.#handleResultFailure('B5 automation failed.', automated, token);
                 continue;
@@ -533,9 +578,10 @@ class CollectorB5ModeService {
 
             this.lastError = null;
             if (!automated.data?.waitingForMaterials) this.failureBreaker.recordSuccess({ verified: true });
-            await this.#refreshB3ShortagesAfterAutomation(token);
+            await this.#refreshB3ShortagesAfterAutomation(token, generation);
             if (automated.data?.completedNewB5) {
                 this.cycles += 1;
+                this.batchProtectionRequired = true;
                 this.phase = 'CHECKING';
                 this.#logActivity('B5: Đã thành công x1 • kiểm tra lượt kế tiếp ngay.');
                 this.eventBus?.emit('mode:collector-b5:cycle-completed', {
@@ -593,15 +639,16 @@ class CollectorB5ModeService {
             dateKey: skyState.dateKey
         });
 
-        const joined = await this.skyblock.join(null, { cancellationToken: token });
-        if (!joined.success) {
-            await this.#handleResultFailure('Daily Sky recovery rejoin failed.', joined, token);
+        const expectedGeneration = this.context.getGeneration();
+        const demand = this.skyblockReadiness?.requireTarget?.(this.skyTarget, { owner: MODE_ID, trigger: 'daily-sky-rejoin' });
+        if (demand?.success === false) {
+            await this.#handleResultFailure('Daily Sky recovery demand failed.', demand, token);
             return true;
         }
-
-        const generation = this.context.getGeneration();
-        this.skyReadyGenerations.add(generation);
+        this.#assertCycleGeneration(expectedGeneration, 'daily-sky-rejoin-demanded');
         this.preparedGeneration = null;
+        this.batchProtectionRequired = true;
+        const generation = this.context.getGeneration();
         this.lastSkyDailyRecoveryDate = skyState.dateKey;
         this.lastError = null;
         this.logger?.info?.('Daily 03:00 Sky recovery rejoin succeeded; mode will resume from fresh server state.', {
@@ -620,7 +667,7 @@ class CollectorB5ModeService {
         if (this.dailyHoldLogKey === key) return;
         this.dailyHoldLogKey = key;
         this.logger?.warn?.(kind === 'sky'
-            ? 'Daily 03:00 Sky recovery hold active; Collector+B5 will wait 10 minutes.'
+            ? 'Daily 03:00 Sky recovery hold active; Collector+B5 will wait 5 minutes.'
             : 'Daily 05:00 server recovery hold active; Collector+B5 will wait for reconnect after 10 minutes.', {
             botId: this.botId,
             operation: 'CollectorB5ModeService',
@@ -635,39 +682,41 @@ class CollectorB5ModeService {
 
     async #prepareGeneration(generation, token) {
         this.phase = 'WAITING_SKYBLOCK';
-        if (this.config.waitForSkyblockReady) {
-            const deadline = Date.now() + this.config.skyblockReadyTimeoutMs;
-            while (!this.skyReadyGenerations.has(generation)) {
-                token.throwIfCancelled();
-                if (!this.context.has() || this.context.getGeneration() !== generation) return;
-                if (Date.now() >= deadline) {
-                    throw new Error(`Skyblock readiness was not observed for connection generation ${generation}.`);
-                }
-                await Timeout.delay(100, { cancellationToken: token });
-            }
+        const demand = this.skyblockReadiness?.requireTarget?.(this.skyTarget, { owner: MODE_ID, trigger: 'collector-b5-generation' });
+        if (demand?.success === false) throw demand.error || new Error(demand.message || 'Unable to request Sky target.');
+        while (!this.skyblockReadiness?.isGenerationReady?.(generation, this.skyTarget)) {
+            token.throwIfCancelled();
+            if (!this.context.has() || this.context.getGeneration() !== generation) return;
+            await Timeout.delay(100, { cancellationToken: token });
         }
 
         if (this.config.teleportHomeOnEnable) {
             this.phase = 'HOMING';
-            const home = await this.island.goHome();
+            const home = await this.movementFlow.returnHome({ cancellationToken: token, expectedGeneration: generation });
+            this.#assertCycleGeneration(generation, 'island-home-complete');
             if (!home.success) throw home.error || new Error(home.message || '/is failed.');
         }
 
         this.phase = 'MOVING_TO_PICKUP';
-        await this.movementManager.goTo(this.#requirePickupLocation(), {
-            timeoutMs: this.config.moveTimeoutMs,
-            radius: this.config.arrivalRadius,
-            cancellationToken: token
-        });
-        await this.movementManager.stop();
+        await this.movementFlow.moveToPickup(this.#requirePickupLocation(), { cancellationToken: token });
+        this.#assertCycleGeneration(generation, 'initial-pickup-movement-complete');
         this.phase = 'COLLECTING';
         this.#logActivity('B5: Đã tới điểm nhặt.');
     }
 
-    async #reanchorIfNeeded() {
-        // Intentionally disabled for normal Collector+B5 operation. The bot moves
-        // to pickupLocation once per connection generation, then remains there
-        // while collecting, checking and crafting B5.
+    async #reanchorIfNeeded(token, generation) {
+        token?.throwIfCancelled?.();
+        this.#assertCycleGeneration(generation, 'reanchor-check');
+        const target = this.#requirePickupLocation();
+        if (!this.movementFlow.needsReanchor(target)) return false;
+
+        this.phase = 'REANCHORING';
+        this.#logActivity('B5: Bị lệch điểm nhặt, đang quay lại.');
+        await this.movementFlow.moveToPickup(target, { cancellationToken: token });
+        this.#assertCycleGeneration(generation, 'reanchor-movement-complete');
+        this.phase = 'COLLECTING';
+        this.#logActivity('B5: Đã quay lại điểm nhặt.');
+        return true;
     }
 
     async #handleRecoverableFailure(message, error, token) {
@@ -683,6 +732,10 @@ class CollectorB5ModeService {
             await this.delay(this.config.pollIntervalMs, { cancellationToken: token });
             return;
         }
+        if (classification.kind === 'STALE') {
+            await this.#handleStaleBoundary(token);
+            return;
+        }
         const failedPhase = this.phase;
         const diagnostic = this.#diagnostic(error);
         if (['NOT_READY', 'WAITING_MATERIALS', 'NOT_ENOUGH_MATERIALS'].includes(diagnostic.code)) {
@@ -694,9 +747,6 @@ class CollectorB5ModeService {
         }
 
         this.lastError = error;
-        if (this.#isStorageBoundaryPhase(failedPhase)) {
-            await this.#stabilizeStorageBoundary(token, `recover-${failedPhase.toLowerCase()}`, { bestEffort: true });
-        }
         const postBoundary = classifyRuntimeResult({ error, token });
         if (postBoundary.kind === 'TOKEN_CANCELLED') {
             token?.throwIfCancelled?.();
@@ -706,6 +756,10 @@ class CollectorB5ModeService {
             this.lastError = null;
             this.phase = 'COLLECTING';
             await this.delay(this.config.pollIntervalMs, { cancellationToken: token });
+            return;
+        }
+        if (postBoundary.kind === 'STALE') {
+            await this.#handleStaleBoundary(token);
             return;
         }
         const failureState = this.failureBreaker.recordFailure({ retryable: diagnostic.retryable !== false });
@@ -720,11 +774,20 @@ class CollectorB5ModeService {
         this.#emitFailure(message, error, diagnostic, failedPhase, retryInMs);
         if (diagnostic.retryable === false) {
             this.paused = true;
-            try { await this.movementManager.stop(); } catch {}
+            try { await this.movementManager.stop(); } catch (error) { this.logger?.debug?.('Collector movement stop cleanup failed.', { error }); }
             return;
         }
-        if (failureState.state === 'OPEN') try { await this.movementManager.stop(); } catch {}
+        if (failureState.state === 'OPEN') try { await this.movementManager.stop(); } catch (error) { this.logger?.debug?.('Collector movement stop cleanup failed.', { error }); }
         await this.delay(Math.max(50, retryInMs), { cancellationToken: token });
+    }
+
+    async #handleStaleBoundary(token) {
+        this.lastError = null;
+        this.preparedGeneration = null;
+        this.batchProtectionRequired = true;
+        this.phase = 'WAITING_CONNECTION';
+        this.#logActivity('B5: Kết nối đã đổi, đang đồng bộ lại.');
+        await this.delay(this.config.pollIntervalMs, { cancellationToken: token });
     }
 
     #emitFailure(message, error, diagnostic, phase, retryInMs, extra = {}) {
@@ -774,6 +837,10 @@ class CollectorB5ModeService {
             await this.delay(this.config.pollIntervalMs, { cancellationToken: token });
             return;
         }
+        if (classification.kind === 'STALE') {
+            await this.#handleStaleBoundary(token);
+            return;
+        }
         await this.#handleRecoverableFailure(
             message,
             result?.error || new Error(result?.message || message),
@@ -781,51 +848,17 @@ class CollectorB5ModeService {
         );
     }
 
-    #clearRestartTimer() {
-        if (!this.restartTimer) return;
-        clearTimeout(this.restartTimer);
+    async #clearRestartTimer(reason = 'Collector restart cancelled.') {
+        const handle = this.restartTimer;
+        if (!handle) return;
         this.restartTimer = null;
-    }
-
-    #isStorageBoundaryPhase(phase) {
-        return ['PREPROCESSING', 'CHECKING', 'CRAFTING', 'MAINTENANCE'].includes(String(phase || ''));
-    }
-
-    async #stabilizeStorageBoundary(token, reason, { bestEffort = false } = {}) {
+        handle.cancel(reason);
         try {
-            token?.throwIfCancelled?.();
-            if (typeof this.b1Materials?.stabilizeStorage === 'function') {
-                const result = await this.b1Materials.stabilizeStorage({ cancellationToken: token });
-                if (result?.success && result.data?.pressure) this.storagePressure = result.data.pressure;
-                if (result?.success === false && !bestEffort) return result;
-                return result?.success === false
-                    ? { success: true, data: { skippedFailure: true, reason, original: result } }
-                    : (result || { success: true, data: { reason } });
-            }
-
-            if (typeof this.b1Materials?.compactAll === 'function') {
-                const compacted = await this.b1Materials.compactAll({ cancellationToken: token });
-                if (compacted?.success === false && !bestEffort) return compacted;
-            }
-            if (typeof this.b1Materials?.inspectStoragePressure === 'function') {
-                const pressure = await this.b1Materials.inspectStoragePressure({ cancellationToken: token });
-                if (pressure?.success) this.storagePressure = pressure.data || null;
-                if (pressure?.success && pressure.data?.nearFull === true && typeof this.b1Materials?.relieveStoragePressure === 'function') {
-                    const relieved = await this.b1Materials.relieveStoragePressure({ cancellationToken: token });
-                    if (relieved?.success === false && !bestEffort) return relieved;
-                    if (relieved?.success && relieved.data?.pressure) this.storagePressure = relieved.data.pressure;
-                }
-            }
-            return { success: true, data: { reason } };
+            await handle.promise;
         } catch (error) {
-            if (this.#isCancellation(error, token)) throw error;
-            this.logger?.warn?.('B5 storage boundary cleanup failed.', {
-                botId: this.botId,
-                reason,
-                message: error?.message || String(error)
-            });
-            if (bestEffort) return { success: true, data: { skippedFailure: true, reason, message: error?.message || String(error) } };
-            return { success: false, message: error?.message || String(error), error };
+            if (error?.code !== 'CANCELLED') {
+                this.logger?.debug?.('Collector restart cleanup observed an unexpected rejection.', { reason, error });
+            }
         }
     }
 
@@ -846,91 +879,22 @@ class CollectorB5ModeService {
         });
     }
 
-    #hasActionableWork(data) {
-        const progress = data?.progress || {};
-        if (progress.b5DirectReady) return true;
-        if (Number(progress.b4CraftableTotal || 0) > 0) return true;
-        if (Number(progress.b3PromotableTotal || 0) > 0) return true;
-        if (data?.fullPlan?.feasible && Array.isArray(data.finalSteps) && data.finalSteps.length > 0) return true;
-
-        return (data?.chains || []).some(chain => {
-            const b2Crafts = Number(chain?.b2Crafts || 0);
-            const b3Crafts = Number(chain?.b3Crafts || 0);
-            const planned = b2Crafts > 0 || b3Crafts > 0;
-            if (chain?.readyToReserve && planned) return true;
-
-            // Owned B2 is always worth compressing when a complete B3 group can
-            // be formed, even if the B5 planner says this B3 type is not missing.
-            const existingB2 = Number(chain?.vaultB2 || 0) + Number(chain?.inventoryB2 || 0);
-            if (Number(chain?.b3InputPerCraft || 0) > 0
-                && existingB2 >= Number(chain.b3InputPerCraft)) return true;
-
-            // Irreducible lower-tier inventory is still maintenance work: it is
-            // stored only after every possible higher-tier promotion has run.
-            return Boolean(chain?.compactableB1)
-                || Number(chain?.inventoryB2 || 0) > 0
-                || Number(chain?.inventoryB3 || 0) > 0;
-        });
-    }
-
-    #pressureNeedsMaintenance(pressure) {
-        return Boolean(pressure?.known && (pressure.shouldConsumeB1 || pressure.sellRequired || pressure.critical));
-    }
-
-    #hasMaintenanceWork(data) {
-        const progress = data?.progress || {};
-        if (Number(progress.b4CraftableTotal || 0) > 0) return true;
-        if (Number(progress.b3PromotableTotal || 0) > 0) return true;
-        return (data?.chains || []).some(chain => {
-            const existingB2 = Number(chain?.vaultB2 || 0) + Number(chain?.inventoryB2 || 0);
-            const b3InputPerCraft = Number(chain?.b3InputPerCraft || 0);
-            return (b3InputPerCraft > 0 && existingB2 >= b3InputPerCraft)
-                || Number(chain?.inventoryB2 || 0) > 0
-                || Number(chain?.inventoryB3 || 0) > 0;
-        });
-    }
-
-    #allB3Satisfied(data) {
-        const chains = Array.isArray(data?.chains) ? data.chains : [];
-        return chains.length > 0 && chains.every(chain =>
-            Number(chain?.b2Crafts || 0) <= 0 && Number(chain?.b3Crafts || 0) <= 0
-        );
-    }
-
     #updateB5Progress(data) {
-        const progress = data?.progress || null;
-        if (!progress) {
-            this.b5Progress = null;
-            return;
-        }
-        this.b5Progress = Object.freeze({
-            ...progress,
-            phase: this.phase,
-            updatedAt: new Date().toISOString()
-        });
+        this.b5Progress = this.statusPresenter.b5Progress(data, this.phase);
     }
 
     #updateB3Shortages(data) {
-        const chains = Array.isArray(data?.chains) ? data.chains : [];
-        const progressB3 = new Map((data?.progress?.b3 || []).map(entry => [entry.id, entry]));
-        this.b3Shortages = Object.freeze(chains.map(chain => {
-            const progress = progressB3.get(chain.b3Id) || {};
-            return Object.freeze({
-                b3Id: chain.b3Id,
-                b2Id: chain.b2Id,
-                missing: Math.max(0, Number(chain.b3Crafts || 0)),
-                vault: Math.max(0, Number(chain.vaultB3 || 0)),
-                inventory: Math.max(0, Number(chain.inventoryB3 || 0)),
-                ownedB2: Math.max(0, Number(progress.ownedB2 || 0)),
-                promotableFromOwnedB2: Math.max(0, Number(progress.promotableFromOwnedB2 || 0))
-            });
-        }));
+        this.b3Shortages = this.statusPresenter.b3Shortages(data);
     }
 
-    async #refreshB3ShortagesAfterAutomation(token) {
+    async #refreshB3ShortagesAfterAutomation(token, expectedGeneration) {
         try {
             token?.throwIfCancelled?.();
-            const refreshed = await this.b5Planning.inspectAdditional(1);
+            const refreshed = await this.b5Planning.inspectAdditional(1, {
+                cancellationToken: token,
+                expectedGeneration
+            });
+            this.#assertCycleGeneration(expectedGeneration, 'post-automation-refresh-complete');
             if (refreshed?.success) {
                 this.#updateB3Shortages(refreshed.data);
                 this.#updateB5Progress(refreshed.data);
@@ -941,6 +905,7 @@ class CollectorB5ModeService {
             });
         } catch (error) {
             if (token?.isCancelled) throw error;
+            this.#assertCycleGeneration(expectedGeneration, 'post-automation-refresh-error');
             this.logger?.debug?.('Could not refresh B3 shortage status after automation.', { botId: this.botId, error });
         }
     }
@@ -961,44 +926,60 @@ class CollectorB5ModeService {
         this.#logActivity(`B5: Còn ${normalized} bước.`);
     }
 
-    #activityText(automationProgress, b5Progress) {
-        if (!this.enabled) return 'Đã tắt';
-        if (this.paused) return 'Tạm dừng';
-        const step = automationProgress?.currentStep || null;
-        const kind = String(step?.kind || '').toUpperCase();
-        const state = String(automationProgress?.state || '').toUpperCase();
-        if (this.phase === 'CRAFTING' || automationProgress?.running) {
-            if (kind === 'B2' || state === 'CRAFTING_B2') return 'Đang chế B2';
-            if (kind === 'B3' || kind === 'B2/B3' || state === 'CRAFTING_B3' || state === 'CRAFTING_INTERMEDIATE') return 'Đang chế B3';
-            if (kind === 'B4' || state === 'CRAFTING_B4') return 'Đang chế B4';
-            if (kind === 'B5' || state === 'CRAFTING_B5') return 'Đang chế B5';
-            if (kind === 'DEPOSIT' || state === 'DEPOSITING') return 'Đang cất B5';
-            if (kind === 'VERIFY' || state === 'VERIFYING') return 'Đang xác nhận B5';
-            if (kind === 'CONVERT_BLOCKS') return 'Đang đổi khối';
-            if (kind === 'SELL') return 'Đang bán';
-            if (kind === 'STORE') return 'Đang cất nguyên liệu';
-            if (kind === 'PLAN') return 'Đang tính các bước còn lại';
-            return 'Đang chế tạo';
-        }
-        const byPhase = {
-            STARTING: 'Đang bắt đầu',
-            STARTUP_STORAGE_SAFETY: 'Đang cân B1 về reserve 3 B5',
-            RESUMING: 'Đang chạy tiếp',
-            WAITING_CONNECTION: 'Đang chờ kết nối',
-            WAITING_SKYBLOCK: 'Đang vào SkyBlock',
-            HOMING: 'Đang về đảo',
-            MOVING_TO_PICKUP: 'Đang đến điểm nhặt',
-            PREPROCESSING: 'Đang nung / đổi khối',
-            CHECKING: 'Đang tính các bước còn lại',
-            COLLECTING: 'Đang nhặt / chờ nguyên liệu',
-            MAINTENANCE: 'Đang bảo trì kho',
-            WAITING_RETRY: 'Đang thử lại',
-            DEGRADED: 'Đang backoff sau lỗi',
-            PAUSED_ERROR: 'Tạm dừng do lỗi',
-            DAILY_SERVER_RECOVERY_WAIT: 'Đang chờ server',
-            DAILY_SKY_RECOVERY_WAIT: 'Đang chờ vào lại SkyBlock'
-        };
-        return byPhase[this.phase] || (Number(b5Progress?.remainingStages) === 0 ? 'Đã thành công' : 'Đang chạy');
+    #isCurrentGeneration(generation, requireConnected = false) {
+        if (!Number.isInteger(generation) || generation <= 0) return false;
+        if (Number(this.context?.getGeneration?.()) !== generation) return false;
+        if (requireConnected && !this.context?.has?.()) return false;
+        return true;
+    }
+
+    #assertCycleGeneration(expectedGeneration, step) {
+        const expected = Number(expectedGeneration);
+        const current = Number(this.context?.getGeneration?.());
+        if (Number.isInteger(expected) && expected > 0 && this.context?.has?.() && current === expected) return;
+        throw new FlowError(`Collector+B5 connection generation changed during ${step}.`, {
+            code: 'COLLECTOR_STALE_GENERATION',
+            subsystem: 'collector-b5',
+            operation: 'CollectorB5ModeService',
+            step,
+            retryable: true,
+            details: { expectedGeneration: expected, currentGeneration: Number.isFinite(current) ? current : null }
+        });
+    }
+
+    #hasModeLease() {
+        return this.leaseSession.isHeld();
+    }
+
+    #releaseModeLease() {
+        const leaseId = this.leaseSession.leaseId();
+        if (!leaseId) return;
+        const released = this.leaseSession.release();
+        if (!released.success) this.logger?.warn?.('Collector+B5 mode lease release failed.', {
+            botId: this.botId,
+            leaseId,
+            message: released.message
+        });
+    }
+
+    #handleCoordinatorChange(change) {
+        if (!this.leaseSession.matchesRelease(change) || !this.enabled) return;
+        this.#handleLostLease('Collector+B5 mode lease was revoked.');
+    }
+
+    #handleLostLease(message) {
+        if (!this.enabled) return;
+        this.lastError = new FlowError(message, {
+            code: 'MODE_LEASE_LOST',
+            subsystem: 'mode-coordinator',
+            operation: 'CollectorB5ModeService',
+            step: 'lease-ownership',
+            retryable: false,
+            details: { botId: this.botId, modeId: MODE_ID, leaseId: this.leaseSession.leaseId() }
+        });
+        this.paused = true;
+        this.phase = 'PAUSED_ERROR';
+        this.source?.cancel(message);
     }
 
     #requirePickupLocation() {
@@ -1021,18 +1002,24 @@ class CollectorB5ModeService {
             if (!Number.isFinite(value) || value <= 0) throw new Error(`collectorB5.${key} must be positive`);
             return value;
         };
+        const maxUsageRatio = Number(config.b1Decompression?.maxUsageRatio ?? 0.8);
+        if (!Number.isFinite(maxUsageRatio) || maxUsageRatio <= 0 || maxUsageRatio > 1) {
+            throw new Error('collectorB5.b1Decompression.maxUsageRatio must be in (0, 1].');
+        }
         return Object.freeze({
             enabled: config.enabled !== false,
             teleportHomeOnEnable: config.teleportHomeOnEnable !== false,
-            waitForSkyblockReady: config.waitForSkyblockReady !== false,
-            skyblockReadyTimeoutMs: positive('skyblockReadyTimeoutMs', 30000),
             pickupLocation: Object.freeze({ ...(config.pickupLocation || {}) }),
             arrivalRadius: positive('arrivalRadius', 1.2),
             reanchorRadius: positive('reanchorRadius', 2.5),
             moveTimeoutMs: positive('moveTimeoutMs', 30000),
             pollIntervalMs: positive('pollIntervalMs', 15000),
             errorRetryMs: positive('errorRetryMs', 5000),
-            craftLoopDelayMs: positive('craftLoopDelayMs', 250)
+            craftLoopDelayMs: positive('craftLoopDelayMs', 250),
+            b1Decompression: Object.freeze({
+                maxUsageRatio,
+                requireKnownCapacity: config.b1Decompression?.requireKnownCapacity !== false
+            })
         });
     }
 }

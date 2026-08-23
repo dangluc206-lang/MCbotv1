@@ -1,0 +1,74 @@
+{
+  "commandKey": "storage",
+  "resourceAmountPatterns": [
+    "(?:dang\\s*co|so\\s*luong|amount)\\s*[:：]?\\s*(?<value>[\\d.,]+)"
+  ],
+  "allowStackCountFallback": false,
+  "capacityIndicator": {
+    "itemId": "storage_capacity",
+    "scanAllSlots": true,
+    "usedPatterns": [
+      "(?:da\\s*su\\s*dung|used)\\s*[:：]?\\s*(?<value>[\\d.,]+)"
+    ],
+    "freePatterns": [
+      "(?:dang\\s*trong|con\\s*trong|free)\\s*[:：]?\\s*(?<value>[\\d.,]+)"
+    ],
+    "limitPatterns": [
+      "(?:dung\\s*luong|suc\\s*chua|capacity|limit)\\s*[:：]?\\s*(?<value>[\\d.,]+)"
+    ],
+    "regex": "(?<used>[\\d.,]+)\\s*[/|]\\s*(?<limit>[\\d.,]+)",
+    "slot": 49,
+    "fallbackLimit": 800000
+  },
+  "sell": {
+    "enabled": true,
+    "commandKey": "storageSell",
+    "mode": "gui",
+    "resultDelayMs": 250,
+    "itemAliases": {
+      "cobblestone": "COBBLESTONE",
+      "coal": "COAL",
+      "redstone": "REDSTONE",
+      "lapis_lazuli": "LAPIS_LAZULI",
+      "iron_ingot": "IRON_INGOT",
+      "gold_ingot": "GOLD_INGOT",
+      "diamond": "DIAMOND",
+      "emerald": "EMERALD",
+      "coal_block": "COAL_BLOCK",
+      "redstone_block": "REDSTONE_BLOCK",
+      "lapis_block": "LAPIS_BLOCK",
+      "iron_block": "IRON_BLOCK",
+      "gold_block": "GOLD_BLOCK",
+      "diamond_block": "DIAMOND_BLOCK",
+      "emerald_block": "EMERALD_BLOCK"
+    },
+    "allowAll": false,
+    "fastDisposableSellAllIds": [
+      "lapis_block"
+    ],
+    "fastDisposableEmergencyCooldownMs": 300000,
+    "openSettleMs": 250,
+    "closeSettleMs": 180,
+    "updateTimeoutMs": 2500,
+    "replanEveryClicks": 8,
+    "startupReserveCoverage": 1.5,
+    "startupTrimEnabled": true,
+    "startupMaxClicks": 20000,
+    "openAfterCloseSettleMs": 1000,
+    "startupAllowSingle": false,
+    "pressureAllowSingle": false,
+    "blockOnly": true,
+    "startupStopCoverage": 1.75,
+    "startupCheckpointClicks": 512,
+    "startupMaxPasses": 6
+  },
+  "guiId": "storage",
+  "guiTimeoutMs": 5000,
+  "openSettleMs": 200,
+  "refreshSettleMs": 100,
+  "openAttempts": 3,
+  "retryDelayMs": 600,
+  "retryCloseSettleMs": 400,
+  "openAfterCloseSettleMs": 1000,
+  "closeConfirmTimeoutMs": 1000
+}

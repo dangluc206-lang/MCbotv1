@@ -2,6 +2,8 @@
 
 const TimeoutError = require('../shared/errors/TimeoutError');
 const FlowError = require('../shared/errors/FlowError');
+const ConnectionFailureSignalContract = require('./ConnectionFailureSignalContract');
+const ConnectionSuccessResultContract = require('./ConnectionSuccessResultContract');
 
 class ConnectionManager {
     constructor({
@@ -14,7 +16,8 @@ class ConnectionManager {
         eventBus = null,
         logger = null,
         attemptCoordinator = null,
-        readyTimeoutMs = 30000
+        readyTimeoutMs = 30000,
+        autoConnect = profile?.enabled
     }) {
         Object.assign(this, {
             botId,
@@ -26,19 +29,23 @@ class ConnectionManager {
             eventBus,
             logger,
             attemptCoordinator,
-            readyTimeoutMs
+            readyTimeoutMs,
+            autoConnect: Boolean(autoConnect)
         });
 
         this.connecting = null;
         this.stopping = false;
         this.clientCleanups = new Map();
         this.clientSignals = new WeakMap();
+        this.connectionSuccesses = new WeakMap();
+        this.attemptEpoch = 0;
+        this.currentAttempt = null;
     }
 
     async initialize() {}
 
     async start() {
-        if (!this.profile.enabled) {
+        if (!this.autoConnect) {
             this.eventBus?.emit('connection:disabled', { botId: this.botId });
             this.logger?.debug?.('Minecraft connection is disabled for bot profile.', {
                 botId: this.botId
@@ -70,6 +77,30 @@ class ConnectionManager {
         return this.connecting;
     }
 
+    async connectWithResult() {
+        const joinedExisting = this.context.has();
+        const joinedInFlight = Boolean(this.connecting);
+        const attemptEpochBefore = this.attemptEpoch;
+        const client = joinedInFlight ? await this.connecting : await this.connect();
+        const success = client && (typeof client === 'object' || typeof client === 'function')
+            ? this.connectionSuccesses.get(client)
+            : null;
+        const startedByInvocation = !joinedExisting
+            && !joinedInFlight
+            && success?.attemptEpoch > attemptEpochBefore;
+
+        return ConnectionSuccessResultContract.create({
+            client,
+            connectionGeneration: success?.connectionGeneration
+                ?? (client === this.context.get() ? this.context.getGeneration() : null),
+            attemptId: success?.attemptId ?? null,
+            attemptEpoch: success?.attemptEpoch ?? null,
+            startedByInvocation,
+            joinedExisting,
+            joinedInFlight
+        });
+    }
+
     async requestReconnect(reason = 'Reconnect requested by runtime capability.', { expectedGeneration = null } = {}) {
         if (this.stopping) return false;
         const currentGeneration = Number(this.context.getGeneration());
@@ -92,7 +123,7 @@ class ConnectionManager {
                 intentional: false,
                 synthetic: true,
                 reason: String(reason)
-            });
+            }, { scope: 'bot' });
             return false;
         }
         if (typeof client.end !== 'function') {
@@ -129,38 +160,60 @@ class ConnectionManager {
     }
 
     async #connect() {
+        const attemptEpoch = ++this.attemptEpoch;
+        const attemptId = `${this.botId}:connection-attempt:${attemptEpoch}`;
+        const attempt = Object.freeze({ attemptId, attemptEpoch });
+        this.currentAttempt = attempt;
         let attemptLease = null;
-        if (this.attemptCoordinator?.acquireTurn) {
-            attemptLease = await this.attemptCoordinator.acquireTurn({
-                botId: this.botId,
-                host: this.server.host,
-                port: this.server.port
-            });
-        } else if (this.attemptCoordinator?.waitTurn) {
-            await this.attemptCoordinator.waitTurn({
-                botId: this.botId,
-                host: this.server.host,
-                port: this.server.port
-            });
-        }
+        let leaseReleased = false;
+        let client = null;
+        let generation = null;
+        let stage = 'acquire-turn';
 
-        this.logger?.info?.('Connecting Minecraft bot.', {
+        const releaseLease = outcome => {
+            if (!attemptLease?.release || leaseReleased) return;
+            leaseReleased = true;
+            attemptLease.release(outcome);
+        };
+
+        this.eventBus?.emit('connection:attempt-started', {
             botId: this.botId,
-            host: this.server.host,
-            port: this.server.port,
-            username: this.profile.username,
-            auth: this.profile.auth ?? this.server.auth ?? 'offline',
-            version: this.profile.version !== undefined
-                ? this.profile.version
-                : (this.server.version ?? false)
+            attemptId,
+            attemptEpoch,
+            host: this.server.host ?? null,
+            port: this.server.port ?? null
         });
-        this.eventBus?.emit('connection:connecting', { botId: this.botId });
-
-        let client;
-        let generation;
-        let stage = 'create-client';
 
         try {
+            if (this.attemptCoordinator?.acquireTurn) {
+                attemptLease = await this.attemptCoordinator.acquireTurn({
+                    botId: this.botId,
+                    host: this.server.host,
+                    port: this.server.port
+                });
+            } else if (this.attemptCoordinator?.waitTurn) {
+                await this.attemptCoordinator.waitTurn({
+                    botId: this.botId,
+                    host: this.server.host,
+                    port: this.server.port
+                });
+            }
+
+            this.logger?.info?.('Connecting Minecraft bot.', {
+                botId: this.botId,
+                attemptId,
+                attemptEpoch,
+                host: this.server.host,
+                port: this.server.port,
+                username: this.profile.username,
+                auth: this.profile.auth ?? this.server.auth ?? 'offline',
+                version: this.profile.version !== undefined
+                    ? this.profile.version
+                    : (this.server.version ?? false)
+            });
+            this.eventBus?.emit('connection:connecting', { botId: this.botId, attemptId, attemptEpoch });
+
+            stage = 'create-client';
             client = this.connectionFactory.create(this.profile, this.server);
             stage = 'register-pathfinder';
             this.#registerPathfinder(client);
@@ -170,7 +223,9 @@ class ConnectionManager {
             this.#bindClientEvents(client, generation);
             this.eventBus?.emit('connection:client-attached', {
                 botId: this.botId,
-                connectionGeneration: generation
+                connectionGeneration: generation,
+                attemptId,
+                attemptEpoch
             });
 
             stage = 'wait-for-spawn';
@@ -183,38 +238,46 @@ class ConnectionManager {
                 throw new Error(`Connection ${generation} is no longer current for ${this.botId}`);
             }
 
+            this.connectionSuccesses.set(client, Object.freeze({
+                connectionGeneration: generation,
+                attemptId,
+                attemptEpoch
+            }));
             this.logger?.info?.('Minecraft bot spawned.', {
                 botId: this.botId,
-                connectionGeneration: generation
+                connectionGeneration: generation,
+                attemptId,
+                attemptEpoch
             });
             this.eventBus?.emit('connection:spawned', {
                 botId: this.botId,
-                connectionGeneration: generation
+                connectionGeneration: generation,
+                attemptId,
+                attemptEpoch
             });
-            attemptLease?.release?.({ outcome: 'success' });
-
+            releaseLease({ outcome: 'success' });
             return client;
         } catch (error) {
             const signals = client ? (this.clientSignals.get(client) || {}) : {};
             const failureClass = this.#classifyConnectionFailure(error, signals);
-            attemptLease?.release?.({ outcome: 'failure', failureClass });
+            releaseLease({ outcome: 'failure', failureClass });
 
-            if (client) {
+            const attachedGeneration = Number.isInteger(generation) && generation > 0 ? generation : null;
+            if (client && attachedGeneration !== null) {
                 this.#cleanupClient(client);
                 this.context.detach(client);
                 this.sessionManager.close(client);
             }
 
             const wrapped = FlowError.wrap(error, {
-                // Preserve stable lower-level error codes (notably TIMEOUT) so
-                // callers can classify failures without parsing messages. The flow
-                // step/action below provides the more specific connection context.
-                code: error?.code || 'CONNECTION_FAILED',
+                code: error?.code || (attachedGeneration === null ? 'CONNECTION_ATTEMPT_FAILED' : 'CONNECTION_FAILED'),
                 subsystem: 'connection', operation: 'ConnectionManager', step: stage,
                 action: 'connect Minecraft bot', resource: this.server.host,
                 details: {
                     botId: this.botId,
-                    connectionGeneration: generation ?? null,
+                    attemptId,
+                    attemptEpoch,
+                    connectionGeneration: attachedGeneration,
                     host: this.server.host,
                     port: this.server.port,
                     username: this.profile.username,
@@ -225,35 +288,66 @@ class ConnectionManager {
                     kickReason: signals.kickReason || null,
                     socketErrorCode: signals.errorCode || error?.code || null,
                     socketErrorMessage: signals.errorMessage || null,
-                    endReason: signals.endReason || null
+                    endReason: signals.endReason || null,
+                    failureSignal: {
+                        contract: ConnectionFailureSignalContract.contract,
+                        eventType: attachedGeneration === null ? 'connection:attempt-failed' : 'connection:failed',
+                        ownerScope: attachedGeneration === null ? 'attempt' : 'generation',
+                        attemptEpoch,
+                        connectionGeneration: attachedGeneration
+                    }
                 }
             });
 
             this.logger?.error?.('Minecraft bot failed to connect.', {
                 botId: this.botId,
-                connectionGeneration: generation,
+                attemptId,
+                attemptEpoch,
+                connectionGeneration: attachedGeneration,
                 code: wrapped.code,
                 step: wrapped.step,
                 action: wrapped.action,
                 error: wrapped
             });
-            this.eventBus?.emit('connection:failed', {
-                botId: this.botId,
-                connectionGeneration: generation,
-                error: wrapped,
-                diagnostic: wrapped.toDiagnostic()
-            });
+
+            if (attachedGeneration === null) {
+                // Pre-attach failures are owned by the immutable attempt identity,
+                // not by a fabricated connection generation.
+                this.eventBus?.emit('connection:attempt-failed', {
+                    botId: this.botId,
+                    attemptId,
+                    attemptEpoch,
+                    stage,
+                    retryable: wrapped.retryable !== false,
+                    failureClass,
+                    error: wrapped,
+                    diagnostic: wrapped.toDiagnostic()
+                });
+            } else {
+                this.eventBus?.emit('connection:failed', {
+                    botId: this.botId,
+                    connectionGeneration: attachedGeneration,
+                    attemptId,
+                    attemptEpoch,
+                    retryable: wrapped.retryable !== false,
+                    failureClass,
+                    error: wrapped,
+                    diagnostic: wrapped.toDiagnostic()
+                });
+            }
 
             try {
                 client?.end?.('connection failed');
             } catch (endError) {
                 this.logger?.debug?.('Failed to close rejected Minecraft client.', {
                     botId: this.botId,
+                    attemptId,
                     error: endError
                 });
             }
-
             throw wrapped;
+        } finally {
+            if (this.currentAttempt?.attemptId === attemptId) this.currentAttempt = null;
         }
     }
 
@@ -478,6 +572,20 @@ class ConnectionManager {
 
         if (this.connecting) {
             await Promise.allSettled([this.connecting]);
+        }
+
+        // stop() may race with a connect attempt that had not attached its
+        // client yet. Re-check after the in-flight promise settles so an
+        // operator disconnect can never leave a late client online.
+        const lateClient = this.context.get();
+        if (lateClient) {
+            try {
+                lateClient.end?.('runtime stopping');
+            } finally {
+                this.#cleanupClient(lateClient);
+                this.context.detach(lateClient);
+                this.sessionManager.close(lateClient);
+            }
         }
     }
 

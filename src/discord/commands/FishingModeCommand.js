@@ -1,10 +1,11 @@
 'use strict';
 
 class FishingModeCommand {
-    constructor({ botRegistry, config, allowedUserIds, logger = null }) {
+    constructor({ botRegistry, config, allowedUserIds, fleetControl = null, logger = null }) {
         this.botRegistry = botRegistry;
         this.config = config;
         this.allowedUserIds = new Set(allowedUserIds || []);
+        this.fleetControl = fleetControl;
         this.logger = logger;
     }
 
@@ -51,10 +52,20 @@ class FishingModeCommand {
         try {
             let result;
             if (action === 'on') {
-                if (!runtime.context.has()) throw new Error(`Bot chưa kết nối: ${botId}`);
-                result = await mode.enable();
+                if (this.fleetControl) {
+                    result = await this.fleetControl.requestMode(botId, 'fishing', {
+                        state: 'ACTIVE',
+                        source: 'discord-command'
+                    });
+                } else {
+                    if (!runtime.context.has()) throw new Error(`Bot chưa kết nối: ${botId}`);
+                    result = await mode.enable();
+                }
             } else if (action === 'off') {
-                result = await mode.disable('Disabled from Discord /fishmode.');
+                const intent = this.fleetControl?.intent?.(botId);
+                result = this.fleetControl && (intent?.desiredMode === 'fishing' || mode.status().enabled)
+                    ? await this.fleetControl.requestMode(botId, null, { source: 'discord-command' })
+                    : await mode.disable('Disabled from Discord /fishmode.');
             } else if (action === 'status') {
                 result = { success: true, data: mode.status() };
             } else {
@@ -63,7 +74,7 @@ class FishingModeCommand {
 
             if (!result.success) throw result.error || new Error(result.message || 'Fishing mode operation failed.');
             await interaction.reply({
-                content: this.#formatStatus(botId, result.data),
+                content: this.#formatStatus(botId, mode.status()),
                 ephemeral: this.config.ephemeral
             });
             this.logger?.info?.('Discord fishing mode command completed.', {

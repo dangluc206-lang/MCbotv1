@@ -53,3 +53,35 @@ test('RuntimeLogOutput filters console level and writes full JSONL file', () => 
     assert.equal(records[0].level, 'debug');
     assert.equal(records[1].meta.token, '[REDACTED]');
 });
+
+
+test('RuntimeLogOutput reports per-file retention deletion failures instead of hiding them', async () => {
+    const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'mcbot-log-retention-'));
+    const dir = path.join(temp, 'logs');
+    fs.mkdirSync(dir, { recursive: true });
+    const stale = path.join(dir, 'test-2020-01-01.jsonl');
+    fs.writeFileSync(stale, 'old');
+    const old = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    fs.utimesSync(stale, old, old);
+    const lines = [];
+    const consoleRef = { log: value => lines.push(value), warn: value => lines.push(value), error: value => lines.push(value), debug: value => lines.push(value) };
+    const originalRmSync = fs.rmSync;
+    fs.rmSync = target => {
+        if (target === stale) { const error = new Error('retention locked'); error.code = 'EBUSY'; throw error; }
+        return originalRmSync(target, { force: true });
+    };
+    const output = new RuntimeLogOutput({
+        baseDir: temp,
+        env: {},
+        consoleRef,
+        app: { logging: { file: { enabled: true, level: 'debug', directory: 'logs', prefix: 'test', retentionDays: 1 } } }
+    });
+    try {
+        await output.start();
+        assert.ok(lines.some(line => /could not remove retained file test-2020-01-01\.jsonl/i.test(String(line))));
+    } finally {
+        output.close();
+        fs.rmSync = originalRmSync;
+        originalRmSync(temp, { recursive: true, force: true });
+    }
+});

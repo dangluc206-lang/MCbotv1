@@ -3,972 +3,971 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const B1StorageMaterialService = require('../../../src/server-features/storage/B1StorageMaterialService');
+const KhoSellOperation = require('../../../src/server-features/storage/KhoSellOperation');
 
-function config() {
+function conversionConfig(overrides = {}) {
     return {
-        smeltingRecipeIds: ['raw_iron_to_iron'],
+        smeltingRecipeIds: ['raw_iron_to_iron', 'raw_gold_to_gold', 'cobblestone_to_stone'],
         resources: {
             cobblestone: { baseId: 'cobblestone', blockId: null, ratio: 1, sellId: 'cobblestone' },
             coal: { baseId: 'coal', blockId: 'coal_block', ratio: 9, sellId: 'coal_block' },
+            iron_ingot: { baseId: 'iron_ingot', blockId: 'iron_block', ratio: 9, sellId: 'iron_block' },
+            gold_ingot: { baseId: 'gold_ingot', blockId: 'gold_block', ratio: 9, sellId: 'gold_block' },
             diamond: { baseId: 'diamond', blockId: 'diamond_block', ratio: 9, sellId: 'diamond_block' }
+        },
+        ...overrides
+    };
+}
+
+function smeltingConfig(overrides = {}) {
+    return {
+        verificationAttempts: 3,
+        verificationRetryMs: 0,
+        recipes: {
+            raw_iron_to_iron: { input: 'raw_iron', output: 'iron_ingot' },
+            raw_gold_to_gold: { input: 'raw_gold', output: 'gold_ingot' },
+            cobblestone_to_stone: { input: 'cobblestone', output: 'stone' }
+        },
+        ...overrides
+    };
+}
+
+function recipeConfig() {
+    return {
+        super_alloy: {
+            outputAmount: 1,
+            inputs: { cobblestone: 16, coal: 16, iron_ingot: 64, gold_ingot: 64, diamond: 32 }
         }
     };
 }
 
-function snapshot(items) {
-    return { success: true, data: { items: { ...items } } };
+function snap(items, { used = null, limit = 800000, capturedAt = Date.now() } = {}) {
+    const capacity = used === null ? null : { used, limit, usageRatio: used / limit };
+    return { items: { ...items }, capacity, capturedAt };
 }
 
-test('effectiveItems expands block stock into B1-equivalent units', () => {
-    const service = new B1StorageMaterialService({
-        storage: {}, minerals: {}, smelting: {}, conversionConfig: config(),
-        smeltingConfig: { recipes: { raw_iron_to_iron: { input: 'raw_iron', output: 'iron_ingot' } } }
+function okSnapshot(items, meta = {}) {
+    return { success: true, data: snap(items, meta) };
+}
+
+function hardReserveState(overrides = {}) {
+    return {
+        cobblestone: 24,
+        coal_block: 3,
+        iron_block: 11,
+        gold_block: 11,
+        diamond_block: 6,
+        ...overrides
+    };
+}
+
+function makeService({ storage = {}, minerals = {}, smelting = {}, conversion = conversionConfig(), smeltingCfg = smeltingConfig(), recipes = recipeConfig(), now = Date.now } = {}) {
+    storage.config ||= { sell: { enabled: true, reserveCoverage: 1.5, allowSingle: false, allowAll: false, blockOnly: true } };
+    return new B1StorageMaterialService({
+        storage,
+        minerals,
+        smelting,
+        conversionConfig: conversion,
+        smeltingConfig: smeltingCfg,
+        recipeConfig: recipes,
+        logger: null,
+        now
     });
+}
+
+test('storage protection status exposes only the batch policy and reserve source', () => {
+    const service = makeService();
+    assert.deepEqual(service.status(), {
+        storageProtection: {
+            enabled: true,
+            sellingCapabilityEnabled: true,
+            reserveCoverage: 1.5,
+            sellQuantity: 64,
+            allowSingle: false,
+            smeltingRecipeIds: ['raw_iron_to_iron', 'raw_gold_to_gold']
+        }
+    });
+    assert.equal(service.status().storageProtection.storagePressure, undefined);
+});
+
+test('B5 smelting allowlist permanently excludes stone even if configured', () => {
+    const service = makeService();
+    assert.deepEqual(service.smeltingRecipeIds, ['raw_iron_to_iron', 'raw_gold_to_gold']);
+});
+
+test('effectiveItems expands compacted stock into B1-equivalent units', () => {
+    const service = makeService({ minerals: { isAvailable() { return true; } } });
     const items = service.effectiveItems({ coal: 3, coal_block: 10, diamond_block: 2 });
     assert.equal(items.coal, 93);
     assert.equal(items.diamond, 18);
 });
 
-test('ensureBaseAvailable converts block to base only when loose B1 is insufficient', async () => {
-    const reads = [snapshot({ coal: 2, coal_block: 20 }), snapshot({ coal: 182, coal_block: 0 })];
-    let converted = 0;
-    const service = new B1StorageMaterialService({
-        storage: { async read() { return reads.shift(); } },
-        minerals: { async toBase(id) { assert.equal(id, 'coal'); converted += 1; return { success: true, data: {} }; } },
-        smelting: {}, conversionConfig: config(),
-        smeltingConfig: { recipes: { raw_iron_to_iron: { input: 'raw_iron', output: 'iron_ingot' } } }
+test('effectiveItems does not count block stock when block-to-base capability is unavailable', () => {
+    const service = makeService({
+        minerals: { isAvailable(baseId, direction) { return !(baseId === 'coal' && direction === 'toBase'); } }
     });
-    const result = await service.ensureBaseAvailable('coal', 64);
-    assert.equal(result.success, true);
-    assert.equal(result.data.converted, true);
-    assert.equal(converted, 1);
+    const items = service.effectiveItems({ coal: 3, coal_block: 10, diamond_block: 2 });
+    assert.equal(items.coal, 3);
+    assert.equal(items.diamond, 18);
 });
 
-test('sellLargestStoredBlock sells only the largest compacted logical stock', async () => {
-    let soldId = null;
-    const service = new B1StorageMaterialService({
-        storage: {
-            async read() { return snapshot({ cobblestone: 200, coal_block: 800, diamond_block: 20 }); },
-            async sell(id, options = {}) { soldId = id; return { success: true, data: { sold: 800 } }; }
-        },
-        minerals: {}, smelting: {}, conversionConfig: config(),
-        smeltingConfig: { recipes: { raw_iron_to_iron: { input: 'raw_iron', output: 'iron_ingot' } } }
-    });
-    const result = await service.sellLargestStoredBlock();
-    assert.equal(result.success, true);
-    assert.equal(soldId, 'coal_block');
-    assert.equal(result.data.selected.logicalId, 'coal_block');
-});
-
-test('preprocess skips unavailable smelting option instead of failing the B5 loop', async () => {
+test('preprocessForCraft blocks the protection episode when required smelting option is unavailable', async () => {
     let smeltCalls = 0;
-    const service = new B1StorageMaterialService({
-        storage: { async read() { return snapshot({ raw_iron: 128, iron_ingot: 5 }); } },
-        minerals: {},
+    const service = makeService({
+        storage: { async read() { return okSnapshot({ raw_iron: 128, iron_ingot: 5 }); } },
         smelting: {
             async smelt(id) {
                 assert.equal(id, 'raw_iron_to_iron');
                 smeltCalls += 1;
                 return { success: true, data: { skipped: true, reason: 'option-unavailable' } };
             }
-        },
-        conversionConfig: config(),
-        smeltingConfig: { recipes: { raw_iron_to_iron: { input: 'raw_iron', output: 'iron_ingot' } } }
+        }
     });
 
     const result = await service.preprocessForCraft();
-    assert.equal(result.success, true);
+    assert.equal(result.success, false);
+    assert.equal(result.status, 'NOT_READY');
+    assert.equal(result.error.code, 'B1_B5_PROTECTION_SMELT_UNVERIFIED');
     assert.equal(smeltCalls, 1);
-    assert.equal(result.data.actions[0].skipped, true);
-    assert.equal(result.data.actions[0].reason, 'option-unavailable');
 });
 
-test('unavailable block to base conversion is treated as waiting, not an error', async () => {
-    const service = new B1StorageMaterialService({
-        storage: { async read() { return snapshot({ coal: 2, coal_block: 20 }); } },
-        minerals: {
-            isAvailable() { return true; },
-            async toBase() { return { success: true, data: { skipped: true, reason: 'option-unavailable' } }; }
-        },
-        smelting: {},
-        conversionConfig: config(),
-        smeltingConfig: { recipes: { raw_iron_to_iron: { input: 'raw_iron', output: 'iron_ingot' } } }
-    });
-
-    const result = await service.ensureBaseAvailable('coal', 64);
-    assert.equal(result.success, true);
-    assert.equal(result.data.ready, false);
-    assert.equal(result.data.reason, 'option-unavailable');
-    assert.equal(result.data.available, 2);
-});
-
-test('effectiveItems stops expanding blocks after toBase capability is known unavailable', () => {
-    const service = new B1StorageMaterialService({
-        storage: {},
-        minerals: { isAvailable(baseId, direction) { return !(baseId === 'coal' && direction === 'toBase'); } },
-        smelting: {},
-        conversionConfig: config(),
-        smeltingConfig: { recipes: { raw_iron_to_iron: { input: 'raw_iron', output: 'iron_ingot' } } }
-    });
-
-    const items = service.effectiveItems({ coal: 3, coal_block: 10, diamond_block: 2 });
-    assert.equal(items.coal, 3);
-    assert.equal(items.diamond, 18);
-});
-
-test('compact skips unavailable base to block conversion without failing cleanup', async () => {
-    const service = new B1StorageMaterialService({
-        storage: { async read() { return snapshot({ coal: 64, coal_block: 0 }); } },
-        minerals: { async toBlocks() { return { success: true, data: { skipped: true, reason: 'option-unavailable' } }; } },
-        smelting: {},
-        conversionConfig: config(),
-        smeltingConfig: { recipes: { raw_iron_to_iron: { input: 'raw_iron', output: 'iron_ingot' } } }
-    });
-
-    const result = await service.compact('coal');
-    assert.equal(result.success, true);
-    assert.equal(result.data.converted, false);
-    assert.equal(result.data.reason, 'option-unavailable');
-});
-
-
-test('smelting verification polls fresh /kho until telemetry reflects the completed smelt', async () => {
+test('smelting verification polls fresh /kho until telemetry reflects server state', async () => {
     const reads = [
-        snapshot({ raw_iron: 128, iron_ingot: 5 }),
-        snapshot({ raw_iron: 128, iron_ingot: 5 }),
-        snapshot({ raw_iron: 128, iron_ingot: 5 }),
-        snapshot({ raw_iron: 0, iron_ingot: 133 })
+        okSnapshot({ raw_iron: 128, iron_ingot: 5 }),
+        okSnapshot({ raw_iron: 128, iron_ingot: 5 }),
+        okSnapshot({ raw_iron: 0, iron_ingot: 133 })
     ];
     const refreshFlags = [];
-    const service = new B1StorageMaterialService({
+    const service = makeService({
         storage: {
             async read(options = {}) {
                 refreshFlags.push(Boolean(options.refresh));
-                return reads.shift() || snapshot({ raw_iron: 0, iron_ingot: 133 });
+                return reads.shift() || okSnapshot({ raw_iron: 0, iron_ingot: 133 });
             }
         },
-        minerals: {},
-        smelting: {
-            async smelt() { return { success: true, data: { skipped: false } }; }
-        },
-        conversionConfig: config(),
-        smeltingConfig: {
-            verificationAttempts: 5,
-            verificationRetryMs: 1,
-            recipes: { raw_iron_to_iron: { input: 'raw_iron', output: 'iron_ingot' } }
-        }
+        smelting: { async smelt() { return { success: true, data: { skipped: false } }; } }
     });
 
     const result = await service.preprocessForCraft();
     assert.equal(result.success, true);
     assert.equal(result.data.actions[0].afterInput, 0);
     assert.equal(result.data.actions[0].afterOutput, 133);
-    assert.equal(result.data.actions[0].verificationAttempt, 3);
-    assert.deepEqual(refreshFlags, [false, true, true, true]);
+    assert.equal(result.data.actions[0].verificationAttempt, 2);
+    assert.deepEqual(refreshFlags, [false, true, true]);
 });
 
-
-test('storage pressure exposes NORMAL/RISING/HIGH/CRITICAL thresholds for continuous supply protection', async () => {
-    const conversion = config();
-    conversion.storagePressure = {
-        watchRatio: 0.75,
-        highRatio: 0.85,
-        usedRatio: 0.90,
-        criticalRatio: 0.95,
-        growthHorizonMinutes: 1,
-        fastGrowthPerMinute: 0.05,
-        maxSalesPerPass: 3
-    };
-    const ratios = [0.50, 0.80, 0.86, 0.96];
-    const service = new B1StorageMaterialService({
+test('pure B5 unbounded decompression ignores /kho headroom ratio', async () => {
+    const state = { coal: 2, coal_block: 20 };
+    let converted = 0;
+    const service = makeService({
         storage: {
             async read() {
-                const usageRatio = ratios.shift();
-                return { success: true, data: { items: {}, capacity: { usageRatio, used: usageRatio * 1000, limit: 1000 } } };
-            }
-        },
-        minerals: {}, smelting: {}, conversionConfig: conversion,
-        smeltingConfig: { recipes: { raw_iron_to_iron: { input: 'raw_iron', output: 'iron_ingot' } } }
-    });
-
-    const levels = [];
-    for (let i = 0; i < 4; i += 1) levels.push((await service.inspectStoragePressure()).data);
-    assert.deepEqual(levels.map(item => item.level), ['NORMAL', 'RISING', 'HIGH', 'CRITICAL']);
-    assert.equal(levels[2].shouldConsumeB1, true);
-    assert.equal(levels[2].sellRequired, true);
-    assert.equal(levels[3].sellRequired, true);
-    assert.equal(levels[3].critical, true);
-});
-
-test('relieveStoragePressure sells in coarse bursts and re-reads /kho between bursts', async () => {
-    const conversion = config();
-    conversion.storagePressure = { watchRatio: 0.75, highRatio: 0.85, usedRatio: 0.90, criticalRatio: 0.95, maxSalesPerPass: 3 };
-    let reads = 0;
-    const sold = [];
-    const snapshots = [
-        { usageRatio: 0.96, items: { coal_block: 800, diamond_block: 300 } },
-        { usageRatio: 0.91, items: { coal_block: 0, diamond_block: 300 } },
-        { usageRatio: 0.70, items: { coal_block: 0, diamond_block: 0 } }
-    ];
-    const service = new B1StorageMaterialService({
-        storage: {
-            async read() {
-                reads += 1;
-                const next = snapshots.shift() || { usageRatio: 0.70, items: {} };
-                return { success: true, data: { items: next.items, capacity: { usageRatio: next.usageRatio, used: next.usageRatio * 1000, limit: 1000 } } };
-            },
-            async sell(id, options = {}) { sold.push(id); return { success: true, data: { id } }; }
-        },
-        minerals: {}, smelting: {}, conversionConfig: conversion,
-        smeltingConfig: { recipes: { raw_iron_to_iron: { input: 'raw_iron', output: 'iron_ingot' } } }
-    });
-
-    const result = await service.relieveStoragePressure();
-    assert.equal(result.success, true);
-    assert.deepEqual(sold, ['coal_block', 'coal_block', 'coal_block', 'diamond_block', 'diamond_block', 'diamond_block']);
-    assert.equal(reads, 3, 'full /kho should be read once per burst checkpoint, not once per click');
-    assert.equal(result.data.reason, 'low-water-reached');
-    assert.equal(result.data.pressure.nearFull, false);
-});
-
-
-test('craftableItems excludes block stock when decompression would cross the safe /kho ceiling', () => {
-    const conversion = config();
-    conversion.storagePressure = { highRatio: 0.85, decompressionMaxRatio: 0.85, requireKnownCapacityForDecompression: true };
-    const service = new B1StorageMaterialService({
-        storage: {},
-        minerals: { isAvailable() { return true; } },
-        smelting: {}, conversionConfig: conversion,
-        smeltingConfig: { recipes: { raw_iron_to_iron: { input: 'raw_iron', output: 'iron_ingot' } } }
-    });
-
-    const safe = service.craftableItems({
-        items: { coal: 2, coal_block: 10 },
-        capacity: { used: 500, limit: 1000, usageRatio: 0.5 }
-    });
-    assert.equal(safe.coal, 92);
-
-    const blocked = service.craftableItems({
-        items: { coal: 2, coal_block: 50 },
-        capacity: { used: 500, limit: 1000, usageRatio: 0.5 }
-    });
-    assert.equal(blocked.coal, 2);
-});
-
-test('ensureBaseAvailable refuses an all-block decompression that could overflow /kho', async () => {
-    const conversion = config();
-    conversion.storagePressure = { highRatio: 0.85, decompressionMaxRatio: 0.85, requireKnownCapacityForDecompression: true };
-    let toBaseCalls = 0;
-    const service = new B1StorageMaterialService({
-        storage: {
-            async read() {
-                return {
-                    success: true,
-                    data: {
-                        items: { coal: 2, coal_block: 50 },
-                        capacity: { used: 500, limit: 1000, usageRatio: 0.5 }
-                    }
-                };
+                return { success: true, data: snap(state, { used: 790000, limit: 800000 }) };
             }
         },
         minerals: {
-            async toBase() { toBaseCalls += 1; return { success: true, data: {} }; }
+            async toBase(id) {
+                assert.equal(id, 'coal');
+                converted += 1;
+                state.coal += state.coal_block * 9;
+                state.coal_block = 0;
+                return { success: true, data: {} };
+            }
+        }
+    });
+
+    const result = await service.ensureBaseAvailable('coal', 64, { decompressionPolicy: 'unbounded' });
+    assert.equal(result.success, true);
+    assert.equal(result.data.ready, true);
+    assert.equal(converted, 1);
+});
+
+test('Collector+B5 guarded decompression waits when projected /kho usage exceeds its own limit', async () => {
+    const service = makeService({
+        storage: {
+            async read() {
+                return { success: true, data: snap({ coal: 2, coal_block: 20 }, { used: 640000, limit: 800000 }) };
+            }
         },
-        smelting: {}, conversionConfig: conversion,
-        smeltingConfig: { recipes: { raw_iron_to_iron: { input: 'raw_iron', output: 'iron_ingot' } } }
+        minerals: { async toBase() { throw new Error('must not expand'); } }
+    });
+
+    const result = await service.ensureBaseAvailable('coal', 64, {
+        decompressionPolicy: 'guarded',
+        decompressionMaxRatioOverride: 0.8,
+        requireKnownCapacityOverride: true
+    });
+    assert.equal(result.success, true);
+    assert.equal(result.data.ready, false);
+    assert.equal(result.data.reason, 'unsafe-block-expansion');
+    assert.equal(result.data.expansion.maxRatio, 0.8);
+});
+
+test('Collector+B5 guarded decompression uses the mode-provided ratio, not a global pressure policy', async () => {
+    const state = { coal: 2, coal_block: 20 };
+    let converted = 0;
+    const service = makeService({
+        storage: {
+            async read() {
+                return { success: true, data: snap(state, { used: 600000, limit: 800000 }) };
+            }
+        },
+        minerals: {
+            async toBase() {
+                converted += 1;
+                state.coal += state.coal_block * 9;
+                state.coal_block = 0;
+                return { success: true, data: {} };
+            }
+        }
+    });
+
+    const result = await service.ensureBaseAvailable('coal', 64, {
+        decompressionPolicy: 'guarded',
+        decompressionMaxRatioOverride: 0.9,
+        requireKnownCapacityOverride: true
+    });
+    assert.equal(result.success, true);
+    assert.equal(result.data.ready, true);
+    assert.equal(converted, 1);
+});
+
+test('unavailable block-to-base conversion is waiting, not a fatal error', async () => {
+    const service = makeService({
+        storage: { async read() { return okSnapshot({ coal: 2, coal_block: 20 }); } },
+        minerals: { async toBase() { return { success: true, data: { skipped: true, reason: 'option-unavailable' } }; } }
     });
 
     const result = await service.ensureBaseAvailable('coal', 64);
     assert.equal(result.success, true);
     assert.equal(result.data.ready, false);
-    assert.equal(result.data.reason, 'unsafe-block-expansion');
-    assert.equal(result.data.expansion.projectedRatio > 0.85, true);
-    assert.equal(toBaseCalls, 0);
+    assert.equal(result.data.reason, 'option-unavailable');
 });
 
-test('stabilizeStorage sells high-water stock before attempting GUI compaction', async () => {
-    const conversion = config();
-    conversion.storagePressure = { watchRatio: 0.75, highRatio: 0.85, usedRatio: 0.90, criticalRatio: 0.95, maxSalesPerPass: 2 };
-    const calls = [];
-    const reads = [
-        snapshot({ coal: 64, coal_block: 0 }),
-        snapshot({ coal: 0, coal_block: 7 }),
-        { success: true, data: { items: { coal_block: 700 }, capacity: { usageRatio: 0.96, used: 960, limit: 1000 } } },
-        { success: true, data: { items: { coal_block: 700 }, capacity: { usageRatio: 0.96, used: 960, limit: 1000 } } },
-        { success: true, data: { items: {}, capacity: { usageRatio: 0.70, used: 700, limit: 1000 } } }
-    ];
-    const service = new B1StorageMaterialService({
-        storage: {
-            async read() { return reads.shift() || { success: true, data: { items: {}, capacity: { usageRatio: 0.70, used: 700, limit: 1000 } } }; },
-            async sell(id, options = {}) { calls.push(`sell:${id}`); return { success: true, data: { id } }; }
-        },
-        minerals: {
-            async toBlocks(id) { calls.push(`block:${id}`); return { success: true, data: {} }; }
-        },
-        smelting: {}, conversionConfig: conversion,
-        smeltingConfig: { recipes: { raw_iron_to_iron: { input: 'raw_iron', output: 'iron_ingot' } } }
-    });
-
-    // Limit this fixture to one resource so compactAll does not consume reads
-    // for unrelated resources.
-    service.resources = Object.freeze({ coal: service.resources.coal });
-    const result = await service.stabilizeStorage();
-    assert.equal(result.success, true);
-    assert.equal(calls[0], 'sell:coal_block');
-    assert.equal(calls.every(call => call.startsWith('sell:')), true, 'pressure sale must happen before any GUI compaction');
-    assert.equal(result.data.pressure.nearFull, false);
-});
-
-
-test('fast continuous growth can trigger proactive selling before current usage reaches 90%', async () => {
-    const conversion = config();
-    conversion.storagePressure = {
-        watchRatio: 0.75,
-        highRatio: 0.85,
-        usedRatio: 0.90,
-        criticalRatio: 0.95,
-        growthHorizonMinutes: 1,
-        fastGrowthPerMinute: 0.05
-    };
-    const service = new B1StorageMaterialService({
-        storage: {
-            async read() {
-                return { success: true, data: { items: { coal_block: 100 }, capacity: { usageRatio: 0.86, used: 860, limit: 1000 } } };
-            }
-        },
-        minerals: {}, smelting: {}, conversionConfig: conversion,
-        smeltingConfig: { recipes: { raw_iron_to_iron: { input: 'raw_iron', output: 'iron_ingot' } } }
-    });
-    service.lastPressureObservation = { usageRatio: 0.80, used: 800, at: Date.now() - 60_000 };
-
-    const result = await service.inspectStoragePressure();
-    assert.equal(result.success, true);
-    assert.equal(result.data.usageRatio < 0.90, true);
-    assert.equal(result.data.projectedRatio >= 0.90, true);
-    assert.equal(result.data.projectedSellRequired, true);
-    assert.equal(result.data.sellRequired, true);
-});
-
-
-test('relieveStoragePressure preserves the growth baseline long enough to perform a proactive sale', async () => {
-    const conversion = config();
-    conversion.storagePressure = {
-        watchRatio: 0.75,
-        highRatio: 0.85,
-        usedRatio: 0.90,
-        criticalRatio: 0.95,
-        growthHorizonMinutes: 1,
-        fastGrowthPerMinute: 0.05,
-        maxSalesPerPass: 2
-    };
-    const sold = [];
-    const snapshots = [
-        { usageRatio: 0.86, items: { coal_block: 100 } },
-        { usageRatio: 0.70, items: {} }
-    ];
-    const service = new B1StorageMaterialService({
-        storage: {
-            async read() {
-                const next = snapshots.shift() || { usageRatio: 0.70, items: {} };
-                return { success: true, data: { items: next.items, capacity: { usageRatio: next.usageRatio, used: next.usageRatio * 1000, limit: 1000 } } };
-            },
-            async sell(id, options = {}) { sold.push(id); return { success: true, data: { id } }; }
-        },
-        minerals: {}, smelting: {}, conversionConfig: conversion,
-        smeltingConfig: { recipes: { raw_iron_to_iron: { input: 'raw_iron', output: 'iron_ingot' } } }
-    });
-    service.lastPressureObservation = { usageRatio: 0.80, used: 800, at: Date.now() - 60_000 };
-
-    const result = await service.relieveStoragePressure();
-    assert.equal(result.success, true);
-    assert.deepEqual(sold, ['coal_block']);
-    assert.equal(result.data.pressure.nearFull, false);
-});
-
-
-test('high-water protection starts selling at 80% and drains to 70% low-water', async () => {
-    const conversion = config();
-    conversion.storagePressure = {
-        watchRatio: 0.70,
-        highRatio: 0.80,
-        usedRatio: 0.80,
-        lowWaterRatio: 0.70,
-        criticalRatio: 0.92,
-        maxSalesPerPass: 4
-    };
-    const sold = [];
-    const snapshots = [
-        { usageRatio: 0.81, items: { coal_block: 500, diamond_block: 300 } },
-        { usageRatio: 0.76, items: { coal_block: 0, diamond_block: 300 } },
-        { usageRatio: 0.69, items: { coal_block: 0, diamond_block: 0 } }
-    ];
-    const service = new B1StorageMaterialService({
-        storage: {
-            async read() {
-                const next = snapshots.shift() || { usageRatio: 0.69, items: {} };
-                return { success: true, data: { items: next.items, capacity: { usageRatio: next.usageRatio, used: next.usageRatio * 1000, limit: 1000 } } };
-            },
-            async sell(id, options = {}) { sold.push(id); return { success: true, data: { id } }; }
-        },
-        minerals: {}, smelting: {}, conversionConfig: conversion,
-        smeltingConfig: { recipes: {} }
-    });
-
-    const result = await service.relieveStoragePressure();
-    assert.equal(result.success, true);
-    assert.deepEqual(sold, [
-        'coal_block', 'coal_block', 'coal_block', 'coal_block',
-        'diamond_block', 'diamond_block', 'diamond_block', 'diamond_block'
-    ]);
-    assert.equal(result.data.pressure.usageRatio <= 0.70, true);
-    assert.equal(result.data.reason, 'low-water-reached');
-});
-
-test('sale priority uses stock relative to B5 consumption instead of raw block count alone', async () => {
-    const conversion = config();
-    conversion.storagePressure = {
-        highRatio: 0.80,
-        usedRatio: 0.80,
-        lowWaterRatio: 0.70,
-        maxSalesPerPass: 1,
-        maxSellBurstsPerPass: 1,
-        materialGrowthWeightMinutes: 0
-    };
-    const sold = [];
-    const service = new B1StorageMaterialService({
-        storage: {
-            async read() {
-                return {
-                    success: true,
-                    data: {
-                        // Coal has more blocks, but one target consumes 100 coal
-                        // versus only 10 diamond. Diamond therefore has more
-                        // target-coverage surplus and should be sold first.
-                        items: { coal_block: 1000, diamond_block: 200 },
-                        capacity: { usageRatio: 0.90, used: 900, limit: 1000 }
-                    }
-                };
-            },
-            async sell(id, options = {}) { sold.push(id); return { success: true, data: { id } }; }
-        },
-        minerals: {}, smelting: {}, conversionConfig: conversion,
-        smeltingConfig: { recipes: {} },
-        recipeConfig: {
-            target: { output: 'target', outputAmount: 1, inputs: { coal: 100, diamond: 10 } }
-        },
-        targetId: 'target'
-    });
-
-    const result = await service.relieveStoragePressure();
-    assert.equal(result.success, true);
-    assert.deepEqual(sold, ['diamond_block']);
-    assert.equal(result.data.actions[0].selected.baseId, 'diamond');
-    assert.equal(result.data.actions[0].selected.coverageB5 > 0, true);
-});
-
-test('positive net inflow raises sale priority when stock coverage is otherwise similar', async () => {
-    const conversion = config();
-    conversion.storagePressure = {
-        highRatio: 0.80,
-        usedRatio: 0.80,
-        lowWaterRatio: 0.70,
-        maxSalesPerPass: 1,
-        maxSellBurstsPerPass: 1,
-        materialGrowthWeightMinutes: 5
-    };
-    const sold = [];
-    const service = new B1StorageMaterialService({
-        storage: {
-            async read() {
-                return {
-                    success: true,
-                    data: {
-                        items: { coal_block: 100, diamond_block: 100 },
-                        capacity: { usageRatio: 0.90, used: 900, limit: 1000 }
-                    }
-                };
-            },
-            async sell(id, options = {}) { sold.push(id); return { success: true, data: { id } }; }
-        },
-        minerals: {}, smelting: {}, conversionConfig: conversion,
-        smeltingConfig: { recipes: {} },
-        recipeConfig: { target: { output: 'target', outputAmount: 1, inputs: { coal: 90, diamond: 90 } } },
-        targetId: 'target'
-    });
-    service.lastMaterialObservation = {
-        items: { coal: 50, diamond: 100 },
-        at: Date.now() - 60_000
-    };
-
-    const result = await service.relieveStoragePressure();
-    assert.equal(result.success, true);
-    assert.deepEqual(sold, ['coal_block']);
-    assert.equal(result.data.actions[0].selected.growthPerMinute > 0, true);
-});
-
-
-test('high-water sale ignores large loose stock and sells compressed block surplus only', async () => {
-    const conversion = config();
-    conversion.storagePressure = {
-        highRatio: 0.80, usedRatio: 0.80, lowWaterRatio: 0.70,
-        maxSalesPerPass: 1, maxSellBurstsPerPass: 1, materialGrowthWeightMinutes: 0
-    };
-    const sold = [];
-    const service = new B1StorageMaterialService({
-        storage: {
-            async read() {
-                return {
-                    success: true,
-                    data: {
-                        items: { diamond: 100000, diamond_block: 1, coal_block: 5000 },
-                        capacity: { usageRatio: 0.90, used: 900000, limit: 1000000 }
-                    }
-                };
-            },
-            async sell(id, options = {}) { sold.push(id); return { success: true, data: { id } }; }
-        },
-        minerals: {}, smelting: {}, conversionConfig: conversion, smeltingConfig: { recipes: {} },
-        recipeConfig: { target: { output: 'target', outputAmount: 1, inputs: { diamond: 32, coal: 32 } } },
-        targetId: 'target'
-    });
-
-    const result = await service.relieveStoragePressure();
-    assert.equal(result.success, true);
-    assert.deepEqual(sold, ['coal_block']);
-    assert.equal(result.data.actions[0].selected.logicalId, 'coal_block');
-});
-
-test('high-water sale still runs when later compaction would fail', async () => {
-    const conversion = config();
-    conversion.storagePressure = { highRatio: 0.80, usedRatio: 0.80, lowWaterRatio: 0.70, maxSalesPerPass: 2, maxProtectionPasses: 1 };
-    const calls = [];
-    const snapshots = [
-        { items: { coal_block: 500 }, capacity: { usageRatio: 0.90, used: 900, limit: 1000 } },
-        { items: { coal_block: 500 }, capacity: { usageRatio: 0.90, used: 900, limit: 1000 } },
-        { items: {}, capacity: { usageRatio: 0.69, used: 690, limit: 1000 } },
-        { items: { coal: 64 }, capacity: { usageRatio: 0.69, used: 690, limit: 1000 } },
-        { items: { coal: 64 }, capacity: { usageRatio: 0.69, used: 690, limit: 1000 } }
-    ];
-    const service = new B1StorageMaterialService({
-        storage: {
-            async read() { return { success: true, data: snapshots.shift() || { items: {}, capacity: { usageRatio: 0.69, used: 690, limit: 1000 } } }; },
-            async sell(id, options = {}) { calls.push(`sell:${id}`); return { success: true, data: { id } }; }
-        },
-        minerals: { async toBlocks(id) { calls.push(`block:${id}`); return { success: false, status: 'FAILED', message: 'GUI failed' }; } },
-        smelting: {}, conversionConfig: conversion, smeltingConfig: { recipes: {} }
-    });
-    service.resources = Object.freeze({ coal: service.resources.coal });
-
-    const result = await service.stabilizeStorage();
-    assert.equal(result.success, true);
-    assert.equal(calls[0], 'sell:coal_block');
-    assert.equal(result.data.passes[0].compacted.failures.length, 1);
-});
-
-
-
-test('block-only protection compacts loose stock under high pressure instead of selling loose', async () => {
-    const conversion = {
-        smeltingRecipeIds: [],
-        resources: { coal: { baseId: 'coal', blockId: 'coal_block', ratio: 9, sellId: 'coal_block' } },
-        storagePressure: { highRatio: 0.80, lowWaterRatio: 0.70, maxSalesPerPass: 2, maxSellBurstsPerPass: 1, maxProtectionPasses: 1 }
-    };
-    const state = { coal: 900, coal_block: 0 };
-    const sold = [];
-    let compactCalls = 0;
-    const storage = {
-        config: { sell: { startupReserveCoverage: 3, pressureAllowSingle: false } },
-        async read() {
-            const used = Number(state.coal || 0) + Number(state.coal_block || 0);
-            return { success: true, data: { items: { ...state }, capacity: { used, limit: 1000, usageRatio: used / 1000 } } };
-        },
-        async sell(id, options = {}) { sold.push({ id, ...options }); return { success: true, data: {} }; },
-        async closeSellGui() { return { success: true }; }
-    };
-    const service = new B1StorageMaterialService({
-        storage,
+test('compact converts loose B1 back to block form and verifies the result', async () => {
+    const state = { coal: 90, coal_block: 1 };
+    const service = makeService({
+        storage: { async read() { return { success: true, data: snap(state) }; } },
         minerals: {
             async toBlocks(id) {
                 assert.equal(id, 'coal');
-                compactCalls += 1;
-                const blocks = Math.floor(state.coal / 9);
-                state.coal -= blocks * 9;
-                state.coal_block += blocks;
+                state.coal_block += Math.floor(state.coal / 9);
+                state.coal %= 9;
+                return { success: true, data: {} };
+            }
+        }
+    });
+
+    const result = await service.compact('coal');
+    assert.equal(result.success, true);
+    assert.equal(result.data.converted, true);
+    assert.equal(state.coal, 0);
+    assert.equal(state.coal_block, 11);
+});
+
+test('protectForB5Batch runs fresh read -> iron/gold smelt -> compact -> reserve trim and never smelts stone', async () => {
+    const events = [];
+    const state = {
+        cobblestone: 24,
+        raw_iron: 64,
+        raw_gold: 64,
+        iron_ingot: 0,
+        gold_ingot: 0,
+        coal: 90,
+        coal_block: 100,
+        iron_block: 20,
+        gold_block: 20,
+        diamond: 0,
+        diamond_block: 10
+    };
+    const storage = {
+        config: { sell: { enabled: true, reserveCoverage: 1.5, allowSingle: true, allowAll: false, blockOnly: true } },
+        async closeSellGui() { events.push('close-sell'); },
+        async read(options = {}) {
+            events.push(options.forceReopen ? 'read:fresh' : 'read');
+            return { success: true, data: snap(state) };
+        },
+        async sell(id, { quantity }) {
+            events.push(`sell:${id}:${quantity}`);
+            state[id] = Math.max(0, Number(state[id] || 0) - Number(quantity));
+            return { success: true, data: { skipped: false, sold: quantity } };
+        }
+    };
+    const smelting = {
+        async smelt(id) {
+            events.push(`smelt:${id}`);
+            if (id === 'raw_iron_to_iron') {
+                state.iron_ingot += state.raw_iron;
+                state.raw_iron = 0;
+            } else if (id === 'raw_gold_to_gold') {
+                state.gold_ingot += state.raw_gold;
+                state.raw_gold = 0;
+            } else {
+                throw new Error(`unexpected smelt ${id}`);
+            }
+            return { success: true, data: { skipped: false } };
+        }
+    };
+    const minerals = {
+        isAvailable() { return true; },
+        async toBlocks(baseId) {
+            events.push(`compact:${baseId}`);
+            const resource = conversionConfig().resources[baseId];
+            if (resource?.blockId) {
+                const count = Math.floor(Number(state[baseId] || 0) / resource.ratio);
+                state[resource.blockId] = Number(state[resource.blockId] || 0) + count;
+                state[baseId] = Number(state[baseId] || 0) - count * resource.ratio;
+            }
+            return { success: true, data: {} };
+        }
+    };
+
+    const service = makeService({ storage, minerals, smelting });
+    const result = await service.protectForB5Batch();
+    assert.equal(result.success, true);
+    assert.equal(result.data.reserveCoverage, 1.5);
+
+    const smelts = events.filter(event => event.startsWith('smelt:'));
+    assert.deepEqual(smelts, ['smelt:raw_iron_to_iron', 'smelt:raw_gold_to_gold']);
+    assert.equal(events.some(event => event.includes('cobblestone_to_stone')), false);
+    assert.ok(events.indexOf('read:fresh') < events.indexOf('smelt:raw_iron_to_iron'));
+    assert.ok(events.indexOf('smelt:raw_gold_to_gold') < events.findIndex(event => event.startsWith('compact:')));
+    assert.ok(events.findIndex(event => event.startsWith('compact:')) < events.findIndex(event => event.startsWith('sell:')));
+
+    const finalCoverage = service.coverageSnapshot(result.data.finalSnapshot);
+    for (const family of Object.values(finalCoverage)) {
+        assert.ok(family.coverage >= 1.5 || family.effectiveB1 < family.requiredPerB5 * 1.5);
+        const selected = service.materialPolicy.selectReserveSaleAction(
+            result.data.finalSnapshot.items,
+            finalCoverage,
+            1.5,
+            new Set(),
+            {},
+            { allowSingle: true, minCoverageToSell: 1.5 }
+        );
+        assert.equal(selected, null, 'no family should still have sellable surplus above 1.5 B5');
+        break;
+    }
+});
+
+test('protectForB5Batch enforces hard 1.5 B5 reserve and does not need pass/burst/click/forecast fields', async () => {
+    const state = hardReserveState({ coal_block: 130 });
+    const service = makeService({
+        storage: {
+            config: { sell: { enabled: true, reserveCoverage: 9, allowSingle: true, blockOnly: true } },
+            async closeSellGui() {},
+            async read() { return { success: true, data: snap(state) }; },
+            async sell(id, { quantity }) {
+                state[id] -= Number(quantity);
                 return { success: true, data: { skipped: false } };
             }
         },
-        smelting: {}, conversionConfig: conversion, smeltingConfig: { recipes: {} },
-        recipeConfig: { target: { output: 'target', outputAmount: 1, inputs: { coal: 100 } } }, targetId: 'target'
+        minerals: { async toBlocks() { return { success: true, data: { skipped: true } }; } },
+        smelting: { async smelt() { return { success: true, data: { skipped: true } }; } }
     });
 
-    const result = await service.stabilizeStorage();
+    const result = await service.protectForB5Batch();
     assert.equal(result.success, true);
-    assert.deepEqual(sold, [], 'loose coal must never be a sell candidate');
-    assert.equal(compactCalls, 1);
-    assert.equal(state.coal, 0);
-    assert.equal(state.coal_block, 100);
-    assert.equal(result.data.pressure.usageRatio, 0.10);
+    assert.equal(result.data.reserveCoverage, 1.5);
+    assert.equal(state.coal_block, 66, '64-only sale keeps the final 63-block surplus remainder above the 3-block reserve');
 });
-test('startup trim uses /kho coverage including raw and stops at coarse 64-only reserve band', async () => {
-    const conversion = {
-        smeltingRecipeIds: ['raw_iron_to_iron'],
-        resources: {
-            iron_ingot: { baseId: 'iron_ingot', blockId: 'iron_block', ratio: 9, sellId: 'iron_block' },
-            diamond: { baseId: 'diamond', blockId: 'diamond_block', ratio: 9, sellId: 'diamond_block' }
-        },
-        storagePressure: {}
-    };
-    const state = { raw_iron: 100, iron_ingot: 20, iron_block: 100, diamond: 250 };
-    const sales = [];
-    let reads = 0;
+
+test('reconfigure keeps the hard 64-only sale and 1.5 B5 reserve contract', () => {
     const storage = {
-        config: { sell: { startupReserveCoverage: 3, startupTrimEnabled: true, startupMaxClicks: 1000, replanEveryClicks: 2 } },
-        async read() { reads += 1; return { success: true, data: { items: { ...state }, capacity: { used: 750, limit: 800000, usageRatio: 750 / 800000 } } }; },
-        async sell(id, { quantity }) { sales.push({ id, quantity }); state[id] = Math.max(0, Number(state[id] || 0) - Number(quantity)); return { success: true, data: { logicalId: id, quantity } }; },
-        async closeSellGui() { return { success: true }; }
+        config: { sell: { enabled: true, reserveCoverage: 1.5, allowSingle: true } },
+        reconfigure(next) { this.config = next; }
     };
-    const service = new B1StorageMaterialService({
-        storage,
-        minerals: {},
-        smelting: { async smelt() { throw new Error('raw should not need smelting when sellable surplus is enough'); } },
-        conversionConfig: conversion,
-        smeltingConfig: { recipes: { raw_iron_to_iron: { input: 'raw_iron', output: 'iron_ingot' } } },
-        recipeConfig: { target: { output: 'target', outputAmount: 1, inputs: { iron_ingot: 100, diamond: 100 } } },
-        targetId: 'target'
-    });
-
-    const result = await service.startupTrimToReserve();
-    assert.equal(result.success, true);
-    assert.equal(result.data.finalCoverage.iron_ingot.coverage, 4.44);
-    assert.equal(result.data.finalCoverage.diamond.coverage, 2.5);
-    assert.equal(sales.some(action => action.id === 'raw_iron'), false);
-    assert.deepEqual(sales, [{ id: 'iron_block', quantity: 64 }]);
-    assert.equal(sales.filter(action => action.quantity === 1).length, 0);
-    assert.equal(reads, 2, 'startup trim should read full /kho only at the beginning and final verification, not every sell batch');
+    const service = makeService({ storage });
+    const nextStorage = { sell: { enabled: true, reserveCoverage: 2, allowSingle: true } };
+    const status = service.reconfigure({ conversionConfig: conversionConfig(), storageConfig: nextStorage });
+    assert.equal(status.storageProtection.reserveCoverage, 1.5);
+    assert.equal(status.storageProtection.allowSingle, false);
 });
 
-test('startup trim ignores raw-only and loose-only surplus instead of converting them just to sell', async () => {
-    const conversion = {
-        smeltingRecipeIds: ['raw_iron_to_iron'],
-        resources: { iron_ingot: { baseId: 'iron_ingot', blockId: 'iron_block', ratio: 9, sellId: 'iron_block' } },
-        storagePressure: {}
-    };
-    const state = { raw_iron: 400, iron_ingot: 128, iron_block: 0 };
-    const sales = [];
-    let smelts = 0;
-    const storage = {
-        config: { sell: { startupReserveCoverage: 3, startupTrimEnabled: true, startupMaxClicks: 1000 } },
-        async read() { return { success: true, data: { items: { ...state }, capacity: { used: 528, limit: 800000, usageRatio: 528 / 800000 } } }; },
-        async sell(id, { quantity }) { sales.push({ id, quantity }); return { success: true, data: { logicalId: id, quantity } }; },
-        async closeSellGui() { return { success: true }; }
-    };
-    const service = new B1StorageMaterialService({
-        storage,
-        minerals: {},
-        smelting: { async smelt() { smelts += 1; return { success: true, data: { skipped: false } }; } },
-        conversionConfig: conversion,
-        smeltingConfig: { recipes: { raw_iron_to_iron: { input: 'raw_iron', output: 'iron_ingot' } } },
-        recipeConfig: { target: { output: 'target', outputAmount: 1, inputs: { iron_ingot: 100 } } },
-        targetId: 'target'
-    });
 
-    const result = await service.startupTrimToReserve();
-    assert.equal(result.success, true);
-    assert.equal(result.data.initialCoverage.iron_ingot.coverage, 5.28);
-    assert.equal(smelts, 0, 'startup trim must not smelt raw just to create a sellable loose form');
-    assert.deepEqual(sales, []);
-});
-
-test('simulation: slight surplus is accepted when another 64 sale would cross the 3-B5 reserve', async () => {
-    const conversion = {
-        smeltingRecipeIds: [],
-        resources: { coal: { baseId: 'coal', blockId: 'coal_block', ratio: 9 } },
-        storagePressure: {}
-    };
-    const state = { coal: 320, coal_block: 0 };
-    const sales = [];
-    const service = new B1StorageMaterialService({
+test('unverified required smelting stops protection before compact or sell with diagnostic evidence', async () => {
+    let compactCalls = 0;
+    let sellCalls = 0;
+    const service = makeService({
+        smeltingCfg: smeltingConfig({ verificationAttempts: 2, verificationRetryMs: 0 }),
         storage: {
-            config: { sell: { startupReserveCoverage: 3, startupTrimEnabled: true, startupAllowSingle: false } },
-            async read() { return { success: true, data: { items: { ...state }, capacity: { used: 320, limit: 800000, usageRatio: 0.0004 } } }; },
-            async sell(id, { quantity }) { sales.push({ id, quantity }); return { success: true, data: { afterAmount: state[id] } }; },
-            async closeSellGui() { return { success: true }; }
+            config: { sell: { enabled: true, reserveCoverage: 1.5, allowSingle: true, allowAll: false, blockOnly: true } },
+            async closeSellGui() { return { success: true }; },
+            async read() { return okSnapshot({ raw_iron: 64, iron_ingot: 0 }); },
+            async sell() { sellCalls += 1; return { success: true, data: {} }; }
         },
-        minerals: {}, smelting: {}, conversionConfig: conversion, smeltingConfig: { recipes: {} },
-        recipeConfig: { target: { output: 'target', outputAmount: 1, inputs: { coal: 100 } } }, targetId: 'target'
+        smelting: { async smelt() { return { success: true, data: { skipped: false } }; } },
+        minerals: { async toBlocks() { compactCalls += 1; return { success: true, data: {} }; } }
     });
-
-    const result = await service.startupTrimToReserve();
-    assert.equal(result.success, true);
-    assert.equal(result.data.finalCoverage.coal.coverage, 3.2);
-    assert.equal(sales.length, 0, 'do not use single-click fine tuning just to chase exactly 3.0');
+    const result = await service.protectForB5Batch({
+        expectedGeneration: 8,
+        batchId: 'batch-1', trigger: 'explicit-enable',
+        operationContext: { operationId: 'op-1', correlationId: 'corr-1', botId: 'bot-01', connectionGeneration: 8 }
+    });
+    assert.equal(result.success, false);
+    assert.equal(result.error.code, 'B1_B5_PROTECTION_SMELT_UNVERIFIED');
+    assert.equal(compactCalls, 0);
+    assert.equal(sellCalls, 0);
+    assert.equal(result.error.details.recipeId, 'raw_iron_to_iron');
+    assert.equal(result.error.details.attempts, 2);
+    assert.equal(result.error.details.expectedGeneration, 8);
+    assert.equal(result.error.details.operationId, 'op-1');
+    assert.equal(result.error.details.correlationId, 'corr-1');
 });
 
-test('simulation: loose and block arriving together are one family but selling is block-only', async () => {
-    const conversion = config();
-    conversion.storagePressure = {
-        highRatio: 0.80, lowWaterRatio: 0.70, maxSalesPerPass: 2, maxSellBurstsPerPass: 1
-    };
-    const sold = [];
-    const service = new B1StorageMaterialService({
-        storage: {
-            async read() { return { success: true, data: { items: { coal: 64, coal_block: 1000 }, capacity: { usageRatio: 0.90, used: 900, limit: 1000 } } }; },
-            async sell(id, { quantity }) { sold.push({ id, quantity }); return { success: true, data: {} }; },
-            async closeSellGui() { return { success: true }; }
-        },
-        minerals: {}, smelting: {}, conversionConfig: conversion, smeltingConfig: { recipes: {} },
-        recipeConfig: { target: { output: 'target', outputAmount: 1, inputs: { coal: 100 } } }, targetId: 'target'
-    });
-
-    const result = await service.relieveStoragePressure();
-    assert.equal(result.success, true);
-    assert.deepEqual(sold.map(entry => entry.id), ['coal_block', 'coal_block']);
-    assert.equal(sold.every(entry => entry.quantity === 64), true);
-});
-
-test('simulation: refill that outpaces the first sell burst escalates the next bounded burst instead of restarting the mode', async () => {
-    const conversion = config();
-    conversion.storagePressure = {
-        highRatio: 0.80, lowWaterRatio: 0.70,
-        maxSalesPerPass: 2, maxSellBurstsPerPass: 3, maxSellBurstClicks: 4,
-        sellBurstEscalationFactor: 2, minPressureImprovementRatio: 0.002
-    };
-    const checkpoints = [
-        { ratio: 0.90, coal: 5000 },
-        { ratio: 0.91, coal: 5200 }, // NPC added more than the first burst removed.
-        { ratio: 0.78, coal: 3500 },
-        { ratio: 0.69, coal: 2500 }
-    ];
+test('conversion unavailable during protection is a finite blocker and never opens sell', async () => {
+    let sells = 0;
     let reads = 0;
-    const sold = [];
-    const service = new B1StorageMaterialService({
+    const service = makeService({
         storage: {
+            config: { sell: { enabled: true, reserveCoverage: 1.5, allowSingle: true, allowAll: false, blockOnly: true } },
+            async closeSellGui() { return { success: true }; },
+            async read() { reads += 1; return okSnapshot({ coal: 90, coal_block: 0 }); },
+            async sell() { sells += 1; return { success: true, data: {} }; }
+        },
+        smelting: { async smelt() { throw new Error('no raw should be smelted'); } },
+        minerals: { async toBlocks(baseId) { if (baseId === 'coal') return { success: true, data: { skipped: true, reason: 'option-unavailable' } }; return { success: true, data: { skipped: true, reason: 'below-block-ratio' } }; } }
+    });
+    const result = await service.protectForB5Batch({ expectedGeneration: 3, batchId: 'batch-c' });
+    assert.equal(result.success, false);
+    assert.equal(result.error.code, 'B1_B5_PROTECTION_COMPACT_UNVERIFIED');
+    assert.equal(sells, 0);
+    assert.ok(reads < 20, 'conversion blocker must terminate without hot retry');
+});
+
+test('bounded sell episode never expands click budget when independently proven new input arrives after immutable baseline', async () => {
+    const state = hardReserveState({ coal_block: 131 });
+    let sells = 0;
+    const service = makeService({
+        storage: {
+            config: { sell: { enabled: true, reserveCoverage: 1.5, allowSingle: true, allowAll: false, blockOnly: true } },
+            async closeSellGui() { return { success: true }; },
             async read() {
-                reads += 1;
-                const next = checkpoints.shift() || { ratio: 0.69, coal: 2500 };
-                return { success: true, data: { items: { coal_block: next.coal }, capacity: { usageRatio: next.ratio, used: next.ratio * 1000, limit: 1000 } } };
+                // Inject new input only after every baseline action was independently
+                // verified. The final authoritative /kho read may classify this as
+                // deferred input without expanding the episode budget.
+                if (sells === 2 && !this.inflowInjected) {
+                    this.inflowInjected = true;
+                    state.coal_block += 2;
+                }
+                return okSnapshot(state);
             },
-            async sell(id, { quantity }) { sold.push({ id, quantity }); return { success: true, data: {} }; },
-            async closeSellGui() { return { success: true }; }
-        },
-        minerals: {}, smelting: {}, conversionConfig: conversion, smeltingConfig: { recipes: {} },
-        recipeConfig: { target: { output: 'target', outputAmount: 1, inputs: { coal: 100 } } }, targetId: 'target'
-    });
-
-    const result = await service.relieveStoragePressure();
-    assert.equal(result.success, true);
-    assert.equal(result.data.reason, 'low-water-reached');
-    assert.deepEqual(result.data.bursts.map(burst => burst.budget), [2, 4, 2]);
-    assert.equal(result.data.bursts[0].improvement < 0, true, 'first burst lost ground to continuous inflow');
-    assert.equal(reads, 4);
-    assert.equal(sold.length, 8);
-});
-
-test('simulation: continuous inflow can mask a 64-sale delta and the next decision uses the observed larger amount', async () => {
-    const conversion = config();
-    conversion.storagePressure = {
-        highRatio: 0.80, lowWaterRatio: 0.70, maxSalesPerPass: 2, maxSellBurstsPerPass: 1
-    };
-    const sold = [];
-    let saleCall = 0;
-    const service = new B1StorageMaterialService({
-        storage: {
-            async read() { return { success: true, data: { items: { coal_block: 1000 }, capacity: { usageRatio: 0.90, used: 900, limit: 1000 } } }; },
             async sell(id, { quantity }) {
-                saleCall += 1;
-                sold.push({ id, quantity });
-                // After the first click the GUI amount is higher, not lower,
-                // because NPC input arrived at the same time.
-                return { success: true, data: { afterAmount: saleCall === 1 ? 1100 : 1036 } };
+                sells += 1;
+                assert.equal(quantity, 64);
+                state[id] = Math.max(0, Number(state[id] || 0) - Number(quantity));
+                return { success: true, data: { skipped: false, verifiedSoldQuantity: Number(quantity) } };
+            }
+        },
+        minerals: { async toBlocks() { return { success: true, data: { skipped: true, reason: 'below-block-ratio' } }; } },
+        smelting: { async smelt() { throw new Error('no raw'); } }
+    });
+    const result = await service.protectForB5Batch({ expectedGeneration: 4, batchId: 'batch-flow', trigger: 'explicit-enable' });
+    assert.equal(result.success, true);
+    assert.equal(result.data.trimmed.clickBudget, 2, 'budget comes only from the 131-block baseline and 1.5 B5 reserve');
+    assert.equal(sells, 2, 'new inflow must not add 64-clicks to the current episode');
+    assert.ok(result.data.trimmed.deferredNewInput.coal_block > 0);
+    assert.equal(result.data.trimmed.completeForEpisode, true);
+});
+
+test('large 64-only budget resumes the same episode without repeating compact or absorbing new inflow', async () => {
+    const state = hardReserveState({ coal: 9, coal_block: 4162 });
+    const quantities = [];
+    let compactCalls = 0;
+    const service = makeService({
+        storage: {
+            config: { sell: { enabled: true, reserveCoverage: 1.5, allowSingle: false, allowAll: false, blockOnly: true } },
+            async closeSellGui() { return { success: true }; },
+            async read() { return okSnapshot(state); },
+            async sell(id, { quantity }) {
+                quantities.push(quantity);
+                state[id] -= quantity;
+                return { success: true, data: { skipped: false, verifiedSoldQuantity: quantity } };
+            }
+        },
+        minerals: {
+            async toBlocks(baseId) {
+                compactCalls += 1;
+                assert.equal(baseId, 'coal');
+                state.coal_block += 1;
+                state.coal = 0;
+                return { success: true, data: { skipped: false } };
+            }
+        },
+        smelting: { async smelt() { throw new Error('no raw input should be smelted'); } }
+    });
+    const common = {
+        expectedGeneration: 7,
+        batchId: 'batch-large',
+        trigger: 'explicit-enable',
+        episodeId: 'batch-large:storage-protection'
+    };
+
+    const first = await service.protectForB5Batch({
+        ...common,
+        operationContext: {
+            operationId: 'op-large-1', correlationId: common.episodeId,
+            botId: 'bot-01', connectionGeneration: 7, remainingMs: () => 1000000
+        }
+    });
+    assert.equal(first.success, true);
+    assert.equal(first.data.continuationRequired, true);
+    assert.equal(first.data.trimmed.sliceClicks, 64);
+    assert.equal(first.data.trimmed.actionsRemaining, 1);
+    assert.equal(compactCalls, 1);
+
+    state.coal_block += 64; // Must be deferred to the next B5 batch.
+
+    const second = await service.protectForB5Batch({
+        ...common,
+        operationContext: {
+            operationId: 'op-large-2', correlationId: common.episodeId,
+            botId: 'bot-01', connectionGeneration: 7, remainingMs: () => 1000000
+        }
+    });
+    assert.equal(second.success, true);
+    assert.equal(second.data.resumedSellEpisode, true);
+    assert.equal(second.data.continuationRequired, false);
+    assert.equal(second.data.completeForEpisode, true);
+    assert.equal(compactCalls, 1, 'continuation must not repeat the pre-baseline compaction boundary');
+    assert.equal(quantities.length, 65);
+    assert.ok(quantities.every(quantity => quantity === 64));
+    assert.equal(state.coal_block, 67, '3-block reserve plus 64 new-inflow blocks must remain');
+    assert.equal(second.data.trimmed.deferredNewInput.coal_block, 64);
+    assert.equal(second.data.trimmed.sellEvidenceCount, 65);
+    assert.equal(second.data.trimmed.sellEvidence.length, 32, 'large episodes keep bounded diagnostic evidence');
+});
+
+test('sub-64 surplus is retained and never emits a quantity-1 sale', async () => {
+    const state = hardReserveState({ coal_block: 10 });
+    const quantities = [];
+    const service = makeService({
+        storage: {
+            config: { sell: { enabled: true, reserveCoverage: 1.5, allowSingle: true, allowAll: false, blockOnly: true } },
+            async closeSellGui() { return { success: true }; },
+            async read() { return okSnapshot(state); },
+            async sell(_id, { quantity }) { quantities.push(quantity); return { success: true, data: { verifiedSoldQuantity: quantity } }; }
+        }
+    });
+    const result = await service.startupTrimToReserve({
+        initialSnapshot: snap(state), batchId: 'sub-64', episodeId: 'sub-64:episode'
+    });
+    assert.equal(result.success, true);
+    assert.equal(result.data.completeForEpisode, true);
+    assert.equal(result.data.clickBudget, 0);
+    assert.equal(result.data.retainedRemainderItems.coal_block, 7);
+    assert.deepEqual(quantities, []);
+});
+
+test('sell slice treats null operation remaining time as no root deadline', async () => {
+    const state = hardReserveState({ coal_block: 70 });
+    const quantities = [];
+    const service = makeService({
+        storage: {
+            config: { sell: { enabled: true, reserveCoverage: 1.5, allowSingle: false, allowAll: false, blockOnly: true } },
+            async closeSellGui() { return { success: true }; },
+            async read() { return okSnapshot(state); },
+            async sell(id, { quantity }) {
+                quantities.push(quantity);
+                state[id] = Math.max(0, Number(state[id] || 0) - Number(quantity));
+                return { success: true, data: { skipped: false, verifiedSoldQuantity: quantity } };
+            }
+        }
+    });
+    const result = await service.startupTrimToReserve({
+        initialSnapshot: snap(state), batchId: 'no-root-deadline', episodeId: 'no-root-deadline:episode',
+        expectedGeneration: 3,
+        operationContext: { operationId: 'no-root-deadline-1', connectionGeneration: 3, remainingMs: () => null }
+    });
+    assert.equal(result.success, true);
+    assert.equal(result.data.deadlineYielded, false);
+    assert.equal(result.data.completeForEpisode, true);
+    assert.deepEqual(quantities, [64]);
+});
+
+test('sell slice yields before the operation deadline and resumes without timeout', async () => {
+    const state = hardReserveState({ coal_block: 70 });
+    const quantities = [];
+    const service = makeService({
+        storage: {
+            config: { sell: { enabled: true, reserveCoverage: 1.5, allowSingle: false, allowAll: false, blockOnly: true } },
+            async closeSellGui() { return { success: true }; },
+            async read() { return okSnapshot(state); },
+            async sell(id, { quantity }) {
+                quantities.push(quantity);
+                state[id] -= quantity;
+                return { success: true, data: { skipped: false, verifiedSoldQuantity: quantity } };
+            }
+        }
+    });
+    const episodeId = 'deadline-yield:episode';
+    const first = await service.startupTrimToReserve({
+        initialSnapshot: snap(state), batchId: 'deadline-yield', episodeId,
+        expectedGeneration: 3,
+        operationContext: { operationId: 'deadline-1', connectionGeneration: 3, remainingMs: () => 20000 }
+    });
+    assert.equal(first.success, true);
+    assert.equal(first.data.continuationRequired, true);
+    assert.equal(first.data.deadlineYielded, true);
+    assert.equal(first.data.sliceClicks, 0);
+    assert.deepEqual(quantities, []);
+
+    const second = await service.startupTrimToReserve({
+        batchId: 'deadline-yield', episodeId, expectedGeneration: 3,
+        operationContext: { operationId: 'deadline-2', connectionGeneration: 3, remainingMs: () => 1000000 }
+    });
+    assert.equal(second.success, true);
+    assert.equal(second.data.completeForEpisode, true);
+    assert.deepEqual(quantities, [64]);
+});
+
+test('800000-item worst-case storage budget is capped to one 64-click slice', async () => {
+    const state = hardReserveState({ cobblestone: 800000 });
+    const quantities = [];
+    const service = makeService({
+        storage: {
+            config: { sell: { enabled: true, reserveCoverage: 1.5, allowSingle: false, allowAll: false, blockOnly: true } },
+            async closeSellGui() { return { success: true }; },
+            async read() { return okSnapshot(state, { used: 800000, limit: 800000 }); },
+            async sell(id, { quantity }) {
+                quantities.push(quantity);
+                state[id] -= quantity;
+                return { success: true, data: { skipped: false, verifiedSoldQuantity: quantity } };
+            }
+        }
+    });
+    const result = await service.startupTrimToReserve({
+        initialSnapshot: snap(state, { used: 800000, limit: 800000 }),
+        batchId: 'worst-capacity',
+        episodeId: 'worst-capacity:episode',
+        expectedGeneration: 9,
+        operationContext: { operationId: 'worst-1', connectionGeneration: 9, remainingMs: () => 3000000 }
+    });
+    assert.equal(result.success, true);
+    assert.equal(result.data.continuationRequired, true);
+    assert.equal(result.data.clickBudget, 12499);
+    assert.equal(result.data.sliceClicks, 64);
+    assert.equal(result.data.actionsRemaining, 12435);
+    assert.equal(result.data.retainedRemainderItems.cobblestone, 40);
+    assert.equal(quantities.length, 64);
+    assert.ok(quantities.every(quantity => quantity === 64));
+    service.discardProtectionEpisode('worst-capacity:episode');
+});
+
+test('episode-level unavailable sell candidate returns one finite blocker instead of retrying forever', async () => {
+    const state = hardReserveState({ coal_block: 131 });
+    let sells = 0;
+    const service = makeService({
+        storage: {
+            config: { sell: { enabled: true, reserveCoverage: 1.5, allowSingle: true, allowAll: false, blockOnly: true } },
+            async closeSellGui() { return { success: true }; },
+            async read() { return okSnapshot(state); },
+            async sell() { sells += 1; return { success: true, data: { skipped: true, reason: 'sell-entry-unavailable' } }; }
+        },
+        minerals: { async toBlocks() { return { success: true, data: { skipped: true, reason: 'below-block-ratio' } }; } },
+        smelting: { async smelt() { throw new Error('no raw'); } }
+    });
+    const result = await service.protectForB5Batch({ expectedGeneration: 5, batchId: 'batch-blocked' });
+    assert.equal(result.success, false);
+    assert.equal(result.status, 'NOT_READY');
+    assert.equal(result.error.code, 'B1_B5_PROTECTION_SELL_BLOCKED');
+    assert.equal(sells, 1);
+    assert.equal(result.meta?.details?.completeForEpisode ?? result.error.details?.completeForEpisode, false);
+});
+
+test('transition-only sell with unchanged authoritative /kho never completes the episode', async () => {
+    const state = hardReserveState({ coal_block: 70 });
+    let sellCalls = 0;
+    let readCalls = 0;
+    const service = makeService({
+        storage: {
+            config: { sell: { enabled: true, reserveCoverage: 1.5, allowSingle: true, allowAll: false, blockOnly: true } },
+            async closeSellGui() { return { success: true }; },
+            async read() { readCalls += 1; return okSnapshot(state); },
+            async sell() {
+                sellCalls += 1;
+                return { success: true, data: { skipped: false, transitioned: true, amountReliable: false, verification: { verified: false, requiresFreshStorage: true } } };
+            }
+        }
+    });
+
+    const result = await service.startupTrimToReserve({ initialSnapshot: snap(state), batchId: 'sale-noop', episodeId: 'sale-noop:episode' });
+    assert.equal(result.success, false);
+    assert.equal(result.error.code, 'B1_B5_PROTECTION_SELL_UNVERIFIED');
+    assert.equal(result.status, 'VERIFICATION_FAILED');
+    assert.equal(result.error.details.completeForEpisode, false);
+    assert.equal(result.error.details.sellEvidence[0].reason, 'sale-noop-unverified');
+    assert.equal(sellCalls, 1);
+    assert.ok(readCalls >= 2, 'full /kho must verify the no-op and final state');
+});
+
+test('partial sale records only authoritative sold delta and never treats requested 64 as verified', async () => {
+    const state = hardReserveState({ coal_block: 70 });
+    let sellCalls = 0;
+    const service = makeService({
+        storage: {
+            config: { sell: { enabled: true, reserveCoverage: 1.5, allowSingle: true, allowAll: false, blockOnly: true } },
+            async closeSellGui() { return { success: true }; },
+            async read() { return okSnapshot(state); },
+            async sell(id, { quantity }) {
+                sellCalls += 1;
+                assert.equal(quantity, 64);
+                state[id] -= 32;
+                return { success: true, data: { skipped: false, verifiedSoldQuantity: 32 } };
+            }
+        }
+    });
+
+    const result = await service.startupTrimToReserve({ initialSnapshot: snap(state), batchId: 'partial', episodeId: 'partial:episode' });
+    assert.equal(result.success, false);
+    assert.equal(result.error.code, 'B1_B5_PROTECTION_SELL_UNVERIFIED');
+    assert.equal(result.status, 'VERIFICATION_FAILED');
+    assert.equal(sellCalls, 1);
+    assert.equal(result.error.details.soldAmount.coal_block, 32);
+    assert.equal(result.error.details.remainingInitialBudget.coal_block, 32);
+    assert.equal(result.error.details.sellEvidence[0].requestedQuantity, 64);
+    assert.equal(result.error.details.sellEvidence[0].verifiedSoldQuantity, 32);
+    assert.equal(result.error.details.sellEvidence[0].reason, 'partial-sale');
+});
+
+test('final authoritative coverage below 1.5 B5 fails even when local 64-only baseline budget reached zero', async () => {
+    const state = hardReserveState({ cobblestone: 88 });
+    const service = makeService({
+        storage: {
+            config: { sell: { enabled: true, reserveCoverage: 1.5, allowSingle: true, allowAll: false, blockOnly: true } },
+            async closeSellGui() { return { success: true }; },
+            async read() { return okSnapshot(state); },
+            async sell(id, { quantity }) {
+                assert.equal(id, 'cobblestone');
+                assert.equal(quantity, 64);
+                // Server-side behavior depleted slightly more than the verified sale.
+                state.cobblestone = 23.84; // 23.84 / 16 = 1.49 B5
+                return { success: true, data: { skipped: false, verifiedSoldQuantity: 64 } };
+            }
+        }
+    });
+
+    const result = await service.startupTrimToReserve({ initialSnapshot: snap(state), batchId: 'reserve-underrun', episodeId: 'reserve-underrun:episode' });
+    assert.equal(result.success, false);
+    assert.equal(result.status, 'VERIFICATION_FAILED');
+    assert.equal(result.error.code, 'B1_B5_PROTECTION_RESERVE_UNDERRUN');
+    assert.equal(result.error.details.remainingInitialBudget.cobblestone, 0);
+    assert.ok(result.error.details.reserveViolations.some(item => item.baseId === 'cobblestone' && item.coverage < 1.5));
+});
+
+test('sell disabled with a complete 64-block baseline surplus blocks mandatory B5 protection instead of skipping success', async () => {
+    const state = hardReserveState({ coal_block: 130 });
+    let sells = 0;
+    const service = makeService({
+        storage: {
+            config: { sell: { enabled: false, reserveCoverage: 1.5, allowSingle: true, allowAll: false, blockOnly: true } },
+            async closeSellGui() { return { success: true }; },
+            async read() { return okSnapshot(state); },
+            async sell() { sells += 1; return { success: true, data: {} }; }
+        }
+    });
+    const result = await service.startupTrimToReserve({ initialSnapshot: snap(state), batchId: 'disabled-surplus' });
+    assert.equal(result.success, false);
+    assert.equal(result.error.code, 'B1_B5_PROTECTION_SELL_DISABLED');
+    assert.equal(result.error.details.completeForEpisode, false);
+    assert.equal(sells, 0);
+});
+
+test('sell disabled with no safe baseline surplus completes only after authoritative final /kho verification', async () => {
+    const state = hardReserveState();
+    let reads = 0;
+    let sells = 0;
+    const service = makeService({
+        storage: {
+            config: { sell: { enabled: false, reserveCoverage: 1.5, allowSingle: true, allowAll: false, blockOnly: true } },
+            async closeSellGui() { return { success: true }; },
+            async read() { reads += 1; return okSnapshot(state); },
+            async sell() { sells += 1; return { success: true, data: {} }; }
+        }
+    });
+    const result = await service.startupTrimToReserve({ initialSnapshot: snap(state), batchId: 'disabled-no-surplus' });
+    assert.equal(result.success, true);
+    assert.equal(result.data.completeForEpisode, true);
+    assert.equal(sells, 0);
+    assert.equal(reads, 1, 'final full /kho verification is mandatory even with zero sell actions');
+    for (const family of Object.values(result.data.finalCoverage)) assert.ok(family.coverage >= 1.5);
+});
+
+test('B5 smelting preflight blocks before side effects when either required recipe is missing', async () => {
+    for (const configured of [['raw_iron_to_iron'], ['raw_gold_to_gold']]) {
+        let reads = 0;
+        let smelts = 0;
+        const service = makeService({
+            conversion: conversionConfig({ smeltingRecipeIds: configured }),
+            storage: { async closeSellGui() { throw new Error('must not touch GUI'); }, async read() { reads += 1; return okSnapshot(hardReserveState()); } },
+            smelting: { async smelt() { smelts += 1; return { success: true }; } }
+        });
+        const result = await service.protectForB5Batch({ batchId: 'smelt-preflight' });
+        assert.equal(result.success, false);
+        assert.equal(result.error.code, 'B1_B5_PROTECTION_SMELT_CONFIG_INVALID');
+        assert.equal(reads, 0);
+        assert.equal(smelts, 0);
+    }
+});
+
+test('B5 smelting runtime canonicalizes reversed/extended config to iron then gold only', async () => {
+    const state = hardReserveState({ raw_iron: 1, raw_gold: 1, iron_block: 11, gold_block: 11 });
+    const smelts = [];
+    const service = makeService({
+        conversion: conversionConfig({ smeltingRecipeIds: ['raw_gold_to_gold', 'cobblestone_to_stone', 'raw_iron_to_iron'] }),
+        storage: {
+            config: { sell: { enabled: true, reserveCoverage: 1.5, allowSingle: true, allowAll: false, blockOnly: true } },
+            async closeSellGui() { return { success: true }; },
+            async read() { return okSnapshot(state); },
+            async sell(id, { quantity }) { state[id] -= Number(quantity); return { success: true, data: { verifiedSoldQuantity: Number(quantity) } }; }
+        },
+        smelting: {
+            async smelt(id) {
+                smelts.push(id);
+                if (id === 'raw_iron_to_iron') { state.raw_iron = 0; state.iron_ingot = Number(state.iron_ingot || 0) + 1; }
+                if (id === 'raw_gold_to_gold') { state.raw_gold = 0; state.gold_ingot = Number(state.gold_ingot || 0) + 1; }
+                return { success: true, data: { skipped: false } };
+            }
+        },
+        minerals: { async toBlocks() { return { success: true, data: { skipped: true, reason: 'below-block-ratio' } }; } }
+    });
+    const result = await service.protectForB5Batch({ batchId: 'ordered-smelt' });
+    assert.equal(result.success, true);
+    assert.deepEqual(smelts, ['raw_iron_to_iron', 'raw_gold_to_gold']);
+});
+
+test('real KhoSellOperation transition-only result with null verified quantity forces fresh /kho reconciliation in trimmer', async () => {
+    const state = hardReserveState({ coal_block: 70 });
+    let current = null;
+    let fullKhoReads = 0;
+    const makeSession = () => ({
+        window: { id: 1, title: 'Kho', slots: [] },
+        source: null,
+        active: true,
+        setSource(source) { this.source = source; }
+    });
+    const sellConfig = {
+        guiTimeoutMs: 100,
+        sell: {
+            enabled: true, reserveCoverage: 1.5, allowSingle: true, allowAll: false, blockOnly: true,
+            commandKey: 'storageSell', resultDelayMs: 0, openSettleMs: 0, closeSettleMs: 0,
+            openPollMs: 1, openAttempts: 1,
+            itemAliases: { coal_block: 'COAL_BLOCK' }
+        }
+    };
+    const operation = new KhoSellOperation({
+        commandService: { async send() { current = makeSession(); return { success: true }; } },
+        guiManager: {
+            current() { return current; },
+            syncCurrentWindow() { return current; },
+            markCurrent(source) { current?.setSource(source); return current; },
+            async closeCurrentWindow() { current = null; },
+            async clickAndWaitForTransition(_slot, options) {
+                state.coal_block -= options.button === 1 ? 64 : 1;
+                return current;
             },
-            async closeSellGui() { return { success: true }; }
+            describeCurrent() { return current ? { windowId: 1, title: 'Kho' } : null; }
         },
-        minerals: {}, smelting: {}, conversionConfig: conversion, smeltingConfig: { recipes: {} },
-        recipeConfig: { target: { output: 'target', outputAmount: 1, inputs: { coal: 100 } } }, targetId: 'target'
-    });
-
-    const result = await service.relieveStoragePressure();
-    assert.equal(result.success, true);
-    assert.equal(sold.length, 2);
-    assert.deepEqual(sold.map(entry => entry.quantity), [64, 64]);
-});
-
-test('simulation: high pressure with no material above the 3-B5 hard reserve never sells reserve stock', async () => {
-    const conversion = config();
-    conversion.storagePressure = {
-        highRatio: 0.80, lowWaterRatio: 0.70, maxSalesPerPass: 8, maxSellBurstsPerPass: 2
-    };
-    const sold = [];
-    const service = new B1StorageMaterialService({
-        storage: {
-            async read() { return { success: true, data: { items: { coal: 300 }, capacity: { usageRatio: 0.95, used: 950, limit: 1000 } } }; },
-            async sell(id, options) { sold.push({ id, ...options }); return { success: true, data: {} }; },
-            async closeSellGui() { return { success: true }; }
-        },
-        minerals: {}, smelting: {}, conversionConfig: conversion, smeltingConfig: { recipes: {} },
-        recipeConfig: { target: { output: 'target', outputAmount: 1, inputs: { coal: 100 } } }, targetId: 'target'
-    });
-
-    const result = await service.relieveStoragePressure();
-    assert.equal(result.success, true);
-    assert.equal(result.data.reason, 'no-safe-surplus-above-reserve');
-    assert.equal(sold.length, 0);
-});
-
-test('simulation: protection is bounded when NPC inflow keeps pressure flat forever', async () => {
-    const conversion = config();
-    conversion.storagePressure = {
-        highRatio: 0.80, lowWaterRatio: 0.70,
-        maxSalesPerPass: 2, maxSellBurstsPerPass: 3, maxSellBurstClicks: 4,
-        sellBurstEscalationFactor: 2, minPressureImprovementRatio: 0.002
-    };
-    let reads = 0;
-    let sells = 0;
-    const service = new B1StorageMaterialService({
-        storage: {
-            async read() { reads += 1; return { success: true, data: { items: { coal_block: 10000 }, capacity: { usageRatio: 0.90, used: 900, limit: 1000 } } }; },
-            async sell() { sells += 1; return { success: true, data: { afterAmount: 10000 } }; },
-            async closeSellGui() { return { success: true }; }
-        },
-        minerals: {}, smelting: {}, conversionConfig: conversion, smeltingConfig: { recipes: {} },
-        recipeConfig: { target: { output: 'target', outputAmount: 1, inputs: { coal: 100 } } }, targetId: 'target'
-    });
-
-    const result = await service.relieveStoragePressure();
-    assert.equal(result.success, true);
-    assert.equal(result.data.reason, 'pressure-persists-after-bounded-bursts');
-    assert.deepEqual(result.data.bursts.map(burst => burst.budget), [2, 4, 4]);
-    assert.equal(sells, 10);
-    assert.equal(reads, 4, 'initial checkpoint plus one checkpoint per bounded burst');
-});
-
-
-test('startup trim ignores an unreliable sell-GUI amount=1 and continues coarse block sales from /kho state', async () => {
-    const conversion = {
-        smeltingRecipeIds: [],
-        resources: { gold_ingot: { baseId: 'gold_ingot', blockId: 'gold_block', ratio: 9 } },
-        storagePressure: {}
-    };
-    const state = { gold_ingot: 0, gold_block: 512 };
-    const sales = [];
-    let reads = 0;
-    const storage = {
-        config: {
-            sell: {
-                startupReserveCoverage: 3,
-                startupStopCoverage: 3.25,
-                startupTrimEnabled: true,
-                startupAllowSingle: false,
-                startupCheckpointClicks: 64,
-                startupMaxPasses: 2,
-                startupMaxClicks: 1000
+        reader: {
+            read() {
+                return {
+                    entries: {
+                        coal_block: {
+                            logicalId: 'coal_block', slot: 12,
+                            amount: null, amountReliable: false
+                        }
+                    }
+                };
             }
         },
-        async read() {
-            reads += 1;
-            return { success: true, data: { items: { ...state }, capacity: { used: state.gold_block, limit: 800000 } } };
-        },
-        async sell(id, { quantity }) {
-            sales.push({ id, quantity });
-            state[id] = Math.max(0, Number(state[id] || 0) - Number(quantity));
-            // Reproduce the runtime bug: Sell GUI parser surfaced the click
-            // instruction quantity "1" instead of the real stored amount.
-            return { success: true, data: { afterAmount: 1, amountReliable: false, transitioned: true } };
-        },
-        async closeSellGui() { return { success: true }; }
-    };
-    const service = new B1StorageMaterialService({
-        storage,
-        minerals: {}, smelting: {}, conversionConfig: conversion, smeltingConfig: { recipes: {} },
-        recipeConfig: { target: { output: 'target', outputAmount: 1, inputs: { gold_ingot: 100 } } },
-        targetId: 'target'
+        config: sellConfig
     });
-
-    const result = await service.startupTrimToReserve();
-    assert.equal(result.success, true);
-    assert.equal(sales.length, 7, 'unreliable afterAmount=1 must not collapse local block stock after the first click');
-    assert.equal(state.gold_block, 64);
-    assert.equal(reads >= 2, true);
-});
-
-test('startup trim keeps one sell session for hundreds of coarse 64 sales when sell GUI reports bogus reliable zero', async () => {
-    const conversion = {
-        smeltingRecipeIds: [],
-        resources: { gold_ingot: { baseId: 'gold_ingot', blockId: 'gold_block', ratio: 9 } },
-        storagePressure: {}
-    };
-    const state = { gold_ingot: 0, gold_block: 92286 };
-    let reads = 0;
-    let closes = 0;
-    let sells = 0;
-    const storage = {
-        config: {
-            sell: {
-                startupReserveCoverage: 3,
-                startupStopCoverage: 3.25,
-                startupTrimEnabled: true,
-                startupAllowSingle: false,
-                startupCheckpointClicks: 512,
-                startupMaxPasses: 6,
-                startupMaxClicks: 20000
-            }
-        },
-        async read() {
-            reads += 1;
-            return { success: true, data: { items: { ...state }, capacity: { used: state.gold_block, limit: 800000 } } };
-        },
-        async sell(id, { quantity }) {
-            sells += 1;
-            state[id] = Math.max(0, Number(state[id] || 0) - Number(quantity));
-            // Match the observed runtime failure: the Sell GUI claimed a
-            // reliable zero even while /kho held >90k blocks.
-            return { success: true, data: { afterAmount: 0, amountReliable: true, transitioned: true } };
-        },
-        async closeSellGui() { closes += 1; return { success: true }; }
-    };
-    const service = new B1StorageMaterialService({
-        storage,
-        minerals: {}, smelting: {}, conversionConfig: conversion, smeltingConfig: { recipes: {} },
-        recipeConfig: { target: { output: 'target', outputAmount: 1, inputs: { gold_ingot: 196608 } } },
-        targetId: 'target'
-    });
-
-    const result = await service.startupTrimToReserve();
-    assert.equal(result.success, true);
-    assert.equal(sells, 333, '4.23 B5 coverage should be drained to the relative 3.25 band in one long burst');
-    assert.equal(reads, 2, 'only initial /kho plus one full checkpoint should be needed');
-    assert.equal(closes, 1, 'Sell GUI should stay open throughout the 333-click burst');
-    assert.ok(result.data.finalCoverage.gold_ingot.coverage <= 3.25);
-    assert.ok(result.data.finalCoverage.gold_ingot.coverage >= 3);
-});
-
-test('fast projection below low-water stays RISING and never activates hard protection', async () => {
-    const conversion = config();
-    conversion.storagePressure = {
-        watchRatio: 0.70,
-        highRatio: 0.80,
-        lowWaterRatio: 0.70,
-        criticalRatio: 0.92,
-        growthHorizonMinutes: 0.5,
-        fastGrowthPerMinute: 0.03
-    };
-    const service = new B1StorageMaterialService({
+    const service = makeService({
         storage: {
-            async read() {
-                return { success: true, data: { items: { coal_block: 100 }, capacity: { usageRatio: 0.233, used: 186400, limit: 800000 } } };
+            config: sellConfig,
+            async closeSellGui() { await operation.close(); return { success: true }; },
+            async read() { fullKhoReads += 1; return okSnapshot(state); },
+            async sell(id, options) {
+                const data = await operation.execute(id, options);
+                assert.equal(data.verification.verified, false);
+                assert.equal(data.verification.verifiedSoldQuantity, null);
+                assert.equal(data.verifiedSoldQuantity, null);
+                assert.equal(data.verification.requiresFreshStorage, true);
+                return { success: true, data };
             }
-        },
-        minerals: {}, smelting: {}, conversionConfig: conversion,
-        smeltingConfig: { recipes: {} }
+        }
     });
-    service.lastPressureObservation = { usageRatio: 0.20, used: 160000, at: Date.now() - 1000 };
 
-    const result = await service.inspectStoragePressure();
+    const result = await service.startupTrimToReserve({
+        initialSnapshot: snap(state), batchId: 'real-sell-result', episodeId: 'real-sell-result:episode'
+    });
     assert.equal(result.success, true);
-    assert.equal(result.data.projectedRatio >= 0.80, true, 'fixture must create an exaggerated projected spike');
-    assert.equal(result.data.usageRatio < result.data.lowWaterRatio, true);
-    assert.equal(result.data.level, 'RISING');
-    assert.equal(result.data.protectionRequired, false);
-    assert.equal(result.data.sellRequired, false);
-    assert.equal(result.data.projectedSellRequired, false);
+    assert.ok(fullKhoReads >= 2, 'transition-only real result must use fresh /kho checkpoints plus final verification');
+    assert.ok(result.data.sellEvidence.every(entry => entry.source === 'fresh-kho'));
+    assert.ok(result.data.sellEvidence.every(entry => entry.exactRequested === true));
+});
+
+test('non-number compatibility sale quantities are never accepted as verified numeric evidence', async () => {
+    for (const value of [null, undefined, '', '64', false]) {
+        const state = hardReserveState({ coal_block: 70 });
+        let reads = 0;
+        const service = makeService({
+            storage: {
+                config: { sell: { enabled: true, reserveCoverage: 1.5, allowSingle: true, allowAll: false, blockOnly: true } },
+                async closeSellGui() { return { success: true }; },
+                async read() { reads += 1; return okSnapshot(state); },
+                async sell() {
+                    return {
+                        success: true,
+                        data: {
+                            skipped: false,
+                            transitioned: true,
+                            verifiedSoldQuantity: value,
+                            verification: { verified: false, verifiedSoldQuantity: value, requiresFreshStorage: true }
+                        }
+                    };
+                }
+            }
+        });
+        const result = await service.startupTrimToReserve({ initialSnapshot: snap(state), batchId: `strict-${String(value)}` });
+        assert.equal(result.success, false);
+        assert.equal(result.error.code, 'B1_B5_PROTECTION_SELL_UNVERIFIED');
+        assert.ok(reads >= 2, `fresh /kho is required for non-number evidence ${String(value)}`);
+    }
+});
+
+test('protection evidence key ignores unrelated inflow/capacity but changes for the blocker material family', () => {
+    let latestState = {
+        success: true,
+        data: {
+            items: { coal: 10, coal_block: 2, diamond: 3, diamond_block: 1 },
+            capacity: { used: 100, limit: 800000 }
+        }
+    };
+    const service = makeService({
+        storage: {
+            latest() { return latestState; }
+        }
+    });
+    const blocker = { material: 'coal', reason: 'candidate-unavailable' };
+    const initial = service.protectionEvidenceKey(blocker);
+
+    latestState = {
+        success: true,
+        data: {
+            items: { coal: 10, coal_block: 2, diamond: 9999, diamond_block: 999 },
+            capacity: { used: 500000, limit: 800000 }
+        }
+    };
+    assert.equal(service.protectionEvidenceKey(blocker), initial, 'unrelated family inflow/global capacity must not grant a retry');
+
+    latestState = {
+        success: true,
+        data: {
+            items: { coal: 11, coal_block: 2, diamond: 9999, diamond_block: 999 },
+            capacity: { used: 500001, limit: 800000 }
+        }
+    };
+    assert.notEqual(service.protectionEvidenceKey(blocker), initial, 'evidence change in the blocked family must be observable');
+    assert.equal(service.protectionEvidenceKey({ reason: 'unknown', material: 'not-a-family' }), null, 'unresolved blocker must not hash the whole storage');
 });

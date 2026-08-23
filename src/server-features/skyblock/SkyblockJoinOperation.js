@@ -3,15 +3,17 @@
 const Timeout = require('../../shared/time/Timeout');
 const TimeoutError = require('../../shared/errors/TimeoutError');
 const OperationCancelledError = require('../../shared/errors/OperationCancelledError');
+const FlowError = require('../../shared/errors/FlowError');
+const { normalizeConnectionGeneration } = require('../../core/events/EventEnvelope');
 
 class SkyblockJoinOperation {
     constructor({
         botId,
+        context = null,
         commandService,
         guiManager,
         guiKnowledge = null,
         eventBus,
-        lockPolicy,
         config
     }) {
         if (typeof botId !== 'string' || !botId.trim()) {
@@ -26,32 +28,29 @@ class SkyblockJoinOperation {
         if (!eventBus || typeof eventBus.on !== 'function') {
             throw new TypeError('eventBus is required');
         }
-        if (!lockPolicy || typeof lockPolicy.acquire !== 'function' || typeof lockPolicy.release !== 'function') {
-            throw new TypeError('lockPolicy is required');
-        }
 
         this.botId = botId;
+        this.context = context;
         this.commandService = commandService;
         this.guiManager = guiManager;
         this.guiKnowledge = guiKnowledge;
         this.eventBus = eventBus;
-        this.lockPolicy = lockPolicy;
         this.config = this.#validateConfig(config);
     }
 
-    async execute(selectionId = null, { cancellationToken = null } = {}) {
+    async execute(selectionId = null, {
+        cancellationToken = null,
+        expectedGeneration = null,
+        operationContext = null
+    } = {}) {
         cancellationToken?.throwIfCancelled?.();
+        const generation = this.#expectedGeneration(expectedGeneration, operationContext);
+        this.#assertCurrent(generation);
 
         const resolvedSelectionId = selectionId || this.config.defaultSelection;
         const selection = this.config.selections[resolvedSelectionId];
         if (!selection) {
             throw new RangeError(`Unknown skyblock selection: ${resolvedSelectionId}`);
-        }
-
-        const owner = `skyblock-join:${this.botId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
-        const lockKeys = ['gui', 'movement', 'server-command', 'teleport'];
-        if (!this.lockPolicy.acquire(lockKeys, owner)) {
-            throw new Error('Skyblock join is blocked by another operation.');
         }
 
         let firstWait = null;
@@ -65,12 +64,16 @@ class SkyblockJoinOperation {
                 definitionId: this.config.entryGuiId,
                 timeoutMs: this.config.guiTimeoutMs,
                 cancellationToken,
+                expectedGeneration: generation,
                 label: 'skyblock selection GUI'
             });
 
             const sent = await this.commandService.send(this.config.commandKey, {
                 confirm: false,
-                cancellationToken
+                cancellationToken,
+                expectedGeneration: generation,
+                operationId: operationContext?.operationId || null,
+                correlationId: operationContext?.correlationId || null
             });
             if (!sent.success) {
                 throw sent.error || new Error(sent.message || 'Skyblock command failed.');
@@ -78,6 +81,7 @@ class SkyblockJoinOperation {
 
             const selectionSession = await firstWait.promise;
             firstWait = null;
+            this.#assertCurrent(generation);
 
             // /sky is a server-wide static GUI. Its slot addresses come from
             // config/skyblock/join.json and must not depend on per-bot learned
@@ -94,24 +98,32 @@ class SkyblockJoinOperation {
                 slot: selectionSlot,
                 timeoutMs: this.config.slotReadyTimeoutMs,
                 cancellationToken,
+                expectedGeneration: generation,
                 label: `skyblock selection slot ${selectionSlot}`
             });
             await Timeout.delay(this.config.selectionSettleMs, { cancellationToken });
+            this.#assertCurrent(generation);
 
             secondWait = this.#createGuiWait({
                 previousSessionId: selectionSession.id,
                 definitionId: this.config.joinGuiId,
                 timeoutMs: this.config.guiTimeoutMs,
                 cancellationToken,
+                expectedGeneration: generation,
                 label: 'skyblock join GUI'
             });
 
             await this.guiManager.click(selectionSlot, {
-                timeoutMs: this.config.clickTimeoutMs
+                timeoutMs: this.config.clickTimeoutMs,
+                cancellationToken,
+                expectedGeneration: generation,
+                operationId: operationContext?.operationId || null,
+                correlationId: operationContext?.correlationId || null
             });
 
             const joinSession = await secondWait.promise;
             secondWait = null;
+            this.#assertCurrent(generation);
 
             // Same rule for the second /sky GUI: this is shared server
             // structure, not account-specific state. /kho, inventory and /pv 2
@@ -123,23 +135,33 @@ class SkyblockJoinOperation {
                 slot: joinSlot,
                 timeoutMs: this.config.slotReadyTimeoutMs,
                 cancellationToken,
+                expectedGeneration: generation,
                 label: `skyblock join slot ${joinSlot}`
             });
             await Timeout.delay(this.config.joinSettleMs, { cancellationToken });
+            this.#assertCurrent(generation);
 
             // Arm teleport verification BEFORE clicking the final join slot so a fast
             // position packet cannot race past the listener.
+            const positionBeforeJoin = this.#currentPosition();
             teleportWait = this.#createTeleportWait({
                 timeoutMs: this.config.postJoinTimeoutMs,
-                cancellationToken
+                cancellationToken,
+                expectedGeneration: generation,
+                positionBeforeJoin
             });
 
             await this.guiManager.click(joinSlot, {
-                timeoutMs: this.config.clickTimeoutMs
+                timeoutMs: this.config.clickTimeoutMs,
+                cancellationToken,
+                expectedGeneration: generation,
+                operationId: operationContext?.operationId || null,
+                correlationId: operationContext?.correlationId || null
             });
 
             const teleport = await teleportWait.promise;
             teleportWait = null;
+            this.#assertCurrent(generation);
 
             return Object.freeze({
                 selectionId: resolvedSelectionId,
@@ -147,14 +169,14 @@ class SkyblockJoinOperation {
                 joinSlot,
                 selectionSessionId: selectionSession.id,
                 joinSessionId: joinSession.id,
-                verified: 'movement:teleport',
-                position: teleport.position || null
+                verified: teleport.verified || 'movement:teleport',
+                position: teleport.position || null,
+                connectionGeneration: generation
             });
         } finally {
             await this.#cancelWait(firstWait, 'Skyblock selection wait cancelled.');
             await this.#cancelWait(secondWait, 'Skyblock join wait cancelled.');
             await this.#cancelWait(teleportWait, 'Skyblock teleport wait cancelled.');
-            this.lockPolicy.release(lockKeys, owner);
         }
     }
 
@@ -163,14 +185,16 @@ class SkyblockJoinOperation {
         slot,
         timeoutMs,
         cancellationToken,
+        expectedGeneration,
         label
     }) {
         const deadline = Date.now() + timeoutMs;
 
         while (Date.now() <= deadline) {
             cancellationToken?.throwIfCancelled?.();
+            this.#assertCurrent(expectedGeneration);
             const session = this.guiManager.current();
-            if (session?.id === sessionId) {
+            if (session?.id === sessionId && Number(session.connectionGeneration) === expectedGeneration) {
                 const item = session.window?.slots?.[slot];
                 if (item) return item;
             }
@@ -180,19 +204,25 @@ class SkyblockJoinOperation {
         throw new TimeoutError(`Timed out waiting for ${label} to contain an item.`);
     }
 
-    #createTeleportWait({ timeoutMs, cancellationToken }) {
+    #createTeleportWait({ timeoutMs, cancellationToken, expectedGeneration, positionBeforeJoin = null }) {
         let settled = false;
         let rejectPromise = null;
         let unsubscribeCancellation = () => {};
         let unsubscribeTeleport = () => {};
+        let unsubscribePosition = () => {};
+        let unsubscribeEnd = () => {};
         let timer = null;
 
         const cleanup = () => {
             if (timer) clearTimeout(timer);
             timer = null;
             unsubscribeTeleport();
+            unsubscribePosition();
+            unsubscribeEnd();
             unsubscribeCancellation();
             unsubscribeTeleport = () => {};
+            unsubscribePosition = () => {};
+            unsubscribeEnd = () => {};
             unsubscribeCancellation = () => {};
         };
 
@@ -205,10 +235,32 @@ class SkyblockJoinOperation {
                 cleanup();
                 callback(value);
             };
+            const currentEvent = event => event?.botId === this.botId
+                && normalizeConnectionGeneration(event) === expectedGeneration
+                && this.#isCurrent(expectedGeneration);
 
             unsubscribeTeleport = this.eventBus.on('movement:teleport', event => {
-                if (event.botId !== this.botId) return;
-                finish(resolve, event);
+                if (!currentEvent(event)) return;
+                finish(resolve, { ...event, verified: 'movement:teleport' });
+            });
+
+            // Some proxy/server teleport paths update entity position without
+            // Mineflayer emitting forcedMove. Accept a large, generation-owned
+            // position delta as a secondary verification signal. The bot is not
+            // pathing while the join GUI is open, so this avoids false timeout
+            // without treating tiny movement/jitter as a successful join.
+            unsubscribePosition = this.eventBus.on('movement:position', event => {
+                if (!currentEvent(event)) return;
+                if (!this.#positionDeltaAtLeast(positionBeforeJoin, event.position, this.config.postJoinMinPositionDelta)) return;
+                finish(resolve, { ...event, verified: 'movement:position-delta' });
+            });
+
+            unsubscribeEnd = this.eventBus.on('connection:ended', event => {
+                if (event.botId !== this.botId || normalizeConnectionGeneration(event) !== expectedGeneration) return;
+                finish(reject, new FlowError('Connection ended during skyblock join.', {
+                    code: 'DISCONNECTED', subsystem: 'skyblock', operation: 'SkyblockJoinOperation',
+                    step: 'verify-teleport', retryable: true, details: { expectedGeneration }
+                }));
             });
 
             timer = setTimeout(() => {
@@ -225,8 +277,14 @@ class SkyblockJoinOperation {
             }
         });
 
+        const observation = promise.then(
+            () => null,
+            error => error
+        );
+
         return {
             promise,
+            observation,
             cancel(reason) {
                 if (settled) return;
                 settled = true;
@@ -236,25 +294,43 @@ class SkyblockJoinOperation {
         };
     }
 
+    #currentPosition() {
+        const position = this.context?.get?.()?.entity?.position;
+        if (!position || ![position.x, position.y, position.z].every(Number.isFinite)) return null;
+        return Object.freeze({ x: position.x, y: position.y, z: position.z });
+    }
+
+    #positionDeltaAtLeast(before, after, minimum) {
+        if (!before || !after || ![after.x, after.y, after.z].every(Number.isFinite)) return false;
+        const dx = after.x - before.x;
+        const dy = after.y - before.y;
+        const dz = after.z - before.z;
+        return Math.hypot(dx, dy, dz) >= minimum;
+    }
+
     #createGuiWait({
         previousSessionId,
         definitionId,
         timeoutMs,
         cancellationToken,
+        expectedGeneration,
         label
     }) {
         let settled = false;
         let rejectPromise = null;
         let unsubscribeCancellation = () => {};
         let unsubscribeGui = () => {};
+        let unsubscribeEnd = () => {};
         let timer = null;
 
         const cleanup = () => {
             if (timer) clearTimeout(timer);
             timer = null;
             unsubscribeGui();
+            unsubscribeEnd();
             unsubscribeCancellation();
             unsubscribeGui = () => {};
+            unsubscribeEnd = () => {};
             unsubscribeCancellation = () => {};
         };
 
@@ -270,12 +346,21 @@ class SkyblockJoinOperation {
 
             unsubscribeGui = this.eventBus.on('gui:opened', event => {
                 if (event.botId !== this.botId) return;
+                if (normalizeConnectionGeneration(event) !== expectedGeneration) return;
+                if (!this.#isCurrent(expectedGeneration)) return;
                 if (event.sessionId === previousSessionId) return;
                 if (definitionId && event.definitionId && event.definitionId !== definitionId) return;
 
                 const session = this.guiManager.current();
                 if (!session || session.id !== event.sessionId) return;
                 finish(resolve, session);
+            });
+            unsubscribeEnd = this.eventBus.on('connection:ended', event => {
+                if (event.botId !== this.botId || normalizeConnectionGeneration(event) !== expectedGeneration) return;
+                finish(reject, new FlowError('Connection ended while waiting for skyblock GUI.', {
+                    code: 'DISCONNECTED', subsystem: 'skyblock', operation: 'SkyblockJoinOperation',
+                    step: 'wait-gui', retryable: true, details: { expectedGeneration, label }
+                }));
             });
 
             timer = setTimeout(() => {
@@ -292,8 +377,14 @@ class SkyblockJoinOperation {
             }
         });
 
+        const observation = promise.then(
+            () => null,
+            error => error
+        );
+
         return {
             promise,
+            observation,
             cancel(reason) {
                 if (settled) return;
                 settled = true;
@@ -306,7 +397,33 @@ class SkyblockJoinOperation {
     async #cancelWait(waiter, reason) {
         if (!waiter) return;
         waiter.cancel(reason);
-        await waiter.promise.catch(() => {});
+        await waiter.observation;
+    }
+
+    #expectedGeneration(expectedGeneration, operationContext) {
+        const candidate = expectedGeneration ?? operationContext?.connectionGeneration ?? this.context?.getGeneration?.();
+        const generation = Number(candidate);
+        if (!Number.isInteger(generation) || generation <= 0) {
+            throw new FlowError('Skyblock join requires a connection generation.', {
+                code: 'SKYBLOCK_GENERATION_REQUIRED', subsystem: 'skyblock', operation: 'SkyblockJoinOperation',
+                step: 'generation-guard', retryable: true
+            });
+        }
+        return generation;
+    }
+
+    #isCurrent(generation) {
+        if (!this.context) return true;
+        return this.context.has?.() && Number(this.context.getGeneration?.()) === generation;
+    }
+
+    #assertCurrent(generation) {
+        if (this.#isCurrent(generation)) return;
+        throw new FlowError('Skyblock join belongs to a stale connection generation.', {
+            code: 'DISCONNECTED', subsystem: 'skyblock', operation: 'SkyblockJoinOperation',
+            step: 'generation-guard', retryable: true,
+            details: { expectedGeneration: generation, currentGeneration: this.context?.getGeneration?.() ?? null }
+        });
     }
 
     #validateConfig(config) {
@@ -343,6 +460,9 @@ class SkyblockJoinOperation {
         const postJoinTimeoutMs = config.postJoinTimeoutMs === undefined
             ? 7000
             : this.#positive(config.postJoinTimeoutMs, 'skyblock.postJoinTimeoutMs');
+        const postJoinMinPositionDelta = config.postJoinMinPositionDelta === undefined
+            ? 4
+            : this.#positive(config.postJoinMinPositionDelta, 'skyblock.postJoinMinPositionDelta');
         const selectionSettleMs = this.#nonNegative(
             config.selectionSettleMs === undefined ? 300 : config.selectionSettleMs,
             'skyblock.selectionSettleMs'
@@ -371,7 +491,8 @@ class SkyblockJoinOperation {
             slotReadyTimeoutMs,
             selectionSettleMs,
             joinSettleMs,
-            postJoinTimeoutMs
+            postJoinTimeoutMs,
+            postJoinMinPositionDelta
         });
     }
 

@@ -1,6 +1,7 @@
 'use strict';
 
 const { strongestIdentity, identitiesEquivalent, identityStrength } = require('../../items/ItemIdentity');
+const { containerEnd, isContainerSlot } = require('../ContainerSlotRange');
 
 class GuiKnowledgeRegistry {
     constructor({ botId, normalizer, store, itemResolver, bootstrapMappings = [], logger = null }) {
@@ -35,9 +36,12 @@ class GuiKnowledgeRegistry {
         this.logger?.debug?.('GUI knowledge loaded.', { botId: this.botId, records: this.records.size, repairedStrongBindings: repaired });
     }
 
-    async stop() {}
+    async stop() {
+        await this.store.drain?.();
+    }
 
     async destroy() {
+        await this.stop();
         this.records.clear();
         this.liveSessions.clear();
         this.globalItems.clear();
@@ -88,12 +92,42 @@ class GuiKnowledgeRegistry {
         let record = observed.record;
         const learned = record.learned?.[roleId] || null;
         const slots = session.window.slots || [];
+        const slotEnd = containerEnd(session.window);
 
-        const sample = this.#normalizeBootstrapSlot(bootstrapSlot);
+        const configuredSample = this.#normalizeBootstrapSlot(bootstrapSlot);
+        const sample = configuredSample !== null && configuredSample < slotEnd ? configuredSample : null;
+
+        // 0) A configured bootstrap slot is semantically authoritative when the
+        // live item in that slot actually matches the configured logical item.
+        // This prevents stale learned/global fingerprints from stealing another
+        // recipe's slot (for example B3 super_cobblestone_block resolving to the
+        // B2 super_cobblestone icon at slot 10). If the configured slot no longer
+        // matches, normal learned/dynamic resolution below still supports server
+        // menu moves.
+        if (sample !== null && slots[sample] && logicalItemId && this.itemResolver) {
+            let sampleMatched = false;
+            try {
+                sampleMatched = Boolean(this.itemResolver.matches(slots[sample], logicalItemId, context)?.matched);
+            } catch (error) {
+                this.#logResolverFailure('bootstrap-sample-match', error, { logicalItemId, context, roleId });
+            }
+            if (sampleMatched) {
+                await this.learnSlot(session, {
+                    source,
+                    roleId,
+                    slot: sample,
+                    logicalItemId,
+                    context,
+                    bootstrapSlot: sample,
+                    relearned: Boolean(learned) && Number(learned.currentSlot) !== sample
+                });
+                return sample;
+            }
+        }
 
         // 1) Prefer the fingerprint learned for this exact semantic role/route.
         if (learned?.fingerprint) {
-            const matched = this.#findFingerprintSlot(slots, learned.fingerprint);
+            const matched = this.#findFingerprintSlot(slots, learned.fingerprint, slotEnd);
             if (matched >= 0) {
                 const actualFingerprint = this.normalizer.fingerprintItem(slots[matched]);
                 if (this.#fingerprintNeedsUpgrade(learned.fingerprint, actualFingerprint)) {
@@ -122,7 +156,7 @@ class GuiKnowledgeRegistry {
         // when its slot moves, without trusting a configured display name.
         if (logicalItemId) {
             const globalFingerprint = this.globalItems.get(logicalItemId)?.fingerprint || null;
-            const globalMatch = globalFingerprint ? this.#findFingerprintSlot(slots, globalFingerprint) : -1;
+            const globalMatch = globalFingerprint ? this.#findFingerprintSlot(slots, globalFingerprint, slotEnd) : -1;
             if (globalMatch >= 0) {
                 await this.learnSlot(session, {
                     source,
@@ -141,7 +175,7 @@ class GuiKnowledgeRegistry {
         // deliberately below learned fingerprints because server text/font
         // can change while the item identity remains useful.
         if (logicalItemId && this.itemResolver) {
-            const fallback = this.#findLogicalSlot(slots, logicalItemId, context);
+            const fallback = this.#findLogicalSlot(slots, logicalItemId, context, slotEnd);
             if (fallback >= 0) {
                 await this.learnSlot(session, {
                     source,
@@ -204,6 +238,9 @@ class GuiKnowledgeRegistry {
     }) {
         if (!session?.window) throw new TypeError('GUI session with window is required.');
         if (!Number.isInteger(slot) || slot < 0) throw new TypeError('slot must be a non-negative integer.');
+        if (!isContainerSlot(session.window, slot)) {
+            throw new RangeError(`GUI role slot ${slot} is outside the container region (inventoryStart=${Number.isInteger(session.window?.inventoryStart) ? session.window.inventoryStart : 'unknown'}).`);
+        }
         const raw = session.window.slots?.[slot];
         if (!raw) return null;
         const observed = await this.observe(session, { source });
@@ -286,7 +323,39 @@ class GuiKnowledgeRegistry {
             || Object.prototype.hasOwnProperty.call(rawItem, 'customMetadataPresent');
         const fingerprintSource = hasStableIdentityShape ? rawItem : (rawItem.raw || rawItem);
         const fingerprint = this.normalizer.fingerprintItem(fingerprintSource);
+
+        // Strong identities declared in items.json are an invariant, not a hint.
+        // Never let runtime delta-learning move a known MMOItems identity to a
+        // different logical item. This specifically protects input identities
+        // from being mistaken for craft outputs when a wrong recipe was clicked
+        // or collector pickups happen during verification.
+        const configuredStrong = this.getConfiguredStrongLogicalId(fingerprintSource, 'inventory')
+            || this.getConfiguredStrongLogicalId(fingerprintSource, 'personal-vault');
+        if (configuredStrong && configuredStrong !== logicalItemId) {
+            await this.#mergeGlobalItem(configuredStrong, fingerprint, {
+                source: 'configured-strong-identity-redirect',
+                roleId,
+                context,
+                configuredStrong: true,
+                rejectedLogicalItemId: logicalItemId,
+                originalSource: source
+            }, { allowStrongAlias: true });
+            this.logger?.warn?.('Rejected logical item learning because configured strong identity belongs to another item.', {
+                botId: this.botId,
+                identity: strongestIdentity(this.#identityValues(fingerprint)),
+                requestedLogicalItemId: logicalItemId,
+                configuredLogicalItemId: configuredStrong,
+                source,
+                roleId
+            });
+            return this.globalItems.get(logicalItemId) || null;
+        }
+
         return this.#mergeGlobalItem(logicalItemId, fingerprint, { source, roleId, context }, { allowStrongAlias: true });
+    }
+
+    getConfiguredStrongLogicalId(rawItem, context = 'inventory') {
+        return this.#resolveConfiguredStrongLogicalId(rawItem, context);
     }
 
     matchesLogical(rawItem, logicalId, context = 'inventory') {
@@ -298,7 +367,8 @@ class GuiKnowledgeRegistry {
         if (this.#entryMatchesFingerprint(learned, actual, { strongOnly: this.#requiresStrongGlobalIdentity(context) })) return true;
         try {
             return Boolean(this.itemResolver?.matches(rawItem, logicalId, context)?.matched);
-        } catch {
+        } catch (error) {
+            this.#logResolverFailure('matches-logical', error, { logicalItemId: logicalId, context });
             return false;
         }
     }
@@ -308,7 +378,34 @@ class GuiKnowledgeRegistry {
         return entry ? this.#plain(entry) : null;
     }
 
+    getConfiguredStrongIdentity(logicalItemId, contexts = ['inventory', 'personal-vault']) {
+        if (typeof logicalItemId !== 'string' || !logicalItemId) return null;
+        const requestedContexts = Array.isArray(contexts) ? contexts : [contexts];
+        const identities = [];
+        try {
+            const definition = this.itemResolver?.registry?.require?.(logicalItemId) || null;
+            const representations = definition?.representations || {};
+            for (const context of requestedContexts) {
+                const rules = representations?.[context]?.rules || [];
+                for (const rule of rules) {
+                    if (String(rule?.type || '').toLowerCase() !== 'identity') continue;
+                    if (rule?.value !== null && rule?.value !== undefined && String(rule.value)) identities.push(String(rule.value));
+                }
+            }
+        } catch (error) {
+            this.#logResolverFailure('configured-strong-identity', error, { logicalItemId, contexts: requestedContexts });
+            return null;
+        }
+        return strongestIdentity(identities);
+    }
+
     getStrongIdentity(logicalItemId) {
+        // Fixed MMOItems identities declared in items.json are authoritative
+        // even before the runtime knowledge store has observed the item. This
+        // lets inventory synchronization/verifiers use the strongest known
+        // identity on the very first craft instead of waiting for delta-learning.
+        const configured = this.getConfiguredStrongIdentity(logicalItemId);
+        if (configured) return configured;
         const entry = this.globalItems.get(logicalItemId);
         const identities = this.#fingerprintsFor(entry)
             .flatMap(fingerprint => this.#identityValues(fingerprint));
@@ -401,6 +498,61 @@ class GuiKnowledgeRegistry {
 
     async #mergeGlobalItem(logicalItemId, fingerprint, learnedFrom = {}, { allowStrongAlias = true } = {}) {
         if (!fingerprint) return this.globalItems.get(logicalItemId) || null;
+
+        // Hard invariant: a strong MMOItems identity explicitly configured in
+        // items.json belongs to exactly that logical item. Enforce this at the
+        // lowest merge layer so GUI-slot learning, verifier delta-learning, PV
+        // learning and startup bootstrap cannot reassign it accidentally.
+        const configuredStrong = this.#resolveConfiguredStrongLogicalId(fingerprint, 'inventory')
+            || this.#resolveConfiguredStrongLogicalId(fingerprint, 'personal-vault');
+        if (configuredStrong && configuredStrong !== logicalItemId) {
+            await this.#mergeGlobalItem(configuredStrong, fingerprint, {
+                ...learnedFrom,
+                source: 'configured-strong-identity-redirect',
+                configuredStrong: true,
+                rejectedLogicalItemId: logicalItemId,
+                originalSource: learnedFrom?.source || null
+            }, { allowStrongAlias: true });
+            this.logger?.warn?.('Rejected strong identity assignment to the wrong logical item.', {
+                botId: this.botId,
+                identity: strongestIdentity(this.#identityValues(fingerprint)),
+                requestedLogicalItemId: logicalItemId,
+                configuredLogicalItemId: configuredStrong,
+                learnedFrom
+            });
+            return this.globalItems.get(logicalItemId) || null;
+        }
+
+        const incomingStrongIdentity = strongestIdentity(this.#identityValues(fingerprint));
+        if (incomingStrongIdentity && identityStrength(incomingStrongIdentity) >= 80) {
+            const existingOwner = this.#resolveGlobalLogicalId(fingerprint, { strongOnly: true });
+            if (existingOwner && existingOwner !== logicalItemId && this.#strongIdentityPolicy(existingOwner) === 'learn') {
+                this.logger?.warn?.('Rejected strong identity reassignment because its learn-once owner is locked.', {
+                    botId: this.botId,
+                    identity: incomingStrongIdentity,
+                    requestedLogicalItemId: logicalItemId,
+                    lockedLogicalItemId: existingOwner,
+                    learnedFrom
+                });
+                return this.globalItems.get(logicalItemId) || null;
+            }
+            if (this.#strongIdentityPolicy(logicalItemId) === 'learn') {
+                const locked = this.#fingerprintsFor(this.globalItems.get(logicalItemId))
+                    .map(candidate => strongestIdentity(this.#identityValues(candidate)))
+                    .filter(identity => identity && identityStrength(identity) >= 80);
+                if (locked.length > 0 && !locked.some(identity => identitiesEquivalent(identity, incomingStrongIdentity))) {
+                    this.logger?.warn?.('Rejected conflicting strong identity for learn-once logical item.', {
+                        botId: this.botId,
+                        logicalItemId,
+                        lockedIdentities: locked,
+                        incomingIdentity: incomingStrongIdentity,
+                        learnedFrom
+                    });
+                    return this.globalItems.get(logicalItemId) || null;
+                }
+            }
+        }
+
         if (this.#isRejectedStoredStrongBinding(logicalItemId, fingerprint, learnedFrom)) {
             this.logger?.debug?.('Skipped stale strong identity from stored GUI knowledge.', {
                 botId: this.botId, logicalItemId, identity: strongestIdentity(this.#identityValues(fingerprint)), learnedFrom
@@ -463,7 +615,8 @@ class GuiKnowledgeRegistry {
             const identityMatched = resolved.match?.strength === 'VERY_STRONG'
                 || details.some(detail => detail?.matched && detail?.field === 'identity');
             return identityMatched ? resolved.id : null;
-        } catch {
+        } catch (error) {
+            this.#logResolverFailure('resolve-configured-strong-logical-id', error, { context });
             return null;
         }
     }
@@ -603,6 +756,16 @@ class GuiKnowledgeRegistry {
         return this.#fingerprintsFor(entry).some(candidate => this.#fingerprintMatches(candidate, fingerprint));
     }
 
+    #strongIdentityPolicy(logicalItemId) {
+        if (!logicalItemId) return null;
+        try {
+            return this.itemResolver?.registry?.require?.(logicalItemId)?.metadata?.strongIdentityPolicy || null;
+        } catch (error) {
+            this.#logResolverFailure('strong-identity-policy', error, { logicalItemId });
+            return null;
+        }
+    }
+
     #requiresStrongGlobalIdentity(context) {
         return context === 'inventory' || context === 'personal-vault';
     }
@@ -643,8 +806,9 @@ class GuiKnowledgeRegistry {
         return Number.isInteger(slot) && slot >= 0 ? slot : null;
     }
 
-    #findFingerprintSlot(slots, fingerprint) {
-        for (let slot = 0; slot < slots.length; slot += 1) {
+    #findFingerprintSlot(slots, fingerprint, end = slots.length) {
+        const limit = Math.max(0, Math.min(Number.isInteger(end) ? end : slots.length, slots.length));
+        for (let slot = 0; slot < limit; slot += 1) {
             const raw = slots[slot];
             if (!raw) continue;
             if (this.#fingerprintMatches(fingerprint, this.normalizer.fingerprintItem(raw))) return slot;
@@ -696,8 +860,22 @@ class GuiKnowledgeRegistry {
         ].filter(Boolean).map(String))];
     }
 
-    #findLogicalSlot(slots, logicalItemId, context) {
-        return slots.findIndex(raw => raw && this.matchesLogical(raw, logicalItemId, context));
+    #findLogicalSlot(slots, logicalItemId, context, end = slots.length) {
+        const limit = Math.max(0, Math.min(Number.isInteger(end) ? end : slots.length, slots.length));
+        for (let slot = 0; slot < limit; slot += 1) {
+            const raw = slots[slot];
+            if (raw && this.matchesLogical(raw, logicalItemId, context)) return slot;
+        }
+        return -1;
+    }
+
+    #logResolverFailure(action, error, details = {}) {
+        this.logger?.debug?.('GUI item resolver fallback failed; continuing with learned/bootstrap evidence.', {
+            botId: this.botId,
+            action,
+            ...details,
+            error: { name: error?.name || 'Error', code: error?.code || null, message: error?.message || String(error) }
+        });
     }
 
     #plain(value) {

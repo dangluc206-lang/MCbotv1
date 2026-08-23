@@ -2,11 +2,13 @@
 
 const Timeout = require('../../shared/time/Timeout');
 const FlowError = require('../../shared/errors/FlowError');
+const { findContainerSlot, isContainerSlot } = require('../../gui/ContainerSlotRange');
 
 class MineralConversionOperation {
-    constructor({ commandService, guiManager, itemResolver, guiKnowledge = null, config, conversionConfig, logger = null }) {
+    constructor({ commandService, guiManager, context = null, itemResolver, guiKnowledge = null, config, conversionConfig, logger = null }) {
         this.commandService = commandService;
         this.guiManager = guiManager;
+        this.context = context;
         this.itemResolver = itemResolver;
         this.guiKnowledge = guiKnowledge;
         this.logger = logger;
@@ -21,7 +23,10 @@ class MineralConversionOperation {
         return !this.unavailableConversions.has(this.#capabilityKey(baseId, direction));
     }
 
-    async execute(baseId, { direction = 'toBlock', cancellationToken = null } = {}) {
+    async execute(baseId, { direction = 'toBlock', cancellationToken = null, expectedGeneration = null, operationContext = null } = {}) {
+        cancellationToken = operationContext?.cancellation?.token || cancellationToken;
+        expectedGeneration = expectedGeneration ?? operationContext?.connectionGeneration ?? this.context?.getGeneration?.() ?? null;
+        this.#assertGeneration(expectedGeneration);
         let stage = 'validate';
         try {
         if (!['toBlock', 'toBase'].includes(direction)) throw new RangeError(`Unknown mineral conversion direction: ${direction}`);
@@ -57,10 +62,17 @@ class MineralConversionOperation {
             }
             try {
                 ({ session } = await this.guiManager.performAndWaitForOpen(
-                    () => this.commandService.send(this.config.commandKey, { confirm: false }),
+                    () => this.commandService.send(this.config.commandKey, {
+                        confirm: false,
+                        cancellationToken,
+                        expectedGeneration,
+                        operationId: operationContext?.operationId || null,
+                        correlationId: operationContext?.correlationId || null
+                    }),
                     {
                         timeoutMs: this.config.guiTimeoutMs,
                         cancellationToken,
+                        expectedGeneration,
                         label: '/ks',
                         settleMs: this.conversionConfig.menuSettleMs,
                         source: rootSource
@@ -105,6 +117,7 @@ class MineralConversionOperation {
             command: '/ks',
             clicks: [entrySlot],
             actions: ['menu_convert_blocks'],
+            guiId: this.config.conversionGuiId,
             source: 'operation'
         };
         const menuItemId = direction === 'toBlock'
@@ -130,6 +143,8 @@ class MineralConversionOperation {
                 session = await this.guiManager.clickAndWaitForTransition(entrySlot, {
                     timeoutMs: this.config.guiTimeoutMs,
                     cancellationToken,
+                    expectedGeneration,
+                    cancellationToken,
                     label: 'mineral conversion menu click',
                     requireNewWindow: false,
                     settleMs: this.conversionConfig.menuSettleMs,
@@ -138,24 +153,22 @@ class MineralConversionOperation {
                 session = this.guiManager.syncCurrentWindow?.() || session;
                 cancellationToken?.throwIfCancelled?.();
 
-                slot = this.guiKnowledge
-                    ? await this.guiKnowledge.resolveSlot(session, {
-                        source: conversionSource,
-                        roleId,
-                        logicalItemId: menuItemId,
-                        context: 'minerals-conversion'
-                    })
-                    : this.#findSlot(session.window, menuItemId, 'minerals-conversion');
+                const ready = await this.#waitForConversionMenuReady({
+                    session, menuItemId, conversionSource, roleId, cancellationToken, expectedGeneration
+                });
+                session = ready.session || session;
+                slot = ready.slot;
 
                 if (slot >= 0) {
                     lastTransitionError = null;
                     break;
                 }
 
-                if (this.#looksLikeConversionMenu(session?.window)) {
+                if (ready.menuRecognized) {
                     // The conversion GUI is genuinely open and this resource is
                     // not offered by the server. This is a capability miss, not
                     // a click race, so do not keep clicking unrelated slots.
+                    lastTransitionError = null;
                     break;
                 }
 
@@ -190,10 +203,17 @@ class MineralConversionOperation {
                 }
             }
             ({ session } = await this.guiManager.performAndWaitForOpen(
-                () => this.commandService.send(this.config.commandKey, { confirm: false }),
+                () => this.commandService.send(this.config.commandKey, {
+                    confirm: false,
+                    cancellationToken,
+                    expectedGeneration,
+                    operationId: operationContext?.operationId || null,
+                    correlationId: operationContext?.correlationId || null
+                }),
                 {
                     timeoutMs: this.config.guiTimeoutMs,
                     cancellationToken,
+                    expectedGeneration,
                     label: '/ks conversion retry',
                     settleMs: this.conversionConfig.menuSettleMs,
                     source: rootSource
@@ -237,7 +257,8 @@ class MineralConversionOperation {
             operation: 'MineralConversionOperation', step: stage, phase: 'START',
             action: direction, resource: baseId, direction, slot, itemName: menuItemId
         });
-        await this.guiManager.click(slot);
+        this.#assertGeneration(expectedGeneration);
+        await this.guiManager.click(slot, { cancellationToken, expectedGeneration });
         await Timeout.delay(this.conversionConfig.resultDelayMs, { cancellationToken });
         this.logger?.info?.('CONVERT ACTION OK', {
             operation: 'MineralConversionOperation', step: stage, phase: 'OK',
@@ -254,14 +275,50 @@ class MineralConversionOperation {
         }
     }
 
+    #assertGeneration(expectedGeneration) {
+        if (expectedGeneration === null || expectedGeneration === undefined || !this.context) return;
+        const expected = Number(expectedGeneration);
+        if (this.context.has?.() && Number(this.context.getGeneration?.()) === expected) return;
+        throw new FlowError('Mineral conversion belongs to a stale connection generation.', {
+            code: 'DISCONNECTED', subsystem: 'mineral-conversion', operation: 'MineralConversionOperation', step: 'generation-guard', retryable: true,
+            details: { expectedGeneration: expected, currentGeneration: this.context.getGeneration?.() ?? null }
+        });
+    }
+
     #resolveMenuEntrySlot(window, configuredSlot, logicalItemId) {
         const slots = window?.slots || [];
-        if (Number.isInteger(configuredSlot) && configuredSlot >= 0 && slots[configuredSlot]) return configuredSlot;
+        if (isContainerSlot(window, configuredSlot) && slots[configuredSlot]) return configuredSlot;
         return this.#findSlot(window, logicalItemId, 'minerals-menu');
     }
 
     #findSlot(window, logicalItemId, context) {
-        return (window?.slots || []).findIndex(item => item && this.itemResolver.matches(item, logicalItemId, context).matched);
+        return findContainerSlot(window, item => item && this.itemResolver.matches(item, logicalItemId, context).matched);
+    }
+
+    async #waitForConversionMenuReady({ session, menuItemId, conversionSource, roleId, cancellationToken, expectedGeneration }) {
+        const deadline = Date.now() + this.conversionConfig.menuOptionReadyTimeoutMs;
+        let current = session;
+        let menuRecognized = false;
+        while (Date.now() <= deadline) {
+            cancellationToken?.throwIfCancelled?.();
+            this.#assertGeneration(expectedGeneration);
+            current = this.guiManager.syncCurrentWindow?.() || current;
+            if (current?.window) {
+                const identity = typeof this.guiManager?.identify === 'function'
+                    ? this.guiManager.identify(current, { expectedId: this.config.conversionGuiId, source: conversionSource })
+                    : null;
+                if (identity?.id === this.config.conversionGuiId && Number(identity?.confidence || 0) >= 0.58) menuRecognized = true;
+                if (this.#looksLikeConversionMenu(current.window)) menuRecognized = true;
+                const resolved = this.guiKnowledge
+                    ? await this.guiKnowledge.resolveSlot(current, {
+                        source: conversionSource, roleId, logicalItemId: menuItemId, context: 'minerals-conversion'
+                    })
+                    : this.#findSlot(current.window, menuItemId, 'minerals-conversion');
+                if (resolved >= 0) return { session: current, slot: resolved, menuRecognized: true };
+            }
+            await Timeout.delay(50, { cancellationToken });
+        }
+        return { session: current, slot: -1, menuRecognized };
     }
 
     #looksLikeConversionMenu(window) {
@@ -293,6 +350,7 @@ class MineralConversionOperation {
         return {
             ...config,
             conversionMenuSlot,
+            conversionGuiId: typeof config.conversionGuiId === 'string' && config.conversionGuiId.trim() ? config.conversionGuiId.trim() : 'mineralConversion',
             commandOpenAttempts: Number.isInteger(config.commandOpenAttempts) && config.commandOpenAttempts > 0 ? config.commandOpenAttempts : 3,
             commandOpenRetryMs: Number.isFinite(config.commandOpenRetryMs) && config.commandOpenRetryMs >= 0 ? config.commandOpenRetryMs : 600,
             commandCloseSettleMs: Number.isFinite(config.commandCloseSettleMs) && config.commandCloseSettleMs >= 0 ? config.commandCloseSettleMs : 350
@@ -319,7 +377,8 @@ class MineralConversionOperation {
             menuSettleMs: positive('menuSettleMs', 200),
             resultDelayMs: positive('resultDelayMs', 300),
             menuTransitionAttempts: attempts,
-            menuTransitionRetryMs: positive('menuTransitionRetryMs', 350)
+            menuTransitionRetryMs: positive('menuTransitionRetryMs', 350),
+            menuOptionReadyTimeoutMs: positive('menuOptionReadyTimeoutMs', 1500)
         });
     }
 }

@@ -2,6 +2,8 @@
   "targetId": "super_alloy",
   "timeoutMs": 900000,
   "inventorySafetyEmptySlots": 2,
+  "pvInventorySettleTimeoutMs": 1600,
+  "pvInventorySettlePollMs": 50,
   "quantityOptimization": {
     "enabled": true,
     "useAllForB2": true,

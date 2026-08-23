@@ -2,11 +2,6 @@
   "commandKey": "smelting",
   "mineralsCommandKey": "minerals",
   "recipes": {
-    "stone_to_smooth_stone": {
-      "input": "stone",
-      "output": "smooth_stone",
-      "menuItemId": "smelt_stone"
-    },
     "raw_iron_to_iron": {
       "input": "raw_iron",
       "output": "iron_ingot",

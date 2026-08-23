@@ -28,12 +28,12 @@ function registerShutdown(application, { logger = null, timeoutMs = 10000 } = {}
     };
 
     const onSignal = signal => {
-        shutdown(signal).catch(() => {});
+        shutdown(signal).catch(error => logger?.debug?.('Shutdown rejection already recorded.', { reason: signal, error }));
     };
     const onFatal = (type, error) => {
         logger?.error?.(`Unhandled process failure: ${type}.`, { error });
         process.exitCode = 1;
-        shutdown(type).catch(() => {});
+        shutdown(type).catch(shutdownError => logger?.debug?.('Fatal shutdown rejection already recorded.', { reason: type, error: shutdownError }));
     };
 
     const sigint = () => onSignal('SIGINT');

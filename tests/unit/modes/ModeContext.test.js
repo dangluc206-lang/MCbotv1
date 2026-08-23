@@ -1,0 +1,30 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const ModeContext = require('../../../src/modes/ModeContext');
+const CapabilityRegistry = require('../../../src/core/registry/CapabilityRegistry');
+const EventBus = require('../../../src/core/EventBus');
+
+test('ModeContext exposes capabilities, generation-scoped events, subscriptions and operation delegation', async () => {
+    const capabilities = new CapabilityRegistry({ botId: 'bot-01' });
+    const movement = { move: true };
+    capabilities.register('movement', movement).seal();
+    const eventBus = new EventBus();
+    const botContext = { has: () => true, getGeneration: () => 7 };
+    const calls = [];
+    const operationManager = { run: async (operation, options) => { calls.push(options); return operation.run(); } };
+    const context = new ModeContext({ botId: 'bot-01', botContext, capabilityRegistry: capabilities, eventBus, operationManager });
+    assert.equal(context.capability('movement'), movement);
+    assert.equal(context.state().connectionGeneration, 7);
+    let observed = null;
+    const off = context.on('mode:test:event', event => { observed = event; });
+    context.emit('mode:test:event', { value: 1 });
+    off();
+    assert.equal(observed.botId, 'bot-01');
+    const result = await context.run({ run: async () => 'ok' });
+    assert.equal(result, 'ok');
+    assert.equal(calls[0].connectionGeneration, 7);
+    const bag = context.subscriptions('unit');
+    assert.equal(bag.size(), 0);
+    await bag.close();
+});

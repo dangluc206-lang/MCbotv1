@@ -1,6 +1,7 @@
 'use strict';
 
 const Status = require('./Status');
+const OperationResultContract = require('../contracts/OperationResultContract');
 
 const WAIT_STATUSES = new Set([Status.NOT_READY, Status.NOT_ENOUGH_MATERIALS]);
 const WAIT_CODES = new Set(['NOT_READY', 'WAITING_MATERIALS', 'NOT_ENOUGH_MATERIALS']);
@@ -29,10 +30,15 @@ function classifyRuntimeResult({ result = null, error = null, token = null } = {
         || result?.code
     );
 
-    if (status === Status.CANCELLED
-        || code === 'CANCELLED'
+    const outcome = OperationResultContract.classify({ status, code, success: result?.success === true });
+
+    if (outcome === OperationResultContract.Outcome.CANCELLED
         || effectiveError?.name === 'OperationCancelledError') {
         return Object.freeze({ kind: 'EXPECTED_CANCEL', status, code: code || 'CANCELLED', error: effectiveError });
+    }
+
+    if (outcome === OperationResultContract.Outcome.STALE) {
+        return Object.freeze({ kind: 'STALE', status, code: code || 'STALE', error: effectiveError });
     }
 
     if (WAIT_STATUSES.has(status)

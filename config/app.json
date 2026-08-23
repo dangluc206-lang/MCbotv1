@@ -16,6 +16,12 @@
   },
   "commandIntervalMs": 350,
   "shutdownTimeoutMs": 10000,
+  "operations": {
+    "maxPending": 128,
+    "defaultQueueWaitTimeoutMs": 5000,
+    "defaultExecutionTimeoutMs": 30000,
+    "shutdownDrainTimeoutMs": 5000
+  },
   "multiBot": {
     "connectionStartSpacingMs": 10000,
     "postSuccessSpacingMs": 10000,
@@ -23,6 +29,15 @@
     "connectionResetCooldownMs": 20000,
     "lostConnectionCooldownMs": 20000,
     "loginTooFastCooldownMs": 30000
+  },
+  "controlPlane": {
+    "enabled": true,
+    "intentFile": "data/runtime/control/intents.json",
+    "maxBytes": 262144,
+    "concurrency": 2,
+    "maxPending": 256,
+    "taskTimeoutMs": 60000,
+    "shutdownDrainMs": 5000
   },
   "diagnostics": {
     "runtimeFailures": {

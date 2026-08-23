@@ -656,6 +656,22 @@
             "value": "Tungsten"
           }
         ]
+      },
+      "inventory": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:VOLFRAM"
+          }
+        ]
+      },
+      "personal-vault": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:VOLFRAM"
+          }
+        ]
       }
     }
   },

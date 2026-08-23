@@ -1,11 +1,25 @@
 'use strict';
 
+function rejectUnknown(value, allowed, label, errors) {
+    const keys = new Set(allowed);
+    for (const key of Object.keys(value || {})) {
+        if (!keys.has(key)) errors.push(`${label}.${key} is not allowed`);
+    }
+}
+
 module.exports = value => {
     const errors = [];
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
         return { valid: false, errors: ['discord config must be an object'] };
     }
+    rejectUnknown(value, [
+        'enabled', 'remoteOnly', 'tokenEnv', 'applicationIdEnv', 'guildIdEnv', 'allowedUserIdsEnv',
+        'commandName', 'modeCommandName', 'fishingModeCommandName', 'skyCommandName', 'defaultBotId',
+        'guiTimeoutMs', 'readyTimeoutMs', 'maxAttachmentBytes', 'ephemeral',
+        'targets', 'panels'
+    ], 'discord', errors);
     if (typeof value.enabled !== 'boolean') errors.push('enabled must be boolean');
+    if (value.remoteOnly !== undefined && typeof value.remoteOnly !== 'boolean') errors.push('remoteOnly must be boolean');
     if (typeof value.commandName !== 'string' || !/^[a-z0-9_-]{1,32}$/.test(value.commandName)) {
         errors.push('commandName must be a lowercase Discord command name');
     }
@@ -13,6 +27,14 @@ module.exports = value => {
     if (value.modeCommandName !== undefined
         && (typeof value.modeCommandName !== 'string' || !/^[a-z0-9_-]{1,32}$/.test(value.modeCommandName))) {
         errors.push('modeCommandName must be a lowercase Discord command name');
+    }
+    if (value.skyCommandName !== undefined
+        && (typeof value.skyCommandName !== 'string' || !/^[a-z0-9_-]{1,32}$/.test(value.skyCommandName))) {
+        errors.push('skyCommandName must be a lowercase Discord command name');
+    }
+    if (value.fishingModeCommandName !== undefined
+        && (typeof value.fishingModeCommandName !== 'string' || !/^[a-z0-9_-]{1,32}$/.test(value.fishingModeCommandName))) {
+        errors.push('fishingModeCommandName must be a lowercase Discord command name');
     }
     for (const key of ['tokenEnv', 'applicationIdEnv', 'allowedUserIdsEnv', 'defaultBotId']) {
         if (typeof value[key] !== 'string' || !value[key].trim()) errors.push(`${key} is required`);
@@ -35,6 +57,7 @@ module.exports = value => {
                 errors.push(`targets.${id} must be an object`);
                 continue;
             }
+            rejectUnknown(target, ['display', 'commandKey'], `targets.${id}`, errors);
             if (typeof target.display !== 'string' || !target.display.startsWith('/')) {
                 errors.push(`targets.${id}.display must be a server command label`);
             }
@@ -49,6 +72,7 @@ module.exports = value => {
         if (!panels || typeof panels !== 'object' || Array.isArray(panels)) {
             errors.push('panels must be an object');
         } else {
+            rejectUnknown(panels, ['enabled', 'botId', 'refreshIntervalMs', 'storePath', 'autoCreateChannels', 'channels'], 'panels', errors);
             if (typeof panels.enabled !== 'boolean') errors.push('panels.enabled must be boolean');
             if (typeof panels.botId !== 'string' || !panels.botId.trim()) errors.push('panels.botId is required');
             if (!Number.isFinite(panels.refreshIntervalMs) || panels.refreshIntervalMs < 1000) {
@@ -59,18 +83,30 @@ module.exports = value => {
             if (!panels.channels || typeof panels.channels !== 'object' || Array.isArray(panels.channels)) {
                 errors.push('panels.channels must be an object');
             } else {
+                rejectUnknown(panels.channels, ['control', 'config', 'errors', 'admin'], 'panels.channels', errors);
                 for (const kind of ['control', 'config', 'errors']) {
                     const channel = panels.channels[kind];
                     if (!channel || typeof channel !== 'object') {
                         errors.push(`panels.channels.${kind} is required`);
                         continue;
                     }
+                    rejectUnknown(channel, ['idEnv', 'name'], `panels.channels.${kind}`, errors);
                     if (typeof channel.name !== 'string' || !channel.name.trim()) {
                         errors.push(`panels.channels.${kind}.name is required`);
                     }
                     if (channel.idEnv !== null && channel.idEnv !== undefined
                         && (typeof channel.idEnv !== 'string' || !channel.idEnv.trim())) {
                         errors.push(`panels.channels.${kind}.idEnv must be null or a non-empty string`);
+                    }
+                }
+                if (panels.channels.admin !== undefined) {
+                    const admin = panels.channels.admin;
+                    if (!admin || typeof admin !== 'object' || Array.isArray(admin)) {
+                        errors.push('panels.channels.admin must be an object');
+                    } else {
+                        rejectUnknown(admin, ['idEnv', 'name'], 'panels.channels.admin', errors);
+                        if (typeof admin.name !== 'string' || !admin.name.trim()) errors.push('panels.channels.admin.name is required');
+                        if (admin.idEnv !== null && admin.idEnv !== undefined && (typeof admin.idEnv !== 'string' || !admin.idEnv.trim())) errors.push('panels.channels.admin.idEnv must be null or a non-empty string');
                     }
                 }
             }

@@ -1,0 +1,1312 @@
+'use strict';
+
+const state = {
+  snapshot: null,
+  profiles: [],
+  commands: [],
+  skyCommands: {},
+  skyCommandSelections: [],
+  skyCommandEditingId: null,
+  logs: [],
+  preferences: null,
+  appInfo: null,
+  guiOutput: null,
+  page: localStorage.getItem('mcbot.page') || 'dashboard',
+  profilesLoaded: false,
+  commandsLoaded: false,
+  lastSnapshotReceivedAt: 0,
+  renderScheduled: false,
+  logRenderScheduled: false,
+  logUnread: 0,
+  pending: new Set(),
+  selectorSignature: '',
+  configGroups: [],
+  customModes: [],
+  customModules: [],
+  customDraft: null,
+  updateStatus: null,
+  localUpdate: null,
+  updateMigration: null,
+  ai: { workspace: null, models: [], messages: [], trace: [], busy: false }
+};
+
+const $ = selector => document.querySelector(selector);
+const $$ = selector => [...document.querySelectorAll(selector)];
+const configLabels = Object.freeze({
+  app:'Ứng dụng & vận hành', server:'Máy chủ Minecraft', commands:'Danh sách lệnh', skyCommands:'Lệnh riêng theo Sky', commandResponses:'Phản hồi lệnh', serverLogin:'Đăng nhập server', resourcePack:'Gói tài nguyên', discord:'Discord', guiWindows:'Nhận diện cửa sổ GUI', guiSlots:'Vai trò ô GUI', guiObservation:'Quan sát GUI', inventoryObservation:'Quan sát túi đồ', movement:'Di chuyển', locations:'Vị trí', routes:'Tuyến đường', items:'Nhận diện vật phẩm', storage:'Kho /kho', personalVault:'Kho cá nhân /pv 2', minerals:'Menu khoáng sản', mineralConversions:'Đổi phôi/khối & bảo vệ kho', smelting:'Nung', island:'Đảo /is', dungeon:'Hầm ngục', skyblock:'Vào Skyblock', recipes:'Công thức chế tạo', craftingTiers:'Tầng chế tạo', b5:'Quy tắc B5', collectorB5Mode:'Collector+B5 cũ', b5CraftMode:'Chế B5 thuần', fishingMode:'Câu cá', dailyRecovery:'Khung phục hồi theo giờ'
+});
+
+const pageTitles = {
+  dashboard: ['Tổng quan', 'Theo dõi và điều khiển toàn bộ bot'],
+  bots: ['Bot', 'Quản lý hồ sơ và kết nối'],
+  modes: ['Chế độ', 'B5 thuần, bảo vệ kho, Skyblock và các chế độ hiện có'],
+  builder: ['Tạo chế độ', 'Ghép mô-đun an toàn thành luồng tự động'],
+  tools: ['Công cụ', 'Trung tâm lệnh và kiểm tra GUI'],
+  logs: ['Nhật ký', 'Theo dõi hoạt động theo thời gian thực'],
+  diagnostics: ['Chẩn đoán', 'Lỗi khi chạy và gói hỗ trợ'],
+  ai: ['AI Local', 'Chat, đọc/sửa project, test và điều khiển runtime qua tool được kiểm soát'],
+  settings: ['Cài đặt', 'Ứng dụng, cấu hình nâng cao, dữ liệu và bảo mật']
+};
+
+async function api(promise) {
+  const response = await promise;
+  if (!response?.success) throw new Error(response?.error?.message || 'API phần mềm gặp lỗi.');
+  const data = response.data;
+  if (data && typeof data === 'object' && data.success === false) {
+    throw new Error(data.error?.message || data.message || 'Tác vụ bị core từ chối.');
+  }
+  return data;
+}
+
+function esc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+}
+
+function toast(message, type = 'ok') {
+  const el = $('#toast');
+  el.textContent = message;
+  el.className = `toast show${type === 'error' ? ' error' : type === 'warn' ? ' warn' : ''}`;
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => { el.className = 'toast'; }, 3200);
+}
+
+function reportRendererError(error, source = 'renderer') {
+  const value = error instanceof Error ? error : new Error(String(error?.message || error || 'Lỗi giao diện không xác định'));
+  const request = window.mcbot?.reportRendererError?.({ message: value.message, stack: value.stack || null, source });
+  if (request?.catch) {
+    request.catch(reportError => console.error(`[MCbot renderer:${source}:report-failed]`, reportError));
+  } else {
+    console.error(`[MCbot renderer:${source}]`, value);
+  }
+}
+
+function formatDuration(ms) {
+  const total = Math.max(0, Math.floor(Number(ms || 0) / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h) return `${h}h ${m}m`;
+  if (m) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function connClass(status) {
+  const value = String(status || '').toLowerCase();
+  return ['connected', 'reconnecting', 'disconnected', 'failed'].includes(value) ? value : '';
+}
+
+function viConnection(status) {
+  return ({ CONNECTED: 'Đã kết nối', CONNECTING: 'Đang kết nối', RECONNECTING: 'Đang kết nối lại', DISCONNECTED: 'Đã ngắt', FAILED: 'Lỗi', IDLE: 'Đang rảnh' })[String(status || '').toUpperCase()] || String(status || 'Không rõ');
+}
+
+function viModeBadge(className) {
+  return ({ running: 'ĐANG CHẠY', paused: 'TẠM DỪNG', pending: 'ĐANG CHUẨN BỊ' })[String(className || '').toLowerCase()] || 'ĐANG RẢNH';
+}
+
+function viPressure(level) {
+  return ({ NORMAL: 'Bình thường', RISING: 'Đang tăng', HIGH: 'Cao', CRITICAL: 'Nguy cấp', UNKNOWN: 'Chưa rõ' })[String(level || '').toUpperCase()] || String(level || 'Chưa rõ');
+}
+
+function viPhase(phase) {
+  const map = { OFF:'Tắt', STARTING:'Đang khởi động', RUNNING:'Đang chạy', PAUSED:'Tạm dừng', PAUSING:'Đang tạm dừng', RESUMING:'Đang tiếp tục', STOPPING:'Đang dừng', PREPARING:'Đang chuẩn bị', WAITING_CONNECTION:'Chờ kết nối', WAITING_SKYBLOCK:'Chờ Skyblock', B1_NORMALIZATION:'Đang nung / đổi khối B1', B5_COOLDOWN:'Đang nghỉ sau B5', GOING_HOME:'Đang /is', STORAGE_CHECK:'Đang kiểm tra kho', STORAGE_PROTECTION:'Đang bảo vệ kho', READING_B5:'Đang đọc vật liệu B5', CRAFTING:'Đang chế tạo', WAITING_STORAGE:'Chờ giảm áp lực kho', WAITING_HEADROOM:'Chờ chỗ trống để bung khối', WAITING_MATERIALS:'Chờ vật liệu', WAITING_PV2:'Chờ PV2', B5_COMPLETED:'Đã chế xong B5', WAITING_RETRY:'Chờ thử lại', WAITING_MANUAL_RESUME:'Chờ bấm Tiếp tục sau reconnect', ERROR:'Lỗi' };
+  return map[String(phase || '').toUpperCase()] || String(phase || '—').replaceAll('_',' ');
+}
+
+function viWaitingReason(reason) {
+  return ({ connection:'kết nối', skyblock:'Skyblock', 'storage-pressure':'giảm áp lực kho', materials:'vật liệu', 'pv2-backpressure':'chỗ trống PV2', 'decompression-headroom':'chỗ trống để bung khối', paused:'tiếp tục thủ công', timeout:'thử lại sau timeout', 'not_ready':'hệ thống sẵn sàng', 'manual-resume-after-reconnect':'bấm Tiếp tục sau reconnect', 'b5-cooldown':'hết thời gian nghỉ sau B5' })[String(reason || '').toLowerCase()] || String(reason || '');
+}
+
+function modeInfo(bot) {
+  const owner = bot.modeOwner;
+  const desiredId = bot.intent?.desiredMode || null;
+  if (!owner && desiredId) {
+    const definition = (bot.modes?.available || []).find(entry => entry.definition?.id === desiredId)?.definition;
+    const connection = String(bot.state?.connectionState || '').toUpperCase();
+    const phase = ['CONNECTED'].includes(connection) ? 'Đang chuẩn bị bật chế độ' : 'Đang kết nối để bật chế độ';
+    return { id: desiredId, desiredOnly: true, name: definition?.label || desiredId, phase, paused: bot.intent?.modeState === 'PAUSED', className: 'pending' };
+  }
+  if (!owner) return { id: null, name: 'Đang rảnh', phase: 'Không có chế độ chính', paused: false, className: '' };
+  const id = String(owner.modeId || owner.mode || owner.owner || owner);
+  const target = bot.modes?.byId?.[id] || (id === 'b5-craft' ? bot.modes?.b5Craft : id.includes('fishing') ? bot.modes?.fishing : bot.modes?.collectorB5);
+  const paused = Boolean(target?.paused);
+  const definition = (bot.modes?.available || []).find(entry => entry.definition?.id === id)?.definition;
+  const manualResume = target?.details?.waitingReason === 'manual-resume-after-reconnect';
+  return { id, name: definition?.label || id, phase: viPhase(target?.phase || (paused ? 'PAUSED' : 'RUNNING')), paused, manualResume, className: paused || manualResume ? 'paused' : 'running' };
+}
+
+function position(player) {
+  const p = player?.position;
+  return p ? `${Number(p.x).toFixed(1)}, ${Number(p.y).toFixed(1)}, ${Number(p.z).toFixed(1)}` : '—';
+}
+
+function activeOperation(bot) {
+  const operations = bot.operation?.operations || [];
+  const op = operations[0];
+  if (!op) return null;
+  const meta = op.metadata || {};
+  const detail = meta.step || meta.action || meta.operation || op.status || '';
+  return { name: op.operationName || op.operationId || 'Tác vụ', detail, active: Number(bot.operation?.active || operations.length) };
+}
+
+function isPending(key) { return state.pending.has(key); }
+
+function buttonHtml({ label, action, bot, mode = '', kind = 'ghost', disabled = false, key = '', title = '' }) {
+  const pending = key && isPending(key);
+  return `<button class="button ${kind}${pending ? ' pending' : ''}" data-action="${esc(action)}" data-bot="${esc(bot)}"${mode ? ` data-mode="${esc(mode)}"` : ''}${title ? ` title="${esc(title)}"` : ''}${disabled || pending ? ' disabled' : ''}>${esc(pending ? 'Đang xử lý…' : label)}</button>`;
+}
+
+function renderMetrics() {
+  const bots = state.snapshot?.bots || [];
+  const connected = bots.filter(bot => bot.state?.connectionState === 'CONNECTED').length;
+  const runningModes = bots.filter(bot => bot.modeOwner).length;
+  const activeOps = bots.reduce((sum, bot) => sum + Number(bot.operation?.active || 0), 0);
+  const errors = bots.filter(bot => bot.state?.lastError).length;
+  const uptime = state.snapshot?.system?.uptimeMs || 0;
+  $('#metrics').innerHTML = [
+    ['Bot', bots.length, 'tiến trình đã đăng ký'],
+    ['Đã kết nối', connected, `${Math.max(0, bots.length - connected)} chưa kết nối`],
+    ['Chế độ', runningModes, 'chế độ chính đang chạy'],
+    ['Tác vụ', activeOps, 'tác vụ đang hoạt động'],
+    ['Thời gian chạy', formatDuration(uptime), errors ? `${errors} bot có lỗi` : 'hệ thống nền ổn định']
+  ].map(([label, value, sub]) => `<div class="metric"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(sub)}</small></div>`).join('');
+}
+
+function botCard(bot, fullActions = false) {
+  const profile = bot.profile || {};
+  const connection = bot.state?.connectionState || 'DISCONNECTED';
+  const connected = connection === 'CONNECTED';
+  const connecting = connection === 'RECONNECTING' || connection === 'CONNECTING';
+  const mode = modeInfo(bot);
+  const player = bot.player;
+  const operation = activeOperation(bot);
+  const id = bot.botId;
+  const held = player?.heldItem?.displayName || player?.heldItem?.name || '—';
+  const mainActions = `<div class="actions">
+    ${buttonHtml({ label: 'Kết nối', action: 'connect', bot: id, kind: 'primary', disabled: connected || connecting, key: `connect:${id}` })}
+    ${buttonHtml({ label: 'Về đảo', action: 'home', bot: id, disabled: !connected, key: `home:${id}` })}
+    ${buttonHtml({ label: 'Ngắt riêng bot này', action: 'disconnect', bot: id, kind: 'danger', disabled: !connected && !connecting, key: `disconnect:${id}` })}
+  </div>`;
+  const availableModes = bot.modes?.available || [
+    { definition: { id: 'b5-craft', label: 'Chế B5 thuần' }, readiness: { ready: true } },
+    { definition: { id: 'collector-b5', label: 'Collector+B5 (cũ)' }, readiness: { ready: true } },
+    { definition: { id: 'fishing', label: 'Câu cá' }, readiness: { ready: true } }
+  ];
+  const startModeButtons = availableModes.map(entry => {
+    const modeId = entry.definition?.id || '';
+    const readiness = entry.readiness || { ready: true, missingCapabilities: [] };
+    const profileDisabled = profile.enabled === false;
+    const sameMode = mode.id === modeId;
+    const blocked = !readiness.ready;
+    const missing = (readiness.missingCapabilities || []).join(', ');
+    return buttonHtml({
+      label: `${entry.definition?.label || modeId || 'Chế độ'}${!connected && !connecting ? ' · tự kết nối' : ''}`,
+      action: 'mode-start', bot: id, mode: modeId, kind: 'primary',
+      disabled: profileDisabled || blocked || sameMode,
+      title: profileDisabled ? 'Hồ sơ bot đang tắt.' : blocked ? `Chưa sẵn sàng: ${missing || 'service mode chưa được bind'}` : !connected ? 'Bật mode và tự kết nối bot.' : '',
+      key: `mode:${id}`
+    });
+  }).join('');
+  const modeActions = fullActions ? `<div class="actions">
+    ${startModeButtons}
+    ${buttonHtml({ label: 'Tạm dừng', action: 'mode-pause', bot: id, disabled: !mode.id || mode.paused, key: `mode:${id}` })}
+    ${buttonHtml({ label: 'Tiếp tục', action: 'mode-resume', bot: id, disabled: !mode.id || (!mode.paused && !mode.manualResume), key: `mode:${id}` })}
+    ${buttonHtml({ label: 'Khởi động lại chế độ', action: 'mode-restart', bot: id, kind: 'warn', disabled: !mode.id, key: `mode:${id}` })}
+    ${buttonHtml({ label: 'Dừng chế độ', action: 'mode-stop', bot: id, kind: 'danger', disabled: !mode.id, key: `mode:${id}` })}
+  </div>` : '';
+  return `<article class="bot-card">
+    <div class="bot-head"><div class="bot-name"><strong>${esc(profile.displayName || id)}</strong><span>${esc(profile.username || id)} · phiên kết nối ${esc(bot.connectionGeneration)} · ${esc(player?.ping ?? '—')} ms</span></div><span class="badge ${connClass(connection)}">${esc(viConnection(connection))}</span></div>
+    <div class="bot-stats">
+      <div class="stat"><span>Máu / thức ăn</span><strong>${esc(player?.health ?? '—')} / ${esc(player?.food ?? '—')}</strong></div>
+      <div class="stat"><span>Túi đồ</span><strong>${esc(player?.inventory?.slotsUsed ?? '—')} ô · ${esc(player?.inventory?.itemCount ?? '—')} vật phẩm</strong></div>
+      <div class="stat"><span>Vật phẩm tay chính</span><strong title="${esc(held)}">${esc(held)}</strong></div>
+      <div class="stat"><span>Vị trí</span><strong title="${esc(position(player))}">${esc(position(player))}</strong></div>
+    </div>
+    <div class="mode-box">
+      <div class="mode-row"><div><div class="mode-title">${esc(mode.name)}</div><div class="mode-phase">${esc(mode.phase)}</div></div><span class="badge ${mode.className}">${esc(viModeBadge(mode.className))}</span></div>
+      ${operation ? `<div class="operation-line"><span>${esc(operation.active)} tác vụ</span><strong title="${esc(operation.detail)}">${esc(operation.name)}${operation.detail ? ` · ${esc(operation.detail)}` : ''}</strong></div>` : '<div class="operation-line"><span>0 tác vụ</span><strong>Không có tác vụ đang chạy</strong></div>'}
+      <div class="status-detail-grid">
+        <div class="status-detail"><span>Sky gateway</span><strong>${bot.skyAutoJoin ? `${esc(bot.skyAutoJoin?.location || 'UNKNOWN')} · ${esc(bot.skyAutoJoin?.activeTarget || bot.skyAutoJoin?.readyTarget || profile.skyblockSelection || '—')} · ${bot.skyAutoJoin?.ready ? 'Sẵn sàng' : bot.skyAutoJoin?.pending ? 'Đang xử lý' : bot.skyAutoJoin?.target ? 'Đang chờ mode gateway' : 'Không có mode yêu cầu'}` : '—'}</strong></div>
+        <div class="status-detail"><span>Bảo vệ kho B5</span><strong>${bot.storageProtection?.storageProtection ? `Reserve ${esc(bot.storageProtection.storageProtection.reserveCoverage ?? 1.5)} B5 · bán 64-only ${bot.storageProtection.storageProtection.sellingCapabilityEnabled === false ? 'không khả dụng' : 'khả dụng'} · nung iron → gold` : '—'}</strong></div>
+        <div class="status-detail"><span>GUI hiện tại</span><strong>${esc(bot.gui?.definitionId || bot.gui?.identity?.candidateId || bot.gui?.title || 'Không mở')}${Number.isFinite(bot.gui?.identity?.confidence) ? ` · ${(Number(bot.gui.identity.confidence) * 100).toFixed(0)}%` : ''}</strong></div>
+        <div class="status-detail"><span>Tay phụ</span><strong>${esc(player?.offhandItem?.displayName || player?.offhandItem?.name || '—')}</strong></div>
+        <div class="status-detail"><span>Ô trống ước tính</span><strong>${esc(player?.inventory?.slotsFreeApprox ?? '—')}</strong></div>
+        <div class="status-detail"><span>Hướng nhìn</span><strong>${Number.isFinite(player?.yaw) ? `${Number(player.yaw).toFixed(2)} / ${Number(player.pitch || 0).toFixed(2)}` : '—'}</strong></div>
+        <div class="status-detail"><span>Lần thử vào Sky</span><strong>${esc(bot.skyAutoJoin?.pending?.attempt ?? (bot.skyAutoJoin?.ready ? 'Hoàn tất' : '—'))}</strong></div>
+        <div class="status-detail"><span>Lỗi gần nhất</span><strong title="${esc(bot.state?.lastError?.message || bot.state?.lastError || '')}">${esc(bot.state?.lastError?.message || bot.state?.lastError || 'Không có')}</strong></div>
+      </div>
+      ${mode.id === 'b5-craft' ? (() => { const d = bot.modes?.b5Craft?.details || {}; const blocker = d.lastAutomationBlockers?.[0] || null; const blockerText = blocker ? `${blocker.baseId ? `${blocker.baseId}: ` : ''}${blocker.reason || blocker.status || 'đang chờ'}` : ''; const protection = d.protectionEpisode || null; const protectionBlocker = protection?.blocker || null; const protectionText = protection ? `${protection.state || 'PENDING'} · attempt ${protection.totalAttempts ?? 0}${protectionBlocker ? ` · ${protectionBlocker.resource ? `${protectionBlocker.resource}: ` : ''}${protectionBlocker.reason || protectionBlocker.code || 'blocked'} · backoff ${protectionBlocker.backoffMs ?? 0}ms${Number.isFinite(protection.nextEligibleAt) ? ` · retry ${Math.max(0, protection.nextEligibleAt - Date.now())}ms` : ''}` : ''}` : ''; const trace = d.b5Automation?.trace || null; const decision = trace?.plan?.decision; const traceText = trace ? `${trace.traceId || ''}${decision?.kind ? ` · ${decision.kind}${decision.resource ? ` ${decision.resource}` : ''}` : ''}` : ''; const batchText = d.batchId ? `${d.batchId}${d.batchProtectionRequired ? ' · chờ bảo vệ kho' : ' · đã bảo vệ kho'}` : 'chưa có batch'; return `<div class="operation-line"><span>B5 thuần</span><strong>Đã hoàn tất: ${esc(d.completedB5 ?? 0)} · Engine: ${esc(d.automationRuns ?? 0)} lượt / ${esc(d.productiveCycles ?? 0)} có tiến triển · ${esc(batchText)} · ${esc(d.waitingReason ? `Đang chờ: ${viWaitingReason(d.waitingReason)}` : 'Đang xử lý')}</strong></div>${protectionText ? `<div class="operation-line"><span>Gate bảo vệ kho</span><strong title="${esc(protectionText)}">${esc(protectionText)}</strong></div>` : ''}${traceText ? `<div class="operation-line"><span>Trace B5 gần nhất</span><strong title="${esc(traceText)}">${esc(traceText)}</strong></div>` : ''}${blockerText ? `<div class="operation-line"><span>Điểm chặn B5</span><strong title="${esc(blockerText)}">${esc(blockerText)}</strong></div>` : ''}`; })() : ''}
+    </div>
+    ${mainActions}${modeActions}
+  </article>`;
+}
+
+function renderDashboard() {
+  renderMetrics();
+  const bots = state.snapshot?.bots || [];
+  $('#dashboardBots').innerHTML = bots.length ? bots.map(bot => botCard(bot)).join('') : '<div class="empty panel">Chưa có tiến trình bot.</div>';
+  const banner = $('#setupBanner');
+  const lifecycle = state.snapshot?.lifecycle || 'STOPPED';
+  if (lifecycle === 'FAILED') {
+    banner.classList.remove('hidden');
+    banner.innerHTML = '<strong>Hệ thống nền khởi động thất bại.</strong><span>Mở Nhật ký/Chẩn đoán để xem nguyên nhân hoặc vào Cài đặt để khởi động lại.</span>';
+  } else if (lifecycle !== 'RUNNING') {
+    banner.classList.remove('hidden');
+    banner.innerHTML = `<strong>Hệ thống nền đang ${esc(viPhase(lifecycle))}.</strong><span>Điều khiển bot chỉ hoạt động khi hệ thống nền đang chạy.</span>`;
+  } else {
+    banner.classList.add('hidden');
+  }
+}
+
+function renderModes() {
+  const bots = state.snapshot?.bots || [];
+  $('#modeCards').innerHTML = bots.length ? bots.map(bot => botCard(bot, true)).join('') : '<div class="empty panel">Chưa có tiến trình bot.</div>';
+}
+
+function renderProfiles() {
+  const profiles = state.profiles || [];
+  if (!profiles.length) {
+    $('#profilesTable').innerHTML = `<div class="empty">${state.snapshot?.lifecycle === 'RUNNING' ? 'Không có hồ sơ bot.' : 'Khởi động hệ thống nền để tải hồ sơ.'}</div>`;
+    return;
+  }
+  $('#profilesTable').innerHTML = `<div class="table-wrap"><table class="table"><thead><tr><th>Mã bot</th><th>Tên</th><th>Tài khoản</th><th>Xác thực</th><th>Phiên bản</th><th>Máy chủ</th><th>Sky</th><th>Đã bật</th><th></th></tr></thead><tbody>${profiles.map(profile => `<tr data-profile="${esc(profile.id)}">
+    <td class="mono">${esc(profile.id)}</td>
+    <td><input data-field="displayName" value="${esc(profile.displayName || '')}"></td>
+    <td><input data-field="username" value="${esc(profile.username || '')}"></td>
+    <td><select data-field="auth"><option value="offline" ${profile.auth === 'offline' ? 'selected' : ''}>offline</option><option value="microsoft" ${profile.auth === 'microsoft' ? 'selected' : ''}>microsoft</option></select></td>
+    <td><input data-field="version" value="${esc(profile.version || '')}"></td>
+    <td><input data-field="serverProfile" value="${esc(profile.serverProfile || 'default')}"></td>
+    <td><select data-field="skyblockSelection"><option value="sky1" ${profile.skyblockSelection === 'sky1' || !profile.skyblockSelection ? 'selected' : ''}>Sky 1</option><option value="sky2" ${profile.skyblockSelection === 'sky2' ? 'selected' : ''}>Sky 2</option></select></td>
+    <td><input type="checkbox" data-field="enabled" ${profile.enabled ? 'checked' : ''}></td>
+    <td class="profile-actions"><button class="button primary small" data-action="save-profile" data-bot="${esc(profile.id)}">Lưu</button><button class="button ghost small" data-action="clone-profile" data-bot="${esc(profile.id)}">Nhân bản</button><button class="button danger small" data-action="delete-profile" data-bot="${esc(profile.id)}" ${profile.enabled ? 'disabled title="Tắt bot trước khi xóa"' : ''}>Xóa</button></td>
+  </tr>`).join('')}</tbody></table></div>`;
+}
+
+function syncSelect(element, html, preferred = null) {
+  if (!element) return;
+  const current = preferred ?? element.value;
+  if (element.innerHTML !== html) element.innerHTML = html;
+  if ([...element.options].some(option => option.value === current)) element.value = current;
+}
+
+function syncSelectors() {
+  const bots = state.snapshot?.bots || [];
+  const botOptions = bots.map(bot => `<option value="${esc(bot.botId)}">${esc(bot.profile?.displayName || bot.botId)}</option>`).join('');
+  const commandOptions = (state.commands || []).map(command => `<option value="${esc(command.key)}">${command.scope === 'sky' ? `[${esc(command.skyId)}] ` : ''}${esc(command.command)} · ${esc(command.label || command.key)}</option>`).join('');
+  const guiCommandOptions = (state.commands || []).filter(command => command.scope !== 'sky').map(command => `<option value="${esc(command.key)}">${esc(command.command)} · ${esc(command.label || command.key)}</option>`).join('');
+  const signature = `${bots.map(bot => `${bot.botId}:${bot.profile?.displayName || ''}`).join('|')}::${state.commands.map(command => `${command.key}:${command.command || ''}`).join('|')}`;
+  if (signature === state.selectorSignature) return;
+  state.selectorSignature = signature;
+  for (const id of ['guiBot', 'commandBot', 'skyCommandBot', 'collectorConfigBot', 'fishingConfigBot', 'secretBotSelect']) syncSelect($('#' + id), botOptions);
+  syncSelect($('#logBot'), '<option value="all">Mọi bot</option>' + botOptions, localStorage.getItem('mcbot.logBot') || 'all');
+  syncSelect($('#guiCommand'), guiCommandOptions);
+  syncSelect($('#commandKey'), commandOptions);
+}
+
+function renderBackend() {
+  const lifecycle = state.snapshot?.lifecycle || 'STOPPED';
+  $('#backendState').textContent = viPhase(lifecycle);
+  $('#backendDot').className = `dot ${String(lifecycle).toLowerCase()}`;
+  $('#sidebarFleet').textContent = `${state.snapshot?.bots?.length || 0} bot`;
+  $('#sidebarMemory').textContent = `${state.snapshot?.system?.memoryMb ?? '—'} MB`;
+  $('#settingsBackendState').textContent = viPhase(lifecycle);
+  $('#settingsUptime').textContent = formatDuration(state.snapshot?.system?.uptimeMs || 0);
+  $('#settingsMemory').textContent = `${state.snapshot?.system?.memoryMb ?? '—'} MB`;
+  $('#startBackend').disabled = lifecycle === 'RUNNING' || lifecycle === 'STARTING';
+  $('#stopBackend').disabled = lifecycle !== 'RUNNING';
+  $('#restartBackend').disabled = lifecycle === 'STARTING' || lifecycle === 'STOPPING';
+}
+
+function renderFreshness() {
+  const age = state.lastSnapshotReceivedAt ? Date.now() - state.lastSnapshotReceivedAt : Infinity;
+  const threshold = Math.max(5000, Number(state.preferences?.snapshotIntervalMs || 900) * 4);
+  const stale = age > threshold;
+  const el = $('#liveState');
+  el.classList.toggle('stale', stale);
+  el.querySelector('strong').textContent = stale ? 'Mất cập nhật trực tiếp' : 'Trực tiếp';
+  $('#updatedAt').textContent = state.snapshot?.updatedAt ? `${stale ? 'Lần cuối' : 'Cập nhật'} ${new Date(state.snapshot.updatedAt).toLocaleTimeString('vi-VN', { hour12: false })}` : 'Chưa có bản chụp trạng thái';
+}
+
+function scheduleDynamicRender() {
+  if (state.renderScheduled) return;
+  state.renderScheduled = true;
+  requestAnimationFrame(() => {
+    state.renderScheduled = false;
+    renderBackend();
+    syncSelectors();
+    if (state.page === 'dashboard') renderDashboard();
+    if (state.page === 'modes') renderModes();
+    renderFreshness();
+  });
+}
+
+function acceptSnapshot(snapshot) {
+  if (!snapshot) return;
+  const previousLifecycle = state.snapshot?.lifecycle;
+  state.snapshot = snapshot;
+  state.lastSnapshotReceivedAt = Date.now();
+  if (previousLifecycle !== 'RUNNING' && snapshot.lifecycle === 'RUNNING') loadStaticData().catch(error => toast(error.message, 'error'));
+  scheduleDynamicRender();
+}
+
+async function refreshSnapshot({ quiet = false } = {}) {
+  try { acceptSnapshot(await api(window.mcbot.snapshot())); }
+  catch (error) { if (!quiet) toast(error.message, 'error'); }
+}
+
+async function loadProfiles() {
+  if (state.snapshot?.lifecycle !== 'RUNNING') { state.profiles = []; state.profilesLoaded = false; renderProfiles(); return; }
+  state.profiles = await api(window.mcbot.profiles());
+  state.profilesLoaded = true;
+  renderProfiles();
+}
+
+async function loadCommands() {
+  if (state.snapshot?.lifecycle !== 'RUNNING') { state.commands = []; state.commandsLoaded = false; state.selectorSignature = ''; syncSelectors(); return; }
+  state.commands = await api(window.mcbot.commands());
+  state.commandsLoaded = true;
+  state.selectorSignature = '';
+  syncSelectors();
+}
+
+function renderSkyCommands() {
+  const skySelect = $('#skyCommandSky');
+  const list = $('#skyCommandList');
+  if (!skySelect || !list) return;
+  const selections = state.skyCommandSelections.length ? state.skyCommandSelections : Object.keys(state.skyCommands || {});
+  const preferred = skySelect.value || selections[0] || '';
+  syncSelect(skySelect, selections.map(id => `<option value="${esc(id)}">${esc(id)}</option>`).join(''), preferred);
+  const skyId = skySelect.value || selections[0] || '';
+  const entries = Object.entries(state.skyCommands?.[skyId] || {}).sort(([a],[b]) => a.localeCompare(b));
+  list.innerHTML = entries.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>ID</th><th>Tên</th><th>Lệnh</th><th>Bật</th><th></th></tr></thead><tbody>${entries.map(([id, d]) => `<tr>
+    <td class="mono">${esc(id)}</td><td>${esc(d.label || id)}</td><td class="mono">${esc(d.command)}</td><td>${d.enabled === false ? 'Tắt' : 'Bật'}</td>
+    <td class="profile-actions"><button class="button ghost small" data-sky-command-action="edit" data-sky="${esc(skyId)}" data-command-id="${esc(id)}">Sửa</button><button class="button primary small" data-sky-command-action="send" data-sky="${esc(skyId)}" data-command-id="${esc(id)}" ${d.enabled === false ? 'disabled' : ''}>Gửi</button><button class="button danger small" data-sky-command-action="delete" data-sky="${esc(skyId)}" data-command-id="${esc(id)}">Xóa</button></td>
+  </tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sky này chưa có lệnh riêng.</div>';
+}
+
+async function loadSkyCommands() {
+  if (state.snapshot?.lifecycle !== 'RUNNING') {
+    state.skyCommands = {};
+    state.skyCommandSelections = [];
+    renderSkyCommands();
+    return;
+  }
+  const group = await api(window.mcbot.skyCommands());
+  state.skyCommands = group.value || {};
+  state.skyCommandSelections = Array.isArray(group.selections) ? group.selections : [];
+  renderSkyCommands();
+}
+
+function clearSkyCommandEditor() {
+  state.skyCommandEditingId = null;
+  $('#skyCommandId').value = '';
+  $('#skyCommandLabel').value = '';
+  $('#skyCommandValue').value = '';
+  $('#skyCommandDescription').value = '';
+  $('#skyCommandEnabled').checked = true;
+}
+
+async function saveSkyCommandFromEditor() {
+  const result = await api(window.mcbot.saveSkyCommand({
+    skyId: $('#skyCommandSky').value,
+    commandId: $('#skyCommandId').value,
+    previousCommandId: state.skyCommandEditingId,
+    label: $('#skyCommandLabel').value,
+    command: $('#skyCommandValue').value,
+    description: $('#skyCommandDescription').value,
+    enabled: $('#skyCommandEnabled').checked
+  }));
+  await Promise.all([loadSkyCommands(), loadCommands()]);
+  clearSkyCommandEditor();
+  return result;
+}
+
+async function loadStaticData() {
+  const jobs = [loadCommands(), loadSkyCommands(), loadConfigurationCatalog(), loadCustomModeCatalog()];
+  if (state.page === 'bots' || !state.profilesLoaded) jobs.push(loadProfiles());
+  await Promise.all(jobs);
+}
+
+function logMatches(log) {
+  const level = $('#logLevel').value;
+  const bot = $('#logBot').value;
+  const query = $('#logSearch').value.trim().toLowerCase();
+  if (level !== 'all' && log.level !== level) return false;
+  const text = `${log.scope || ''} ${log.message || ''} ${log.meta?.botId || ''} ${log.meta?.reason || ''} ${log.meta?.code || ''}`.toLowerCase();
+  if (bot !== 'all' && !text.includes(bot.toLowerCase())) return false;
+  return !query || text.includes(query);
+}
+
+function renderLogs() {
+  if ($('#logPause').checked) return;
+  const filtered = state.logs.filter(logMatches).slice(-600);
+  const consoleEl = $('#logConsole');
+  const autoScroll = $('#logAutoScroll').checked;
+  consoleEl.innerHTML = filtered.map(log => {
+    const time = new Date(log.timestamp).toLocaleTimeString('vi-VN', { hour12: false });
+    const repeat = Number(log.repeatCount || log.meta?.repeatCount || 0);
+    const repeatText = repeat > 0 ? ` <span class="log-meta">· lặp ${esc(repeat)} lần</span>` : '';
+    const reason = log.meta?.reason && log.level !== 'info' ? ` <span class="log-meta">· ${esc(String(log.meta.reason))}</span>` : '';
+    return `<div class="log-line ${esc(log.level)}"><span class="log-time">${esc(time)}</span><span class="log-level ${esc(log.level)}">${esc(String(log.level || '').toUpperCase())}</span><span class="log-scope">${esc(log.scope)}</span><span class="log-message">${esc(log.message)}${reason}${repeatText}</span></div>`;
+  }).join('') || '<div class="empty">Không có nhật ký phù hợp.</div>';
+  $('#logCount').textContent = `${filtered.length} / ${state.logs.length} dòng`;
+  if (autoScroll) consoleEl.scrollTop = consoleEl.scrollHeight;
+  state.logUnread = 0;
+  updateLogUnread();
+}
+
+function scheduleLogRender() {
+  if (state.logRenderScheduled || state.page !== 'logs' || $('#logPause').checked) return;
+  state.logRenderScheduled = true;
+  requestAnimationFrame(() => { state.logRenderScheduled = false; renderLogs(); });
+}
+
+function updateLogUnread() {
+  const badge = $('#logUnreadBadge');
+  badge.textContent = String(Math.min(999, state.logUnread));
+  badge.classList.toggle('hidden', state.logUnread <= 0);
+  $('#logPausedHint').textContent = $('#logPause').checked && state.logUnread ? `${state.logUnread} dòng mới đang chờ` : '';
+}
+
+async function refreshDiagnostics() {
+  try {
+    const list = await api(window.mcbot.diagnostics(80));
+    $('#diagnosticList').innerHTML = list.length ? list.map(item => `<div class="diagnostic-item" data-diagnostic="${esc(item.name)}"><strong>${esc(item.name)}</strong><span>${esc(new Date(item.modifiedAt).toLocaleString('vi-VN'))} · ${esc(item.size)} bytes</span></div>`).join('') : '<div class="empty">Chưa có bản ghi lỗi runtime.</div>';
+  } catch (error) { toast(error.message, 'error'); }
+}
+
+
+function aiLocalConfig() {
+  return {
+    baseUrl: $('#aiBaseUrl')?.value?.trim() || localStorage.getItem('mcbot.ai.baseUrl') || 'http://127.0.0.1:11434/v1',
+    model: $('#aiModel')?.value || localStorage.getItem('mcbot.ai.model') || '',
+    permission: $('#aiPermission')?.value || localStorage.getItem('mcbot.ai.permission') || 'READ',
+    workspaceRoot: $('#aiWorkspace')?.value || localStorage.getItem('mcbot.ai.workspace') || ''
+  };
+}
+
+function persistAiLocalConfig() {
+  const config = aiLocalConfig();
+  localStorage.setItem('mcbot.ai.baseUrl', config.baseUrl);
+  localStorage.setItem('mcbot.ai.model', config.model);
+  localStorage.setItem('mcbot.ai.permission', config.permission);
+  if (config.workspaceRoot) localStorage.setItem('mcbot.ai.workspace', config.workspaceRoot);
+}
+
+function renderAiWorkspace() {
+  const workspace = state.ai.workspace;
+  $('#aiWorkspaceVersion').textContent = workspace?.version || '—';
+  $('#aiWorkspaceFiles').textContent = workspace?.fileCount ?? '—';
+  $('#aiWorkspaceAgents').textContent = workspace ? (workspace.hasAgents ? 'Có' : 'Không') : '—';
+}
+
+function renderAiMessages() {
+  const target = $('#aiMessages');
+  if (!target) return;
+  const messages = state.ai.messages || [];
+  target.innerHTML = messages.length ? messages.map(message => `<div class="ai-message ${esc(message.role)}"><span class="ai-message-role">${message.role === 'user' ? 'Bạn' : 'Local AI'}</span>${esc(message.content)}</div>`).join('') : '<div class="ai-empty">Chọn project + model rồi nhập yêu cầu. Ví dụ: “tìm nguyên nhân B5 bị timeout và sửa, sau đó chạy test liên quan”.</div>';
+  target.scrollTop = target.scrollHeight;
+}
+
+function renderAiTrace() {
+  const box = $('#aiTrace');
+  if (!box) return;
+  const trace = state.ai.trace || [];
+  box.classList.toggle('hidden', !trace.length);
+  box.textContent = trace.map((entry, index) => `${index + 1}. ${entry.success ? 'OK' : 'FAIL'} ${entry.name} · ${entry.elapsedMs}ms\n${entry.summary || ''}`).join('\n\n');
+}
+
+async function inspectAiWorkspace() {
+  const root = $('#aiWorkspace').value.trim();
+  if (!root) throw new Error('Chưa chọn thư mục project cho Local AI.');
+  state.ai.workspace = await api(window.mcbot.inspectAiWorkspace(root));
+  localStorage.setItem('mcbot.ai.workspace', state.ai.workspace.root);
+  $('#aiWorkspace').value = state.ai.workspace.root;
+  renderAiWorkspace();
+  return state.ai.workspace;
+}
+
+async function refreshAiModels() {
+  persistAiLocalConfig();
+  const statusTag = $('#aiStatusTag');
+  statusTag.textContent = 'ĐANG KIỂM TRA';
+  try {
+    const status = await api(window.mcbot.aiStatus({ baseUrl: $('#aiBaseUrl').value.trim() }));
+    state.ai.models = status.models || [];
+    const preferred = localStorage.getItem('mcbot.ai.model') || $('#aiModel').value;
+    syncSelect($('#aiModel'), state.ai.models.map(model => `<option value="${esc(model.id)}">${esc(model.id)}</option>`).join('') || '<option value="">Không có model</option>', preferred);
+    if (!$('#aiModel').value && state.ai.models[0]) $('#aiModel').value = state.ai.models[0].id;
+    statusTag.textContent = 'ĐÃ KẾT NỐI';
+    persistAiLocalConfig();
+    return status;
+  } catch (error) {
+    statusTag.textContent = 'MẤT KẾT NỐI';
+    throw error;
+  }
+}
+
+async function sendAiPrompt(promptOverride = null) {
+  if (state.ai.busy) return;
+  const prompt = String(promptOverride ?? $('#aiPrompt').value).trim();
+  if (!prompt) return;
+  const config = aiLocalConfig();
+  if (!config.workspaceRoot) throw new Error('Chưa chọn project workspace.');
+  if (!config.model) throw new Error('Chưa chọn model Local AI.');
+  persistAiLocalConfig();
+  state.ai.busy = true;
+  $('#aiSend').disabled = true;
+  $('#aiBusyText').textContent = 'Agent đang đọc project / chạy tool…';
+  const priorMessages = state.ai.messages.slice(-24).map(message => ({ role: message.role, content: message.content }));
+  state.ai.messages.push({ role: 'user', content: prompt });
+  $('#aiPrompt').value = '';
+  renderAiMessages();
+  try {
+    const result = await api(window.mcbot.aiChat({
+      workspaceRoot: config.workspaceRoot,
+      baseUrl: config.baseUrl,
+      model: config.model,
+      permission: config.permission,
+      messages: priorMessages,
+      prompt
+    }));
+    state.ai.messages.push({ role: 'assistant', content: result.content || '(AI không trả nội dung)' });
+    state.ai.trace = result.trace || [];
+    state.ai.workspace = { ...(state.ai.workspace || {}), ...(result.workspace || {}) };
+    renderAiMessages();
+    renderAiTrace();
+    renderAiWorkspace();
+    $('#aiBusyText').textContent = `Xong · ${result.toolRounds ?? 0} vòng tool · quyền ${result.permission || config.permission}`;
+    return result;
+  } finally {
+    state.ai.busy = false;
+    $('#aiSend').disabled = false;
+  }
+}
+
+function loadAiLocalSettings() {
+  $('#aiBaseUrl').value = localStorage.getItem('mcbot.ai.baseUrl') || 'http://127.0.0.1:11434/v1';
+  $('#aiPermission').value = localStorage.getItem('mcbot.ai.permission') || 'READ';
+  $('#aiWorkspace').value = localStorage.getItem('mcbot.ai.workspace') || '';
+  const savedModel = localStorage.getItem('mcbot.ai.model') || '';
+  if (savedModel) $('#aiModel').innerHTML = `<option value="${esc(savedModel)}">${esc(savedModel)}</option>`;
+  if ($('#aiWorkspace').value) inspectAiWorkspace().catch(error => reportRendererError(error, 'ai-workspace-auto-inspect'));
+  renderAiMessages();
+  renderAiTrace();
+}
+
+async function runAction({ key, button = null, success, fn, refresh = true }) {
+  if (key && state.pending.has(key)) return;
+  const originalText = button?.textContent;
+  if (key) state.pending.add(key);
+  if (button) { button.disabled = true; button.classList.add('pending'); button.textContent = 'Đang xử lý…'; }
+  scheduleDynamicRender();
+  try {
+    const result = await fn();
+    if (result?.success === false) throw new Error(result.message || result.error?.message || 'Thao tác thất bại');
+    if (success) toast(success);
+    if (refresh) await refreshSnapshot({ quiet: true });
+    return result;
+  } catch (error) {
+    toast(error.message, 'error');
+    reportRendererError(error, key ? `action:${key}` : 'action');
+    throw error;
+  } finally {
+    if (key) state.pending.delete(key);
+    if (button) { button.disabled = false; button.classList.remove('pending'); button.textContent = originalText; }
+    scheduleDynamicRender();
+  }
+}
+
+async function handleBotAction(button) {
+  const action = button.dataset.action;
+  const bot = button.dataset.bot;
+  if (!action || !bot) return;
+  if (action === 'connect') return runAction({ key: `connect:${bot}`, button, success: 'Đã gửi yêu cầu kết nối.', fn: () => api(window.mcbot.connect(bot)) });
+  if (action === 'disconnect') { if (!window.confirm(`Ngắt riêng ${bot}? Bot khác vẫn giữ nguyên kết nối và chế độ.`)) return; return runAction({ key: `disconnect:${bot}`, button, success: `Đã ngắt riêng ${bot}.`, fn: () => api(window.mcbot.disconnect(bot)) }); }
+  if (action === 'home') return runAction({ key: `home:${bot}`, button, success: 'Đã gửi bot về đảo.', fn: () => api(window.mcbot.goHome(bot)) });
+  if (action === 'mode-start') return runAction({ key: `mode:${bot}`, button, success: `Đã gửi yêu cầu bật chế độ ${button.dataset.mode}.`, fn: () => api(window.mcbot.startMode(bot, button.dataset.mode)) });
+  if (action === 'mode-pause') return runAction({ key: `mode:${bot}`, button, success: 'Đã tạm dừng chế độ.', fn: () => api(window.mcbot.pauseMode(bot)) });
+  if (action === 'mode-resume') return runAction({ key: `mode:${bot}`, button, success: 'Đã tiếp tục chế độ.', fn: () => api(window.mcbot.resumeMode(bot)) });
+  if (action === 'mode-stop') return runAction({ key: `mode:${bot}`, button, success: 'Đã dừng chế độ.', fn: () => api(window.mcbot.stopMode(bot)) });
+  if (action === 'mode-restart') return runAction({ key: `mode:${bot}`, button, success: 'Đã khởi động lại chế độ.', fn: () => api(window.mcbot.restartMode(bot)) });
+  if (action === 'save-profile') {
+    const row = button.closest('tr');
+    const fields = {};
+    row.querySelectorAll('[data-field]').forEach(input => { fields[input.dataset.field] = input.type === 'checkbox' ? input.checked : input.value; });
+    return runAction({ key: `profile:${bot}`, button, success: 'Đã lưu hồ sơ.', fn: () => api(window.mcbot.updateProfile(bot, fields)), refresh: false }).then(loadProfiles);
+  }
+  if (action === 'clone-profile') {
+    const suggested = `${bot}-copy`;
+    const newId = window.prompt(`ID cho bản nhân bản của ${bot}:`, suggested)?.trim();
+    if (!newId) return;
+    return runAction({ key: `profile-clone:${bot}`, button, success: `Đã nhân bản ${bot} thành ${newId}.`, fn: () => api(window.mcbot.cloneProfile(bot, newId)), refresh: false }).then(async () => { await loadProfiles(); await refreshSnapshot({ quiet: true }); });
+  }
+  if (action === 'delete-profile') {
+    if (!window.confirm(`Xóa hồ sơ ${bot}? Chỉ được xóa khi bot đã tắt và ngắt kết nối.`)) return;
+    return runAction({ key: `profile-delete:${bot}`, button, success: `Đã xóa hồ sơ ${bot}.`, fn: () => api(window.mcbot.deleteProfile(bot)), refresh: false }).then(async () => { await loadProfiles(); await refreshSnapshot({ quiet: true }); });
+  }
+}
+
+async function handleFleetAction(button) {
+  const action = button.dataset.fleetAction;
+  if (!action) return;
+  if (['disconnect-all', 'stop-modes-all'].includes(action) && !window.confirm(`Xác nhận ${action}?`)) return;
+  await runAction({ key: `fleet:${action}`, button, success: `Đã thực hiện ${action}.`, fn: () => api(window.mcbot.fleetAction(action)) });
+}
+
+function switchPage(page) {
+  if (!pageTitles[page]) page = 'dashboard';
+  state.page = page;
+  localStorage.setItem('mcbot.page', page);
+  $$('.nav-item').forEach(item => item.classList.toggle('active', item.dataset.page === page));
+  $$('.page').forEach(section => section.classList.toggle('active', section.id === `page-${page}`));
+  $('#pageTitle').textContent = pageTitles[page][0];
+  $('#pageSubtitle').textContent = pageTitles[page][1];
+  if (page === 'dashboard') renderDashboard();
+  if (page === 'modes') { renderModes(); Promise.all([loadB5PureConfig(), loadB5Rules(), loadStorageProtection()]).catch(error => toast(error.message, 'error')); }
+  if (page === 'bots' && !state.profilesLoaded) loadProfiles().catch(error => toast(error.message, 'error'));
+  if (page === 'builder' && state.snapshot?.lifecycle === 'RUNNING') loadCustomModeCatalog().catch(error => toast(error.message, 'error'));
+  if (page === 'settings' && state.snapshot?.lifecycle === 'RUNNING' && state.configGroups.length) loadAdvancedConfig().catch(error => toast(error.message, 'error'));
+  if (page === 'logs') { state.logUnread = 0; renderLogs(); }
+  if (page === 'diagnostics') refreshDiagnostics();
+  if (page === 'ai') { renderAiMessages(); renderAiTrace(); if (!state.ai.models.length) refreshAiModels().catch(error => reportRendererError(error, 'ai-model-auto-refresh')); }
+}
+
+async function loadCollectorConfig() {
+  try {
+    const bot = $('#collectorConfigBot').value; if (!bot) return;
+    const config = await api(window.mcbot.collectorConfig(bot));
+    const pickup = config.pickupLocation || {};
+    $('#collectorX').value = pickup.x ?? '';
+    $('#collectorY').value = pickup.y ?? '';
+    $('#collectorZ').value = pickup.z ?? '';
+    $('#collectorDelay').value = config.craftLoopDelayMs ?? '';
+    $('#collectorPoll').value = config.pollIntervalMs ? Number(config.pollIntervalMs) / 1000 : '';
+    $('#collectorRadius').value = config.reanchorRadius ?? '';
+  } catch (error) { toast(error.message, 'error'); }
+}
+
+async function loadFishingConfig() {
+  try {
+    const bot = $('#fishingConfigBot').value; if (!bot) return;
+    const config = await api(window.mcbot.fishingConfig(bot));
+    loadFishingConfig.cache = config;
+    const areas = Array.isArray(config.resolved?.areas) ? config.resolved.areas : [];
+    syncSelect($('#fishingArea'), areas.map(area => `<option value="${esc(area.id)}">${esc(area.id)}</option>`).join(''));
+    fillFishingArea();
+  } catch (error) { toast(error.message, 'error'); }
+}
+
+function fillFishingArea() {
+  const config = loadFishingConfig.cache; if (!config) return;
+  const areaId = $('#fishingArea').value;
+  const shared = (config.resolved?.areas || []).find(area => area.id === areaId) || {};
+  const override = config.overrides?.areas?.[areaId] || {};
+  const positionValue = Object.keys(override).length ? override : (shared.destination || shared);
+  $('#fishingX').value = positionValue.x ?? '';
+  $('#fishingY').value = positionValue.y ?? '';
+  $('#fishingZ').value = positionValue.z ?? '';
+  $('#fishingPitch').value = config.overrides?.shoreFishingPitchDegrees ?? config.resolved?.movement?.shoreFishingPitchDegrees ?? '';
+}
+
+async function loadPreferences() {
+  try {
+    state.preferences = await api(window.mcbot.preferences());
+    $('#prefCloseToTray').checked = state.preferences.closeToTray !== false;
+    $('#prefNotifyErrors').checked = state.preferences.notifyErrors !== false;
+    $('#prefAutoStart').checked = state.preferences.startBackendOnLaunch !== false;
+    $('#prefPreventSleep').checked = state.preferences.preventSystemSleepWhileActive !== false;
+    $('#prefLaunchAtLogin').checked = state.preferences.launchAtLogin === true;
+    $('#prefLaunchAtLogin').disabled = state.preferences.loginItem?.supported === false;
+    $('#prefAutoCheckUpdates').checked = state.preferences.autoCheckUpdates !== false;
+    $('#prefAutoDownloadUpdates').checked = state.preferences.autoDownloadUpdates === true;
+    $('#prefAutoInstallUpdates').checked = state.preferences.autoInstallUpdatesWhenIdle === true;
+    $('#prefUpdateRepository').value = state.preferences.updateRepository || 'dangluc206-lang/MCbotv1';
+    $('#prefUpdateChannel').value = state.preferences.updateChannel || 'stable';
+    const interval = String(state.preferences.snapshotIntervalMs || 900);
+    if ([...$('#prefSnapshotInterval').options].some(option => option.value === interval)) $('#prefSnapshotInterval').value = interval;
+    renderFreshness();
+  } catch (error) { toast(error.message, 'error'); }
+}
+
+function viUpdatePhase(phase) {
+  return ({ IDLE:'Chưa kiểm tra', CHECKING:'Đang kiểm tra', AVAILABLE:'Có bản mới', UP_TO_DATE:'Đã mới nhất', DOWNLOADING:'Đang tải', DOWNLOADED:'Sẵn sàng cài', ERROR:'Lỗi' })[String(phase || '').toUpperCase()] || String(phase || 'Chưa kiểm tra');
+}
+
+function renderUpdateStatus() {
+  const status = state.updateStatus || {};
+  const local = state.localUpdate || {};
+  $('#updateCurrentVersion').textContent = local.currentVersion || status.currentVersion || state.appInfo?.version || '—';
+  $('#localUpdateState').textContent = ({ IDLE:'Chưa chọn', INSPECTING:'Đang kiểm tra', READY:'Sẵn sàng', INSTALL_PENDING:'Đang chuẩn bị cài', ERROR:'Lỗi' })[String(local.phase || '').toUpperCase()] || String(local.phase || 'Chưa chọn');
+  $('#localUpdateVersion').textContent = local.selected?.version || '—';
+  $('#localUpdateFile').textContent = local.lastError?.message
+    || (local.selected ? `${local.selected.fileName} · ${local.selected.type === 'patch' ? 'Patch' : 'Full'} · ${local.selected.fileCount} file` : 'Chưa chọn gói cập nhật.');
+  $('#localUpdateNotes').textContent = local.selected?.notes?.length ? local.selected.notes.map(note => `• ${note}`).join('\n') : 'Chưa có ghi chú từ gói ZIP.';
+  $('#installLocalUpdate').disabled = local.phase !== 'READY' || !local.selected;
+  $('#clearLocalUpdate').disabled = !local.selected && local.phase !== 'ERROR';
+
+  $('#updateState').textContent = viUpdatePhase(status.phase);
+  $('#updateAvailableVersion').textContent = status.release?.version || '—';
+  $('#updateChannelLabel').textContent = state.preferences?.updateChannel === 'beta' ? 'Beta' : 'Ổn định';
+  const progress = status.progress || {};
+  const percent = Number.isFinite(Number(progress.percent)) ? Number(progress.percent) : 0;
+  $('#updateProgress').value = Math.max(0, Math.min(100, percent));
+  const size = value => Number.isFinite(Number(value)) ? `${(Number(value) / 1024 / 1024).toFixed(1)} MB` : '—';
+  $('#updateProgressText').textContent = status.phase === 'DOWNLOADING'
+    ? `Đang tải ${percent.toFixed(1)}% · ${size(progress.received)} / ${size(progress.total)}`
+    : status.lastError?.message || (status.downloaded ? 'Đã tải xong. Có thể cài và khởi động lại.' : status.checkedAt ? `Kiểm tra lúc ${new Date(status.checkedAt).toLocaleString('vi-VN')}` : 'Chưa có tác vụ cập nhật.');
+  $('#updateReleaseNotes').textContent = status.release?.notes || 'Chưa có ghi chú phát hành.';
+  $('#downloadUpdate').disabled = !status.available || status.phase === 'DOWNLOADING' || status.downloaded;
+  $('#installUpdate').disabled = !status.downloaded || state.appInfo?.packaged === false;
+  $('#openUpdateRelease').disabled = !status.release?.htmlUrl;
+  $('#checkUpdates').disabled = ['CHECKING','DOWNLOADING'].includes(status.phase);
+  const migration = state.updateMigration;
+  $('#updateMigrationText').textContent = migration?.lastBackup ? `Backup migration gần nhất: ${migration.lastBackup}` : (state.appInfo?.packaged ? 'Chưa có backup migration.' : 'Migration cấu hình chỉ chạy trên bản đã cài.');
+  $('#rollbackConfigMigration').disabled = !migration?.lastBackup;
+}
+
+async function loadUpdateStatus() {
+  try {
+    [state.updateStatus, state.localUpdate, state.updateMigration] = await Promise.all([
+      api(window.mcbot.updateStatus()),
+      api(window.mcbot.localUpdateStatus()),
+      api(window.mcbot.updateMigrationStatus())
+    ]);
+    renderUpdateStatus();
+  } catch (error) { toast(error.message, 'error'); }
+}
+
+
+async function loadConfigurationCatalog() {
+  if (state.snapshot?.lifecycle !== 'RUNNING') return;
+  state.configGroups = await api(window.mcbot.configGroups());
+  const options = state.configGroups.map(group => `<option value="${esc(group.key)}">${esc(configLabels[group.key] || group.key)} · ${esc(group.file)}</option>`).join('');
+  syncSelect($('#advancedConfigGroup'), options);
+}
+
+async function loadAdvancedConfig() {
+  const key = $('#advancedConfigGroup').value;
+  if (!key) return;
+  const group = await api(window.mcbot.configGroup(key));
+  $('#advancedConfigJson').value = JSON.stringify(group.value, null, 2);
+  $('#advancedConfigHint').textContent = `${group.file} · schema ${group.schema}`;
+}
+
+async function saveAdvancedConfig() {
+  const key = $('#advancedConfigGroup').value;
+  let value;
+  try { value = JSON.parse($('#advancedConfigJson').value); } catch (error) { throw new Error(`JSON không hợp lệ: ${error.message}`); }
+  const result = await api(window.mcbot.saveConfigGroup(key, value));
+  $('#advancedConfigHint').textContent = `${result.file} · ${result.appliedLive ? 'đã áp dụng trực tiếp' : 'cần khởi động lại hệ thống nền'}`;
+  await loadConfigurationCatalog();
+  return result;
+}
+
+async function loadB5PureConfig() {
+  const group = await api(window.mcbot.b5CraftConfig());
+  const c = group.value || {};
+  $('#b5PureEnabled').checked = c.enabled !== false;
+  $('#b5PureHome').checked = c.teleportHomeOnEnable !== false;
+  $('#b5PureResume').checked = c.autoResumeOnReconnect !== false;
+  $('#b5PurePoll').value = c.pollIntervalMs ?? 10000;
+  $('#b5PureCraftDelay').value = c.craftLoopDelayMs ?? 300;
+  $('#b5PureCooldownMinutes').value = Math.round(Number(c.postB5CooldownMs ?? 1800000) / 60000);
+  $('#b5PureRetry').value = c.errorRetryMs ?? 5000;
+  $('#b5PureDisconnectedPoll').value = c.disconnectedPollMs ?? 1500;
+  $('#b5PureRetryMax').value = c.errorRetryMaxMs ?? 30000;
+  $('#b5PureReconcileReads').value = c.reconciliation?.maxFreshReads ?? 3;
+  $('#b5PureReconcileRetry').value = c.reconciliation?.retryMs ?? 1000;
+  $('#b5PureReconcileUnresolved').value = c.reconciliation?.unresolvedPollMs ?? 15000;
+  $('#b5PureRetryAfterNoEffect').checked = c.reconciliation?.allowRetryAfterVerifiedNoEffect !== false;
+  $('#b5PureNoProgressBase').value = c.stability?.noProgressBaseDelayMs ?? 10000;
+  $('#b5PureNoProgressMax').value = c.stability?.noProgressMaxDelayMs ?? 60000;
+  $('#b5PureBlockerThreshold').value = c.stability?.sameBlockerThreshold ?? 2;
+  $('#b5PureLogEvery').value = c.stability?.logEveryNthRepeat ?? 5;
+}
+
+async function saveB5PureConfig() {
+  return api(window.mcbot.updateB5CraftConfig({
+    enabled: $('#b5PureEnabled').checked,
+    teleportHomeOnEnable: $('#b5PureHome').checked,
+    autoResumeOnReconnect: $('#b5PureResume').checked,
+    pollIntervalMs: Number($('#b5PurePoll').value),
+    craftLoopDelayMs: Number($('#b5PureCraftDelay').value),
+    postB5CooldownMs: Number($('#b5PureCooldownMinutes').value) * 60000,
+    errorRetryMs: Number($('#b5PureRetry').value),
+    disconnectedPollMs: Number($('#b5PureDisconnectedPoll').value),
+    errorRetryMaxMs: Number($('#b5PureRetryMax').value),
+    stability: {
+      noProgressBackoffEnabled: true,
+      noProgressBaseDelayMs: Number($('#b5PureNoProgressBase').value),
+      noProgressMaxDelayMs: Number($('#b5PureNoProgressMax').value),
+      sameBlockerThreshold: Number($('#b5PureBlockerThreshold').value),
+      logEveryNthRepeat: Number($('#b5PureLogEvery').value)
+    },
+    reconciliation: {
+      maxFreshReads: Number($('#b5PureReconcileReads').value),
+      retryMs: Number($('#b5PureReconcileRetry').value),
+      unresolvedPollMs: Number($('#b5PureReconcileUnresolved').value),
+      allowRetryAfterVerifiedNoEffect: $('#b5PureRetryAfterNoEffect').checked
+    }
+  }));
+}
+
+async function loadB5Rules() {
+  const group = await api(window.mcbot.b5RulesConfig());
+  const c = group.value || {};
+  const quantity = c.quantityOptimization || {};
+  const pv = c.personalVaultBackpressure || {};
+  $('#b5InventorySafety').value = c.inventorySafetyEmptySlots ?? 2;
+  $('#b5B3MinSlots').value = c.b3AllMinEmptySlots ?? 1;
+  $('#b5PvMinEmpty').value = pv.minEmptySlots ?? 3;
+  $('#b5PvHardMin').value = pv.hardMinEmptySlots ?? 1;
+  $('#b5BatchSize').value = quantity.b2BatchSize ?? 64;
+  $('#b5QuantityEnabled').checked = quantity.enabled !== false;
+  $('#b5B2UseAll').checked = quantity.useAllForB2 === true;
+  $('#b5B3UseAll').checked = quantity.useAllForB3 !== false;
+  $('#b5B4UseAllExact').checked = quantity.useAllForB4WhenExact !== false;
+  $('#b5B5UseAll').checked = quantity.useAllForB5 === true;
+  $('#b5KeepSurplusPv2').checked = quantity.keepSurplusInPv2 !== false;
+}
+
+async function saveB5Rules() {
+  if (!$('#b5KeepSurplusPv2').checked) throw new Error('Giữ phần dư ở PV2 là bắt buộc để bảo toàn luồng B5.');
+  return api(window.mcbot.updateB5RulesConfig({
+    inventorySafetyEmptySlots: Number($('#b5InventorySafety').value),
+    b3AllMinEmptySlots: Number($('#b5B3MinSlots').value),
+    quantityOptimization: {
+      enabled: $('#b5QuantityEnabled').checked,
+      useAllForB2: $('#b5B2UseAll').checked,
+      useAllForB3: $('#b5B3UseAll').checked,
+      useAllForB4WhenExact: $('#b5B4UseAllExact').checked,
+      useAllForB5: $('#b5B5UseAll').checked,
+      keepSurplusInPv2: true,
+      b2BatchSize: Number($('#b5BatchSize').value)
+    },
+    personalVaultBackpressure: {
+      minEmptySlots: Number($('#b5PvMinEmpty').value),
+      hardMinEmptySlots: Number($('#b5PvHardMin').value)
+    }
+  }));
+}
+
+async function loadStorageProtection() {
+  const c = await api(window.mcbot.storageProtectionConfig());
+  $('#storageBlockOnly').checked = c.sell?.blockOnly !== false;
+  $('#collectorDecompressMax').value = Math.round(Number(c.collector?.b1Decompression?.maxUsageRatio ?? 0.8) * 100);
+  $('#collectorRequireKnown').checked = c.collector?.b1Decompression?.requireKnownCapacity !== false;
+}
+
+async function saveStorageProtection() {
+  const maxUsagePercent = Number($('#collectorDecompressMax').value);
+  if (!Number.isFinite(maxUsagePercent) || maxUsagePercent <= 0 || maxUsagePercent > 100) throw new Error('Trần bung B1 của Nhặt+B5 phải nằm trong khoảng 1–100%.');
+  return api(window.mcbot.updateStorageProtectionConfig({
+    sell: {
+      blockOnly: $('#storageBlockOnly').checked
+    },
+    collector: {
+      b1Decompression: {
+        maxUsageRatio: maxUsagePercent / 100,
+        requireKnownCapacity: $('#collectorRequireKnown').checked
+      }
+    }
+  }));
+}
+
+function defaultModuleStep(type) {
+  const commandKey = state.commands?.find(command => command.key !== 'login')?.key || '';
+  const defaults = {
+    command: { type, commandKey, args: {}, confirm: false, timeoutMs: 5000 },
+    'sky-command': { type, commandId: '', skyId: null, args: {} },
+    'slash-command': { type, command: '/is' },
+    'gui-click': { type, slot: 0, button: 0, mode: 0, verifyGui: false, timeoutMs: 3000 },
+    wait: { type, ms: 1000 },
+    move: { type, x: 0, y: 0, z: 0, radius: 1.2, timeoutMs: 30000 },
+    home: { type },
+    'sky-join': { type, selection: 'primary' },
+    'close-gui': { type },
+    'read-storage': { type },
+    'storage-protect': { type, allowSmelting: false },
+    'b5-cycle': { type },
+    'wait-gui': { type, guiId: null, timeoutMs: 5000 },
+    look: { type, yaw: 0, pitch: 0, force: true },
+    log: { type, level: 'info', message: 'Bước workflow' },
+    if: { type, condition: { type: 'connected', guiId: null }, then: [], else: [] },
+    repeat: { type, count: 2, steps: [] }
+  };
+  return JSON.parse(JSON.stringify(defaults[type] || { type }));
+}
+
+function newCustomDraft() {
+  return { id: '', label: '', description: '', enabled: true, primary: true, durable: true, workflow: { start: [], loop: { enabled: true, intervalMs: 1000, continueOnError: false, steps: [] }, stop: [] } };
+}
+
+function modulePayload(step) {
+  const copy = JSON.parse(JSON.stringify(step || {}));
+  delete copy.type;
+  return JSON.stringify(copy, null, 2);
+}
+
+function renderWorkflowList(targetId, steps, section) {
+  const root = $('#' + targetId);
+  root.innerHTML = steps.length ? steps.map((step, index) => `<div class="workflow-step" data-workflow-section="${esc(section)}" data-step-index="${index}"><span class="step-index">${index + 1}</span><select class="step-type">${state.customModules.map(module => `<option value="${esc(module.type)}" ${module.type === step.type ? 'selected' : ''}>${esc(module.label)}</option>`).join('')}</select><textarea class="step-json" spellcheck="false">${esc(modulePayload(step))}</textarea><div class="step-buttons"><button class="button ghost small" data-step-action="up">↑</button><button class="button ghost small" data-step-action="down">↓</button><button class="button danger small" data-step-action="remove">×</button></div></div>`).join('') : '<div class="empty">Chưa có bước.</div>';
+}
+
+function draftFromBuilder() {
+  const readSteps = section => {
+    const root = section === 'start' ? $('#customStartSteps') : $('#customLoopSteps');
+    return [...root.querySelectorAll('.workflow-step')].map(row => {
+      const type = row.querySelector('.step-type').value;
+      let payload = {};
+      const text = row.querySelector('.step-json').value.trim();
+      if (text) payload = JSON.parse(text);
+      return { ...payload, type };
+    });
+  };
+  return {
+    id: $('#customModeId').value.trim(),
+    label: $('#customModeLabel').value.trim(),
+    description: $('#customModeDescription').value.trim(),
+    enabled: $('#customModeEnabled').checked,
+    primary: true,
+    durable: true,
+    workflow: {
+      start: readSteps('start'),
+      loop: { enabled: true, intervalMs: Number($('#customModeLoopDelay').value || 1000), continueOnError: false, steps: readSteps('loop') },
+      stop: []
+    }
+  };
+}
+
+function fillCustomBuilder(definition = null) {
+  const d = definition ? JSON.parse(JSON.stringify(definition)) : newCustomDraft();
+  state.customDraft = d;
+  $('#customModeId').value = d.id || '';
+  $('#customModeLabel').value = d.label || '';
+  $('#customModeDescription').value = d.description || '';
+  $('#customModeEnabled').checked = d.enabled !== false;
+  $('#customModeLoopDelay').value = d.workflow?.loop?.intervalMs ?? 1000;
+  renderWorkflowList('customStartSteps', d.workflow?.start || [], 'start');
+  renderWorkflowList('customLoopSteps', d.workflow?.loop?.steps || [], 'loop');
+  $('#customModeJson').value = JSON.stringify(d, null, 2);
+}
+
+function renderModulePalette() {
+  $('#moduleCount').textContent = String(state.customModules.length);
+  $('#modulePalette').innerHTML = state.customModules.map(module => `<div class="module-card"><strong>${esc(module.label)}</strong><span>${esc(module.description)}</span><div class="actions compact"><button class="button ghost small" data-module-add="start" data-module-type="${esc(module.type)}">+ Bắt đầu</button><button class="button primary small" data-module-add="loop" data-module-type="${esc(module.type)}">+ Vòng lặp</button></div></div>`).join('');
+}
+
+function customModeEntryId(entry) {
+  if (entry?.raw?.id) return entry.raw.id;
+  const file = String(entry?.file || '').replace(/\\/g, '/').split('/').pop() || '';
+  return file.replace(/\.json$/i, '');
+}
+
+async function loadCustomModeCatalog() {
+  if (state.snapshot?.lifecycle !== 'RUNNING') return;
+  [state.customModules, state.customModes] = await Promise.all([api(window.mcbot.customModeModules()), api(window.mcbot.customModes())]);
+  renderModulePalette();
+  const current = $('#customModeSelect')?.value || '';
+  const options = '<option value="">— Tạo mới —</option>' + state.customModes.map(entry => { const id = customModeEntryId(entry); return `<option value="${esc(id)}">${esc(entry.raw?.label || id || entry.file)}${entry.valid ? '' : ' · LỖI'}</option>`; }).join('');
+  syncSelect($('#customModeSelect'), options, current);
+  if (!state.customDraft) fillCustomBuilder();
+}
+
+function changeWorkflowStep(button) {
+  const row = button.closest('.workflow-step');
+  if (!row) return;
+  const section = row.dataset.workflowSection;
+  let draft;
+  try { draft = draftFromBuilder(); } catch (error) { toast(`JSON bước không hợp lệ: ${error.message}`, 'error'); return; }
+  const list = section === 'start' ? draft.workflow.start : draft.workflow.loop.steps;
+  const index = Number(row.dataset.stepIndex);
+  const action = button.dataset.stepAction;
+  if (action === 'remove') list.splice(index, 1);
+  if (action === 'up' && index > 0) [list[index - 1], list[index]] = [list[index], list[index - 1]];
+  if (action === 'down' && index < list.length - 1) [list[index + 1], list[index]] = [list[index], list[index + 1]];
+  fillCustomBuilder(draft);
+}
+
+function bindEvents() {
+  document.addEventListener('click', event => {
+    const botAction = event.target.closest('[data-action]');
+    if (botAction) handleBotAction(botAction).catch(() => {});
+    const fleetAction = event.target.closest('[data-fleet-action]');
+    if (fleetAction) handleFleetAction(fleetAction).catch(() => {});
+  });
+  $('#nav').addEventListener('click', event => { const item = event.target.closest('.nav-item'); if (item) switchPage(item.dataset.page); });
+  $('#refreshBtn').onclick = () => refreshSnapshot();
+  $('#reloadProfiles').onclick = () => loadProfiles().catch(error => toast(error.message, 'error'));
+  $('#loadB5PureConfig').onclick = () => loadB5PureConfig().catch(error => toast(error.message, 'error'));
+  $('#saveB5PureConfig').onclick = event => runAction({ key: 'b5-pure-config', button: event.currentTarget, success: 'Đã lưu cấu hình B5 thuần.', refresh: false, fn: saveB5PureConfig }).catch(() => {});
+  $('#loadB5Rules').onclick = () => loadB5Rules().catch(error => toast(error.message, 'error'));
+  $('#saveB5Rules').onclick = event => runAction({ key: 'b5-rules-config', button: event.currentTarget, success: 'Đã lưu quy tắc B5. Hãy khởi động lại hệ thống nền để áp dụng đầy đủ.', refresh: false, fn: saveB5Rules }).catch(() => {});
+  $('#loadStorageProtect').onclick = () => loadStorageProtection().catch(error => toast(error.message, 'error'));
+  $('#saveStorageProtect').onclick = event => runAction({ key: 'storage-protect-config', button: event.currentTarget, success: 'Đã lưu và áp dụng mức bảo vệ kho cho các bot đang chạy.', refresh: false, fn: saveStorageProtection }).catch(() => {});
+
+  $('#skyCommandSky').onchange = () => { renderSkyCommands(); clearSkyCommandEditor(); };
+  $('#newSkyCommand').onclick = () => clearSkyCommandEditor();
+  $('#saveSkyCommand').onclick = event => runAction({ key: 'sky-command-save', button: event.currentTarget, success: 'Đã lưu lệnh riêng theo Sky và áp dụng ngay.', refresh: false, fn: saveSkyCommandFromEditor }).catch(() => {});
+  $('#skyCommandList').addEventListener('click', event => {
+    const button = event.target.closest('[data-sky-command-action]');
+    if (!button) return;
+    const skyId = button.dataset.sky;
+    const commandId = button.dataset.commandId;
+    const definition = state.skyCommands?.[skyId]?.[commandId];
+    if (button.dataset.skyCommandAction === 'edit' && definition) {
+      $('#skyCommandSky').value = skyId;
+      state.skyCommandEditingId = commandId;
+      $('#skyCommandId').value = commandId;
+      $('#skyCommandLabel').value = definition.label || commandId;
+      $('#skyCommandValue').value = definition.command || '';
+      $('#skyCommandDescription').value = definition.description || '';
+      $('#skyCommandEnabled').checked = definition.enabled !== false;
+      return;
+    }
+    if (button.dataset.skyCommandAction === 'delete') {
+      runAction({ key: `sky-command-delete:${skyId}:${commandId}`, button, success: 'Đã xóa lệnh riêng theo Sky.', refresh: false, fn: async () => {
+        const result = await api(window.mcbot.deleteSkyCommand(skyId, commandId));
+        await Promise.all([loadSkyCommands(), loadCommands()]);
+        return result;
+      }}).catch(() => {});
+      return;
+    }
+    if (button.dataset.skyCommandAction === 'send') {
+      let args = {};
+      try { args = JSON.parse($('#skyCommandArgs').value || '{}'); } catch (error) { toast(`JSON tham số không hợp lệ: ${error.message}`, 'error'); return; }
+      runAction({ key: `sky-command-send:${skyId}:${commandId}`, button, success: `Đã gửi ${commandId} cho bot đang ở ${skyId}.`, refresh: false, fn: () => api(window.mcbot.sendSkyCommand($('#skyCommandBot').value, { skyId, commandId, args })) }).catch(() => {});
+    }
+  });
+
+  $('#advancedConfigGroup').onchange = () => loadAdvancedConfig().catch(error => toast(error.message, 'error'));
+  $('#loadAdvancedConfig').onclick = () => loadAdvancedConfig().catch(error => toast(error.message, 'error'));
+  $('#saveAdvancedConfig').onclick = event => runAction({ key: 'advanced-config', button: event.currentTarget, success: 'Cấu hình hợp lệ và đã được lưu.', refresh: false, fn: saveAdvancedConfig }).catch(() => {});
+
+  $('#modulePalette').addEventListener('click', event => {
+    const button = event.target.closest('[data-module-add]'); if (!button) return;
+    let draft; try { draft = draftFromBuilder(); } catch (error) { toast(`JSON bước không hợp lệ: ${error.message}`, 'error'); return; }
+    const step = defaultModuleStep(button.dataset.moduleType);
+    if (button.dataset.moduleAdd === 'start') draft.workflow.start.push(step); else draft.workflow.loop.steps.push(step);
+    fillCustomBuilder(draft);
+  });
+  for (const id of ['customStartSteps','customLoopSteps']) $('#' + id).addEventListener('click', event => { const button = event.target.closest('[data-step-action]'); if (button) changeWorkflowStep(button); });
+  for (const id of ['customStartSteps','customLoopSteps']) $('#' + id).addEventListener('change', event => {
+    const select = event.target.closest('.step-type'); if (!select) return;
+    const row = select.closest('.workflow-step'); row.querySelector('.step-json').value = modulePayload(defaultModuleStep(select.value));
+  });
+  $('#newCustomMode').onclick = () => { $('#customModeSelect').value = ''; fillCustomBuilder(); };
+  $('#presetCommandWait').onclick = () => {
+    const d = newCustomDraft(); d.label = 'Lệnh lặp'; d.workflow.loop.steps = [defaultModuleStep('slash-command'), { type: 'wait', ms: 1000 }]; fillCustomBuilder(d);
+  };
+  $('#presetB5Safe').onclick = () => {
+    const d = newCustomDraft(); d.label = 'B5 mô-đun'; d.description = 'Mẫu B5 có nung trước bảo vệ kho, không di chuyển.';
+    d.workflow.start = [{ type: 'home' }];
+    d.workflow.loop.steps = [{ type: 'read-storage' }, { type: 'storage-protect', allowSmelting: true }, { type: 'b5-cycle' }, { type: 'wait', ms: 1000 }]; fillCustomBuilder(d);
+  };
+  $('#presetMoveClick').onclick = () => {
+    const d = newCustomDraft(); d.label = 'Di chuyển và click'; d.workflow.loop.steps = [defaultModuleStep('move'), { type: 'wait-gui', guiId: null, timeoutMs: 5000 }, defaultModuleStep('gui-click'), { type: 'wait', ms: 500 }]; fillCustomBuilder(d);
+  };
+  $('#clearCustomSteps').onclick = () => { const draft = draftFromBuilder(); draft.workflow.start = []; draft.workflow.loop.steps = []; fillCustomBuilder(draft); };
+  $('#customModeSelect').onchange = () => {
+    const id = $('#customModeSelect').value;
+    const entry = state.customModes.find(item => customModeEntryId(item) === id);
+    if (!entry?.valid && entry) { fillCustomBuilder({ ...newCustomDraft(), id, label: `${id} (cần sửa)` }); toast(`File mode ${id} đang lỗi. Có thể sửa lại hoặc xóa.`, 'warn'); return; }
+    fillCustomBuilder(entry?.raw || null);
+  };
+  $('#saveCustomMode').onclick = event => runAction({ key: 'custom-mode-save', button: event.currentTarget, success: 'Đã lưu chế độ. Khởi động lại hệ thống nền để đăng ký chế độ mới.', refresh: false, fn: async () => {
+    const definition = draftFromBuilder();
+    const result = await api(window.mcbot.saveCustomMode(definition));
+    await loadCustomModeCatalog(); $('#customModeSelect').value = definition.id; fillCustomBuilder(definition); return result;
+  }}).catch(() => {});
+  $('#deleteCustomMode').onclick = event => {
+    const id = $('#customModeSelect').value || $('#customModeId').value.trim();
+    if (!id) return toast('Chưa chọn chế độ để xóa.', 'warn');
+    if (!window.confirm(`Xóa chế độ ${id}?`)) return;
+    runAction({ key: 'custom-mode-delete', button: event.currentTarget, success: 'Đã xóa chế độ. Khởi động lại hệ thống nền để cập nhật danh mục.', refresh: false, fn: async () => { const result = await api(window.mcbot.deleteCustomMode(id)); await loadCustomModeCatalog(); fillCustomBuilder(); return result; } }).catch(() => {});
+  };
+  $('#applyCustomJson').onclick = () => { try { fillCustomBuilder(JSON.parse($('#customModeJson').value)); toast('Đã áp dụng JSON vào trình dựng.'); } catch (error) { toast(`JSON không hợp lệ: ${error.message}`, 'error'); } };
+  $('#createProfileBtn').onclick = event => runAction({ key: 'profile-create', button: event.currentTarget, success: 'Đã tạo bot mới.', refresh: false, fn: async () => {
+    const fields = {
+      id: $('#newBotId').value.trim(),
+      displayName: $('#newBotDisplayName').value.trim(),
+      username: $('#newBotUsername').value.trim(),
+      auth: $('#newBotAuth').value,
+      version: $('#newBotVersion').value.trim(),
+      serverProfile: $('#newBotServerProfile').value.trim(),
+      skyblockSelection: $('#newBotSkySelection').value
+    };
+    const result = await api(window.mcbot.createProfile(fields));
+    for (const id of ['newBotId', 'newBotDisplayName', 'newBotUsername']) $('#' + id).value = '';
+    await loadProfiles();
+    await refreshSnapshot({ quiet: true });
+    return result;
+  } }).catch(() => {});
+
+  $('#sendCommandBtn').onclick = async event => {
+    let args;
+    try { args = JSON.parse($('#commandArgs').value || '{}'); } catch { toast('JSON tham số không hợp lệ.', 'error'); return; }
+    if (!args || typeof args !== 'object' || Array.isArray(args)) { toast('Tham số phải là một object JSON.', 'error'); return; }
+    await runAction({ key: 'command-send', button: event.currentTarget, success: 'Lệnh đã được xử lý.', refresh: false, fn: async () => {
+      const result = await api(window.mcbot.sendCommand($('#commandBot').value, { commandKey: $('#commandKey').value, args, confirm: $('#commandConfirm').checked, timeoutMs: Number($('#commandTimeout').value) }));
+      $('#commandOutput').textContent = JSON.stringify(result, null, 2); return result;
+    }}).catch(() => {});
+  };
+  $('#copyCommandBtn').onclick = () => navigator.clipboard.writeText($('#commandOutput').textContent).then(() => toast('Đã sao chép kết quả lệnh.')).catch(error => { reportRendererError(error, 'clipboard-command'); toast('Không sao chép được kết quả.', 'error'); });
+
+  $('#inspectGuiBtn').onclick = event => runAction({ key: 'gui-inspect', button: event.currentTarget, success: 'Đã chụp GUI.', refresh: false, fn: async () => {
+    const slots = $('#guiSlots').value.split(',').map(value => Number(value.trim())).filter(Number.isInteger);
+    state.guiOutput = await api(window.mcbot.inspectGui($('#guiBot').value, { commandKey: $('#guiCommand').value, slots, timeoutMs: Number($('#guiTimeout').value) }));
+    $('#guiOutput').textContent = JSON.stringify(state.guiOutput, null, 2);
+    return { success: true };
+  }}).catch(() => {});
+  $('#copyGuiBtn').onclick = () => navigator.clipboard.writeText($('#guiOutput').textContent).then(() => toast('Đã sao chép JSON GUI.')).catch(error => { reportRendererError(error, 'clipboard-gui'); toast('Không sao chép được JSON GUI.', 'error'); });
+
+  for (const id of ['logLevel', 'logBot']) $('#' + id).addEventListener('change', () => { localStorage.setItem(`mcbot.${id}`, $('#' + id).value); renderLogs(); });
+  $('#logSearch').addEventListener('input', scheduleLogRender);
+  $('#logPause').addEventListener('change', () => { if (!$('#logPause').checked) renderLogs(); updateLogUnread(); });
+  $('#logAutoScroll').addEventListener('change', () => { localStorage.setItem('mcbot.logAutoScroll', $('#logAutoScroll').checked ? '1' : '0'); if ($('#logAutoScroll').checked) renderLogs(); });
+  $('#clearLogView').onclick = () => { state.logs = []; state.logUnread = 0; renderLogs(); };
+  $('#openDetailedLogs').onclick = () => runAction({ key: 'open-detailed-logs', refresh: false, fn: () => api(window.mcbot.openLogFolder()) }).catch(() => {});
+  $('#logConsole').addEventListener('scroll', () => { const el = $('#logConsole'); if (el.scrollHeight - el.scrollTop - el.clientHeight > 100 && $('#logAutoScroll').checked) { $('#logAutoScroll').checked = false; localStorage.setItem('mcbot.logAutoScroll', '0'); } });
+
+  $('#refreshDiagnostics').onclick = refreshDiagnostics;
+  $('#diagnosticList').addEventListener('click', async event => { const item = event.target.closest('[data-diagnostic]'); if (!item) return; try { $('#diagnosticOutput').textContent = JSON.stringify(await api(window.mcbot.readDiagnostic(item.dataset.diagnostic)), null, 2); } catch (error) { toast(error.message, 'error'); } });
+  $('#exportSupport').onclick = event => runAction({ key: 'support-export', button: event.currentTarget, success: 'Đã xuất gói hỗ trợ.', refresh: false, fn: () => api(window.mcbot.exportSupportBundle()) }).catch(() => {});
+  $('#openSupport').onclick = () => runAction({ key: 'open-support', success: null, refresh: false, fn: () => api(window.mcbot.openSupportFolder()) }).catch(() => {});
+
+  $('#openProject').onclick = () => runAction({ key: 'open-project', refresh: false, fn: () => api(window.mcbot.openProjectFolder()) }).catch(() => {});
+  $('#openLogs').onclick = () => runAction({ key: 'open-logs', refresh: false, fn: () => api(window.mcbot.openLogFolder()) }).catch(() => {});
+  $('#openBackups').onclick = () => runAction({ key: 'open-backups', refresh: false, fn: () => api(window.mcbot.openBackupFolder()) }).catch(() => {});
+  $('#backupConfig').onclick = event => runAction({ key: 'backup-config', button: event.currentTarget, success: 'Đã sao lưu toàn bộ cấu hình.', refresh: false, fn: () => api(window.mcbot.backupConfig()) }).catch(() => {});
+
+  $('#startBackend').onclick = event => runAction({ key: 'backend', button: event.currentTarget, success: 'Hệ thống nền đã khởi động.', fn: () => api(window.mcbot.backendStart()) }).then(loadStaticData).catch(() => {});
+  $('#stopBackend').onclick = event => { if (!window.confirm('Dừng hệ thống nền sẽ dừng các tiến trình bot và kết nối. Tiếp tục?')) return; runAction({ key: 'backend', button: event.currentTarget, success: 'Hệ thống nền đã dừng.', fn: () => api(window.mcbot.backendStop()) }).catch(() => {}); };
+  $('#restartBackend').onclick = event => runAction({ key: 'backend', button: event.currentTarget, success: 'Hệ thống nền đã khởi động lại.', fn: () => api(window.mcbot.backendRestart()) }).then(loadStaticData).catch(() => {});
+  $('#emergencyStop').onclick = event => { if (!window.confirm('DỪNG KHẨN CẤP: dừng mọi chế độ và ngắt kết nối tất cả bot?')) return; runAction({ key: 'fleet:emergency-stop', button: event.currentTarget, success: 'Dừng khẩn cấp đã hoàn tất.', fn: () => api(window.mcbot.fleetAction('emergency-stop')) }).catch(() => {}); };
+
+  $('#secretStatusBtn').onclick = async () => { try { const status = await api(window.mcbot.secretStatus()); $('#secretStatusText').textContent = `Mã hóa: ${status.encryptionAvailable ? 'OK' : 'KHÔNG KHẢ DỤNG'} · Đã cấu hình: ${status.keys.join(', ') || 'chưa có'}`; } catch (error) { toast(error.message, 'error'); } };
+  $('#clearBotPassword').onclick = event => {
+    const selectedBot = $('#secretBotSelect').value.trim();
+    if (!selectedBot) return toast('Chưa chọn bot.', 'warn');
+    if (!window.confirm(`Xóa mật khẩu đã lưu của ${selectedBot}?`)) return;
+    const key = `MCBOT_${selectedBot.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_PASSWORD`;
+    runAction({ key: `clear-secret:${key}`, button: event.currentTarget, success: 'Đã xóa mật khẩu bot. Khởi động lại hệ thống nền để áp dụng.', refresh: false, fn: () => api(window.mcbot.clearSecret(key)) }).catch(() => {});
+  };
+  $('#clearDiscordSecrets').onclick = event => {
+    if (!window.confirm('Xóa toàn bộ Discord token/Application/Guild/allowlist đã lưu?')) return;
+    runAction({ key: 'clear-discord-secrets', button: event.currentTarget, success: 'Đã xóa dữ liệu bí mật Discord. Khởi động lại hệ thống nền để áp dụng.', refresh: false, fn: async () => {
+      for (const key of ['DISCORD_TOKEN', 'DISCORD_APPLICATION_ID', 'DISCORD_GUILD_ID', 'DISCORD_ALLOWED_USER_IDS', 'DISCORD_CONTROL_CHANNEL_ID', 'DISCORD_CONFIG_CHANNEL_ID', 'DISCORD_ERRORS_CHANNEL_ID']) await api(window.mcbot.clearSecret(key));
+      return { success: true };
+    } }).catch(() => {});
+  };
+  $('#saveSecrets').onclick = event => runAction({ key: 'save-secrets', button: event.currentTarget, success: 'Đã lưu dữ liệu bí mật. Khởi động lại hệ thống nền để áp dụng.', refresh: false, fn: async () => {
+    const entries = [['DISCORD_TOKEN', $('#secretDiscordToken').value.trim()], ['DISCORD_APPLICATION_ID', $('#secretDiscordAppId').value.trim()], ['DISCORD_GUILD_ID', $('#secretDiscordGuildId').value.trim()], ['DISCORD_ALLOWED_USER_IDS', $('#secretDiscordAllowed').value.trim()]];
+    for (const [key, value] of entries) if (value) await api(window.mcbot.setSecret(key, value));
+    const selectedBot = $('#secretBotSelect').value.trim(); const password = $('#secretBotPassword').value;
+    const key = selectedBot ? `MCBOT_${selectedBot.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_PASSWORD` : '';
+    if (key && password) await api(window.mcbot.setSecret(key, password));
+    for (const id of ['secretDiscordToken', 'secretDiscordAppId', 'secretDiscordGuildId', 'secretDiscordAllowed', 'secretBotPassword']) $('#' + id).value = '';
+    return { success: true };
+  }}).catch(() => {});
+
+  $('#selectLocalUpdate').onclick = event => runAction({ key: 'local-update-select', button: event.currentTarget, success: null, refresh: false, fn: async () => {
+    state.localUpdate = await api(window.mcbot.selectLocalUpdateZip());
+    renderUpdateStatus();
+    if (state.localUpdate?.phase === 'READY') toast(`Đã kiểm tra gói MCbot ${state.localUpdate.selected?.version}.`);
+    return state.localUpdate;
+  }}).catch(() => {});
+  $('#clearLocalUpdate').onclick = event => runAction({ key: 'local-update-clear', button: event.currentTarget, success: 'Đã bỏ gói ZIP.', refresh: false, fn: async () => {
+    state.localUpdate = await api(window.mcbot.clearLocalUpdateZip());
+    renderUpdateStatus();
+    return state.localUpdate;
+  }}).catch(() => {});
+  $('#installLocalUpdate').onclick = event => {
+    const version = state.localUpdate?.selected?.version || 'mới';
+    if (!window.confirm(`MCbot sẽ sao lưu cấu hình, dừng bot/chế độ, thoát và cập nhật lên ${version} từ file ZIP. Tiếp tục?`)) return;
+    runAction({ key: 'local-update-install', button: event.currentTarget, success: 'Đã giao gói cập nhật cho tiến trình updater.', refresh: false, fn: () => api(window.mcbot.installLocalUpdateZip()) }).catch(() => {});
+  };
+
+
+  $('#aiBaseUrl').addEventListener('change', persistAiLocalConfig);
+  $('#aiModel').addEventListener('change', persistAiLocalConfig);
+  $('#aiPermission').addEventListener('change', persistAiLocalConfig);
+  $('#aiRefreshModels').onclick = event => runAction({ key: 'ai-models', button: event.currentTarget, success: 'Đã kết nối Local AI.', refresh: false, fn: refreshAiModels }).catch(() => {});
+  $('#aiSelectWorkspace').onclick = event => runAction({ key: 'ai-workspace-select', button: event.currentTarget, success: null, refresh: false, fn: async () => {
+    const selected = await api(window.mcbot.selectAiWorkspace());
+    if (selected?.canceled) return selected;
+    state.ai.workspace = selected.workspace;
+    $('#aiWorkspace').value = selected.workspace.root;
+    persistAiLocalConfig();
+    renderAiWorkspace();
+    toast(`Đã chọn project ${selected.workspace.name || selected.workspace.root}.`);
+    return selected;
+  }}).catch(() => {});
+  $('#aiInspectWorkspace').onclick = event => runAction({ key: 'ai-workspace-inspect', button: event.currentTarget, success: 'Đã quét lại project.', refresh: false, fn: inspectAiWorkspace }).catch(() => {});
+  $('#aiSend').onclick = () => sendAiPrompt().catch(error => { $('#aiBusyText').textContent = `Lỗi: ${error.message}`; toast(error.message, 'error'); });
+  $('#aiPrompt').addEventListener('keydown', event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); sendAiPrompt().catch(error => toast(error.message, 'error')); } });
+  $('#aiNewChat').onclick = () => { state.ai.messages = []; state.ai.trace = []; renderAiMessages(); renderAiTrace(); $('#aiBusyText').textContent = 'Sẵn sàng.'; };
+  $('#aiCopyLast').onclick = async () => { const last = [...state.ai.messages].reverse().find(message => message.role === 'assistant'); if (!last) return; await navigator.clipboard.writeText(last.content); toast('Đã sao chép trả lời AI.'); };
+  $$('.ai-quick-actions [data-ai-prompt]').forEach(button => button.onclick = () => sendAiPrompt(button.dataset.aiPrompt).catch(error => toast(error.message, 'error')));
+
+  $('#checkUpdates').onclick = event => runAction({ key: 'update-check', button: event.currentTarget, success: null, refresh: false, fn: async () => { state.updateStatus = await api(window.mcbot.checkUpdates()); renderUpdateStatus(); toast(state.updateStatus.available ? `Có MCbot ${state.updateStatus.release?.version}.` : 'Bạn đang dùng phiên bản mới nhất.'); return state.updateStatus; } }).catch(() => {});
+  $('#downloadUpdate').onclick = event => runAction({ key: 'update-download', button: event.currentTarget, success: 'Đã tải bản cập nhật.', refresh: false, fn: async () => { state.updateStatus = await api(window.mcbot.downloadUpdate()); renderUpdateStatus(); return state.updateStatus; } }).catch(() => {});
+  $('#installUpdate').onclick = event => { if (!window.confirm('MCbot sẽ sao lưu cấu hình, dừng hệ thống nền, mở bộ cài và thoát để cập nhật. Tiếp tục?')) return; runAction({ key: 'update-install', button: event.currentTarget, success: 'Đã mở bộ cài cập nhật.', refresh: false, fn: () => api(window.mcbot.installUpdate()) }).catch(() => {}); };
+  $('#openUpdateRelease').onclick = () => runAction({ key: 'update-release', refresh: false, fn: () => api(window.mcbot.openUpdateRelease()) }).catch(() => {});
+  $('#rollbackConfigMigration').onclick = event => { if (!window.confirm('Khôi phục cấu hình từ backup migration gần nhất? Hệ thống nền có thể được khởi động lại.')) return; runAction({ key: 'update-rollback-config', button: event.currentTarget, success: 'Đã khôi phục cấu hình trước migration.', refresh: false, fn: async () => { const result = await api(window.mcbot.rollbackConfigMigration()); await loadUpdateStatus(); return result; } }).catch(() => {}); };
+
+  $('#savePreferences').onclick = event => runAction({ key: 'save-preferences', button: event.currentTarget, success: 'Đã lưu tùy chọn phần mềm.', refresh: false, fn: async () => {
+    state.preferences = await api(window.mcbot.setPreferences({ closeToTray: $('#prefCloseToTray').checked, notifyErrors: $('#prefNotifyErrors').checked, startBackendOnLaunch: $('#prefAutoStart').checked, preventSystemSleepWhileActive: $('#prefPreventSleep').checked, launchAtLogin: $('#prefLaunchAtLogin').checked, snapshotIntervalMs: Number($('#prefSnapshotInterval').value), autoCheckUpdates: $('#prefAutoCheckUpdates').checked, autoDownloadUpdates: $('#prefAutoDownloadUpdates').checked, autoInstallUpdatesWhenIdle: $('#prefAutoInstallUpdates').checked, updateChannel: $('#prefUpdateChannel').value, updateRepository: $('#prefUpdateRepository').value.trim() }));
+    return { success: true };
+  }}).catch(() => {});
+
+  $('#loadCollectorConfig').onclick = loadCollectorConfig;
+  $('#collectorConfigBot').onchange = loadCollectorConfig;
+  $('#saveCollectorConfig').onclick = event => runAction({ key: 'collector-config', button: event.currentTarget, success: 'Đã lưu cấu hình Collector+B5.', refresh: false, fn: () => api(window.mcbot.updateCollectorConfig($('#collectorConfigBot').value, { pickupLocation: { x: Number($('#collectorX').value), y: Number($('#collectorY').value), z: Number($('#collectorZ').value) }, craftLoopDelayMs: Number($('#collectorDelay').value), pollSeconds: Number($('#collectorPoll').value), reanchorRadius: Number($('#collectorRadius').value) })) }).catch(() => {});
+  $('#loadFishingConfig').onclick = loadFishingConfig;
+  $('#fishingConfigBot').onchange = loadFishingConfig;
+  $('#fishingArea').onchange = fillFishingArea;
+  $('#saveFishingConfig').onclick = event => runAction({ key: 'fishing-config', button: event.currentTarget, success: 'Đã lưu cấu hình câu cá.', refresh: false, fn: () => api(window.mcbot.updateFishingArea($('#fishingConfigBot').value, { areaId: $('#fishingArea').value, x: Number($('#fishingX').value), y: Number($('#fishingY').value), z: Number($('#fishingZ').value), pitchDegrees: Number($('#fishingPitch').value) })) }).catch(() => {});
+
+  document.addEventListener('keydown', event => {
+    if ((event.ctrlKey || event.metaKey) && !event.shiftKey && /^[1-9]$/.test(event.key)) {
+      event.preventDefault(); switchPage(Object.keys(pageTitles)[Number(event.key) - 1]);
+    } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'r') {
+      event.preventDefault(); refreshSnapshot();
+    } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'l') {
+      event.preventDefault(); switchPage('logs');
+    }
+  });
+}
+
+function restoreLocalPreferences() {
+  $('#logLevel').value = localStorage.getItem('mcbot.logLevel') || 'all';
+  $('#logSearch').value = localStorage.getItem('mcbot.logSearch') || '';
+  $('#logAutoScroll').checked = localStorage.getItem('mcbot.logAutoScroll') !== '0';
+  $('#logSearch').addEventListener('input', () => localStorage.setItem('mcbot.logSearch', $('#logSearch').value));
+}
+
+async function initialize() {
+  bindEvents();
+  restoreLocalPreferences();
+  loadAiLocalSettings();
+  switchPage(state.page);
+  window.mcbot.onSnapshot(acceptSnapshot);
+  window.mcbot.onUpdateStatus(status => { state.updateStatus = status; renderUpdateStatus(); });
+  window.mcbot.onLog(log => {
+    state.logs.push(log);
+    if (state.logs.length > 2500) state.logs.splice(0, state.logs.length - 2500);
+    if (state.page !== 'logs' || $('#logPause').checked) { state.logUnread += 1; updateLogUnread(); }
+    else scheduleLogRender();
+  });
+  try { state.logs = await api(window.mcbot.logs(800)); } catch (error) { reportRendererError(error, 'initial-log-load'); }
+  const appInfoPromise = api(window.mcbot.appInfo()).then(info => { state.appInfo = info; $('#appVersion').textContent = `MCbot Desktop · v${info.version}${info.packaged ? '' : ' · DEV'}`; }).catch(error => reportRendererError(error, 'app-info-load'));
+  await Promise.all([refreshSnapshot({ quiet: true }), loadPreferences(), appInfoPromise]);
+  await loadUpdateStatus();
+  if (state.snapshot?.lifecycle === 'RUNNING') await loadStaticData().catch(error => toast(error.message, 'error'));
+  renderLogs();
+  setInterval(() => { renderFreshness(); if (Date.now() - state.lastSnapshotReceivedAt > 15000) refreshSnapshot({ quiet: true }); }, 1000);
+}
+
+window.addEventListener('error', event => reportRendererError(event.error || event.message, 'window-error'));
+window.addEventListener('unhandledrejection', event => reportRendererError(event.reason, 'unhandled-rejection'));
+
+initialize().catch(error => { reportRendererError(error, 'initialize'); toast(error.message, 'error'); });

@@ -4,7 +4,38 @@ const DiscordPanelStore = require('./DiscordPanelStore');
 const CollectorB5ConfigEditor = require('../config/CollectorB5ConfigEditor');
 const FishingBotConfigEditor = require('../config/FishingBotConfigEditor');
 const DiscordErrorReporter = require('../errors/DiscordErrorReporter');
+const DiscordPanelFormatter = require('./DiscordPanelFormatter');
+const DiscordControlPanelBuilder = require('./DiscordControlPanelBuilder');
 const { createFailureEvent } = require('../../diagnostics/runtime/RuntimeFailureEvent');
+
+
+async function sendHubWithGenerationHold({ autoJoin, slashCommandService, expectedGeneration, logger = null, botId = null } = {}) {
+    let holdEstablished = false;
+    try {
+        const held = autoJoin.holdAtHub({ reason: 'discord-remote', expectedGeneration });
+        if (held?.success === false) throw held.error || new Error(held.message || 'Không thể giữ bot tại HUB.');
+        holdEstablished = true;
+        const result = await slashCommandService.send('/hub', { expectedGeneration });
+        if (result?.success === false) throw result.error || new Error(result.message || 'Không gửi được /hub.');
+        return result;
+    } catch (error) {
+        if (holdEstablished) {
+            try {
+                autoJoin.releaseHubHold({
+                    rejoin: true,
+                    trigger: 'discord-remote-hub-failed',
+                    expectedGeneration
+                });
+            } catch (rollbackError) {
+                logger?.debug?.('Discord HUB hold rollback was rejected.', {
+                    botId, action: 'hub', expectedGeneration,
+                    error: rollbackError?.message || String(rollbackError)
+                });
+            }
+        }
+        throw error;
+    }
+}
 
 class DiscordPanelManager {
     constructor({
@@ -15,10 +46,13 @@ class DiscordPanelManager {
         environment = process.env,
         baseDir = process.cwd(),
         logger = null,
-        botProfileAdmin = null
+        botProfileAdmin = null,
+        fleetControl = null,
+        mutationCoordinator = null
     }) {
         this.config = config;
         this.panelConfig = config.panels || {};
+        this.remoteOnly = config.remoteOnly === true;
         this.botRegistry = botRegistry;
         this.allowedUserIds = new Set(allowedUserIds);
         this.configuration = configuration;
@@ -26,11 +60,15 @@ class DiscordPanelManager {
         this.baseDir = baseDir;
         this.logger = logger;
         this.botProfileAdmin = botProfileAdmin;
+        this.fleetControl = fleetControl;
+        this.mutationCoordinator = mutationCoordinator;
         this.botId = this.panelConfig.botId || config.defaultBotId;
+        this.formatter = new DiscordPanelFormatter({ botId: this.botId });
         // The Discord panel message is shared, but control actions can target any
         // registered bot. Keep the selected control bot separate from the panel
         // owner/default bot so bot-02, bot-03, ... are first-class controls.
         this.selectedControlBotId = this.botId;
+        this.selectedControlModeId = 'b5-craft';
         this.selectedAdminBotId = this.botId;
         this.selectedControlBotPage = 0;
         this.selectedAdminBotPage = 0;
@@ -42,6 +80,7 @@ class DiscordPanelManager {
         this.lastDigests = {};
         this.refreshTimer = null;
         this.refreshRunning = false;
+        this.refreshPromise = null;
         this.store = new DiscordPanelStore({
             baseDir,
             relativePath: this.panelConfig.storePath || 'data/runtime/discord/panels.json',
@@ -52,13 +91,15 @@ class DiscordPanelManager {
             configuration,
             botRegistry,
             botId: this.botId,
-            logger
+            logger,
+            mutationCoordinator
         });
         this.fishingConfigEditor = new FishingBotConfigEditor({
             baseDir,
             configuration,
             botRegistry,
-            logger
+            logger,
+            mutationCoordinator
         });
         const fishingAreas = configuration.registry?.require?.('fishingMode')?.areas || [];
         this.runtimeFailuresConfig = configuration.registry.require('app').diagnostics.runtimeFailures;
@@ -87,16 +128,16 @@ class DiscordPanelManager {
         }
 
         this.channels.control = await this.#resolveChannel('control');
-        this.channels.config = await this.#resolveChannel('config');
+        this.channels.config = this.remoteOnly ? null : await this.#resolveChannel('config');
         this.channels.errors = this.runtimeFailuresConfig.enabled ? await this.#resolveChannel('errors') : null;
-        if (this.botProfileAdmin) this.channels.admin = await this.#resolveChannel('admin');
+        if (!this.remoteOnly && this.botProfileAdmin) this.channels.admin = await this.#resolveChannel('admin');
 
         if (this.channels.errors) {
             this.errorReporter.start({ channel: this.channels.errors, discord });
         }
 
         await this.refreshAll(true);
-        const intervalMs = this.#positive(this.panelConfig.refreshIntervalMs, 3000);
+        const intervalMs = this.formatter.positive(this.panelConfig.refreshIntervalMs, 3000);
         this.refreshTimer = setInterval(() => {
             this.refreshAll(false).catch(error => {
                 this.logger?.debug?.('Discord panel refresh failed.', { error });
@@ -116,7 +157,14 @@ class DiscordPanelManager {
     async stop() {
         if (this.refreshTimer) clearInterval(this.refreshTimer);
         this.refreshTimer = null;
+        if (this.refreshPromise) {
+            try { await this.refreshPromise; } catch (error) {
+                this.logger?.debug?.('Discord panel refresh drain observed a failed refresh.', { error });
+            }
+        }
         await this.errorReporter.stop();
+        await this.store.drain?.();
+        await this.botProfileAdmin?.drain?.();
         this.messages = {};
         this.channels = {};
         this.lastDigests = {};
@@ -168,15 +216,18 @@ class DiscordPanelManager {
     }
 
     async refreshAll(force = false) {
-        if (this.refreshRunning) return;
+        if (this.refreshPromise) return this.refreshPromise;
         this.refreshRunning = true;
+        const task = (async () => {
+            const tasks = [this.refreshControl(force)];
+            if (!this.remoteOnly) tasks.push(this.refreshConfig(force), this.refreshAdmin(force));
+            await Promise.all(tasks);
+        })();
+        this.refreshPromise = task;
         try {
-            await Promise.all([
-                this.refreshControl(force),
-                this.refreshConfig(force),
-                this.refreshAdmin(force)
-            ]);
+            return await task;
         } finally {
+            if (this.refreshPromise === task) this.refreshPromise = null;
             this.refreshRunning = false;
         }
     }
@@ -185,25 +236,29 @@ class DiscordPanelManager {
         const channel = this.channels.control;
         if (!channel) return;
         const payload = this.#controlPayload();
-        await this.#upsertPanel('control', channel, payload, this.#marker('control'), force);
+        await this.#upsertPanel('control', channel, payload, this.formatter.marker('control'), force);
     }
 
     async refreshConfig(force = false) {
         const channel = this.channels.config;
         if (!channel) return;
         const payload = await this.#configPayload();
-        await this.#upsertPanel('config', channel, payload, this.#marker('config'), force);
+        await this.#upsertPanel('config', channel, payload, this.formatter.marker('config'), force);
     }
 
     async refreshAdmin(force = false) {
         const channel = this.channels.admin;
         if (!channel || !this.botProfileAdmin) return;
         const payload = await this.#adminPayload();
-        await this.#upsertPanel('admin', channel, payload, this.#marker('admin'), force);
+        await this.#upsertPanel('admin', channel, payload, this.formatter.marker('admin'), force);
     }
 
     async #handleButton(interaction) {
         const id = interaction.customId;
+        if (this.remoteOnly && (id.startsWith('mcbot:admin:') || id.startsWith('mcbot:config:') || id.startsWith('mcbot:fishing-config:'))) {
+            await interaction.reply?.({ content: 'Discord đang ở chế độ remote-only; cấu hình sâu thực hiện trên Desktop.', ephemeral: true });
+            return true;
+        }
         if (id === 'mcbot:control-page:prev' || id === 'mcbot:control-page:next') {
             const botIds = this.#botIds();
             if (!botIds.length) throw new Error('Không có bot runtime nào được đăng ký.');
@@ -228,7 +283,6 @@ class DiscordPanelManager {
             return true;
         }
         if (id.startsWith('mcbot:control:')) {
-            await interaction.deferUpdate?.();
             const encoded = id.slice('mcbot:control:'.length);
             const splitAt = encoded.indexOf('|');
             const controlBotId = splitAt > 0
@@ -240,8 +294,16 @@ class DiscordPanelManager {
             if (!this.#botIds().includes(controlBotId)) {
                 throw new Error(`Bot runtime không tồn tại: ${controlBotId}`);
             }
+            // Sky/HUB are generation-bound side effects. Capture before the
+            // Discord acknowledgement await so a reconnect during deferUpdate
+            // can only make the operation stale, never retarget it to a new client.
+            const runtime = this.botRegistry.require(controlBotId);
+            const expectedGeneration = ['sky', 'hub'].includes(action)
+                ? this.#captureGeneration(runtime, action === 'sky' ? 'enter Sky' : 'return to HUB')
+                : null;
+            await interaction.deferUpdate?.();
             this.selectedControlBotId = controlBotId;
-            await this.#runControlAction(action, controlBotId);
+            await this.#runControlAction(action, controlBotId, { expectedGeneration });
             await this.refreshAll(true);
             return true;
         }
@@ -351,6 +413,10 @@ class DiscordPanelManager {
 
     async #handleSelect(interaction) {
         const id = interaction.customId;
+        if (this.remoteOnly && (id.startsWith('mcbot:admin:') || id.startsWith('mcbot:config:') || id.startsWith('mcbot:fishing-config:'))) {
+            await interaction.reply?.({ content: 'Discord đang ở chế độ remote-only; cấu hình sâu thực hiện trên Desktop.', ephemeral: true });
+            return true;
+        }
         if (id === 'mcbot:control:bot') {
             const next = interaction.values?.[0];
             if (!next || !this.#botIds().includes(next)) {
@@ -358,6 +424,27 @@ class DiscordPanelManager {
             }
             this.selectedControlBotId = next;
             await interaction.deferUpdate?.();
+            await this.refreshControl(true);
+            return true;
+        }
+        if (id === 'mcbot:control:mode') {
+            const next = interaction.values?.[0];
+            const runtime = this.botRegistry.require(this.selectedControlBotId);
+            const registry = runtime.requireService('modeRegistry');
+            if (!next || !registry.has(next)) throw new Error(`Mode không tồn tại: ${next || '(trống)'}`);
+            this.selectedControlModeId = next;
+            await interaction.deferUpdate?.();
+            await this.refreshControl(true);
+            return true;
+        }
+        if (id === 'mcbot:control:sky-command') {
+            const commandId = interaction.values?.[0];
+            if (!commandId) throw new Error('Chưa chọn lệnh Sky.');
+            const runtime = this.botRegistry.require(this.selectedControlBotId);
+            const expectedGeneration = this.#captureGeneration(runtime, 'send Sky command');
+            await interaction.deferUpdate?.();
+            const result = await runtime.requireService('skyCommandService').send(commandId, { expectedGeneration });
+            if (result?.success === false) throw result.error || new Error(result.message || 'Không gửi được lệnh Sky.');
             await this.refreshControl(true);
             return true;
         }
@@ -398,6 +485,10 @@ class DiscordPanelManager {
 
     async #handleModal(interaction) {
         const id = interaction.customId;
+        if (this.remoteOnly && (id.startsWith('mcbot:admin-') || id.startsWith('mcbot:config-') || id.startsWith('mcbot:fishing-config-'))) {
+            await interaction.reply?.({ content: 'Discord đang ở chế độ remote-only; cấu hình sâu thực hiện trên Desktop.', ephemeral: true });
+            return true;
+        }
         if (id === 'mcbot:admin-modal:add') {
             if (!this.botProfileAdmin) throw new Error('Bot admin service không khả dụng.');
             await interaction.deferReply?.({ ephemeral: true });
@@ -492,68 +583,91 @@ class DiscordPanelManager {
         return true;
     }
 
-    async #runControlAction(action, botId = this.selectedControlBotId) {
+    async #runControlAction(action, botId = this.selectedControlBotId, { expectedGeneration: pinnedGeneration = null } = {}) {
         const runtime = this.botRegistry.require(botId);
-        const collectorMode = runtime.requireService('collectorB5Mode');
-        const fishingMode = runtime.requireService('fishingMode');
-        const collectorStatus = collectorMode.status();
-        const fishingStatus = fishingMode.status();
-        const activeMode = fishingStatus.enabled ? fishingMode : collectorStatus.enabled ? collectorMode : null;
-        const activeModeName = fishingStatus.enabled ? 'fishing' : collectorStatus.enabled ? 'collector' : null;
+        const registry = runtime.requireService('modeRegistry');
+        const active = registry.active?.()?.[0] || null;
+        const activeModeId = active?.definition?.id || null;
+        const activeService = activeModeId ? registry.require(activeModeId) : null;
         let result = null;
 
         if (action === 'join') {
-            await runtime.requireService('connectionManager').connect();
+            result = this.fleetControl
+                ? await this.fleetControl.requestConnection(botId, 'CONNECTED', { source: 'discord-remote' })
+                : await runtime.requireService('connectionManager').connect();
+            if (result?.success === false) throw result.error || new Error(result.message || 'Không kết nối được bot.');
+            return;
+        }
+        if (action === 'disconnect') {
+            result = this.fleetControl
+                ? await this.fleetControl.requestConnection(botId, 'DISCONNECTED', { source: 'discord-remote' })
+                : await runtime.requireService('connectionManager').disconnect('Disconnected from Discord remote.');
+            if (result?.success === false) throw result.error || new Error(result.message || 'Không ngắt được bot.');
             return;
         }
         if (action === 'sky') {
             this.#requireConnected(runtime);
-            result = await runtime.requireService('serverFeatureFacade').skyblock().join();
-        } else if (action === 'mode') {
+            const expectedGeneration = pinnedGeneration ?? this.#captureGeneration(runtime, 'enter Sky');
+            runtime.requireService('skyblockAutoJoin').requestJoinNow({ trigger: 'discord-remote', expectedGeneration });
+            return;
+        }
+        if (action === 'hub') {
             this.#requireConnected(runtime);
-            if (fishingStatus.enabled) throw new Error('Mode câu cá đang bật. Dừng hẳn mode đó trước.');
-            result = await collectorMode.enable();
-        } else if (action === 'fishing') {
-            this.#requireConnected(runtime);
-            if (collectorStatus.enabled) throw new Error('Mode Nhặt+B5 đang bật. Dừng hẳn mode đó trước.');
-            result = await fishingMode.enable();
+            const expectedGeneration = pinnedGeneration ?? this.#captureGeneration(runtime, 'return to HUB');
+            await sendHubWithGenerationHold({
+                autoJoin: runtime.requireService('skyblockAutoJoin'),
+                slashCommandService: runtime.requireService('slashCommandService'),
+                expectedGeneration,
+                logger: this.logger,
+                botId
+            });
+            return;
+        }
+        if (action === 'start-selected-mode') {
+            const modeId = this.selectedControlModeId;
+            if (!registry.has(modeId)) throw new Error(`Mode không tồn tại: ${modeId}`);
+            result = this.fleetControl
+                ? await this.fleetControl.requestMode(botId, modeId, { state: 'ACTIVE', source: 'discord-remote' })
+                : await runtime.requireService('modeControl').start(modeId, { reason: 'Started from Discord remote.' });
         } else if (action === 'pause') {
-            if (!activeMode) throw new Error('Không có mode nào đang chạy.');
-            result = await activeMode.pause('Paused from Discord control panel.');
+            if (!activeModeId) throw new Error('Không có mode nào đang chạy.');
+            result = this.fleetControl
+                ? await this.fleetControl.requestMode(botId, activeModeId, { state: 'PAUSED', source: 'discord-remote' })
+                : await runtime.requireService('modeControl').pause(activeModeId, 'Paused from Discord remote.');
         } else if (action === 'resume') {
-            this.#requireConnected(runtime);
-            if (!activeMode) throw new Error('Không có mode nào để chạy tiếp.');
-            result = await activeMode.resume();
+            if (!activeModeId) throw new Error('Không có mode nào để chạy tiếp.');
+            result = this.fleetControl
+                ? await this.fleetControl.requestMode(botId, activeModeId, { state: 'ACTIVE', source: 'discord-remote' })
+                : await runtime.requireService('modeControl').resume(activeModeId);
         } else if (action === 'stop-mode') {
-            result = await this.#hardStopModes(runtime, 'Hard stop from Discord control panel.');
+            result = this.fleetControl
+                ? await this.fleetControl.requestMode(botId, null, { source: 'discord-remote' })
+                : await runtime.requireService('modeControl').stopAll('Stopped from Discord remote.');
         } else if (action === 'restart-mode') {
-            this.#requireConnected(runtime);
-            if (!activeModeName) throw new Error('Không có mode nào để khởi động lại.');
-            await this.#hardStopModes(runtime, 'Restarting mode from Discord control panel.');
-            result = activeModeName === 'fishing'
-                ? await fishingMode.enable()
-                : await collectorMode.enable();
-        } else if (action === 'reset') {
-            result = await this.#resetInteractions(runtime, { pauseMode: true });
-        } else if (action === 'auto-fix') {
-            result = await this.#autoFix(runtime, { collectorMode, fishingMode });
+            if (!activeModeId) throw new Error('Không có mode nào để khởi động lại.');
+            result = this.fleetControl
+                ? await this.fleetControl.restartMode(botId, activeModeId, { source: 'discord-remote' })
+                : await runtime.requireService('modeControl').restart(activeModeId, { reason: 'Restarted from Discord remote.' });
         } else if (action === 'home') {
             this.#requireConnected(runtime);
-            if (activeMode && !activeMode.status().paused) {
-                const paused = await activeMode.pause('Paused before manual /is from Discord panel.');
-                if (!paused.success) throw paused.error || new Error(paused.message || 'Không pause được mode trước /is.');
+            if (activeModeId && !activeService.status().paused) {
+                const paused = this.fleetControl
+                    ? await this.fleetControl.requestMode(botId, activeModeId, { state: 'PAUSED', source: 'discord-remote-home' })
+                    : await runtime.requireService('modeControl').pause(activeModeId, 'Paused before /is from Discord remote.');
+                if (paused?.success === false) throw paused.error || new Error(paused.message || 'Không pause được mode trước /is.');
             }
             result = await runtime.requireService('serverFeatureFacade').island().goHome();
+        } else if (action === 'reset') {
+            result = await this.#resetInteractions(runtime, { pauseMode: Boolean(activeService) });
+        } else if (action === 'auto-fix') {
+            result = await this.#resetInteractions(runtime, { pauseMode: Boolean(activeService) });
         } else {
             throw new Error(`Control action không hỗ trợ: ${action}`);
         }
-
-        if (result && result.success === false) {
-            throw result.error || new Error(result.message || `Action ${action} thất bại.`);
-        }
+        if (result && result.success === false) throw result.error || new Error(result.message || `Action ${action} thất bại.`);
     }
 
-    async #autoFix(runtime, { collectorMode, fishingMode }) {
+    async #autoFix(runtime, { botId, collectorMode, fishingMode }) {
         const gui = runtime.getService?.('guiManager')?.describeCurrent?.() || null;
         const fishingStatus = fishingMode?.status?.() || { enabled: false, paused: false, phase: 'DISABLED' };
         const collectorStatus = collectorMode?.status?.() || { enabled: false, paused: false, phase: 'OFF' };
@@ -562,17 +676,44 @@ class DiscordPanelManager {
         const activeStatus = activeName === 'fishing' ? fishingStatus : activeName === 'collector' ? collectorStatus : null;
 
         if (activeStatus?.lastError || ['ERROR', 'WAITING_RETRY'].includes(activeStatus?.phase)) {
-            await this.#hardStopModes(runtime, 'Automatic Discord mode recovery.');
-            return activeName === 'fishing' ? fishingMode.enable() : collectorMode.enable();
+            return this.fleetControl
+                ? this.fleetControl.restartMode(botId, this.#durableModeId(activeName), { source: 'discord-panel-auto-fix' })
+                : this.#restartDirectMode(runtime, activeName, { collectorMode, fishingMode });
         }
-        if (activeStatus?.paused) return active.resume();
-        if (gui?.windowId !== null && gui?.windowId !== undefined) return this.#resetInteractions(runtime, { pauseMode: Boolean(active) });
+        if (activeStatus?.paused) {
+            return this.fleetControl
+                ? this.fleetControl.requestMode(botId, this.#durableModeId(activeName), { state: 'ACTIVE', source: 'discord-panel-auto-fix' })
+                : active.resume();
+        }
+        if (gui?.windowId !== null && gui?.windowId !== undefined) {
+            if (this.fleetControl && activeName) {
+                const paused = await this.fleetControl.requestMode(botId, this.#durableModeId(activeName), {
+                    state: 'PAUSED',
+                    source: 'discord-panel-auto-fix'
+                });
+                if (paused?.success === false) return paused;
+                return this.#resetInteractions(runtime, { pauseMode: false });
+            }
+            return this.#resetInteractions(runtime, { pauseMode: Boolean(active) });
+        }
         if (active) {
             // State looks healthy; restart only the mode, never the Minecraft connection.
-            await this.#hardStopModes(runtime, 'Automatic Discord clean mode restart.');
-            return activeName === 'fishing' ? fishingMode.enable() : collectorMode.enable();
+            return this.fleetControl
+                ? this.fleetControl.restartMode(botId, this.#durableModeId(activeName), { source: 'discord-panel-auto-fix' })
+                : this.#restartDirectMode(runtime, activeName, { collectorMode, fishingMode });
         }
         return this.#resetInteractions(runtime, { pauseMode: false });
+    }
+
+    #durableModeId(activeName) {
+        if (activeName === 'collector') return 'collector-b5';
+        if (activeName === 'fishing') return 'fishing';
+        throw new Error(`Mode không hợp lệ cho durable control: ${activeName || 'none'}`);
+    }
+
+    async #restartDirectMode(runtime, activeName, { collectorMode, fishingMode }) {
+        await this.#hardStopModes(runtime, 'Restarting mode from Discord control panel.');
+        return activeName === 'fishing' ? fishingMode.enable() : collectorMode.enable();
     }
 
     async #hardStopModes(runtime, reason) {
@@ -603,149 +744,21 @@ class DiscordPanelManager {
     }
 
     #controlPayload() {
-        const botIds = this.#botIds();
-        if (!botIds.length) throw new Error('Không có bot runtime nào được đăng ký.');
-        if (!botIds.includes(this.selectedControlBotId)) {
-            this.selectedControlBotId = botIds.includes(this.botId) ? this.botId : botIds[0];
-        }
-
-        const controlBotId = this.selectedControlBotId;
-        const runtime = this.botRegistry.require(controlBotId);
-        const displayName = runtime.identity?.displayName || controlBotId;
-        const username = runtime.identity?.username || '-';
-        const bot = runtime.context.get();
-        const online = Boolean(bot);
-        const collectorMode = runtime.requireService('collectorB5Mode').status();
-        const fishingService = runtime.getService?.('fishingMode') || null;
-        const fishingMode = fishingService?.status?.() || { enabled: false, paused: false, phase: 'DISABLED', catches: 0, areas: [] };
-        const gui = runtime.getService?.('guiManager')?.describeCurrent?.() || null;
-        const activeMode = fishingMode.enabled ? fishingMode : collectorMode.enabled ? collectorMode : null;
-        const position = bot?.entity?.position || activeMode?.position || null;
-        const mainHand = bot?.heldItem || null;
-        const offHand = bot?.inventory?.slots?.[45] || null;
-        const hp = online && Number.isFinite(bot.health) ? `${this.#number(bot.health)}/20` : '-';
-        const food = online && Number.isFinite(bot.food) ? `${this.#number(bot.food)}/20` : '-';
-        const modeText = fishingMode.enabled
-            ? `Câu cá — ${fishingMode.paused ? 'PAUSED' : fishingMode.phase}`
-            : collectorMode.enabled
-                ? `Nhặt + B5 — ${collectorMode.paused ? 'PAUSED' : collectorMode.phase}`
-                : 'Không';
-
-        const fields = [
-            { name: 'Bot điều khiển', value: `**${displayName}** \`${controlBotId}\``, inline: true },
-            { name: 'Minecraft', value: `\`${username}\``, inline: true },
-            { name: 'Trạng thái', value: online ? '`ONLINE`' : '`OFFLINE`', inline: true },
-            { name: 'Máu', value: `\`${hp}\``, inline: true },
-            { name: 'Độ no', value: `\`${food}\``, inline: true },
-            { name: 'Tay trái', value: this.#itemText(offHand), inline: true },
-            { name: 'Tay phải', value: this.#itemText(mainHand), inline: true },
-            { name: 'Vị trí', value: `\`${this.#positionText(position)}\``, inline: true },
-            { name: 'Mode hiện tại', value: `\`${modeText}\`` },
-            { name: 'Tác vụ', value: this.#operationStatusText(runtime.getService?.('operationManager')?.snapshot?.()), inline: true },
-            { name: 'Khôi phục đề xuất', value: this.#recoveryAdvice({ online, collectorMode, fishingMode, gui }) }
-        ];
-        if (collectorMode.enabled) {
-            if (collectorMode.lastError) {
-                const retryText = Number(collectorMode.unhandledRetryCount || 0) > 0
-                    ? ` | auto-retry #${Number(collectorMode.unhandledRetryCount || 0)}`
-                    : '';
-                fields.push({
-                    name: 'Lỗi Collector+B5 gần nhất',
-                    value: `\`phase=${collectorMode.lastUnhandledPhase || collectorMode.phase || 'UNKNOWN'}${retryText}\`\n${String(collectorMode.lastError).slice(0, 900)}`
-                });
-            }
-            fields.push({
-                name: 'Đang làm',
-                value: `**${collectorMode.activity || 'Đang chạy'}**`,
-                inline: true
-            });
-            fields.push({
-                name: 'Tiến độ B5',
-                value: this.#simpleB5ProgressText(collectorMode),
-                inline: true
-            });
-        }
-        if (fishingMode.enabled) {
-            fields.push(
-                { name: 'Khu AFK câu cá', value: `\`${fishingMode.currentAreaId || 'đang chọn khu'}\``, inline: true },
-                { name: 'Câu thành công', value: `\`${Number(fishingMode.catches || 0)}\``, inline: true },
-                { name: 'Số người khu AFK', value: this.#fishingAreasText(fishingMode.areas) }
-            );
-        }
-
-        const embed = new this.discord.EmbedBuilder()
-            .setTitle(`MCbot - ${displayName} [${controlBotId}]`.slice(0, 256))
-            .addFields(...fields)
-            .setFooter({ text: this.#marker('control') });
-
-        const controlMaxPage = Math.max(0, Math.ceil(botIds.length / 25) - 1);
-        this.selectedControlBotPage = Math.max(0, Math.min(controlMaxPage, this.selectedControlBotPage));
-        const controlPageStart = this.selectedControlBotPage * 25;
-        const controlPageIds = botIds.slice(controlPageStart, controlPageStart + 25);
-        const botOptions = controlPageIds.map(botId => {
-            const candidate = this.botRegistry.get?.(botId);
-            return {
-                label: String(candidate?.identity?.displayName || botId).slice(0, 100),
-                description: `${botId} | ${candidate?.identity?.username || '-'}`.slice(0, 100),
-                value: botId,
-                default: botId === controlBotId
-            };
+        const builder = new DiscordControlPanelBuilder({
+            discord: this.discord,
+            formatter: this.formatter,
+            botRegistry: this.botRegistry,
+            defaultBotId: this.botId
         });
-        const botRow = new this.discord.ActionRowBuilder().addComponents(
-            new this.discord.StringSelectMenuBuilder()
-                .setCustomId('mcbot:control:bot')
-                .setPlaceholder(`Chọn bot để điều khiển • trang ${this.selectedControlBotPage + 1}/${controlMaxPage + 1}`)
-                .addOptions(...botOptions)
-        );
-        const controlPageRow = controlMaxPage > 0
-            ? new this.discord.ActionRowBuilder().addComponents(
-                new this.discord.ButtonBuilder().setCustomId('mcbot:control-page:prev').setLabel('◀ Bot trước').setStyle(this.discord.ButtonStyle.Secondary).setDisabled(this.selectedControlBotPage <= 0),
-                new this.discord.ButtonBuilder().setCustomId('mcbot:control-page:next').setLabel('Bot sau ▶').setStyle(this.discord.ButtonStyle.Secondary).setDisabled(this.selectedControlBotPage >= controlMaxPage)
-            )
-            : null;
-
-        const anyModeEnabled = collectorMode.enabled || fishingMode.enabled;
-        const activePaused = Boolean(activeMode?.paused);
-        const cid = action => `mcbot:control:${controlBotId}|${action}`;
-
-        // Keep the lightweight six-button layout for minimal/legacy runtimes.
-        // Full production runtimes expose recovery/fishing controls below.
-        const hasAdvancedRecovery = Boolean(
-            fishingService
-            || runtime.getService?.('operationManager')
-        );
-        if (!hasAdvancedRecovery && botIds.length === 1) {
-            const legacyRow1 = new this.discord.ActionRowBuilder().addComponents(
-                new this.discord.ButtonBuilder().setCustomId(cid('join')).setLabel('Join Server').setStyle(this.discord.ButtonStyle.Primary).setDisabled(online),
-                new this.discord.ButtonBuilder().setCustomId(cid('sky')).setLabel('Sky thủ công').setStyle(this.discord.ButtonStyle.Primary).setDisabled(!online),
-                new this.discord.ButtonBuilder().setCustomId(cid('mode')).setLabel('Mode').setStyle(this.discord.ButtonStyle.Success).setDisabled(!online || anyModeEnabled)
-            );
-            const legacyRow2 = new this.discord.ActionRowBuilder().addComponents(
-                new this.discord.ButtonBuilder().setCustomId(cid('pause')).setLabel('Dừng').setStyle(this.discord.ButtonStyle.Secondary).setDisabled(!anyModeEnabled || activePaused),
-                new this.discord.ButtonBuilder().setCustomId(cid('resume')).setLabel('Chạy tiếp').setStyle(this.discord.ButtonStyle.Success).setDisabled(!online || !anyModeEnabled || !activePaused),
-                new this.discord.ButtonBuilder().setCustomId(cid('home')).setLabel('Về đảo').setStyle(this.discord.ButtonStyle.Secondary).setDisabled(!online)
-            );
-            return { embeds: [embed], components: [legacyRow1, legacyRow2] };
-        }
-
-        const row1 = new this.discord.ActionRowBuilder().addComponents(
-            new this.discord.ButtonBuilder().setCustomId(cid('join')).setLabel('Join Server').setStyle(this.discord.ButtonStyle.Primary).setDisabled(online),
-            new this.discord.ButtonBuilder().setCustomId(cid('sky')).setLabel('Sky thủ công').setStyle(this.discord.ButtonStyle.Primary).setDisabled(!online),
-            new this.discord.ButtonBuilder().setCustomId(cid('mode')).setLabel('Bật Nhặt + B5').setStyle(this.discord.ButtonStyle.Success).setDisabled(!online || anyModeEnabled),
-            new this.discord.ButtonBuilder().setCustomId(cid('fishing')).setLabel('Bật Câu cá').setStyle(this.discord.ButtonStyle.Success).setDisabled(!online || anyModeEnabled)
-        );
-        const row2 = new this.discord.ActionRowBuilder().addComponents(
-            new this.discord.ButtonBuilder().setCustomId(cid('pause')).setLabel('Tạm dừng').setStyle(this.discord.ButtonStyle.Secondary).setDisabled(!anyModeEnabled || activePaused),
-            new this.discord.ButtonBuilder().setCustomId(cid('resume')).setLabel('Chạy tiếp').setStyle(this.discord.ButtonStyle.Success).setDisabled(!online || !anyModeEnabled || !activePaused),
-            new this.discord.ButtonBuilder().setCustomId(cid('home')).setLabel('Về đảo').setStyle(this.discord.ButtonStyle.Secondary).setDisabled(!online)
-        );
-        const row3 = new this.discord.ActionRowBuilder().addComponents(
-            new this.discord.ButtonBuilder().setCustomId(cid('stop-mode')).setLabel('Dừng hẳn mode').setStyle(this.discord.ButtonStyle.Danger).setDisabled(!anyModeEnabled),
-            new this.discord.ButtonBuilder().setCustomId(cid('restart-mode')).setLabel('Restart mode').setStyle(this.discord.ButtonStyle.Primary).setDisabled(!online || !anyModeEnabled),
-            new this.discord.ButtonBuilder().setCustomId(cid('reset')).setLabel('Reset thao tác').setStyle(this.discord.ButtonStyle.Secondary).setDisabled(!online),
-            new this.discord.ButtonBuilder().setCustomId(cid('auto-fix')).setLabel('Tự sửa lỗi').setStyle(this.discord.ButtonStyle.Primary).setDisabled(!online)
-        );
-        return { embeds: [embed], components: [botRow, row1, row2, row3, controlPageRow].filter(Boolean) };
+        const built = builder.build({
+            selectedBotId: this.selectedControlBotId,
+            selectedModeId: this.selectedControlModeId,
+            selectedPage: this.selectedControlBotPage
+        });
+        this.selectedControlBotId = built.selectedBotId;
+        this.selectedControlModeId = built.selectedModeId;
+        this.selectedControlBotPage = built.selectedPage;
+        return built.payload;
     }
 
     #botIds() {
@@ -754,33 +767,13 @@ class DiscordPanelManager {
         return [];
     }
 
-    #recoveryAdvice({ online, collectorMode, fishingMode, gui }) {
-        if (!online) return '`Bot offline → Join Server.`';
-        const active = fishingMode.enabled ? fishingMode : collectorMode.enabled ? collectorMode : null;
-        if (active?.lastError || active?.phase === 'ERROR' || active?.phase === 'WAITING_RETRY') {
-            if (gui?.windowId !== null && gui?.windowId !== undefined) {
-                return '`Reset thao tác → Restart mode. Không cần thoát bot.`';
-            }
-            return '`Restart mode để hủy state cũ và bật lại từ đầu. Không reconnect.`';
-        }
-        if (active?.paused) return '`Chạy tiếp; nếu state vẫn sai thì Restart mode.`';
-        if (gui?.windowId !== null && gui?.windowId !== undefined && !active) return '`Có GUI đang mở; Reset thao tác để đóng sạch.`';
-        if (active) return '`Mode đang chạy. Tạm dừng để can thiệp; Restart mode nếu hành vi sai.`';
-        return '`Không có mode đang chạy; chọn mode cần bật.`';
-    }
-
-    #operationStatusText(snapshot) {
-        if (!snapshot) return '`active=0 | pending=0`';
-        return `\`active=${Number(snapshot.active || 0)} | pending=${Number(snapshot.pending || 0)}\``;
-    }
-
     async #adminPayload() {
         const profiles = await this.botProfileAdmin.listProfiles();
         if (!profiles.length) {
             const embed = new this.discord.EmbedBuilder()
                 .setTitle('MCbot - Quản trị bot')
                 .setDescription('Chưa có bot profile. Bấm **Thêm bot** để tạo profile đầu tiên.')
-                .setFooter({ text: this.#marker('admin') });
+                .setFooter({ text: this.formatter.marker('admin') });
             const row = new this.discord.ActionRowBuilder().addComponents(
                 new this.discord.ButtonBuilder().setCustomId('mcbot:admin:add').setLabel('Thêm bot').setStyle(this.discord.ButtonStyle.Success)
             );
@@ -822,7 +815,7 @@ class DiscordPanelManager {
                 { name: 'Danh sách', value: summary || '`trống`' },
                 { name: 'Ghi chú', value: '`Bot mới tạo DISABLED. Password/token không nhập qua Discord; secret vẫn lấy từ environment.`' }
             )
-            .setFooter({ text: this.#marker('admin') });
+            .setFooter({ text: this.formatter.marker('admin') });
 
         const select = new this.discord.ActionRowBuilder().addComponents(
             new this.discord.StringSelectMenuBuilder()
@@ -906,9 +899,9 @@ class DiscordPanelManager {
         const pickup = [p.x, p.y, p.z].every(Number.isFinite)
             ? `${p.x}, ${p.y}, ${p.z}`
             : 'chưa cấu hình';
-        const craftDelayMs = this.#number(Number(current.craftLoopDelayMs || 250));
-        const pollSeconds = this.#number(Number(current.pollIntervalMs || 0) / 1000);
-        const reanchor = this.#number(Number(current.reanchorRadius || 0));
+        const craftDelayMs = this.formatter.number(Number(current.craftLoopDelayMs || 250));
+        const pollSeconds = this.formatter.number(Number(current.pollIntervalMs || 0) / 1000);
+        const reanchor = this.formatter.number(Number(current.reanchorRadius || 0));
 
         const collectorRow = new this.discord.ActionRowBuilder().addComponents(
             new this.discord.ButtonBuilder().setCustomId('mcbot:config:pickup').setLabel('Điểm nhặt').setStyle(this.discord.ButtonStyle.Primary),
@@ -921,7 +914,9 @@ class DiscordPanelManager {
         let configuredBotIds = [];
         try {
             configuredBotIds = await this.fishingConfigEditor.listBotIds();
-        } catch {}
+        } catch (error) {
+            this.logger?.debug?.('Fishing bot IDs could not be listed for the optional panel.', { error });
+        }
         const botIds = configuredBotIds.length > 0 ? configuredBotIds : this.#botIds();
         if (!botIds.includes(this.selectedFishingBotId)) this.selectedFishingBotId = botIds[0] || this.botId;
 
@@ -934,7 +929,9 @@ class DiscordPanelManager {
                 try {
                     const resolved = requireConfig.call(this.configuration.registry, 'fishingMode');
                     fishing = { resolved, overrides: {} };
-                } catch {}
+                } catch (error) {
+                    this.logger?.debug?.('Fishing shared config is unavailable for the optional panel.', { error });
+                }
             }
         }
 
@@ -950,7 +947,7 @@ class DiscordPanelManager {
                     { name: 'Chu kỳ kiểm tra', value: `\`${pollSeconds} giây\``, inline: true },
                     { name: 'Reanchor radius', value: `\`${reanchor}\``, inline: true }
                 )
-                .setFooter({ text: this.#marker('config') });
+                .setFooter({ text: this.formatter.marker('config') });
             return { embeds: [embed], components: [collectorRow] };
         }
 
@@ -960,9 +957,9 @@ class DiscordPanelManager {
         const selectedArea = fishing.resolved.areas.find(area => area.id === this.selectedFishingAreaId) || null;
         const fp = selectedArea?.destination || {};
         const fishingPosition = [fp.x, fp.y, fp.z].every(Number.isFinite)
-            ? `${this.#number(fp.x)}, ${this.#number(fp.y)}, ${this.#number(fp.z)}`
+            ? `${this.formatter.number(fp.x)}, ${this.formatter.number(fp.y)}, ${this.formatter.number(fp.z)}`
             : 'chưa cấu hình';
-        const pitch = this.#number(fishing.resolved?.movement?.shoreFishingPitchDegrees ?? 10);
+        const pitch = this.formatter.number(fishing.resolved?.movement?.shoreFishingPitchDegrees ?? 10);
         const explicitArea = Boolean(fishing.overrides?.areas?.[this.selectedFishingAreaId]);
         const explicitPitch = Number.isFinite(Number(fishing.overrides?.shoreFishingPitchDegrees));
 
@@ -979,7 +976,7 @@ class DiscordPanelManager {
                 { name: 'Điểm đứng câu', value: `\`${fishingPosition}\` (${explicitArea ? 'riêng bot' : 'mặc định chung'})` },
                 { name: 'Góc cúi khi câu', value: `\`${pitch}°\` (${explicitPitch ? 'riêng bot' : 'mặc định chung'})`, inline: true }
             )
-            .setFooter({ text: this.#marker('config') });
+            .setFooter({ text: this.formatter.marker('config') });
 
         const botOptions = botIds.slice(0, 25).map(botId => ({
             label: botId,
@@ -1110,7 +1107,9 @@ class DiscordPanelManager {
         if (stored?.channelId === channel.id && stored.messageId) {
             try {
                 return await channel.messages.fetch(stored.messageId);
-            } catch {}
+            } catch (error) {
+                this.logger?.debug?.('Stored Discord panel message no longer exists.', { kind, error });
+            }
         }
 
         try {
@@ -1181,6 +1180,14 @@ class DiscordPanelManager {
         return Boolean(channel && typeof channel.send === 'function' && (channel.isTextBased?.() ?? true));
     }
 
+    #captureGeneration(runtime, action) {
+        const generation = Number(runtime?.context?.getGeneration?.());
+        if (Number.isInteger(generation) && generation > 0) return generation;
+        const error = new Error(`Bot is not connected; cannot ${action}.`);
+        error.code = 'COMMAND_STALE_GENERATION';
+        throw error;
+    }
+
     #requireConnected(runtime) {
         if (!runtime.context.has()) throw new Error(`Bot chưa kết nối: ${runtime.botId || this.botId}`);
     }
@@ -1190,54 +1197,13 @@ class DiscordPanelManager {
         try {
             if (interaction.deferred || interaction.replied) await interaction.followUp?.(payload);
             else await interaction.reply?.(payload);
-        } catch {}
+        } catch (responseError) {
+            this.logger?.warn?.('Discord interaction error response could not be delivered.', { error: responseError });
+        }
     }
 
-    #itemText(item) {
-        if (!item) return '`Trống`';
-        const raw = item.displayName || item.name || 'item';
-        const name = String(raw).replace(/§[0-9A-FK-OR]/gi, '').trim() || item.name || 'item';
-        const count = Number(item.count || 1);
-        return `\`${name}${count > 1 ? ` x${count}` : ''}\``;
-    }
 
-    #simpleB5ProgressText(status) {
-        if (!status?.enabled) return '`Chưa chạy`';
-        if (status.paused) return '`Tạm dừng`';
-        if (status.lastError) return '`Đang thử lại sau lỗi`';
-        const remaining = Number(status.remainingSteps);
-        if (Number.isFinite(remaining)) return `Còn **${Math.max(0, Math.floor(remaining))} bước**`;
-        return '`Đang tính...`';
-    }
-
-    #fishingAreasText(areas) {
-        if (!Array.isArray(areas) || areas.length === 0) return '`Đang đọc /afk...`';
-        return areas.map(area => {
-            const occupancy = area?.known ? `${area.current}/${area.capacity}` : '?/?';
-            const state = area?.full === true ? 'đầy' : area?.full === false ? 'còn chỗ' : 'chưa rõ';
-            return `Slot ${area.menuSlot}: **${occupancy}** (${state})`;
-        }).join('\n');
-    }
-
-    #positionText(position) {
-        if (!position) return '-';
-        return `${this.#number(position.x)}, ${this.#number(position.y)}, ${this.#number(position.z)}`;
-    }
-
-    #number(value) {
-        const number = Number(value);
-        if (!Number.isFinite(number)) return '-';
-        return Number.isInteger(number) ? String(number) : String(Math.round(number * 10) / 10);
-    }
-
-    #marker(kind) {
-        return `mcbot-${kind}-panel:${this.botId}`;
-    }
-
-    #positive(value, fallback) {
-        const number = Number(value);
-        return Number.isFinite(number) && number > 0 ? number : fallback;
-    }
 }
 
+DiscordPanelManager.sendHubWithGenerationHold = sendHubWithGenerationHold;
 module.exports = DiscordPanelManager;

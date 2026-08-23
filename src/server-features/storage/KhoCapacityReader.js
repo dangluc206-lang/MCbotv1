@@ -9,6 +9,11 @@ class KhoCapacityReader {
         this.textParser = textParser;
     }
 
+    reconfigure(config) {
+        this.config = config || {};
+        return this;
+    }
+
     read(window) {
         const rule = this.config?.capacityIndicator;
         if (!rule) return null;
@@ -28,12 +33,12 @@ class KhoCapacityReader {
         if (!item) return null;
         const lines = this.textParser.itemLines(item);
         const text = this.textParser.normalizeText(lines.join('\n'));
-        const used = this.textParser.firstMatch(text, rule.usedPatterns || [], 'value')
-            ?? this.textParser.firstNumberAfterLabel(lines, /(?:da\s*su\s*dung|used)\s*:?/i);
-        const free = this.textParser.firstMatch(text, rule.freePatterns || [], 'value')
-            ?? this.textParser.firstNumberAfterLabel(lines, /(?:dang\s*trong|con\s*trong|free)\s*:?/i);
-        const limit = this.textParser.firstMatch(text, rule.limitPatterns || [], 'value')
-            ?? this.textParser.firstNumberAfterLabel(lines, /(?:dung\s*luong|suc\s*chua|capacity|limit)\s*:?/i);
+        const used = this.textParser.firstAbsoluteMatch(text, rule.usedPatterns || [], 'value')
+            ?? this.textParser.firstAbsoluteNumberAfterLabel(lines, /(?:da\s*su\s*dung|used)\s*:?/i);
+        const free = this.textParser.firstAbsoluteMatch(text, rule.freePatterns || [], 'value')
+            ?? this.textParser.firstAbsoluteNumberAfterLabel(lines, /(?:dang\s*trong|con\s*trong|free)\s*:?/i);
+        const limit = this.textParser.firstAbsoluteMatch(text, rule.limitPatterns || [], 'value')
+            ?? this.textParser.firstAbsoluteNumberAfterLabel(lines, /(?:dung\s*luong|suc\s*chua|capacity|limit)\s*:?/i);
 
         if (Number.isSafeInteger(used) || Number.isSafeInteger(free) || Number.isSafeInteger(limit)) {
             const resolvedLimit = Number.isSafeInteger(limit)

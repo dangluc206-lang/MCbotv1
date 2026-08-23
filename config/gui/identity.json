@@ -1,0 +1,14 @@
+{
+  "minimumConfidence": 0.62,
+  "minimumMargin": 0.08,
+  "expectedMinimumConfidence": 0.58,
+  "titleWeight": 0.46,
+  "layoutWeight": 0.16,
+  "fingerprintWeight": 0.38,
+  "expectedIdWeight": 0.42,
+  "expectedConflictWeight": 0.2,
+  "previousIdWeight": 0.08,
+  "unknownPenalty": 0.14,
+  "maxSemanticWeight": 0.5,
+  "candidateLimit": 5
+}

@@ -6,6 +6,7 @@ test('ConfigLoader classifies missing and invalid JSON',async t=>{const dir=awai
 test('ConfigRegistry isolates values and validator contract',()=>{const registry=new ConfigRegistry();const input={a:{b:1}};registry.register('x',input);input.a.b=2;assert.equal(registry.require('x').a.b,1);assert.throws(()=>registry.register('x',{}),/already exists/);const validator=new ConfigValidator({ok:value=>({valid:value===1,errors:value===1?[]:['bad']})});assert.equal(validator.validate('ok',1).valid,true);assert.throws(()=>validator.assertValid('ok',2),/validation failed/i);});
 
 const serverSchema = require('../../../src/configuration/schemas/server.schema');
+const appSchema = require('../../../src/configuration/schemas/app.schema');
 
 test('server schema accepts named profiles and rejects missing defaults', () => {
     assert.equal(serverSchema({
@@ -21,3 +22,79 @@ test('server schema accepts named profiles and rejects missing defaults', () => 
     assert.equal(invalid.valid, false);
     assert.equal(invalid.errors.some(error => error.includes('defaultProfile')), true);
 });
+
+test('app schema validates operation queue and timeout policy bounds', () => {
+    const valid = appSchema({
+        operations: {
+            maxPending: 8,
+            defaultQueueWaitTimeoutMs: 0,
+            defaultExecutionTimeoutMs: 100,
+            shutdownDrainTimeoutMs: 250
+        },
+        diagnostics: {
+            runtimeFailures: {
+                enabled: false,
+                directory: 'data/runtime/errors',
+                repeatWindowMs: 0,
+                connectionAggregationMs: 0,
+                maxFileMb: 1,
+                maxTotalMb: 1,
+                retentionDays: 0,
+                cleanupIntervalMs: 0
+            },
+            circuitBreaker: {
+                baseBackoffMs: 0,
+                maxBackoffMs: 0,
+                multiplier: 1,
+                jitterRatio: 0,
+                maxConsecutiveFailures: 1,
+                openDurationMs: 0
+            }
+        }
+    });
+    assert.equal(valid.valid, true, valid.errors.join('; '));
+
+    for (const [key, value] of [
+        ['maxPending', 0],
+        ['maxPending', 1.5],
+        ['defaultQueueWaitTimeoutMs', -1],
+        ['defaultExecutionTimeoutMs', -1],
+        ['shutdownDrainTimeoutMs', -1]
+    ]) {
+        const operations = {
+            maxPending: 8,
+            defaultQueueWaitTimeoutMs: 1,
+            defaultExecutionTimeoutMs: 1,
+            shutdownDrainTimeoutMs: 1,
+            [key]: value
+        };
+        const result = appSchema({ ...validConfigShell(), operations });
+        assert.equal(result.valid, false, `${key}=${value} should be invalid`);
+        assert.equal(result.errors.some(error => error.includes(`operations.${key}`)), true);
+    }
+});
+
+function validConfigShell() {
+    return {
+        diagnostics: {
+            runtimeFailures: {
+                enabled: false,
+                directory: 'data/runtime/errors',
+                repeatWindowMs: 0,
+                connectionAggregationMs: 0,
+                maxFileMb: 1,
+                maxTotalMb: 1,
+                retentionDays: 0,
+                cleanupIntervalMs: 0
+            },
+            circuitBreaker: {
+                baseBackoffMs: 0,
+                maxBackoffMs: 0,
+                multiplier: 1,
+                jitterRatio: 0,
+                maxConsecutiveFailures: 1,
+                openDurationMs: 0
+            }
+        }
+    };
+}

@@ -56,7 +56,11 @@ async function main() {
 }
 
 if (require.main === module) {
-    main().catch(() => {});
+    main().catch(error => {
+        // main() already records the structured bootstrap failure; stderr is the
+        // last-resort channel if logger teardown also failed.
+        process.stderr.write(`MCbot fatal bootstrap failure: ${error?.message || error}\n`);
+    });
 }
 
 module.exports = { main };

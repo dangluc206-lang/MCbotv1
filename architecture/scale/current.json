@@ -1,0 +1,271 @@
+{
+  "schema": "mcbot-scale-baseline/v1",
+  "schemaVersion": 1,
+  "capturedAt": "2026-08-22T23:04:43.279Z",
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "linux",
+    "arch": "x64",
+    "cpuCount": 5,
+    "totalMemoryBytes": 6368813056,
+    "gcExposed": true
+  },
+  "workload": {
+    "counts": [
+      1,
+      8,
+      16,
+      32,
+      64
+    ],
+    "componentsPerRuntime": 24,
+    "eventsPerBot": 50,
+    "model": "synthetic-current-core-primitives",
+    "caveat": "No Mineflayer socket, server GUI, pathfinding, Discord network, or live Minecraft workload is included."
+  },
+  "measurements": [
+    {
+      "botCount": 1,
+      "componentsPerRuntime": 24,
+      "lifecycle": {
+        "initializeMs": 0.459,
+        "startMs": 0.54,
+        "stopMs": 0.238,
+        "destroyMs": 0.105,
+        "startRejected": 0
+      },
+      "events": {
+        "totalEvents": 50,
+        "deliveredToTarget": 50,
+        "elapsedMs": 1.27,
+        "eventsPerSecond": 39366.607
+      },
+      "memory": {
+        "before": {
+          "rssBytes": 54403072,
+          "heapUsedBytes": 4289168,
+          "heapTotalBytes": 6881280,
+          "externalBytes": 1571692
+        },
+        "after": {
+          "rssBytes": 55713792,
+          "heapUsedBytes": 4681616,
+          "heapTotalBytes": 7143424,
+          "externalBytes": 1573740
+        },
+        "delta": {
+          "rssBytes": 1310720,
+          "heapUsedBytes": 392448,
+          "heapTotalBytes": 262144,
+          "externalBytes": 2048
+        },
+        "rssPerBotDeltaBytes": 1310720,
+        "heapUsedPerBotDeltaBytes": 392448
+      },
+      "eventLoopDelayMs": {
+        "min": 10.093,
+        "mean": 10.338,
+        "max": 10.584,
+        "p99": 10.584
+      }
+    },
+    {
+      "botCount": 8,
+      "componentsPerRuntime": 24,
+      "lifecycle": {
+        "initializeMs": 0.192,
+        "startMs": 0.149,
+        "stopMs": 0.247,
+        "destroyMs": 0.229,
+        "startRejected": 0
+      },
+      "events": {
+        "totalEvents": 400,
+        "deliveredToTarget": 400,
+        "elapsedMs": 1.875,
+        "eventsPerSecond": 213381.814
+      },
+      "memory": {
+        "before": {
+          "rssBytes": 55713792,
+          "heapUsedBytes": 4410536,
+          "heapTotalBytes": 7143424,
+          "externalBytes": 1573740
+        },
+        "after": {
+          "rssBytes": 56823808,
+          "heapUsedBytes": 5272496,
+          "heapTotalBytes": 7143424,
+          "externalBytes": 1573740
+        },
+        "delta": {
+          "rssBytes": 1110016,
+          "heapUsedBytes": 861960,
+          "heapTotalBytes": 0,
+          "externalBytes": 0
+        },
+        "rssPerBotDeltaBytes": 138752,
+        "heapUsedPerBotDeltaBytes": 107745
+      },
+      "eventLoopDelayMs": {
+        "min": 10.093,
+        "mean": 10.097,
+        "max": 10.101,
+        "p99": 10.101
+      }
+    },
+    {
+      "botCount": 16,
+      "componentsPerRuntime": 24,
+      "lifecycle": {
+        "initializeMs": 0.204,
+        "startMs": 0.246,
+        "stopMs": 0.535,
+        "destroyMs": 0.254,
+        "startRejected": 0
+      },
+      "events": {
+        "totalEvents": 800,
+        "deliveredToTarget": 800,
+        "elapsedMs": 3.496,
+        "eventsPerSecond": 228854.62
+      },
+      "memory": {
+        "before": {
+          "rssBytes": 56954880,
+          "heapUsedBytes": 4467592,
+          "heapTotalBytes": 7405568,
+          "externalBytes": 1573740
+        },
+        "after": {
+          "rssBytes": 57872384,
+          "heapUsedBytes": 5234856,
+          "heapTotalBytes": 7405568,
+          "externalBytes": 1573740
+        },
+        "delta": {
+          "rssBytes": 917504,
+          "heapUsedBytes": 767264,
+          "heapTotalBytes": 0,
+          "externalBytes": 0
+        },
+        "rssPerBotDeltaBytes": 57344,
+        "heapUsedPerBotDeltaBytes": 47954
+      },
+      "eventLoopDelayMs": {
+        "min": 10.084,
+        "mean": 10.088,
+        "max": 10.093,
+        "p99": 10.093
+      }
+    },
+    {
+      "botCount": 32,
+      "componentsPerRuntime": 24,
+      "lifecycle": {
+        "initializeMs": 0.303,
+        "startMs": 0.874,
+        "stopMs": 1.323,
+        "destroyMs": 0.422,
+        "startRejected": 0
+      },
+      "events": {
+        "totalEvents": 1600,
+        "deliveredToTarget": 1600,
+        "elapsedMs": 7.715,
+        "eventsPerSecond": 207397.587
+      },
+      "memory": {
+        "before": {
+          "rssBytes": 57872384,
+          "heapUsedBytes": 4489976,
+          "heapTotalBytes": 7405568,
+          "externalBytes": 1573740
+        },
+        "after": {
+          "rssBytes": 60841984,
+          "heapUsedBytes": 6077056,
+          "heapTotalBytes": 9764864,
+          "externalBytes": 1573740
+        },
+        "delta": {
+          "rssBytes": 2969600,
+          "heapUsedBytes": 1587080,
+          "heapTotalBytes": 2359296,
+          "externalBytes": 0
+        },
+        "rssPerBotDeltaBytes": 92800,
+        "heapUsedPerBotDeltaBytes": 49596
+      },
+      "eventLoopDelayMs": {
+        "min": 10.101,
+        "mean": 10.105,
+        "max": 10.109,
+        "p99": 10.109
+      }
+    },
+    {
+      "botCount": 64,
+      "componentsPerRuntime": 24,
+      "lifecycle": {
+        "initializeMs": 0.688,
+        "startMs": 2.085,
+        "stopMs": 1.468,
+        "destroyMs": 1.236,
+        "startRejected": 0
+      },
+      "events": {
+        "totalEvents": 3200,
+        "deliveredToTarget": 3200,
+        "elapsedMs": 13.401,
+        "eventsPerSecond": 238786.279
+      },
+      "memory": {
+        "before": {
+          "rssBytes": 60841984,
+          "heapUsedBytes": 4503872,
+          "heapTotalBytes": 9764864,
+          "externalBytes": 1573740
+        },
+        "after": {
+          "rssBytes": 62668800,
+          "heapUsedBytes": 6868080,
+          "heapTotalBytes": 10027008,
+          "externalBytes": 1573740
+        },
+        "delta": {
+          "rssBytes": 1826816,
+          "heapUsedBytes": 2364208,
+          "heapTotalBytes": 262144,
+          "externalBytes": 0
+        },
+        "rssPerBotDeltaBytes": 28544,
+        "heapUsedPerBotDeltaBytes": 36941
+      },
+      "eventLoopDelayMs": {
+        "min": 10.199,
+        "mean": 10.203,
+        "max": 10.207,
+        "p99": 10.207
+      }
+    }
+  ],
+  "crashIsolation": {
+    "tested": true,
+    "runtimeCount": 64,
+    "initializedRejected": 0,
+    "startedRejected": 1,
+    "startedFulfilled": 63,
+    "blastRadiusRuntimes": 1,
+    "isolationObserved": true
+  },
+  "decisionInput": {
+    "measurableDriverPresent": false,
+    "targetBotCountDefined": false,
+    "latencySloDefined": false,
+    "memorySloDefined": false,
+    "failureToleranceDefined": false,
+    "recommendedWp500State": "DEFERRED_NO_DRIVER",
+    "reason": "Measurement evidence exists, but the repository still has no product bot-count/SLO/failure-tolerance driver. Do not infer a worker requirement from synthetic timing alone."
+  }
+}

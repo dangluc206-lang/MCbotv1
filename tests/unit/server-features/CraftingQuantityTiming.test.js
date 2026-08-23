@@ -153,3 +153,70 @@ test('crafting ALL uses dynamic quantity action and reports actual crafts from o
     assert.equal(afterOptions.inputRequirements.refined_coal.amount, 16);
     assert.ok(order.includes('click:24'));
 });
+
+test('failed verification after quantity click returns a non-retryable uncertain outcome with reconciliation baseline', async () => {
+    const rootWindow = windowWith(21, 27, { 16: { displayName: 'crafting' } });
+    const craftingWindow = windowWith(22, 54, { 10: { displayName: 'recipe' } });
+    const quantityWindow = windowWith(23, 45, { 24: { displayName: 'ALL' } });
+    const bot = {
+        currentWindow: null,
+        inventory: { slots: [] },
+        waitForTicks: async () => {},
+        closeWindow: window => { if (bot.currentWindow === window) bot.currentWindow = null; }
+    };
+    let transition = 0;
+    const guiManager = {
+        context: { require: () => bot }, current: () => null, describeCurrent: () => ({}),
+        performAndWaitForOpen: async action => { await action(); bot.currentWindow = rootWindow; return { session: { window: rootWindow } }; },
+        clickAndWaitForTransition: async () => { transition += 1; const window = transition === 1 ? craftingWindow : quantityWindow; bot.currentWindow = window; return { window }; },
+        click: async () => {}, syncCurrentWindow: () => null,
+        closeCurrentWindow: async () => { bot.currentWindow = null; return true; }
+    };
+    const resultVerifier = {
+        before: () => ({
+            count: 0,
+            countsBySource: { 'bot-inventory': 0 },
+            views: [],
+            inputCounts: { refined_coal: { count: 64, countsBySource: { 'bot-inventory': 64 } } }
+        }),
+        arm() {},
+        after: async () => ({
+            verified: false,
+            before: 0,
+            after: 0,
+            delta: 0,
+            attempt: 10,
+            verificationMode: 'none',
+            inputEvidence: [{ inputId: 'refined_coal', expected: 16, consumed: 0 }],
+            eventEvidence: { outputDelta: 0, eventCount: 0, mmoCandidates: [] },
+            snapshotMmoCandidates: [],
+            syncEvidence: { timedOut: true }
+        })
+    };
+    const operation = new CraftingOperation({
+        commandService: { send: async () => ({ success: true }) }, guiManager, context: { require: () => bot },
+        itemResolver: { matches: (item, id) => ({ matched: item?.displayName === id }) },
+        recipeRegistry: { require: () => ({ output: 'refined_coal_block', menuItemId: 'recipe', menuSlot: 10, outputAmount: 1, inputs: { refined_coal: 16 } }), ids: () => ['r'] },
+        quantityResolver: { resolve: amount => amount === 'ALL' ? 24 : -1, describeCandidates: () => [] },
+        resultVerifier,
+        config: { commandKey: 'minerals', entryMenuItemId: 'crafting', entrySlot: 16, guiTimeoutMs: 100, resultDelayMs: 0, preQuantityClickTicks: 15, postQuantityClickTicks: 10, openSettleMs: 0 }
+    });
+
+    await assert.rejects(
+        () => operation.execute('r', 'ALL', {
+            reconciliationBaseline: {
+                inputs: { refined_coal: { source: 'inventory', count: 64 } }
+            }
+        }),
+        error => {
+            assert.equal(error.code, 'CRAFTING_OUTCOME_UNCERTAIN');
+            assert.equal(error.retryable, false);
+            assert.equal(error.details.outcome.requiresReconciliation, true);
+            assert.equal(error.details.outcome.safeToBlindRetry, false);
+            assert.equal(error.details.reconciliationBaseline.outputCountBefore, 0);
+            assert.equal(error.details.reconciliationBaseline.inputCountsBefore.refined_coal, 64);
+            assert.deepEqual(error.details.reconciliationBaseline.inputs.refined_coal, { source: 'inventory', count: 64 });
+            return true;
+        }
+    );
+});

@@ -12,36 +12,66 @@ class PersonalVaultTransfer {
         this.storageSlots = storageSlots;
     }
 
-    async transferToInventory(logicalId, { maxStacks = Infinity } = {}) {
+    async transferToInventory(logicalId, {
+        maxStacks = Infinity,
+        cancellationToken = null,
+        expectedGeneration = null,
+        operationId = null,
+        correlationId = null
+    } = {}) {
         const session = this.#requireSession();
+        const generation = expectedGeneration ?? session.connectionGeneration ?? null;
         let moved = 0;
         const end = Math.min(this.storageSlots, session.window.slots.length);
         for (let slot = 0; slot < end && moved < maxStacks; slot += 1) {
+            cancellationToken?.throwIfCancelled?.();
             const item = session.window.slots[slot];
             if (item && await this.#matchesAndLearn(item, logicalId, 'personal-vault', `withdraw-slot:${slot}`)) {
                 this.logger?.info?.('PV WITHDRAW CLICK', {
                     operation: 'PersonalVaultTransfer', step: 'withdraw-click', phase: 'START',
                     action: 'shift-click vault item', resource: logicalId, slot, itemName: item.name, count: item.count
                 });
-                await this.guiManager.click(slot, { button: 0, mode: 1 });
+                await this.guiManager.click(slot, {
+                    button: 0,
+                    mode: 1,
+                    cancellationToken,
+                    expectedGeneration: generation,
+                    operationId,
+                    correlationId
+                });
                 moved += 1;
             }
         }
         return { logicalId, movedStacks: moved, direction: 'to-inventory' };
     }
 
-    async transferFromInventory(logicalId, { maxStacks = Infinity } = {}) {
+    async transferFromInventory(logicalId, {
+        maxStacks = Infinity,
+        cancellationToken = null,
+        expectedGeneration = null,
+        operationId = null,
+        correlationId = null
+    } = {}) {
         const session = this.#requireSession();
+        const generation = expectedGeneration ?? session.connectionGeneration ?? null;
         let moved = 0;
         const start = Math.min(this.storageSlots, session.window.slots.length);
         for (let slot = start; slot < session.window.slots.length && moved < maxStacks; slot += 1) {
+            cancellationToken?.throwIfCancelled?.();
             const item = session.window.slots[slot];
             if (item && await this.#matchesAndLearn(item, logicalId, 'inventory', `deposit-slot:${slot}`)) {
                 this.logger?.info?.('PV DEPOSIT CLICK', {
                     operation: 'PersonalVaultTransfer', step: 'deposit-click', phase: 'START',
                     action: 'shift-click inventory item', resource: logicalId, slot, itemName: item.name, count: item.count
                 });
-                await this.guiManager.click(slot, { button: 0, mode: 1 });
+                await this.guiManager.click(slot, {
+                    button: 0,
+                    mode: 1,
+                    cancellationToken,
+                    expectedGeneration: generation,
+                    operationId,
+                    correlationId
+                });
                 moved += 1;
             }
         }

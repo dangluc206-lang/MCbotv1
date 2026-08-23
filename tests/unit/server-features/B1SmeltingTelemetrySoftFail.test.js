@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const B1StorageMaterialService = require('../../../src/server-features/storage/B1StorageMaterialService');
 const Result = require('../../../src/shared/result/Result');
 
-test('stale /kho telemetry after a successful smelting click does not deadlock B5 preprocessing', async () => {
+test('stale /kho telemetry after a successful smelting click fails closed instead of inventing verified B1 state', async () => {
     const reads = [];
     const storage = {
         async read(options = {}) {
@@ -29,8 +29,9 @@ test('stale /kho telemetry after a successful smelting click does not deadlock B
     });
 
     const result = await service.preprocessForCraft();
-    assert.equal(result.success, true);
-    assert.equal(result.data.actions[0].verified, false);
-    assert.equal(result.data.actions[0].telemetryStale, true);
-    assert.equal(reads.some(options => options.forceReopen === true), true);
+    assert.equal(result.success, false, 'a successful click is not proof that server-side smelting applied');
+    assert.equal(result.status, 'VERIFICATION_FAILED');
+    assert.equal(result.error?.code, 'B1_B5_PROTECTION_SMELT_UNVERIFIED');
+    assert.equal(result.error?.retryable, true);
+    assert.equal(reads.some(options => options.forceReopen === true), true, 'last verification attempt must force a fresh GUI reopen');
 });

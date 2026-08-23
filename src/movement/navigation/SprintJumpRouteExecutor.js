@@ -248,7 +248,9 @@ class SprintJumpRouteExecutor {
                     Promise.resolve(this.rotationService.lookAt(
                         new Vec3(destination.x, position.y + 1.5, destination.z),
                         true
-                    )).catch(() => {});
+                    )).catch(error => {
+                        this.logger?.debug?.('Sprint+jump periodic look update failed.', { error });
+                    });
                 }
 
                 applyDirectMovementControls();
@@ -403,9 +405,17 @@ class SprintJumpRouteExecutor {
         this.unsticking = false;
         // Exact old V1 cleanup, but through the per-bot control manager.
         for (const control of ['forward', 'back', 'left', 'right', 'jump', 'sprint']) {
-            try { this.controlStateManager.set(control, false); } catch {}
+            try {
+                this.controlStateManager.set(control, false);
+            } catch (error) {
+                this.logger?.warn?.('Sprint+jump control release failed.', { control, error });
+            }
         }
-        try { this.controlStateManager.clear(); } catch {}
+        try {
+            this.controlStateManager.clear();
+        } catch (error) {
+            this.logger?.warn?.('Sprint+jump control manager clear failed.', { error });
+        }
     }
 }
 

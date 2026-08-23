@@ -1,0 +1,2116 @@
+{
+  "schemaVersion": 1,
+  "baselineVersion": 1,
+  "workPackage": "WP-001",
+  "generatedAt": "2026-08-23T07:27:03.500Z",
+  "releaseVersion": "2.7.67",
+  "scope": {
+    "root": ".",
+    "exclusions": [
+      ".git/**",
+      ".env*",
+      "data/**",
+      "node_modules/**",
+      "**/*.log"
+    ],
+    "contentScanAdditionalExclusions": [
+      "config/bots/**"
+    ],
+    "selfOutputsExcludedFromCounts": [
+      "architecture/baseline/current.json",
+      "docs/architecture-roadmap/baseline/WP-001_GAP_REPORT.md"
+    ],
+    "reproducibleCommands": [
+      "rg --files --hidden -g '!.git/**' -g '!.env*' -g '!data/**' -g '!node_modules/**' -g '!*.log' -g '!architecture/baseline/current.json' -g '!docs/architecture-roadmap/baseline/WP-001_GAP_REPORT.md'",
+      "node scripts/inspect-architecture-baseline.js",
+      "node scripts/inspect-architecture-baseline.js --check",
+      "node scripts/validate-architecture.js --json",
+      "node --test tests/unit/architecture/ArchitectureBaseline.test.js"
+    ]
+  },
+  "revision": {
+    "available": false,
+    "revision": null,
+    "branch": null,
+    "worktree": {
+      "state": "UNAVAILABLE",
+      "inScopeChangedPaths": 0
+    },
+    "reason": "No Git metadata is present in this packaged baseline.",
+    "sourceFingerprintSha256": "76f78d036925ec992e49160fb38da9ca3dd511c7b6ecea736240c58fd893fc85"
+  },
+  "counts": {
+    "files": 664,
+    "source": 304,
+    "tests": 180,
+    "scripts": 30,
+    "configJson": 34,
+    "routes": 1
+  },
+  "sourceAreas": [
+    {
+      "area": "<root>",
+      "files": 1,
+      "owner": "src/index.js",
+      "layer": "runtime-entrypoint",
+      "classification": "CURRENT"
+    },
+    {
+      "area": "ai",
+      "files": 5,
+      "owner": "src/ai/",
+      "layer": "application-support",
+      "classification": "CURRENT"
+    },
+    {
+      "area": "bootstrap",
+      "files": 12,
+      "owner": "src/bootstrap/",
+      "layer": "composition-root",
+      "classification": "CURRENT"
+    },
+    {
+      "area": "bot",
+      "files": 10,
+      "owner": "src/bot/",
+      "layer": "bot-runtime",
+      "classification": "CURRENT"
+    },
+    {
+      "area": "commands",
+      "files": 10,
+      "owner": "src/commands/",
+      "layer": "command-capability",
+      "classification": "CURRENT"
+    },
+    {
+      "area": "configuration",
+      "files": 16,
+      "owner": "src/configuration/",
+      "layer": "application-configuration",
+      "classification": "CURRENT"
+    },
+    {
+      "area": "connection",
+      "files": 7,
+      "owner": "src/connection/",
+      "layer": "bot-connection",
+      "classification": "CURRENT"
+    },
+    {
+      "area": "core",
+      "files": 13,
+      "owner": "src/core/",
+      "layer": "platform-core",
+      "classification": "CURRENT"
+    },
+    {
+      "area": "desktop",
+      "files": 15,
+      "owner": "src/desktop/",
+      "layer": "control-plane-desktop",
+      "classification": "CURRENT"
+    },
+    {
+      "area": "diagnostics",
+      "files": 13,
+      "owner": "src/diagnostics/",
+      "layer": "observability",
+      "classification": "CURRENT"
+    },
+    {
+      "area": "discord",
+      "files": 14,
+      "owner": "src/discord/",
+      "layer": "control-plane-discord",
+      "classification": "CURRENT"
+    },
+    {
+      "area": "fleet",
+      "files": 1,
+      "owner": "src/fleet/",
+      "layer": "fleet-scheduling",
+      "classification": "CURRENT"
+    },
+    {
+      "area": "gui",
+      "files": 24,
+      "owner": "src/gui/",
+      "layer": "gui-capability",
+      "classification": "CURRENT"
+    },
+    {
+      "area": "items",
+      "files": 19,
+      "owner": "src/items/",
+      "layer": "item-inventory-capability",
+      "classification": "CURRENT"
+    },
+    {
+      "area": "modes",
+      "files": 28,
+      "owner": "src/modes/",
+      "layer": "mode-platform",
+      "classification": "CURRENT"
+    },
+    {
+      "area": "movement",
+      "files": 13,
+      "owner": "src/movement/",
+      "layer": "movement-capability",
+      "classification": "CURRENT"
+    },
+    {
+      "area": "operations",
+      "files": 7,
+      "owner": "src/operations/",
+      "layer": "operation-platform",
+      "classification": "CURRENT"
+    },
+    {
+      "area": "planning",
+      "files": 7,
+      "owner": "src/planning/",
+      "layer": "pure-planning",
+      "classification": "CURRENT"
+    },
+    {
+      "area": "recovery",
+      "files": 2,
+      "owner": "src/recovery/",
+      "layer": "durable-control",
+      "classification": "CURRENT"
+    },
+    {
+      "area": "server-features",
+      "files": 54,
+      "owner": "src/server-features/",
+      "layer": "server-domain-features",
+      "classification": "CURRENT"
+    },
+    {
+      "area": "server-profiles",
+      "files": 4,
+      "owner": "src/server-profiles/",
+      "layer": "server-profile-boundary",
+      "classification": "CURRENT"
+    },
+    {
+      "area": "shared",
+      "files": 25,
+      "owner": "src/shared/",
+      "layer": "shared-foundation",
+      "classification": "CURRENT"
+    },
+    {
+      "area": "simulation",
+      "files": 4,
+      "owner": "src/simulation/",
+      "layer": "simulation-replay",
+      "classification": "CURRENT"
+    }
+  ],
+  "reachability": {
+    "runtimeEntrypoints": [
+      {
+        "file": "src/index.js",
+        "exists": true,
+        "directLocalDependencies": [
+          "src/bootstrap/createApplication.js",
+          "src/bootstrap/shutdown.js"
+        ],
+        "reachableSourceFiles": 279
+      },
+      {
+        "file": "src/desktop/main.js",
+        "exists": true,
+        "directLocalDependencies": [
+          "src/ai/LocalAiService.js",
+          "src/desktop/DesktopController.js",
+          "src/desktop/DesktopPreferenceStore.js",
+          "src/desktop/DesktopSecretStore.js",
+          "src/desktop/DesktopShutdownSequence.js",
+          "src/desktop/update/GitHubUpdateService.js",
+          "src/desktop/update/LocalZipUpdateService.js",
+          "src/desktop/update/RuntimeConfigMigrator.js",
+          "src/desktop/update/SquirrelLifecycle.js",
+          "src/desktop/update/local-update-helper.js"
+        ],
+        "reachableSourceFiles": 295
+      },
+      {
+        "file": "src/desktop/preload.js",
+        "exists": true,
+        "directLocalDependencies": [],
+        "reachableSourceFiles": 1
+      },
+      {
+        "file": "src/desktop/renderer/app.js",
+        "exists": true,
+        "directLocalDependencies": [],
+        "reachableSourceFiles": 1
+      }
+    ],
+    "runtimeReachableSourceFiles": [
+      "src/ai/AgentSession.js",
+      "src/ai/LocalAiService.js",
+      "src/ai/knowledge/ProjectWorkspace.js",
+      "src/ai/providers/OllamaProvider.js",
+      "src/ai/tools/AiToolRegistry.js",
+      "src/bootstrap/createApplication.js",
+      "src/bootstrap/createBotRuntime.js",
+      "src/bootstrap/createConnectionEventBinding.js",
+      "src/bootstrap/createConnectionStateBinding.js",
+      "src/bootstrap/createModeCatalog.js",
+      "src/bootstrap/loadBotProfiles.js",
+      "src/bootstrap/loadConfiguration.js",
+      "src/bootstrap/registerBotServices.js",
+      "src/bootstrap/registerDiscordServices.js",
+      "src/bootstrap/registerModules.js",
+      "src/bootstrap/registerSharedServices.js",
+      "src/bootstrap/shutdown.js",
+      "src/bot/BotContext.js",
+      "src/bot/BotFactory.js",
+      "src/bot/BotIdentity.js",
+      "src/bot/BotLifecycle.js",
+      "src/bot/BotRegistry.js",
+      "src/bot/BotRuntime.js",
+      "src/bot/BotState.js",
+      "src/bot/errors/BotAlreadyExistsError.js",
+      "src/bot/errors/BotNotFoundError.js",
+      "src/bot/errors/BotNotReadyError.js",
+      "src/commands/CommandExecutor.js",
+      "src/commands/CommandGuard.js",
+      "src/commands/CommandRegistry.js",
+      "src/commands/CommandResolver.js",
+      "src/commands/CommandService.js",
+      "src/commands/SlashCommandService.js",
+      "src/commands/responses/CommandConfirmation.js",
+      "src/commands/responses/ResponseMatcher.js",
+      "src/commands/sky/SkyCommandRegistry.js",
+      "src/commands/sky/SkyCommandService.js",
+      "src/configuration/ConfigLoader.js",
+      "src/configuration/ConfigRegistry.js",
+      "src/configuration/ConfigResolver.js",
+      "src/configuration/ConfigSpecs.js",
+      "src/configuration/ConfigValidator.js",
+      "src/configuration/ConfigurationContractValidator.js",
+      "src/configuration/ConfigurationService.js",
+      "src/configuration/errors/ConfigLoadError.js",
+      "src/configuration/errors/ConfigRegistryError.js",
+      "src/configuration/errors/ConfigValidationError.js",
+      "src/configuration/schemas/app.schema.js",
+      "src/configuration/schemas/bot.schema.js",
+      "src/configuration/schemas/discord.schema.js",
+      "src/configuration/schemas/fishing.schema.js",
+      "src/configuration/schemas/group.schemas.js",
+      "src/configuration/schemas/server.schema.js",
+      "src/connection/ConnectionAttemptCoordinator.js",
+      "src/connection/ConnectionFactory.js",
+      "src/connection/ConnectionFailureSignalContract.js",
+      "src/connection/ConnectionManager.js",
+      "src/connection/ConnectionSuccessResultContract.js",
+      "src/connection/ReconnectManager.js",
+      "src/connection/SessionManager.js",
+      "src/core/Application.js",
+      "src/core/EventBus.js",
+      "src/core/HealthRegistry.js",
+      "src/core/KeyedMutationCoordinator.js",
+      "src/core/LifecycleCoordinator.js",
+      "src/core/RuntimePlatformService.js",
+      "src/core/StateStore.js",
+      "src/core/TaskSupervisor.js",
+      "src/core/constants/LifecycleState.js",
+      "src/core/events/EventEnvelope.js",
+      "src/core/events/EventScopeRegistry.js",
+      "src/core/events/SubscriptionBag.js",
+      "src/core/registry/CapabilityRegistry.js",
+      "src/desktop/DesktopController.js",
+      "src/desktop/DesktopLogPolicy.js",
+      "src/desktop/DesktopPreferenceStore.js",
+      "src/desktop/DesktopSecretStore.js",
+      "src/desktop/DesktopShutdownSequence.js",
+      "src/desktop/main.js",
+      "src/desktop/preload.js",
+      "src/desktop/renderer/app.js",
+      "src/desktop/update/GitHubUpdateService.js",
+      "src/desktop/update/LocalZipUpdateService.js",
+      "src/desktop/update/RuntimeConfigMigrations.js",
+      "src/desktop/update/RuntimeConfigMigrator.js",
+      "src/desktop/update/SquirrelLifecycle.js",
+      "src/desktop/update/Version.js",
+      "src/desktop/update/local-update-helper.js",
+      "src/diagnostics/CommandDiagnostics.js",
+      "src/diagnostics/DiagnosticsManager.js",
+      "src/diagnostics/GuiDiagnostics.js",
+      "src/diagnostics/GuiInspectionService.js",
+      "src/diagnostics/GuiSnapshotSerializer.js",
+      "src/diagnostics/ItemDiagnostics.js",
+      "src/diagnostics/MovementDiagnostics.js",
+      "src/diagnostics/SlotDiagnostics.js",
+      "src/diagnostics/runtime/RuntimeFailureEvent.js",
+      "src/diagnostics/runtime/RuntimeFailurePublisher.js",
+      "src/diagnostics/runtime/RuntimeFailureRecorder.js",
+      "src/diagnostics/runtime/TraceEnvelope.js",
+      "src/discord/DiscordService.js",
+      "src/discord/admin/BotProfileAdminService.js",
+      "src/discord/commands/CollectorB5ModeCommand.js",
+      "src/discord/commands/FishingModeCommand.js",
+      "src/discord/commands/GuiInspectionCommand.js",
+      "src/discord/commands/RemoteModeCommand.js",
+      "src/discord/commands/SkyRemoteCommand.js",
+      "src/discord/config/CollectorB5ConfigEditor.js",
+      "src/discord/config/FishingBotConfigEditor.js",
+      "src/discord/errors/DiscordErrorReporter.js",
+      "src/discord/panels/DiscordControlPanelBuilder.js",
+      "src/discord/panels/DiscordPanelFormatter.js",
+      "src/discord/panels/DiscordPanelManager.js",
+      "src/discord/panels/DiscordPanelStore.js",
+      "src/fleet/FleetScheduler.js",
+      "src/gui/ContainerSlotRange.js",
+      "src/gui/GuiManager.js",
+      "src/gui/GuiRegistry.js",
+      "src/gui/GuiSession.js",
+      "src/gui/GuiState.js",
+      "src/gui/click/ClickExecutor.js",
+      "src/gui/click/ClickGuard.js",
+      "src/gui/click/ClickQueue.js",
+      "src/gui/click/ClickVerifier.js",
+      "src/gui/detection/GuiDetector.js",
+      "src/gui/detection/LayoutMatcher.js",
+      "src/gui/detection/SlotFingerprintMatcher.js",
+      "src/gui/detection/TitleMatcher.js",
+      "src/gui/detection/TitleTextExtractor.js",
+      "src/gui/detection/WindowMatcher.js",
+      "src/gui/identity/GuiIdentityEngine.js",
+      "src/gui/knowledge/GuiKnowledgeRegistry.js",
+      "src/gui/observation/GuiObservationService.js",
+      "src/gui/observation/GuiObservationStore.js",
+      "src/gui/observation/GuiStructureNormalizer.js",
+      "src/gui/slots/SlotInspector.js",
+      "src/gui/slots/SlotRegistry.js",
+      "src/gui/slots/SlotResolver.js",
+      "src/gui/slots/SlotValidator.js",
+      "src/index.js",
+      "src/items/ItemIdentity.js",
+      "src/items/ItemInspector.js",
+      "src/items/ItemNormalizer.js",
+      "src/items/ItemRegistry.js",
+      "src/items/ItemResolver.js",
+      "src/items/inventory/InventoryCounter.js",
+      "src/items/inventory/InventoryReader.js",
+      "src/items/inventory/InventoryScanner.js",
+      "src/items/inventory/InventorySnapshot.js",
+      "src/items/inventory/observation/InventoryObservationService.js",
+      "src/items/inventory/observation/InventoryObservationStore.js",
+      "src/items/inventory/sync/InventorySyncService.js",
+      "src/items/matching/CompositeItemMatcher.js",
+      "src/items/matching/IdentityMatcher.js",
+      "src/items/matching/ItemMatcher.js",
+      "src/items/matching/LoreMatcher.js",
+      "src/items/matching/MaterialMatcher.js",
+      "src/items/matching/NameMatcher.js",
+      "src/items/matching/NbtMatcher.js",
+      "src/modes/ManagedMode.js",
+      "src/modes/ModeCatalog.js",
+      "src/modes/ModeContext.js",
+      "src/modes/ModeControlService.js",
+      "src/modes/ModeCoordinator.js",
+      "src/modes/ModeLeaseSession.js",
+      "src/modes/ModeSdk.js",
+      "src/modes/RuntimeModeRegistry.js",
+      "src/modes/b5-craft/B5CraftModeService.js",
+      "src/modes/collector-b5/CollectorB5ModeService.js",
+      "src/modes/collector-b5/CollectorB5StatusPresenter.js",
+      "src/modes/collector-b5/CollectorB5WorkPolicy.js",
+      "src/modes/collector-b5/flows/CollectorMovementFlow.js",
+      "src/modes/composable/ComposableModeService.js",
+      "src/modes/composable/CustomModeStore.js",
+      "src/modes/composable/WorkflowDefinitionValidator.js",
+      "src/modes/composable/WorkflowModuleCatalog.js",
+      "src/modes/composable/WorkflowStepExecutor.js",
+      "src/modes/fishing/ConnectionPacketObserver.js",
+      "src/modes/fishing/ConnectionStateView.js",
+      "src/modes/fishing/FishingModeService.js",
+      "src/modes/fishing/FishingMovementOperation.js",
+      "src/modes/fishing/FishingMovementProbeService.js",
+      "src/modes/fishing/FishingPositionGuard.js",
+      "src/modes/fishing/FishingRecoveryPolicy.js",
+      "src/modes/fishing/FishingWorldReadinessService.js",
+      "src/modes/fishing/resolveFishingConfig.js",
+      "src/modes/legacy/LegacyModeAdapter.js",
+      "src/movement/ControlStateManager.js",
+      "src/movement/MovementManager.js",
+      "src/movement/MovementState.js",
+      "src/movement/PositionService.js",
+      "src/movement/RotationService.js",
+      "src/movement/navigation/ArrivalDetector.js",
+      "src/movement/navigation/DestinationResolver.js",
+      "src/movement/navigation/NavigationManager.js",
+      "src/movement/navigation/RouteExecutor.js",
+      "src/movement/navigation/RouteRegistry.js",
+      "src/movement/navigation/SprintJumpRouteExecutor.js",
+      "src/movement/safety/MovementGuard.js",
+      "src/movement/safety/PositionValidator.js",
+      "src/operations/Operation.js",
+      "src/operations/OperationCancellation.js",
+      "src/operations/OperationContext.js",
+      "src/operations/OperationLockPolicy.js",
+      "src/operations/OperationManager.js",
+      "src/operations/OperationQueue.js",
+      "src/operations/OperationTimeoutPolicy.js",
+      "src/planning/crafting/B5ExecutionPlanner.js",
+      "src/planning/crafting/B5Planner.js",
+      "src/planning/crafting/CraftingPlan.js",
+      "src/planning/crafting/CraftingPlanner.js",
+      "src/planning/crafting/CraftingStep.js",
+      "src/planning/crafting/MaterialCalculator.js",
+      "src/planning/storage/B1StorageProtectionPlanner.js",
+      "src/recovery/DurableIntentStore.js",
+      "src/recovery/FleetControlService.js",
+      "src/server-features/ServerFeatureFacade.js",
+      "src/server-features/afk/AfkAreaOccupancyParser.js",
+      "src/server-features/afk/AfkAreaService.js",
+      "src/server-features/authentication/ServerLoginService.js",
+      "src/server-features/crafting/B5AutomationService.js",
+      "src/server-features/crafting/B5PlanningService.js",
+      "src/server-features/crafting/CraftingOperation.js",
+      "src/server-features/crafting/CraftingOutcomeClassifier.js",
+      "src/server-features/crafting/CraftingQuantityResolver.js",
+      "src/server-features/crafting/CraftingRecipeRegistry.js",
+      "src/server-features/crafting/CraftingResultVerifier.js",
+      "src/server-features/crafting/CraftingService.js",
+      "src/server-features/crafting/b5/flows/B5CraftFlow.js",
+      "src/server-features/crafting/b5/flows/B5DepositFlow.js",
+      "src/server-features/crafting/b5/flows/B5InventoryReadFlow.js",
+      "src/server-features/crafting/b5/flows/B5KhoReadFlow.js",
+      "src/server-features/crafting/b5/flows/B5PlanningFlow.js",
+      "src/server-features/crafting/b5/flows/B5Pv2ReadFlow.js",
+      "src/server-features/crafting/b5/flows/B5ReadFlow.js",
+      "src/server-features/crafting/b5/flows/B5StorageFlow.js",
+      "src/server-features/crafting/b5/flows/B5WithdrawFlow.js",
+      "src/server-features/crafting/b5/support/B5ActionDiagnostics.js",
+      "src/server-features/crafting/b5/support/B5InventoryState.js",
+      "src/server-features/crafting/b5/support/B5ProgressTracker.js",
+      "src/server-features/crafting/b5/support/B5RecipeResolver.js",
+      "src/server-features/crafting/b5/trace/B5TraceRecorder.js",
+      "src/server-features/dungeon/DungeonDestinationRegistry.js",
+      "src/server-features/dungeon/DungeonService.js",
+      "src/server-features/dungeon/DungeonTeleportOperation.js",
+      "src/server-features/fishing/FishingService.js",
+      "src/server-features/island/IslandService.js",
+      "src/server-features/island/IslandTeleportOperation.js",
+      "src/server-features/minerals/MineralConversionOperation.js",
+      "src/server-features/minerals/MineralService.js",
+      "src/server-features/personal-vault/PersonalVaultReader.js",
+      "src/server-features/personal-vault/PersonalVaultService.js",
+      "src/server-features/personal-vault/PersonalVaultSnapshot.js",
+      "src/server-features/personal-vault/PersonalVaultTransfer.js",
+      "src/server-features/resource-pack/ResourcePackAutoAcceptService.js",
+      "src/server-features/skyblock/SkyblockAutoJoinService.js",
+      "src/server-features/skyblock/SkyblockJoinOperation.js",
+      "src/server-features/skyblock/SkyblockService.js",
+      "src/server-features/smelting/SmeltingOperation.js",
+      "src/server-features/smelting/SmeltingService.js",
+      "src/server-features/storage/B1StorageMaterialService.js",
+      "src/server-features/storage/KhoCapacityReader.js",
+      "src/server-features/storage/KhoReader.js",
+      "src/server-features/storage/KhoSellOperation.js",
+      "src/server-features/storage/KhoService.js",
+      "src/server-features/storage/KhoSnapshot.js",
+      "src/server-features/storage/SellGuiReader.js",
+      "src/server-features/storage/StorageTextParser.js",
+      "src/server-features/storage/b1/B1MaterialPolicy.js",
+      "src/server-features/storage/b1/B1StartupReserveTrimmer.js",
+      "src/server-profiles/ServerProfile.js",
+      "src/server-profiles/ServerProfileReadinessError.js",
+      "src/server-profiles/ServerProfileRegistry.js",
+      "src/server-profiles/createServerProfileRegistry.js",
+      "src/shared/cancellation/CancellationSource.js",
+      "src/shared/cancellation/CancellationToken.js",
+      "src/shared/contracts/DecisionReplayEnvelope.js",
+      "src/shared/contracts/ErrorContract.js",
+      "src/shared/contracts/OperationResultContract.js",
+      "src/shared/errors/AppError.js",
+      "src/shared/errors/ConfigurationError.js",
+      "src/shared/errors/FlowError.js",
+      "src/shared/errors/OperationCancelledError.js",
+      "src/shared/errors/TimeoutError.js",
+      "src/shared/flow/StepRunner.js",
+      "src/shared/logger/CompactLogFormatter.js",
+      "src/shared/logger/Logger.js",
+      "src/shared/logger/LoggerFactory.js",
+      "src/shared/logger/RuntimeLogOutput.js",
+      "src/shared/reconciliation/ReconciliationBarrier.js",
+      "src/shared/resilience/FailureCircuitBreaker.js",
+      "src/shared/result/Result.js",
+      "src/shared/result/RuntimeResultClassifier.js",
+      "src/shared/result/Status.js",
+      "src/shared/security/Redactor.js",
+      "src/shared/time/DailyRecoverySchedule.js",
+      "src/shared/time/Timeout.js",
+      "src/shared/time/VietnamTime.js",
+      "src/shared/utils/object.js"
+    ],
+    "projectReachableSourceFiles": [
+      "src/ai/AgentSession.js",
+      "src/ai/LocalAiService.js",
+      "src/ai/knowledge/ProjectWorkspace.js",
+      "src/ai/providers/OllamaProvider.js",
+      "src/ai/tools/AiToolRegistry.js",
+      "src/bootstrap/createApplication.js",
+      "src/bootstrap/createBotRuntime.js",
+      "src/bootstrap/createConnectionEventBinding.js",
+      "src/bootstrap/createConnectionStateBinding.js",
+      "src/bootstrap/createModeCatalog.js",
+      "src/bootstrap/loadBotProfiles.js",
+      "src/bootstrap/loadConfiguration.js",
+      "src/bootstrap/registerBotServices.js",
+      "src/bootstrap/registerDiscordServices.js",
+      "src/bootstrap/registerModules.js",
+      "src/bootstrap/registerSharedServices.js",
+      "src/bootstrap/shutdown.js",
+      "src/bot/BotContext.js",
+      "src/bot/BotFactory.js",
+      "src/bot/BotIdentity.js",
+      "src/bot/BotLifecycle.js",
+      "src/bot/BotRegistry.js",
+      "src/bot/BotRuntime.js",
+      "src/bot/BotState.js",
+      "src/bot/errors/BotAlreadyExistsError.js",
+      "src/bot/errors/BotNotFoundError.js",
+      "src/bot/errors/BotNotReadyError.js",
+      "src/commands/CommandExecutor.js",
+      "src/commands/CommandGuard.js",
+      "src/commands/CommandRegistry.js",
+      "src/commands/CommandResolver.js",
+      "src/commands/CommandService.js",
+      "src/commands/SlashCommandService.js",
+      "src/commands/responses/CommandConfirmation.js",
+      "src/commands/responses/ResponseMatcher.js",
+      "src/commands/sky/SkyCommandRegistry.js",
+      "src/commands/sky/SkyCommandService.js",
+      "src/configuration/ConfigLoader.js",
+      "src/configuration/ConfigRegistry.js",
+      "src/configuration/ConfigResolver.js",
+      "src/configuration/ConfigSpecs.js",
+      "src/configuration/ConfigValidator.js",
+      "src/configuration/ConfigurationContractValidator.js",
+      "src/configuration/ConfigurationService.js",
+      "src/configuration/errors/ConfigLoadError.js",
+      "src/configuration/errors/ConfigRegistryError.js",
+      "src/configuration/errors/ConfigValidationError.js",
+      "src/configuration/schemas/app.schema.js",
+      "src/configuration/schemas/bot.schema.js",
+      "src/configuration/schemas/discord.schema.js",
+      "src/configuration/schemas/fishing.schema.js",
+      "src/configuration/schemas/group.schemas.js",
+      "src/configuration/schemas/server.schema.js",
+      "src/connection/ConnectionAttemptCoordinator.js",
+      "src/connection/ConnectionFactory.js",
+      "src/connection/ConnectionFailureSignalContract.js",
+      "src/connection/ConnectionManager.js",
+      "src/connection/ConnectionSuccessResultContract.js",
+      "src/connection/ReconnectManager.js",
+      "src/connection/SessionManager.js",
+      "src/core/Application.js",
+      "src/core/EventBus.js",
+      "src/core/HealthRegistry.js",
+      "src/core/KeyedMutationCoordinator.js",
+      "src/core/LifecycleCoordinator.js",
+      "src/core/RuntimePlatformService.js",
+      "src/core/StateStore.js",
+      "src/core/TaskSupervisor.js",
+      "src/core/constants/LifecycleState.js",
+      "src/core/events/EventEnvelope.js",
+      "src/core/events/EventScopeRegistry.js",
+      "src/core/events/SubscriptionBag.js",
+      "src/core/registry/CapabilityRegistry.js",
+      "src/desktop/DesktopController.js",
+      "src/desktop/DesktopLogPolicy.js",
+      "src/desktop/DesktopPreferenceStore.js",
+      "src/desktop/DesktopSecretStore.js",
+      "src/desktop/DesktopShutdownSequence.js",
+      "src/desktop/main.js",
+      "src/desktop/preload.js",
+      "src/desktop/renderer/app.js",
+      "src/desktop/update/GitHubUpdateService.js",
+      "src/desktop/update/LocalZipUpdateService.js",
+      "src/desktop/update/RuntimeConfigMigrations.js",
+      "src/desktop/update/RuntimeConfigMigrator.js",
+      "src/desktop/update/SquirrelLifecycle.js",
+      "src/desktop/update/Version.js",
+      "src/desktop/update/local-update-helper.js",
+      "src/diagnostics/CommandDiagnostics.js",
+      "src/diagnostics/DiagnosticsManager.js",
+      "src/diagnostics/GuiDiagnostics.js",
+      "src/diagnostics/GuiInspectionService.js",
+      "src/diagnostics/GuiSnapshotSerializer.js",
+      "src/diagnostics/ItemDiagnostics.js",
+      "src/diagnostics/MovementDiagnostics.js",
+      "src/diagnostics/SlotDiagnostics.js",
+      "src/diagnostics/runtime/RuntimeFailureEvent.js",
+      "src/diagnostics/runtime/RuntimeFailurePublisher.js",
+      "src/diagnostics/runtime/RuntimeFailureRecorder.js",
+      "src/diagnostics/runtime/TraceEnvelope.js",
+      "src/diagnostics/support/SupportBundleBuilder.js",
+      "src/discord/DiscordService.js",
+      "src/discord/admin/BotProfileAdminService.js",
+      "src/discord/commands/CollectorB5ModeCommand.js",
+      "src/discord/commands/FishingModeCommand.js",
+      "src/discord/commands/GuiInspectionCommand.js",
+      "src/discord/commands/RemoteModeCommand.js",
+      "src/discord/commands/SkyRemoteCommand.js",
+      "src/discord/config/CollectorB5ConfigEditor.js",
+      "src/discord/config/FishingBotConfigEditor.js",
+      "src/discord/errors/DiscordErrorReporter.js",
+      "src/discord/panels/DiscordControlPanelBuilder.js",
+      "src/discord/panels/DiscordPanelFormatter.js",
+      "src/discord/panels/DiscordPanelManager.js",
+      "src/discord/panels/DiscordPanelStore.js",
+      "src/fleet/FleetScheduler.js",
+      "src/gui/ContainerSlotRange.js",
+      "src/gui/GuiManager.js",
+      "src/gui/GuiRegistry.js",
+      "src/gui/GuiSession.js",
+      "src/gui/GuiState.js",
+      "src/gui/click/ClickExecutor.js",
+      "src/gui/click/ClickGuard.js",
+      "src/gui/click/ClickQueue.js",
+      "src/gui/click/ClickVerifier.js",
+      "src/gui/detection/GuiDetector.js",
+      "src/gui/detection/LayoutMatcher.js",
+      "src/gui/detection/SlotFingerprintMatcher.js",
+      "src/gui/detection/TitleMatcher.js",
+      "src/gui/detection/TitleTextExtractor.js",
+      "src/gui/detection/WindowMatcher.js",
+      "src/gui/identity/GuiIdentityEngine.js",
+      "src/gui/knowledge/GuiKnowledgeRegistry.js",
+      "src/gui/observation/GuiObservationService.js",
+      "src/gui/observation/GuiObservationStore.js",
+      "src/gui/observation/GuiStructureNormalizer.js",
+      "src/gui/slots/SlotInspector.js",
+      "src/gui/slots/SlotRegistry.js",
+      "src/gui/slots/SlotResolver.js",
+      "src/gui/slots/SlotValidator.js",
+      "src/index.js",
+      "src/items/ItemIdentity.js",
+      "src/items/ItemInspector.js",
+      "src/items/ItemNormalizer.js",
+      "src/items/ItemRegistry.js",
+      "src/items/ItemResolver.js",
+      "src/items/inventory/InventoryCounter.js",
+      "src/items/inventory/InventoryReader.js",
+      "src/items/inventory/InventoryScanner.js",
+      "src/items/inventory/InventorySnapshot.js",
+      "src/items/inventory/observation/InventoryObservationService.js",
+      "src/items/inventory/observation/InventoryObservationStore.js",
+      "src/items/inventory/sync/InventorySyncService.js",
+      "src/items/matching/CompositeItemMatcher.js",
+      "src/items/matching/IdentityMatcher.js",
+      "src/items/matching/ItemMatcher.js",
+      "src/items/matching/LoreMatcher.js",
+      "src/items/matching/MaterialMatcher.js",
+      "src/items/matching/NameMatcher.js",
+      "src/items/matching/NbtMatcher.js",
+      "src/modes/ManagedMode.js",
+      "src/modes/ModeCatalog.js",
+      "src/modes/ModeContext.js",
+      "src/modes/ModeControlService.js",
+      "src/modes/ModeCoordinator.js",
+      "src/modes/ModeLeaseSession.js",
+      "src/modes/ModeSdk.js",
+      "src/modes/RuntimeModeRegistry.js",
+      "src/modes/b5-craft/B5CraftModeService.js",
+      "src/modes/collector-b5/CollectorB5ModeService.js",
+      "src/modes/collector-b5/CollectorB5StatusPresenter.js",
+      "src/modes/collector-b5/CollectorB5WorkPolicy.js",
+      "src/modes/collector-b5/flows/CollectorMovementFlow.js",
+      "src/modes/composable/ComposableModeService.js",
+      "src/modes/composable/CustomModeStore.js",
+      "src/modes/composable/WorkflowDefinitionValidator.js",
+      "src/modes/composable/WorkflowModuleCatalog.js",
+      "src/modes/composable/WorkflowStepExecutor.js",
+      "src/modes/fishing/ConnectionPacketObserver.js",
+      "src/modes/fishing/ConnectionStateView.js",
+      "src/modes/fishing/FishingModeService.js",
+      "src/modes/fishing/FishingMovementOperation.js",
+      "src/modes/fishing/FishingMovementProbeService.js",
+      "src/modes/fishing/FishingPositionGuard.js",
+      "src/modes/fishing/FishingRecoveryPolicy.js",
+      "src/modes/fishing/FishingWorldReadinessService.js",
+      "src/modes/fishing/resolveFishingConfig.js",
+      "src/modes/legacy/LegacyModeAdapter.js",
+      "src/movement/ControlStateManager.js",
+      "src/movement/MovementManager.js",
+      "src/movement/MovementState.js",
+      "src/movement/PositionService.js",
+      "src/movement/RotationService.js",
+      "src/movement/navigation/ArrivalDetector.js",
+      "src/movement/navigation/DestinationResolver.js",
+      "src/movement/navigation/NavigationManager.js",
+      "src/movement/navigation/RouteExecutor.js",
+      "src/movement/navigation/RouteRegistry.js",
+      "src/movement/navigation/SprintJumpRouteExecutor.js",
+      "src/movement/safety/MovementGuard.js",
+      "src/movement/safety/PositionValidator.js",
+      "src/operations/Operation.js",
+      "src/operations/OperationCancellation.js",
+      "src/operations/OperationContext.js",
+      "src/operations/OperationLockPolicy.js",
+      "src/operations/OperationManager.js",
+      "src/operations/OperationQueue.js",
+      "src/operations/OperationTimeoutPolicy.js",
+      "src/planning/crafting/B5ExecutionPlanner.js",
+      "src/planning/crafting/B5Planner.js",
+      "src/planning/crafting/CraftingPlan.js",
+      "src/planning/crafting/CraftingPlanner.js",
+      "src/planning/crafting/CraftingStep.js",
+      "src/planning/crafting/MaterialCalculator.js",
+      "src/planning/storage/B1StorageProtectionPlanner.js",
+      "src/recovery/DurableIntentStore.js",
+      "src/recovery/FleetControlService.js",
+      "src/server-features/ServerFeatureFacade.js",
+      "src/server-features/afk/AfkAreaOccupancyParser.js",
+      "src/server-features/afk/AfkAreaService.js",
+      "src/server-features/authentication/ServerLoginService.js",
+      "src/server-features/crafting/B5AutomationService.js",
+      "src/server-features/crafting/B5PlanningService.js",
+      "src/server-features/crafting/CraftingOperation.js",
+      "src/server-features/crafting/CraftingOutcomeClassifier.js",
+      "src/server-features/crafting/CraftingQuantityResolver.js",
+      "src/server-features/crafting/CraftingRecipeRegistry.js",
+      "src/server-features/crafting/CraftingResultVerifier.js",
+      "src/server-features/crafting/CraftingService.js",
+      "src/server-features/crafting/b5/flows/B5CraftFlow.js",
+      "src/server-features/crafting/b5/flows/B5DepositFlow.js",
+      "src/server-features/crafting/b5/flows/B5InventoryReadFlow.js",
+      "src/server-features/crafting/b5/flows/B5KhoReadFlow.js",
+      "src/server-features/crafting/b5/flows/B5PlanningFlow.js",
+      "src/server-features/crafting/b5/flows/B5Pv2ReadFlow.js",
+      "src/server-features/crafting/b5/flows/B5ReadFlow.js",
+      "src/server-features/crafting/b5/flows/B5StorageFlow.js",
+      "src/server-features/crafting/b5/flows/B5WithdrawFlow.js",
+      "src/server-features/crafting/b5/support/B5ActionDiagnostics.js",
+      "src/server-features/crafting/b5/support/B5InventoryState.js",
+      "src/server-features/crafting/b5/support/B5ProgressTracker.js",
+      "src/server-features/crafting/b5/support/B5RecipeResolver.js",
+      "src/server-features/crafting/b5/trace/B5TraceRecorder.js",
+      "src/server-features/dungeon/DungeonDestinationRegistry.js",
+      "src/server-features/dungeon/DungeonService.js",
+      "src/server-features/dungeon/DungeonTeleportOperation.js",
+      "src/server-features/fishing/FishingService.js",
+      "src/server-features/island/IslandService.js",
+      "src/server-features/island/IslandTeleportOperation.js",
+      "src/server-features/minerals/MineralConversionOperation.js",
+      "src/server-features/minerals/MineralService.js",
+      "src/server-features/personal-vault/PersonalVaultReader.js",
+      "src/server-features/personal-vault/PersonalVaultService.js",
+      "src/server-features/personal-vault/PersonalVaultSnapshot.js",
+      "src/server-features/personal-vault/PersonalVaultTransfer.js",
+      "src/server-features/resource-pack/ResourcePackAutoAcceptService.js",
+      "src/server-features/skyblock/SkyblockAutoJoinService.js",
+      "src/server-features/skyblock/SkyblockJoinOperation.js",
+      "src/server-features/skyblock/SkyblockService.js",
+      "src/server-features/smelting/SmeltingOperation.js",
+      "src/server-features/smelting/SmeltingService.js",
+      "src/server-features/storage/B1StorageMaterialService.js",
+      "src/server-features/storage/KhoCapacityReader.js",
+      "src/server-features/storage/KhoReader.js",
+      "src/server-features/storage/KhoSellOperation.js",
+      "src/server-features/storage/KhoService.js",
+      "src/server-features/storage/KhoSnapshot.js",
+      "src/server-features/storage/SellGuiReader.js",
+      "src/server-features/storage/StorageTextParser.js",
+      "src/server-features/storage/b1/B1MaterialPolicy.js",
+      "src/server-features/storage/b1/B1StartupReserveTrimmer.js",
+      "src/server-profiles/ServerProfile.js",
+      "src/server-profiles/ServerProfileReadinessError.js",
+      "src/server-profiles/ServerProfileRegistry.js",
+      "src/server-profiles/createServerProfileRegistry.js",
+      "src/shared/cancellation/CancellationSource.js",
+      "src/shared/cancellation/CancellationToken.js",
+      "src/shared/contracts/DecisionReplayEnvelope.js",
+      "src/shared/contracts/ErrorContract.js",
+      "src/shared/contracts/OperationResultContract.js",
+      "src/shared/errors/AppError.js",
+      "src/shared/errors/ConfigurationError.js",
+      "src/shared/errors/FlowError.js",
+      "src/shared/errors/OperationCancelledError.js",
+      "src/shared/errors/TimeoutError.js",
+      "src/shared/flow/StepRunner.js",
+      "src/shared/logger/CompactLogFormatter.js",
+      "src/shared/logger/Logger.js",
+      "src/shared/logger/LoggerFactory.js",
+      "src/shared/logger/RuntimeLogOutput.js",
+      "src/shared/reconciliation/ReconciliationBarrier.js",
+      "src/shared/resilience/FailureCircuitBreaker.js",
+      "src/shared/result/Result.js",
+      "src/shared/result/RuntimeResultClassifier.js",
+      "src/shared/result/Status.js",
+      "src/shared/security/Redactor.js",
+      "src/shared/time/DailyRecoverySchedule.js",
+      "src/shared/time/Timeout.js",
+      "src/shared/time/VietnamTime.js",
+      "src/shared/utils/object.js",
+      "src/simulation/RuntimeReplayHarness.js",
+      "src/simulation/SafetyReplayRuntime.js",
+      "src/simulation/VirtualClock.js",
+      "src/simulation/b5/B5PlannerReplay.js"
+    ],
+    "orphanSourceFiles": []
+  },
+  "sideEffects": [
+    {
+      "id": "server-command",
+      "owners": [
+        "src/commands/CommandExecutor.js"
+      ],
+      "callsites": [
+        "src/commands/CommandExecutor.js"
+      ],
+      "violations": []
+    },
+    {
+      "id": "gui-click",
+      "owners": [
+        "src/gui/click/ClickExecutor.js"
+      ],
+      "callsites": [
+        "src/gui/click/ClickExecutor.js"
+      ],
+      "violations": []
+    },
+    {
+      "id": "client-end",
+      "owners": [
+        "src/connection/ConnectionManager.js"
+      ],
+      "callsites": [
+        "src/connection/ConnectionManager.js"
+      ],
+      "violations": []
+    },
+    {
+      "id": "fishing-raw-protocol",
+      "owners": [
+        "src/modes/fishing/ConnectionPacketObserver.js"
+      ],
+      "callsites": [
+        "src/modes/fishing/ConnectionPacketObserver.js"
+      ],
+      "violations": []
+    }
+  ],
+  "events": {
+    "connectionScoped": [
+      {
+        "event": "command:message",
+        "producers": [
+          "src/bootstrap/createConnectionEventBinding.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "connection:client-attached",
+        "producers": [
+          "src/connection/ConnectionManager.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "connection:ended",
+        "producers": [
+          "src/connection/ConnectionManager.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "connection:error",
+        "producers": [
+          "src/connection/ConnectionManager.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "connection:failed",
+        "producers": [
+          "src/connection/ConnectionManager.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "connection:kicked",
+        "producers": [
+          "src/connection/ConnectionManager.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "connection:login",
+        "producers": [
+          "src/connection/ConnectionManager.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "connection:spawned",
+        "producers": [
+          "src/connection/ConnectionManager.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "fishing:packet-observation",
+        "producers": [
+          "src/modes/fishing/ConnectionPacketObserver.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "gui:closed",
+        "producers": [
+          "src/gui/GuiManager.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "gui:opened",
+        "producers": [
+          "src/gui/GuiManager.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "gui:updated",
+        "producers": [
+          "src/gui/GuiManager.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "inventory:delta",
+        "producers": [
+          "src/items/inventory/observation/InventoryObservationService.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "inventory:observed",
+        "producers": [
+          "src/items/inventory/observation/InventoryObservationService.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "mode:fishing:catch",
+        "producers": [
+          "src/modes/fishing/FishingModeService.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "movement:position",
+        "producers": [
+          "src/bootstrap/createConnectionEventBinding.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "movement:teleport",
+        "producers": [
+          "src/bootstrap/createConnectionEventBinding.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "player:death",
+        "producers": [
+          "src/bootstrap/createConnectionEventBinding.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "resource-pack:accepted",
+        "producers": [
+          "src/server-features/resource-pack/ResourcePackAutoAcceptService.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "resource-pack:disabled",
+        "producers": [
+          "src/server-features/resource-pack/ResourcePackAutoAcceptService.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "resource-pack:failed",
+        "producers": [
+          "src/server-features/resource-pack/ResourcePackAutoAcceptService.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "resource-pack:ready",
+        "producers": [
+          "src/server-features/resource-pack/ResourcePackAutoAcceptService.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "resource-pack:requested",
+        "producers": [
+          "src/server-features/resource-pack/ResourcePackAutoAcceptService.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "server-login:disabled",
+        "producers": [
+          "src/server-features/authentication/ServerLoginService.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "server-login:failed",
+        "producers": [
+          "src/server-features/authentication/ServerLoginService.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "server-login:started",
+        "producers": [
+          "src/server-features/authentication/ServerLoginService.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "server-login:succeeded",
+        "producers": [
+          "src/server-features/authentication/ServerLoginService.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "skyblock:gateway:attempting",
+        "producers": [
+          "src/server-features/skyblock/SkyblockAutoJoinService.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "skyblock:gateway:failed",
+        "producers": [
+          "src/server-features/skyblock/SkyblockAutoJoinService.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "skyblock:gateway:scheduled",
+        "producers": [
+          "src/server-features/skyblock/SkyblockAutoJoinService.js"
+        ],
+        "producerReachable": true
+      },
+      {
+        "event": "skyblock:gateway:succeeded",
+        "producers": [
+          "src/server-features/skyblock/SkyblockAutoJoinService.js"
+        ],
+        "producerReachable": true
+      }
+    ],
+    "botScopeOverrides": [
+      "connection:ended"
+    ],
+    "generationGuardFiles": [
+      "src/bootstrap/createConnectionEventBinding.js",
+      "src/bootstrap/createConnectionStateBinding.js",
+      "src/bot/BotContext.js",
+      "src/commands/responses/CommandConfirmation.js",
+      "src/connection/ConnectionManager.js",
+      "src/connection/ConnectionSuccessResultContract.js",
+      "src/connection/ReconnectManager.js",
+      "src/core/EventBus.js",
+      "src/core/events/EventEnvelope.js",
+      "src/desktop/DesktopController.js",
+      "src/desktop/renderer/app.js",
+      "src/diagnostics/GuiInspectionService.js",
+      "src/diagnostics/GuiSnapshotSerializer.js",
+      "src/diagnostics/runtime/RuntimeFailureEvent.js",
+      "src/diagnostics/runtime/RuntimeFailurePublisher.js",
+      "src/diagnostics/runtime/RuntimeFailureRecorder.js",
+      "src/diagnostics/runtime/TraceEnvelope.js",
+      "src/gui/GuiManager.js",
+      "src/gui/GuiSession.js",
+      "src/gui/click/ClickExecutor.js",
+      "src/gui/click/ClickGuard.js",
+      "src/gui/click/ClickVerifier.js",
+      "src/gui/observation/GuiObservationService.js",
+      "src/items/inventory/observation/InventoryObservationService.js",
+      "src/items/inventory/sync/InventorySyncService.js",
+      "src/modes/ModeContext.js",
+      "src/modes/b5-craft/B5CraftModeService.js",
+      "src/modes/collector-b5/CollectorB5ModeService.js",
+      "src/modes/fishing/ConnectionPacketObserver.js",
+      "src/modes/fishing/ConnectionStateView.js",
+      "src/modes/fishing/FishingModeService.js",
+      "src/modes/fishing/FishingMovementOperation.js",
+      "src/modes/fishing/FishingPositionGuard.js",
+      "src/modes/fishing/FishingWorldReadinessService.js",
+      "src/modes/legacy/LegacyModeAdapter.js",
+      "src/operations/Operation.js",
+      "src/operations/OperationContext.js",
+      "src/operations/OperationManager.js",
+      "src/server-features/afk/AfkAreaService.js",
+      "src/server-features/authentication/ServerLoginService.js",
+      "src/server-features/crafting/B5AutomationService.js",
+      "src/server-features/crafting/CraftingOperation.js",
+      "src/server-features/crafting/CraftingResultVerifier.js",
+      "src/server-features/crafting/CraftingService.js",
+      "src/server-features/crafting/b5/trace/B5TraceRecorder.js",
+      "src/server-features/dungeon/DungeonService.js",
+      "src/server-features/dungeon/DungeonTeleportOperation.js",
+      "src/server-features/fishing/FishingService.js",
+      "src/server-features/island/IslandService.js",
+      "src/server-features/island/IslandTeleportOperation.js",
+      "src/server-features/minerals/MineralConversionOperation.js",
+      "src/server-features/minerals/MineralService.js",
+      "src/server-features/personal-vault/PersonalVaultService.js",
+      "src/server-features/personal-vault/PersonalVaultTransfer.js",
+      "src/server-features/resource-pack/ResourcePackAutoAcceptService.js",
+      "src/server-features/skyblock/SkyblockAutoJoinService.js",
+      "src/server-features/skyblock/SkyblockJoinOperation.js",
+      "src/server-features/skyblock/SkyblockService.js",
+      "src/server-features/smelting/SmeltingOperation.js",
+      "src/server-features/smelting/SmeltingService.js",
+      "src/server-features/storage/B1StorageMaterialService.js",
+      "src/server-features/storage/KhoSellOperation.js",
+      "src/server-features/storage/KhoService.js",
+      "src/server-features/storage/b1/B1StartupReserveTrimmer.js",
+      "src/shared/contracts/OperationResultContract.js",
+      "src/shared/logger/CompactLogFormatter.js",
+      "src/shared/reconciliation/ReconciliationBarrier.js",
+      "src/simulation/SafetyReplayRuntime.js"
+    ]
+  },
+  "modes": [
+    {
+      "id": "b5-craft",
+      "serviceName": "b5CraftMode",
+      "kind": "builtin",
+      "lifecycle": "MANAGED_MODE",
+      "requiredCapabilities": [
+        "b1-materials",
+        "b5-automation",
+        "b5-planning",
+        "crafting",
+        "island",
+        "personal-vault",
+        "smelting",
+        "storage"
+      ],
+      "requestedResources": [
+        "primary-mode"
+      ],
+      "sourceFile": "src/modes/b5-craft/B5CraftModeService.js"
+    },
+    {
+      "id": "collector-b5",
+      "serviceName": "collectorB5Mode",
+      "kind": "builtin",
+      "lifecycle": "LEGACY_OR_CUSTOM",
+      "requiredCapabilities": [
+        "crafting",
+        "island",
+        "movement",
+        "personal-vault",
+        "storage"
+      ],
+      "requestedResources": [
+        "primary-mode"
+      ],
+      "sourceFile": "src/modes/collector-b5/CollectorB5ModeService.js"
+    },
+    {
+      "id": "fishing",
+      "serviceName": "fishingMode",
+      "kind": "builtin",
+      "lifecycle": "LEGACY_OR_CUSTOM",
+      "requiredCapabilities": [
+        "afk",
+        "fishing",
+        "island",
+        "movement"
+      ],
+      "requestedResources": [
+        "primary-mode"
+      ],
+      "sourceFile": "src/modes/fishing/FishingModeService.js"
+    }
+  ],
+  "capabilities": {
+    "sourceFile": "src/bootstrap/registerBotServices.js",
+    "ids": [
+      "afk",
+      "b1-materials",
+      "b5-automation",
+      "b5-planning",
+      "b5-trace",
+      "commands",
+      "connection",
+      "crafting",
+      "dungeon",
+      "fishing",
+      "gui",
+      "gui-identity",
+      "inventory",
+      "island",
+      "minerals",
+      "movement",
+      "personal-vault",
+      "position",
+      "rotation",
+      "sky-commands",
+      "skyblock",
+      "slash-command",
+      "smelting",
+      "storage"
+    ],
+    "parseStatus": "CURRENT"
+  },
+  "modePlatform": {
+    "catalogFactory": "src/bootstrap/createModeCatalog.js",
+    "catalogClass": "src/modes/ModeCatalog.js",
+    "capabilityRegistry": "src/core/registry/CapabilityRegistry.js",
+    "runtimeModeRegistry": "src/modes/RuntimeModeRegistry.js",
+    "binding": "src/bootstrap/registerBotServices.js"
+  },
+  "serverSpecificFacts": [
+    {
+      "category": "command",
+      "configLocations": [
+        "config/authentication/login.json",
+        "config/commands/commands.json",
+        "config/commands/responses.json",
+        "config/commands/sky-commands.json",
+        "config/dungeon/destinations.json",
+        "config/island/island.json"
+      ],
+      "sourceLocations": [
+        "src/commands/CommandExecutor.js",
+        "src/commands/CommandGuard.js",
+        "src/commands/CommandRegistry.js",
+        "src/commands/CommandResolver.js",
+        "src/commands/CommandService.js",
+        "src/commands/SlashCommandService.js",
+        "src/commands/responses/CommandConfirmation.js",
+        "src/commands/responses/ResponseMatcher.js",
+        "src/commands/sky/SkyCommandRegistry.js",
+        "src/commands/sky/SkyCommandService.js",
+        "src/server-features/authentication/ServerLoginService.js",
+        "src/server-features/dungeon/DungeonDestinationRegistry.js",
+        "src/server-features/dungeon/DungeonService.js",
+        "src/server-features/dungeon/DungeonTeleportOperation.js",
+        "src/server-features/island/IslandService.js",
+        "src/server-features/island/IslandTeleportOperation.js"
+      ]
+    },
+    {
+      "category": "gui",
+      "configLocations": [
+        "config/gui/identity.json",
+        "config/gui/observation.json",
+        "config/gui/slots.json",
+        "config/gui/windows.json"
+      ],
+      "sourceLocations": [
+        "src/gui/ContainerSlotRange.js",
+        "src/gui/GuiManager.js",
+        "src/gui/GuiRegistry.js",
+        "src/gui/GuiSession.js",
+        "src/gui/GuiState.js",
+        "src/gui/click/ClickExecutor.js",
+        "src/gui/click/ClickGuard.js",
+        "src/gui/click/ClickQueue.js",
+        "src/gui/click/ClickVerifier.js",
+        "src/gui/detection/GuiDetector.js",
+        "src/gui/detection/LayoutMatcher.js",
+        "src/gui/detection/SlotFingerprintMatcher.js",
+        "src/gui/detection/TitleMatcher.js",
+        "src/gui/detection/TitleTextExtractor.js",
+        "src/gui/detection/WindowMatcher.js",
+        "src/gui/identity/GuiIdentityEngine.js",
+        "src/gui/knowledge/GuiKnowledgeRegistry.js",
+        "src/gui/observation/GuiObservationService.js",
+        "src/gui/observation/GuiObservationStore.js",
+        "src/gui/observation/GuiStructureNormalizer.js",
+        "src/gui/slots/SlotInspector.js",
+        "src/gui/slots/SlotRegistry.js",
+        "src/gui/slots/SlotResolver.js",
+        "src/gui/slots/SlotValidator.js",
+        "src/server-features/crafting/B5AutomationService.js",
+        "src/server-features/crafting/B5PlanningService.js",
+        "src/server-features/crafting/CraftingOperation.js",
+        "src/server-features/crafting/CraftingOutcomeClassifier.js",
+        "src/server-features/crafting/CraftingQuantityResolver.js",
+        "src/server-features/crafting/CraftingRecipeRegistry.js",
+        "src/server-features/crafting/CraftingResultVerifier.js",
+        "src/server-features/crafting/CraftingService.js",
+        "src/server-features/crafting/b5/flows/B5CraftFlow.js",
+        "src/server-features/crafting/b5/flows/B5DepositFlow.js",
+        "src/server-features/crafting/b5/flows/B5InventoryReadFlow.js",
+        "src/server-features/crafting/b5/flows/B5KhoReadFlow.js",
+        "src/server-features/crafting/b5/flows/B5PlanningFlow.js",
+        "src/server-features/crafting/b5/flows/B5Pv2ReadFlow.js",
+        "src/server-features/crafting/b5/flows/B5ReadFlow.js",
+        "src/server-features/crafting/b5/flows/B5StorageFlow.js",
+        "src/server-features/crafting/b5/flows/B5WithdrawFlow.js",
+        "src/server-features/crafting/b5/support/B5ActionDiagnostics.js",
+        "src/server-features/crafting/b5/support/B5InventoryState.js",
+        "src/server-features/crafting/b5/support/B5ProgressTracker.js",
+        "src/server-features/crafting/b5/support/B5RecipeResolver.js",
+        "src/server-features/crafting/b5/trace/B5TraceRecorder.js",
+        "src/server-features/minerals/MineralConversionOperation.js",
+        "src/server-features/minerals/MineralService.js",
+        "src/server-features/personal-vault/PersonalVaultReader.js",
+        "src/server-features/personal-vault/PersonalVaultService.js",
+        "src/server-features/personal-vault/PersonalVaultSnapshot.js",
+        "src/server-features/personal-vault/PersonalVaultTransfer.js",
+        "src/server-features/storage/B1StorageMaterialService.js",
+        "src/server-features/storage/KhoCapacityReader.js",
+        "src/server-features/storage/KhoReader.js",
+        "src/server-features/storage/KhoSellOperation.js",
+        "src/server-features/storage/KhoService.js",
+        "src/server-features/storage/KhoSnapshot.js",
+        "src/server-features/storage/SellGuiReader.js",
+        "src/server-features/storage/StorageTextParser.js",
+        "src/server-features/storage/b1/B1MaterialPolicy.js",
+        "src/server-features/storage/b1/B1StartupReserveTrimmer.js"
+      ]
+    },
+    {
+      "category": "item",
+      "configLocations": [
+        "config/items/items.json"
+      ],
+      "sourceLocations": [
+        "src/items/ItemIdentity.js",
+        "src/items/ItemInspector.js",
+        "src/items/ItemNormalizer.js",
+        "src/items/ItemRegistry.js",
+        "src/items/ItemResolver.js",
+        "src/items/inventory/InventoryCounter.js",
+        "src/items/inventory/InventoryReader.js",
+        "src/items/inventory/InventoryScanner.js",
+        "src/items/inventory/InventorySnapshot.js",
+        "src/items/inventory/observation/InventoryObservationService.js",
+        "src/items/inventory/observation/InventoryObservationStore.js",
+        "src/items/inventory/sync/InventorySyncService.js",
+        "src/items/matching/CompositeItemMatcher.js",
+        "src/items/matching/IdentityMatcher.js",
+        "src/items/matching/ItemMatcher.js",
+        "src/items/matching/LoreMatcher.js",
+        "src/items/matching/MaterialMatcher.js",
+        "src/items/matching/NameMatcher.js",
+        "src/items/matching/NbtMatcher.js"
+      ]
+    },
+    {
+      "category": "recipe",
+      "configLocations": [
+        "config/minerals/conversions.json",
+        "config/minerals/menu.json",
+        "config/server-data/b5.json",
+        "config/server-data/crafting-tiers.json",
+        "config/server-data/recipes.json",
+        "config/smelting/recipes.json"
+      ],
+      "sourceLocations": [
+        "src/planning/crafting/B5ExecutionPlanner.js",
+        "src/planning/crafting/B5Planner.js",
+        "src/planning/crafting/CraftingPlan.js",
+        "src/planning/crafting/CraftingPlanner.js",
+        "src/planning/crafting/CraftingStep.js",
+        "src/planning/crafting/MaterialCalculator.js",
+        "src/server-features/crafting/B5AutomationService.js",
+        "src/server-features/crafting/B5PlanningService.js",
+        "src/server-features/crafting/CraftingOperation.js",
+        "src/server-features/crafting/CraftingOutcomeClassifier.js",
+        "src/server-features/crafting/CraftingQuantityResolver.js",
+        "src/server-features/crafting/CraftingRecipeRegistry.js",
+        "src/server-features/crafting/CraftingResultVerifier.js",
+        "src/server-features/crafting/CraftingService.js",
+        "src/server-features/crafting/b5/flows/B5CraftFlow.js",
+        "src/server-features/crafting/b5/flows/B5DepositFlow.js",
+        "src/server-features/crafting/b5/flows/B5InventoryReadFlow.js",
+        "src/server-features/crafting/b5/flows/B5KhoReadFlow.js",
+        "src/server-features/crafting/b5/flows/B5PlanningFlow.js",
+        "src/server-features/crafting/b5/flows/B5Pv2ReadFlow.js",
+        "src/server-features/crafting/b5/flows/B5ReadFlow.js",
+        "src/server-features/crafting/b5/flows/B5StorageFlow.js",
+        "src/server-features/crafting/b5/flows/B5WithdrawFlow.js",
+        "src/server-features/crafting/b5/support/B5ActionDiagnostics.js",
+        "src/server-features/crafting/b5/support/B5InventoryState.js",
+        "src/server-features/crafting/b5/support/B5ProgressTracker.js",
+        "src/server-features/crafting/b5/support/B5RecipeResolver.js",
+        "src/server-features/crafting/b5/trace/B5TraceRecorder.js",
+        "src/server-features/minerals/MineralConversionOperation.js",
+        "src/server-features/minerals/MineralService.js",
+        "src/server-features/smelting/SmeltingOperation.js",
+        "src/server-features/smelting/SmeltingService.js"
+      ]
+    },
+    {
+      "category": "storage",
+      "configLocations": [
+        "config/personal-vault/pv2.json",
+        "config/storage/kho.json"
+      ],
+      "sourceLocations": [
+        "src/server-features/personal-vault/PersonalVaultReader.js",
+        "src/server-features/personal-vault/PersonalVaultService.js",
+        "src/server-features/personal-vault/PersonalVaultSnapshot.js",
+        "src/server-features/personal-vault/PersonalVaultTransfer.js",
+        "src/server-features/storage/B1StorageMaterialService.js",
+        "src/server-features/storage/KhoCapacityReader.js",
+        "src/server-features/storage/KhoReader.js",
+        "src/server-features/storage/KhoSellOperation.js",
+        "src/server-features/storage/KhoService.js",
+        "src/server-features/storage/KhoSnapshot.js",
+        "src/server-features/storage/SellGuiReader.js",
+        "src/server-features/storage/StorageTextParser.js",
+        "src/server-features/storage/b1/B1MaterialPolicy.js",
+        "src/server-features/storage/b1/B1StartupReserveTrimmer.js"
+      ]
+    },
+    {
+      "category": "join",
+      "configLocations": [
+        "config/authentication/login.json",
+        "config/resource-pack/resource-pack.json",
+        "config/server.json",
+        "config/skyblock/join.json"
+      ],
+      "sourceLocations": [
+        "src/connection/ConnectionAttemptCoordinator.js",
+        "src/connection/ConnectionFactory.js",
+        "src/connection/ConnectionFailureSignalContract.js",
+        "src/connection/ConnectionManager.js",
+        "src/connection/ConnectionSuccessResultContract.js",
+        "src/connection/ReconnectManager.js",
+        "src/connection/SessionManager.js",
+        "src/server-features/authentication/ServerLoginService.js",
+        "src/server-features/resource-pack/ResourcePackAutoAcceptService.js",
+        "src/server-features/skyblock/SkyblockAutoJoinService.js",
+        "src/server-features/skyblock/SkyblockJoinOperation.js",
+        "src/server-features/skyblock/SkyblockService.js"
+      ]
+    }
+  ],
+  "configuration": [
+    {
+      "key": "app",
+      "file": "config/app.json",
+      "schema": "app",
+      "consumers": [
+        "src/bootstrap/createApplication.js",
+        "src/bootstrap/registerBotServices.js",
+        "src/bootstrap/registerSharedServices.js",
+        "src/discord/panels/DiscordPanelManager.js",
+        "src/index.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "server",
+      "file": "config/server.json",
+      "schema": "server",
+      "consumers": [
+        "src/bootstrap/registerBotServices.js",
+        "src/bootstrap/registerSharedServices.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "commands",
+      "file": "config/commands/commands.json",
+      "schema": "commands",
+      "consumers": [
+        "src/bootstrap/registerSharedServices.js",
+        "src/desktop/DesktopController.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "skyCommands",
+      "file": "config/commands/sky-commands.json",
+      "schema": "skyCommands",
+      "consumers": [
+        "src/bootstrap/registerSharedServices.js",
+        "src/desktop/DesktopController.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": true,
+        "explicitRuntimeApplyEvidence": [
+          "src/desktop/DesktopController.js"
+        ]
+      }
+    },
+    {
+      "key": "commandResponses",
+      "file": "config/commands/responses.json",
+      "schema": "commandResponses",
+      "consumers": [
+        "src/bootstrap/registerSharedServices.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "serverLogin",
+      "file": "config/authentication/login.json",
+      "schema": "serverLogin",
+      "consumers": [
+        "src/bootstrap/registerSharedServices.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "resourcePack",
+      "file": "config/resource-pack/resource-pack.json",
+      "schema": "resourcePack",
+      "consumers": [
+        "src/bootstrap/registerBotServices.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "discord",
+      "file": "config/discord/discord.json",
+      "schema": "discord",
+      "consumers": [
+        "src/bootstrap/registerDiscordServices.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "guiWindows",
+      "file": "config/gui/windows.json",
+      "schema": "guiWindows",
+      "consumers": [
+        "src/bootstrap/registerSharedServices.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "guiIdentity",
+      "file": "config/gui/identity.json",
+      "schema": "guiIdentity",
+      "consumers": [
+        "src/bootstrap/registerSharedServices.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "guiSlots",
+      "file": "config/gui/slots.json",
+      "schema": "guiSlots",
+      "consumers": [
+        "src/bootstrap/registerSharedServices.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "guiObservation",
+      "file": "config/gui/observation.json",
+      "schema": "guiObservation",
+      "consumers": [
+        "src/bootstrap/registerBotServices.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "inventoryObservation",
+      "file": "config/inventory/observation.json",
+      "schema": "inventoryObservation",
+      "consumers": [
+        "src/bootstrap/registerBotServices.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "movement",
+      "file": "config/movement/movement.json",
+      "schema": "movement",
+      "consumers": [],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "locations",
+      "file": "config/movement/locations.json",
+      "schema": "locations",
+      "consumers": [
+        "src/bootstrap/registerBotServices.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "routes",
+      "file": "config/movement/routes.json",
+      "schema": "routes",
+      "consumers": [
+        "src/bootstrap/registerBotServices.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "items",
+      "file": "config/items/items.json",
+      "schema": "items",
+      "consumers": [
+        "src/bootstrap/registerSharedServices.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "storage",
+      "file": "config/storage/kho.json",
+      "schema": "storage",
+      "consumers": [
+        "src/bootstrap/registerSharedServices.js",
+        "src/desktop/DesktopController.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "personalVault",
+      "file": "config/personal-vault/pv2.json",
+      "schema": "personalVault",
+      "consumers": [
+        "src/bootstrap/registerSharedServices.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "minerals",
+      "file": "config/minerals/menu.json",
+      "schema": "minerals",
+      "consumers": [
+        "src/bootstrap/registerSharedServices.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "mineralConversions",
+      "file": "config/minerals/conversions.json",
+      "schema": "mineralConversions",
+      "consumers": [
+        "src/bootstrap/registerSharedServices.js",
+        "src/desktop/DesktopController.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "smelting",
+      "file": "config/smelting/recipes.json",
+      "schema": "smelting",
+      "consumers": [
+        "src/bootstrap/registerSharedServices.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "island",
+      "file": "config/island/island.json",
+      "schema": "island",
+      "consumers": [
+        "src/bootstrap/registerBotServices.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "dungeon",
+      "file": "config/dungeon/destinations.json",
+      "schema": "dungeon",
+      "consumers": [
+        "src/bootstrap/registerBotServices.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "skyblock",
+      "file": "config/skyblock/join.json",
+      "schema": "skyblock",
+      "consumers": [
+        "src/bootstrap/registerSharedServices.js",
+        "src/desktop/DesktopController.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": true,
+        "explicitRuntimeApplyEvidence": [
+          "src/desktop/DesktopController.js"
+        ]
+      }
+    },
+    {
+      "key": "recipes",
+      "file": "config/server-data/recipes.json",
+      "schema": "recipes",
+      "consumers": [
+        "src/bootstrap/registerSharedServices.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "craftingTiers",
+      "file": "config/server-data/crafting-tiers.json",
+      "schema": "craftingTiers",
+      "consumers": [
+        "src/bootstrap/registerSharedServices.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "b5",
+      "file": "config/server-data/b5.json",
+      "schema": "b5",
+      "consumers": [
+        "src/bootstrap/registerBotServices.js",
+        "src/desktop/DesktopController.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "collectorB5Mode",
+      "file": "config/modes/collector-b5.json",
+      "schema": "collectorB5Mode",
+      "consumers": [
+        "src/bootstrap/registerBotServices.js",
+        "src/desktop/DesktopController.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": true,
+        "explicitRuntimeApplyEvidence": [
+          "src/discord/config/CollectorB5ConfigEditor.js"
+        ]
+      }
+    },
+    {
+      "key": "b5CraftMode",
+      "file": "config/modes/b5-craft.json",
+      "schema": "b5CraftMode",
+      "consumers": [
+        "src/bootstrap/registerBotServices.js",
+        "src/bootstrap/registerSharedServices.js",
+        "src/desktop/DesktopController.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": true,
+        "explicitRuntimeApplyEvidence": [
+          "src/desktop/DesktopController.js"
+        ]
+      }
+    },
+    {
+      "key": "fishingMode",
+      "file": "config/modes/fishing.json",
+      "schema": "fishing",
+      "consumers": [
+        "src/bootstrap/registerBotServices.js",
+        "src/discord/config/FishingBotConfigEditor.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    },
+    {
+      "key": "dailyRecovery",
+      "file": "config/recovery/daily.json",
+      "schema": "dailyRecovery",
+      "consumers": [
+        "src/bootstrap/registerBotServices.js"
+      ],
+      "reload": {
+        "api": "src/configuration/ConfigurationService.js",
+        "configurationReloadSupported": true,
+        "explicitRuntimeApply": false,
+        "explicitRuntimeApplyEvidence": []
+      }
+    }
+  ],
+  "dynamicConfiguration": [
+    {
+      "id": "bot-profiles",
+      "directory": "config/bots",
+      "schema": "bot",
+      "files": 2,
+      "contentCaptured": false,
+      "consumers": [
+        "src/bootstrap/loadBotProfiles.js",
+        "src/discord/admin/BotProfileAdminService.js"
+      ],
+      "runtimeReload": [
+        "src/discord/config/FishingBotConfigEditor.js",
+        "src/discord/admin/BotProfileAdminService.js"
+      ]
+    },
+    {
+      "id": "custom-modes",
+      "directory": "config/modes/custom",
+      "schema": "WorkflowDefinitionValidator",
+      "files": 0,
+      "contentCaptured": true,
+      "consumers": [
+        "src/modes/composable/CustomModeStore.js",
+        "src/bootstrap/createModeCatalog.js"
+      ],
+      "runtimeReload": []
+    }
+  ],
+  "architectureInspection": {
+    "valid": true,
+    "catalog": {
+      "version": 3,
+      "sourceFiles": 304,
+      "testFiles": 180,
+      "scriptFiles": 30,
+      "sourceReachable": 304,
+      "runtimeReachable": 299,
+      "configGroups": 32,
+      "connectionEvents": 31,
+      "stalePaths": 42,
+      "officialDocuments": 6,
+      "governedDocumentRoots": 1,
+      "coverage": {
+        "include": "src/**/*.js",
+        "lines": 80,
+        "branches": 65,
+        "functions": 80
+      }
+    },
+    "findings": []
+  },
+  "findings": [
+    {
+      "code": "BASELINE_ARCHITECTURE_VALIDATOR",
+      "category": "CURRENT",
+      "file": "scripts/validate-architecture.js",
+      "summary": "Architecture validator is clean at capture time.",
+      "workPackages": [
+        "WP-001"
+      ]
+    },
+    {
+      "code": "COMMON_CONTRACTS_ACTIVE",
+      "category": "CURRENT",
+      "file": "src/shared/contracts/OperationResultContract.js",
+      "summary": "Versioned operation result/error/event contracts are reachable and WP-002 closure is present.",
+      "workPackages": [
+        "WP-002"
+      ]
+    },
+    {
+      "code": "SERVER_PROFILE_BOUNDARY_ACTIVE",
+      "category": "CURRENT",
+      "file": "src/server-profiles",
+      "summary": "Server-specific command/GUI/item/recipe/storage/join facts are governed through the ServerProfile boundary; generic consumers may still exist under src/server-features.",
+      "workPackages": [
+        "WP-100",
+        "WP-101",
+        "WP-102",
+        "WP-103",
+        "WP-104",
+        "WP-105"
+      ]
+    },
+    {
+      "code": "MODE_LIFECYCLE_STRANGLER_DEBT",
+      "category": "DEBT",
+      "file": "architecture/legacy-mode-debt.json",
+      "summary": "collector-b5, fishing remain intentional strangler-adapter modes; generic registry/control parity is closed and exit triggers are documented rather than forcing a gameplay rewrite.",
+      "workPackages": [
+        "WP-201",
+        "WP-203"
+      ]
+    },
+    {
+      "code": "CONFIG_TRANSACTION_CLOSED",
+      "category": "CURRENT",
+      "file": "src/desktop/update/RuntimeConfigMigrator.js",
+      "summary": "Runtime configuration transaction closure is implemented and reachable; WP-003 is no longer pending.",
+      "workPackages": [
+        "WP-003"
+      ]
+    },
+    {
+      "code": "SIDE_EFFECT_OWNERSHIP_CLOSED",
+      "category": "CURRENT",
+      "file": "architecture/artifact-ownership.json",
+      "summary": "Raw side-effect and destructive artifact ownership are catalogued with zero current raw-owner violations.",
+      "workPackages": [
+        "WP-004"
+      ]
+    },
+    {
+      "code": "GENERATION_CANCELLATION_GUARDS_ACTIVE",
+      "category": "CURRENT",
+      "file": "src/core/events/EventEnvelope.js",
+      "summary": "Generation/cancellation contracts are active with 68 source file(s) carrying generation-guard evidence.",
+      "workPackages": [
+        "WP-005"
+      ]
+    },
+    {
+      "code": "RELEASE_ZIP_CONTRACT_ACTIVE",
+      "category": "CURRENT",
+      "file": "scripts/release-zip-contract.js",
+      "summary": "Release ZIP completeness/safety policy and real-ZIP verifier are present; source-only fast quality includes the pure contract test.",
+      "workPackages": [
+        "WP-402"
+      ]
+    }
+  ]
+}

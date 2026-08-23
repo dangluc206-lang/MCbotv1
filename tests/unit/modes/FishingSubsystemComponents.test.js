@@ -323,3 +323,29 @@ test('FishingMovementProbeService covers busy, exhausted, cancellation, time bud
     const timed = new FishingMovementProbeService({ movementOperation, connectionState: connectionView(state), config, clock: () => { now += 200; return now; }, delay: async () => {} });
     assert.equal((await timed.run({ destination: {}, expectedGeneration: 1 })).exhausted, true);
 });
+
+test('ConnectionPacketObserver ignores generation-less and stale connection end for current protocol listener', async () => {
+    const protocol = new EventEmitter();
+    const client = { _client: protocol };
+    const context = { has: () => true, get: () => client, getGeneration: () => 2 };
+    const raw = new EventEmitter();
+    const eventBus = {
+        on(name, handler) { raw.on(name, handler); return () => raw.off(name, handler); },
+        emit(name, payload) { raw.emit(name, payload); return true; }
+    };
+    const observer = new ConnectionPacketObserver({ botId: 'bot-01', context, eventBus, config: { packetObservation: { sampleLimit: 8 } } });
+    await observer.initialize();
+    const before = protocol.listenerCount('entity_velocity');
+    assert.equal(before, 1);
+
+    raw.emit('connection:ended', { botId: 'bot-01' });
+    assert.equal(protocol.listenerCount('entity_velocity'), 1);
+    raw.emit('connection:ended', { botId: 'bot-01', connectionGeneration: 1 });
+    assert.equal(protocol.listenerCount('entity_velocity'), 1);
+    raw.emit('connection:ended', { botId: 'bot-02', connectionGeneration: 2 });
+    assert.equal(protocol.listenerCount('entity_velocity'), 1);
+
+    raw.emit('connection:ended', { botId: 'bot-01', connectionGeneration: 2 });
+    assert.equal(protocol.listenerCount('entity_velocity'), 0);
+    await observer.destroy();
+});

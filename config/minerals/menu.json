@@ -34,5 +34,6 @@
   "craftingMenuSlot": 16,
   "commandOpenAttempts": 3,
   "commandOpenRetryMs": 600,
-  "commandCloseSettleMs": 350
+  "commandCloseSettleMs": 350,
+  "conversionGuiId": "mineralConversion"
 }

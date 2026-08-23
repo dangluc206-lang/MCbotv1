@@ -129,7 +129,7 @@ test('PV shift-click learns strong logical identity before moving the item', asy
         const slots = Array(90).fill(null);
         slots[10] = b3VaultItem(5);
         const session = new GuiSession({
-            botId: 'bot-01', generation: 1,
+            botId: 'bot-01', connectionGeneration: 1,
             window: { title: 'PV', type: 'generic', slots }
         });
         const clicks = [];
@@ -143,9 +143,20 @@ test('PV shift-click learns strong logical identity before moving the item', asy
             storageSlots: 54
         });
 
-        const result = await transfer.transferToInventory('refined_diamond_block', { maxStacks: 1 });
+        const token = { throwIfCancelled() {} };
+        const result = await transfer.transferToInventory('refined_diamond_block', {
+            maxStacks: 1,
+            cancellationToken: token,
+            expectedGeneration: 1,
+            operationId: 'op-pv',
+            correlationId: 'corr-pv'
+        });
         assert.equal(result.movedStacks, 1);
         assert.equal(clicks[0].slot, 10);
+        assert.equal(clicks[0].options.cancellationToken, token);
+        assert.equal(clicks[0].options.expectedGeneration, 1);
+        assert.equal(clicks[0].options.operationId, 'op-pv');
+        assert.equal(clicks[0].options.correlationId, 'corr-pv');
         assert.equal(knowledge.matchesLogical(b3InventoryItem(), 'refined_diamond_block', 'inventory'), true);
     } finally {
         await fs.rm(directory, { recursive: true, force: true });
@@ -158,7 +169,7 @@ test('startup migrates old PV semantic slot mapping into strong MMOItems binding
         const source = { commandKey: 'personalVault2', command: '/pv 2', clicks: [], actions: [], source: 'operation' };
         const slots = Array(90).fill(null);
         slots[10] = b3VaultItem(5);
-        const session = new GuiSession({ botId: 'bot-01', generation: 1, window: { title: 'PV', type: 'generic', slots }, source });
+        const session = new GuiSession({ botId: 'bot-01', connectionGeneration: 1, window: { title: 'PV', type: 'generic', slots }, source });
         const normalized = normalizer.normalize(session);
         await store.upsert('pv-2', normalized, { source });
         await store.updateSemantic('pv-2', 'personalVault', {

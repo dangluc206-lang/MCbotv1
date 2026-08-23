@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'">
+  <title>MCbot Desktop</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">MC</div>
+        <div class="brand-copy"><strong>MCbot</strong><span>Trung tâm điều khiển</span></div>
+      </div>
+      <nav id="nav" aria-label="Điều hướng chính">
+        <button class="nav-item active" data-page="dashboard"><span>01</span>Tổng quan</button>
+        <button class="nav-item" data-page="bots"><span>02</span>Bot</button>
+        <button class="nav-item" data-page="modes"><span>03</span>Chế độ</button>
+        <button class="nav-item" data-page="builder"><span>04</span>Tạo chế độ</button>
+        <button class="nav-item" data-page="tools"><span>05</span>Công cụ</button>
+        <button class="nav-item" data-page="logs"><span>06</span>Nhật ký <b id="logUnreadBadge" class="nav-badge hidden">0</b></button>
+        <button class="nav-item" data-page="diagnostics"><span>07</span>Chẩn đoán</button>
+        <button class="nav-item" data-page="ai"><span>08</span>AI Local</button>
+        <button class="nav-item" data-page="settings"><span>09</span>Cài đặt</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="backend-state"><span id="backendDot" class="dot"></span><div><small>Hệ thống nền</small><strong id="backendState">...</strong></div></div>
+        <div class="sidebar-meta"><span id="sidebarFleet">0 bot</span><span id="sidebarMemory">— MB</span></div>
+        <div class="version" id="appVersion">MCbot Desktop</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="title-block"><h1 id="pageTitle">Tổng quan</h1><p id="pageSubtitle">Theo dõi và điều khiển toàn bộ bot</p></div>
+        <div class="top-actions">
+          <div id="liveState" class="live-state"><span class="pulse"></span><div><strong>Đang đồng bộ</strong><small id="updatedAt">—</small></div></div>
+          <button class="button ghost" id="refreshBtn">Làm mới</button>
+        </div>
+      </header>
+
+      <section class="page active" id="page-dashboard">
+        <div id="setupBanner" class="setup-banner hidden"></div>
+        <div class="metric-grid" id="metrics"></div>
+        <div class="panel fleet-bar">
+          <div><strong>Điều khiển toàn bộ</strong><span>Thao tác nhanh cho toàn bộ bot đã bật</span></div>
+          <div class="actions compact">
+            <button class="button primary" data-fleet-action="connect-all">Kết nối tất cả</button>
+            <button class="button ghost" data-fleet-action="home-all">Về đảo tất cả</button>
+            <button class="button ghost" data-fleet-action="pause-all">Tạm dừng tất cả</button>
+            <button class="button ghost" data-fleet-action="resume-all">Tiếp tục tất cả</button>
+            <button class="button warn" data-fleet-action="stop-modes-all">Dừng mọi chế độ</button>
+            <button class="button danger" data-fleet-action="disconnect-all">Ngắt kết nối tất cả</button>
+          </div>
+        </div>
+        <div class="section-head"><div><h2>Bot đang quản lý</h2><p>Trạng thái, chế độ và tác vụ theo thời gian thực</p></div></div>
+        <div class="bot-grid" id="dashboardBots"></div>
+      </section>
+
+      <section class="page" id="page-bots">
+        <div class="section-head"><div><h2>Hồ sơ bot</h2><p>Tạo, nhân bản và chỉnh bot ngay trong phần mềm; biểu mẫu không bị làm mới trong lúc nhập</p></div><button class="button ghost" id="reloadProfiles">Tải lại hồ sơ</button></div>
+        <details class="panel create-profile" id="createProfilePanel">
+          <summary>+ Thêm bot mới</summary>
+          <div class="profile-create-grid">
+            <label>Mã bot<input id="newBotId" autocomplete="off" placeholder="bot-03"></label>
+            <label>Tên hiển thị<input id="newBotDisplayName" autocomplete="off" placeholder="Bot 03"></label>
+            <label>Tên tài khoản Minecraft<input id="newBotUsername" autocomplete="off" placeholder="username"></label>
+            <label>Xác thực<select id="newBotAuth"><option value="offline">offline</option><option value="microsoft">microsoft</option></select></label>
+            <label>Phiên bản<input id="newBotVersion" value="1.21.1" autocomplete="off"></label>
+            <label>Hồ sơ máy chủ<input id="newBotServerProfile" value="default" autocomplete="off"></label>
+            <label>Sky mặc định<select id="newBotSkySelection"><option value="sky1">Sky 1</option><option value="sky2">Sky 2</option></select></label>
+          </div>
+          <div class="actions"><button class="button primary" id="createProfileBtn">Tạo bot</button><span class="helper">Bot mới được tạo ở trạng thái tắt để bạn kiểm tra trước khi bật.</span></div>
+        </details>
+        <div id="profilesTable" class="panel table-panel"></div>
+      </section>
+
+      <section class="page" id="page-modes">
+        <div class="section-head"><div><h2>Điều khiển chế độ</h2><p>Mỗi bot chỉ có một chế độ chính tại một thời điểm</p></div></div>
+        <div id="modeCards" class="bot-grid"></div>
+        <div class="section-head config-head"><div><h2>Cấu hình chế độ</h2><p>Kiểm tra hợp lệ + sao lưu + nạp lại</p></div></div>
+        <div class="two-column">
+          <div class="panel form-panel accent-panel">
+            <div class="panel-title"><h2>Chế B5 thuần</h2><span class="tag">KHUYẾN NGHỊ</span></div>
+            <p>Khi bật mode: yêu cầu đúng Sky của bot, <code>/is</code>, chạy Bảo vệ kho bắt buộc rồi chế B5. Không tự di chuyển.</p>
+            <label class="check"><input id="b5PureEnabled" type="checkbox"> Cho phép chế độ</label>
+            <label class="check"><input id="b5PureHome" type="checkbox"> Tự <code>/is</code> khi bắt đầu / kết nối lại</label>
+            <label class="check"><input id="b5PureResume" type="checkbox"> Tự tiếp tục sau khi kết nối lại</label>
+            <div class="inline-fields"><label>Chu kỳ đọc/kế hoạch (ms)<input id="b5PurePoll" type="number" min="500"></label><label>Độ trễ sau chế tạo (ms)<input id="b5PureCraftDelay" type="number" min="1"></label></div>
+            <label>Nghỉ sau khi hoàn tất B5 (phút)<input id="b5PureCooldownMinutes" type="number" min="1"></label>
+            <label>Chờ trước khi thử lại lỗi (ms)<input id="b5PureRetry" type="number" min="100"></label>
+            <div class="inline-fields"><label>Chu kỳ khi mất kết nối (ms)<input id="b5PureDisconnectedPoll" type="number" min="100"></label><label>Trần backoff lỗi (ms)<input id="b5PureRetryMax" type="number" min="100"></label></div>
+            <p class="muted">Bảo vệ kho và đối soát sau click là bắt buộc; không có công tắc tắt trong mode B5.</p>
+            <div class="inline-fields"><label>Số lần đọc mới để đối soát<input id="b5PureReconcileReads" type="number" min="1" step="1"></label><label>Khoảng chờ đối soát (ms)<input id="b5PureReconcileRetry" type="number" min="100"></label></div>
+            <div class="inline-fields"><label>Chu kỳ chờ khi còn bất định (ms)<input id="b5PureReconcileUnresolved" type="number" min="100"></label><label class="check"><input id="b5PureRetryAfterNoEffect" type="checkbox"> Chỉ cho phép lập kế hoạch lại khi chứng minh input quan sát được không hề bị tiêu thụ</label></div>
+            <div class="inline-fields"><label>Backoff khi không tiến triển (ms)<input id="b5PureNoProgressBase" type="number" min="100"></label><label>Trần backoff chờ (ms)<input id="b5PureNoProgressMax" type="number" min="100"></label></div>
+            <div class="inline-fields"><label>Số lần cùng blocker trước backoff<input id="b5PureBlockerThreshold" type="number" min="1" step="1"></label><label>Ghi log lại mỗi N lần<input id="b5PureLogEvery" type="number" min="1" step="1"></label></div>
+            <div class="actions"><button class="button ghost" id="loadB5PureConfig">Tải cấu hình</button><button class="button primary" id="saveB5PureConfig">Lưu + áp dụng</button></div>
+          </div>
+          <div class="panel form-panel">
+            <div class="panel-title"><h2>Bảo vệ kho</h2><span class="tag">/kho</span></div>
+            <p>Mỗi đợt B5 chạy theo thứ tự: đọc mới <code>/kho</code> → nung sắt/vàng raw → nén toàn bộ B1 → bán phần dư → giữ lại mức dự trữ.</p>
+            <p><strong>Dự trữ B1:</strong> 1,5 B5 (cố định theo contract B5).</p>
+            <p class="muted">Bán surplus của baseline là bước bắt buộc của B5 protection; nếu capability bán bị tắt/không khả dụng thì gate sẽ dừng thay vì bỏ qua.</p>
+            <label class="check"><input id="storageBlockOnly" type="checkbox"> Chỉ bán dạng khối nén</label>
+            <hr>
+            <p><strong>Nhặt + B5:</strong> chỉ mode này dùng giới hạn bung B1 để giữ headroom khi kho vẫn đang được nạp.</p>
+            <label>Trần dung lượng khi bung B1 (%)<input id="collectorDecompressMax" type="number" min="1" max="100" step="1"></label>
+            <label class="check"><input id="collectorRequireKnown" type="checkbox"> Chỉ bung B1 khi đọc được dung lượng kho</label>
+            <div class="actions"><button class="button ghost" id="loadStorageProtect">Tải cấu hình</button><button class="button primary" id="saveStorageProtect">Lưu + áp dụng ngay</button></div>
+          </div>
+          <div class="panel form-panel">
+            <div class="panel-title"><h2>Quy tắc chế B5</h2><span class="tag">NÂNG CAO</span></div>
+            <p>Điều chỉnh khoảng trống an toàn, cách dùng ALL và ngưỡng chống đầy PV2. Các thay đổi này cần khởi động lại hệ thống nền.</p>
+            <div class="inline-fields"><label>Ô trống an toàn trong túi đồ<input id="b5InventorySafety" type="number" min="0" step="1"></label><label>Ô trống tối thiểu để B3 dùng ALL<input id="b5B3MinSlots" type="number" min="0" step="1"></label></div>
+            <div class="inline-fields"><label>PV2: ô trống mục tiêu<input id="b5PvMinEmpty" type="number" min="0" step="1"></label><label>PV2: ngưỡng ô trống tối thiểu<input id="b5PvHardMin" type="number" min="0" step="1"></label></div>
+            <div class="inline-fields"><label>Kích thước mẻ B2<input id="b5BatchSize" type="number" min="1" step="1"></label><label class="check"><input id="b5QuantityEnabled" type="checkbox"> Bật tối ưu số lượng</label></div>
+            <label class="check"><input id="b5B2UseAll" type="checkbox"> Cho B2 dùng ALL</label>
+            <label class="check"><input id="b5B3UseAll" type="checkbox"> Cho B3 dùng ALL khi đủ ô trống an toàn</label>
+            <label class="check"><input id="b5B4UseAllExact" type="checkbox"> Cho B4 dùng ALL khi số lượng khớp chính xác</label>
+            <label class="check"><input id="b5B5UseAll" type="checkbox"> Cho B5 dùng ALL</label>
+            <label class="check"><input id="b5KeepSurplusPv2" type="checkbox"> Giữ phần dư ở PV2 (bắt buộc để bảo toàn luồng)</label>
+            <div class="actions"><button class="button ghost" id="loadB5Rules">Tải cấu hình</button><button class="button primary" id="saveB5Rules">Lưu (cần khởi động lại hệ thống nền)</button></div>
+          </div>
+        </div>
+        <div class="section-head config-head"><div><h2>Chế độ tương thích</h2><p>Collector+B5 cũ và Câu cá vẫn được giữ để không phá luồng hiện tại.</p></div></div>
+        <div class="two-column">
+          <div class="panel form-panel">
+            <div class="panel-title"><h2>Collector + B5 (cũ)</h2><span class="tag">TƯƠNG THÍCH</span></div>
+            <label>Bot<select id="collectorConfigBot"></select></label>
+            <div class="coordinate-grid"><label>X<input id="collectorX" type="number" step="0.1"></label><label>Y<input id="collectorY" type="number" step="0.1"></label><label>Z<input id="collectorZ" type="number" step="0.1"></label></div>
+            <label>Độ trễ vòng chế tạo (ms)<input id="collectorDelay" type="number" min="1"></label>
+            <label>Chu kỳ kiểm tra (giây)<input id="collectorPoll" type="number" min="0.1" step="0.1"></label>
+            <label>Bán kính trở lại điểm đứng<input id="collectorRadius" type="number" min="0.1" step="0.1"></label>
+            <div class="actions"><button class="button ghost" id="loadCollectorConfig">Tải cấu hình</button><button class="button primary" id="saveCollectorConfig">Lưu + nạp lại</button></div>
+          </div>
+          <div class="panel form-panel">
+            <div class="panel-title"><h2>Câu cá</h2><span class="tag">TƯƠNG THÍCH</span></div>
+            <label>Bot<select id="fishingConfigBot"></select></label><label>Khu vực AFK<select id="fishingArea"></select></label>
+            <div class="coordinate-grid"><label>X<input id="fishingX" type="number" step="0.1"></label><label>Y<input id="fishingY" type="number" step="0.1"></label><label>Z<input id="fishingZ" type="number" step="0.1"></label></div>
+            <label>Góc nhìn dọc (độ)<input id="fishingPitch" type="number" min="0" max="89" step="0.1"></label>
+            <div class="actions"><button class="button ghost" id="loadFishingConfig">Tải cấu hình</button><button class="button primary" id="saveFishingConfig">Lưu + nạp lại</button></div>
+          </div>
+        </div>
+      </section>
+
+
+      <section class="page" id="page-builder">
+        <div class="section-head"><div><h2>Trình tạo chế độ bằng mô-đun</h2><p>Ghép các bước an toàn: lệnh đã đăng ký, nhấp GUI, di chuyển, chờ, /is, vào Sky, đọc kho, bảo vệ kho, chế B5, điều kiện và lặp.</p></div></div>
+        <div class="builder-layout">
+          <div class="panel form-panel">
+            <div class="panel-title"><h2>Thông tin chế độ</h2><span class="tag">KHÔNG EVAL</span></div>
+            <label>Chế độ đã lưu<select id="customModeSelect"><option value="">— Tạo mới —</option></select></label>
+            <label>ID chế độ<input id="customModeId" placeholder="mining-tu-dong"></label>
+            <label>Tên hiển thị<input id="customModeLabel" placeholder="Mining tự động"></label>
+            <label>Mô tả<textarea id="customModeDescription" rows="3"></textarea></label>
+            <label class="check"><input id="customModeEnabled" type="checkbox" checked> Bật chế độ này khi khởi động backend</label>
+            <label>Độ trễ vòng lặp (ms)<input id="customModeLoopDelay" type="number" min="0" value="1000"></label>
+            <div class="actions"><button class="button ghost" id="newCustomMode">Mới</button><button class="button danger" id="deleteCustomMode">Xóa</button></div>
+          </div>
+          <div class="panel">
+            <div class="panel-title"><h2>Kho mô-đun</h2><span id="moduleCount" class="tag">0</span></div>
+            <div class="actions compact"><button class="button ghost small" id="presetCommandWait">Mẫu lệnh + đợi</button><button class="button ghost small" id="presetB5Safe">Mẫu /is + B5</button><button class="button ghost small" id="presetMoveClick">Mẫu di chuyển + nhấp</button></div>
+            <div id="modulePalette" class="module-palette"></div>
+          </div>
+        </div>
+        <div class="panel section-gap">
+          <div class="panel-title"><div><h2>Luồng chạy</h2><p class="helper">Thêm mô-đun rồi chỉnh tham số trực tiếp. Nhóm “Khi bắt đầu” chạy một lần; nhóm “Vòng lặp chính” chạy lặp tới khi dừng chế độ.</p></div><div class="actions compact"><button class="button ghost" id="clearCustomSteps">Xóa bước</button><button class="button primary" id="saveCustomMode">Lưu chế độ</button></div></div>
+          <div class="workflow-columns"><div><h3>Khi bắt đầu</h3><div id="customStartSteps" class="workflow-list"></div></div><div><h3>Vòng lặp chính</h3><div id="customLoopSteps" class="workflow-list"></div></div></div>
+        </div>
+        <details class="panel section-gap"><summary>Cấu hình JSON nâng cao của chế độ</summary><textarea id="customModeJson" class="code-editor" rows="18" spellcheck="false"></textarea><div class="actions"><button class="button ghost" id="applyCustomJson">Áp dụng JSON vào trình dựng</button></div></details>
+      </section>
+
+      <section class="page" id="page-tools">
+        <div class="panel form-panel">
+          <div class="panel-title"><div><h2>Lệnh riêng theo Sky</h2><p class="helper">Đăng ký lệnh riêng cho từng Sky. Bot chỉ được gửi khi đang ở đúng Sky đó; lệnh hệ thống của automation không bị ghi đè.</p></div><span class="tag">THEO SKY</span></div>
+          <div class="inline-fields"><label>Sky<select id="skyCommandSky"></select></label><label>Bot dùng để thử<select id="skyCommandBot"></select></label></div>
+          <div class="inline-fields"><label>ID lệnh<input id="skyCommandId" placeholder="autofarm"></label><label>Tên hiển thị<input id="skyCommandLabel" placeholder="Auto Farm"></label></div>
+          <label>Lệnh server<input id="skyCommandValue" placeholder="/autofarm"></label>
+          <label>Mô tả<input id="skyCommandDescription" placeholder="Tùy chọn"></label>
+          <label class="check"><input id="skyCommandEnabled" type="checkbox" checked> Bật lệnh này</label>
+          <label>Tham số JSON khi thử lệnh<textarea id="skyCommandArgs" rows="3" spellcheck="false">{}</textarea></label>
+          <div class="actions"><button class="button ghost" id="newSkyCommand">Lệnh mới</button><button class="button primary" id="saveSkyCommand">Lưu + áp dụng ngay</button></div>
+          <div id="skyCommandList" class="section-gap"><div class="empty">Chưa tải danh sách lệnh.</div></div>
+        </div>
+        <div class="two-column section-gap">
+          <div class="panel form-panel">
+            <div class="panel-title"><h2>Trung tâm lệnh</h2><span class="tag">Chỉ lệnh đã đăng ký</span></div>
+            <p>Gửi lệnh đã đăng ký qua dịch vụ lệnh; không gửi chat thô trực tiếp.</p>
+            <label>Bot<select id="commandBot"></select></label>
+            <label>Lệnh<select id="commandKey"></select></label>
+            <label>Tham số JSON<textarea id="commandArgs" rows="5" spellcheck="false">{}</textarea></label>
+            <div class="inline-fields"><label class="check"><input id="commandConfirm" type="checkbox"> Chờ xác nhận nếu lệnh có quy tắc</label><label>Thời gian chờ tối đa (ms)<input id="commandTimeout" type="number" min="500" max="30000" value="5000"></label></div>
+            <button class="button primary" id="sendCommandBtn">Gửi lệnh</button>
+          </div>
+          <div class="panel output-panel"><div class="panel-title"><h2>Kết quả lệnh</h2><button class="button ghost small" id="copyCommandBtn">Sao chép</button></div><pre id="commandOutput">Chưa gửi lệnh.</pre></div>
+        </div>
+        <div class="two-column section-gap">
+          <div class="panel form-panel">
+            <div class="panel-title"><h2>Trình kiểm tra GUI</h2><span class="tag">Xác minh</span></div>
+            <p>Mở GUI máy chủ bằng lệnh đã đăng ký, nhấp ô tùy chọn và chụp trạng thái.</p>
+            <label>Bot<select id="guiBot"></select></label>
+            <label>Lệnh<select id="guiCommand"></select></label>
+            <label>Các ô cần nhấp<input id="guiSlots" placeholder="Ví dụ: 10, 16, 49"></label>
+            <label>Thời gian chờ tối đa (ms)<input id="guiTimeout" type="number" min="1000" value="7000"></label>
+            <button class="button primary" id="inspectGuiBtn">Chụp GUI</button>
+          </div>
+          <div class="panel output-panel"><div class="panel-title"><h2>Kết quả GUI</h2><button class="button ghost small" id="copyGuiBtn">Sao chép</button></div><pre id="guiOutput">Chưa có bản chụp trạng thái.</pre></div>
+        </div>
+      </section>
+
+      <section class="page" id="page-logs">
+        <div class="page-heading"><div><h1>Nhật ký</h1><p>Chỉ hiển thị hoạt động chính và cảnh báo. Khi có lỗi cần phân tích sâu, mở file nhật ký chi tiết.</p></div></div>
+        <div class="toolbar panel">
+          <select id="logLevel"><option value="all">Mọi mức</option><option value="info">Thông tin</option><option value="warn">Cảnh báo</option><option value="error">Lỗi</option></select>
+          <select id="logBot"><option value="all">Mọi bot</option></select>
+          <input id="logSearch" placeholder="Tìm nội dung, phạm vi, tác vụ...">
+          <label class="check toolbar-check"><input id="logPause" type="checkbox"> Tạm dừng hiển thị</label>
+          <label class="check toolbar-check"><input id="logAutoScroll" type="checkbox" checked> Tự cuộn</label>
+          <button class="button ghost" id="clearLogView">Xóa màn hình</button><button class="button ghost" id="openDetailedLogs">Mở log chi tiết</button>
+        </div>
+        <div class="log-summary"><span id="logCount">0 dòng nhật ký</span><span id="logPausedHint"></span></div>
+        <div class="log-console panel" id="logConsole"></div>
+      </section>
+
+      <section class="page" id="page-diagnostics">
+        <div class="panel support-bar">
+          <div><strong>Gói hỗ trợ</strong><span>Xuất bản chụp trạng thái + 500 dòng nhật ký + bản ghi lỗi đã che dữ liệu nhạy cảm thành một file JSON.</span></div>
+          <div class="actions compact"><button class="button primary" id="exportSupport">Xuất gói</button><button class="button ghost" id="openSupport">Mở thư mục</button></div>
+        </div>
+        <div class="two-column diagnostic-layout section-gap">
+          <div class="panel"><div class="panel-title"><h2>Lỗi khi chạy</h2><button class="button ghost small" id="refreshDiagnostics">Làm mới</button></div><div id="diagnosticList" class="diagnostic-list"></div></div>
+          <div class="panel output-panel"><h2>Chi tiết</h2><pre id="diagnosticOutput">Chọn một bản ghi lỗi.</pre></div>
+        </div>
+      </section>
+
+      <section class="page" id="page-ai">
+        <div class="ai-layout">
+          <div class="panel ai-sidebar-panel">
+            <div class="panel-title"><div><h2>Local AI Agent</h2><p class="helper">AI đọc project qua tool nội bộ, không được truy cập .env/secret/node_modules/data/out.</p></div><span id="aiStatusTag" class="tag">CHƯA KẾT NỐI</span></div>
+            <label>Ollama / OpenAI-compatible URL<input id="aiBaseUrl" value="http://127.0.0.1:11434/v1" spellcheck="false"></label>
+            <div class="actions"><button class="button ghost" id="aiRefreshModels">Kiểm tra Ollama</button></div>
+            <label>Model<select id="aiModel"><option value="">Chưa tải model</option></select></label>
+            <label>Quyền của agent<select id="aiPermission"><option value="READ">READ · chỉ đọc/phân tích</option><option value="PATCH">PATCH · được sửa file</option><option value="DEVELOP">DEVELOP · sửa + test/validator/git diff</option><option value="ADMIN">ADMIN · DEVELOP + điều khiển bot whitelist</option></select></label>
+            <hr>
+            <label>Project workspace<input id="aiWorkspace" readonly placeholder="Chưa chọn project"></label>
+            <div class="actions"><button class="button primary" id="aiSelectWorkspace">Chọn project</button><button class="button ghost" id="aiInspectWorkspace">Quét lại</button></div>
+            <div class="backend-overview ai-workspace-stats"><div><span>Phiên bản</span><strong id="aiWorkspaceVersion">—</strong></div><div><span>File nguồn</span><strong id="aiWorkspaceFiles">—</strong></div><div><span>AGENTS</span><strong id="aiWorkspaceAgents">—</strong></div></div>
+            <p class="helper">Bản packaged cần chọn thư mục source project trên máy. Bản DEV có thể chọn chính thư mục MCbot hiện tại.</p>
+          </div>
+
+          <div class="panel ai-chat-panel">
+            <div class="panel-title"><div><h2>Chat với project</h2><p class="helper">Agent tự search/read code, sửa bằng patch và chạy check tùy theo quyền bạn chọn.</p></div><div class="actions compact"><button class="button ghost small" id="aiNewChat">Chat mới</button><button class="button ghost small" id="aiCopyLast">Sao chép trả lời</button></div></div>
+            <div class="ai-quick-actions">
+              <button class="button ghost small" data-ai-prompt="Đọc trạng thái runtime và log gần nhất. Phân tích bot đang làm gì, lỗi nào đáng chú ý và nguyên nhân gần nhất. Không sửa code.">Phân tích runtime</button>
+              <button class="button ghost small" data-ai-prompt="Audit luồng B5 hiện tại từ mode tới storage protection/crafting. Chỉ ra blocker hoặc điểm rủi ro dựa trên code hiện tại. Không sửa nếu tôi chưa yêu cầu.">Kiểm tra B5</button>
+              <button class="button ghost small" data-ai-prompt="Đọc AGENTS.md, RULES.md và ARCHITECTURE.md rồi tóm tắt các ràng buộc quan trọng mà mọi thay đổi code phải tuân theo.">Đọc luật project</button>
+            </div>
+            <div id="aiMessages" class="ai-messages"><div class="ai-empty">Chọn project + model rồi nhập yêu cầu. Ví dụ: “tìm nguyên nhân B5 bị timeout và sửa, sau đó chạy test liên quan”.</div></div>
+            <div id="aiTrace" class="ai-trace hidden"></div>
+            <div class="ai-composer">
+              <textarea id="aiPrompt" rows="4" placeholder="Ra lệnh cho Local AI Agent..." spellcheck="false"></textarea>
+              <div class="ai-composer-actions"><span id="aiBusyText" class="helper">Sẵn sàng.</span><button class="button primary" id="aiSend">Gửi</button></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-settings">
+        <div class="settings-grid">
+          <div class="panel form-panel">
+            <h2>Trải nghiệm phần mềm</h2>
+            <label class="check setting-check"><input id="prefCloseToTray" type="checkbox"> Đóng cửa sổ thì thu xuống khay hệ thống</label>
+            <label class="check setting-check"><input id="prefNotifyErrors" type="checkbox"> Hiện thông báo khi có lỗi</label>
+            <label class="check setting-check"><input id="prefAutoStart" type="checkbox"> Tự khởi động hệ thống nền khi mở phần mềm</label>
+            <label class="check setting-check"><input id="prefPreventSleep" type="checkbox"> Ngăn Windows ngủ khi bot đang hoạt động (màn hình vẫn có thể tắt)</label>
+            <label class="check setting-check"><input id="prefLaunchAtLogin" type="checkbox"> Khởi động cùng Windows (chỉ bản đã cài)</label>
+            <label>Chu kỳ cập nhật thời gian thực<select id="prefSnapshotInterval"><option value="500">0.5 giây</option><option value="900">0.9 giây</option><option value="1500">1.5 giây</option><option value="3000">3 giây</option></select></label>
+            <button class="button primary" id="savePreferences">Lưu tùy chọn</button>
+          </div>
+          <div class="panel form-panel"><h2>Cập nhật phần mềm</h2>
+            <div class="backend-overview"><div><span>Phiên bản hiện tại</span><strong id="updateCurrentVersion">—</strong></div><div><span>Trạng thái ZIP</span><strong id="localUpdateState">Chưa chọn</strong></div><div><span>ZIP sẽ cập nhật lên</span><strong id="localUpdateVersion">—</strong></div></div>
+            <div class="update-local-box">
+              <strong>Cập nhật bằng file ZIP</strong>
+              <p class="helper">Cách khuyến nghị khi đang phát triển. MCbot kiểm tra manifest, phiên bản, đường dẫn nguy hiểm và dependency trước khi cho cập nhật.</p>
+              <div class="actions"><button class="button primary" id="selectLocalUpdate">Chọn file ZIP</button><button class="button primary" id="installLocalUpdate">Cập nhật từ ZIP</button><button class="button ghost" id="clearLocalUpdate">Bỏ chọn</button></div>
+              <p id="localUpdateFile" class="helper">Chưa chọn gói cập nhật.</p>
+              <pre id="localUpdateNotes" class="compact-output">Chưa có ghi chú từ gói ZIP.</pre>
+            </div>
+            <hr class="soft-separator">
+            <h3>Cập nhật trực tuyến</h3>
+            <div class="backend-overview"><div><span>Trạng thái</span><strong id="updateState">Chưa kiểm tra</strong></div><div><span>Phiên bản mới</span><strong id="updateAvailableVersion">—</strong></div><div><span>Kênh</span><strong id="updateChannelLabel">Ổn định</strong></div></div>
+            <label>Nguồn cập nhật chính thức<input id="prefUpdateRepository" autocomplete="off" readonly aria-readonly="true"><small class="hint">Được khóa theo bản phát hành để tránh tải bộ cài từ nguồn khác.</small></label>
+            <label>Kênh cập nhật<select id="prefUpdateChannel"><option value="stable">Ổn định</option><option value="beta">Thử nghiệm / beta</option></select></label>
+            <label class="check setting-check"><input id="prefAutoCheckUpdates" type="checkbox"> Tự kiểm tra cập nhật khi mở phần mềm</label>
+            <label class="check setting-check"><input id="prefAutoDownloadUpdates" type="checkbox"> Tự tải bản cập nhật mới</label>
+            <label class="check setting-check"><input id="prefAutoInstallUpdates" type="checkbox"> Tự cài khi không có bot/chế độ đang hoạt động</label>
+            <progress id="updateProgress" max="100" value="0" style="width:100%"></progress>
+            <p id="updateProgressText" class="helper">Chưa có tác vụ cập nhật.</p>
+            <div class="actions"><button class="button ghost" id="checkUpdates">Kiểm tra</button><button class="button primary" id="downloadUpdate">Tải bản mới</button><button class="button primary" id="installUpdate">Cài và khởi động lại</button><button class="button ghost" id="openUpdateRelease">Xem thay đổi</button></div>
+            <pre id="updateReleaseNotes" class="compact-output">Chưa có ghi chú phát hành.</pre>
+            <div class="setting-row"><div><strong>Khôi phục cấu hình trước migration</strong><span>Chỉ khôi phục config; không hạ phiên bản chương trình.</span></div><button class="button warn" id="rollbackConfigMigration">Khôi phục</button></div>
+            <p id="updateMigrationText" class="helper"></p>
+          </div>
+          <div class="panel"><h2>Dữ liệu</h2>
+            <div class="setting-row"><div><strong>Thư mục dự án / dữ liệu chạy</strong><span>Cấu hình và trạng thái khi chạy</span></div><button class="button ghost" id="openProject">Mở</button></div>
+            <div class="setting-row"><div><strong>Nhật ký</strong><span>data/logs</span></div><button class="button ghost" id="openLogs">Mở</button></div>
+            <div class="setting-row"><div><strong>Sao lưu cấu hình</strong><span>Tạo bản sao theo thời điểm của toàn bộ cấu hình</span></div><button class="button primary" id="backupConfig">Sao lưu</button></div>
+            <div class="setting-row"><div><strong>Thư mục sao lưu</strong><span>data/backups</span></div><button class="button ghost" id="openBackups">Mở</button></div>
+          </div>
+          <div class="panel"><h2>Hệ thống nền</h2>
+            <div class="backend-overview"><div><span>Trạng thái</span><strong id="settingsBackendState">—</strong></div><div><span>Thời gian chạy</span><strong id="settingsUptime">—</strong></div><div><span>Bộ nhớ</span><strong id="settingsMemory">—</strong></div></div>
+            <div class="actions"><button class="button primary" id="startBackend">Khởi động</button><button class="button ghost" id="restartBackend">Khởi động lại</button><button class="button danger" id="stopBackend">Dừng</button></div>
+          </div>
+          <div class="panel form-panel"><h2>Dữ liệu bí mật</h2><p>Dữ liệu bí mật được mã hóa bằng cơ chế bảo mật của hệ điều hành và không ghi vào hồ sơ JSON.</p>
+            <label>Mã bí mật Discord<input id="secretDiscordToken" type="password" autocomplete="off" placeholder="Để trống nếu không thay đổi"></label>
+            <label>ID ứng dụng Discord<input id="secretDiscordAppId" autocomplete="off" placeholder="ID ứng dụng"></label>
+            <label>ID máy chủ Discord<input id="secretDiscordGuildId" autocomplete="off" placeholder="ID máy chủ (không bắt buộc)"></label>
+            <label>ID người dùng Discord được phép<input id="secretDiscordAllowed" autocomplete="off" placeholder="123...,456..."></label>
+            <label>Bot<select id="secretBotSelect"></select></label>
+            <label>Mật khẩu bot<input id="secretBotPassword" type="password" autocomplete="off" placeholder="Để trống nếu không thay đổi"></label>
+            <div class="actions"><button class="button primary" id="saveSecrets">Lưu dữ liệu bí mật</button><button class="button ghost" id="secretStatusBtn">Kiểm tra</button><button class="button ghost" id="clearBotPassword">Xóa mật khẩu bot</button><button class="button danger" id="clearDiscordSecrets">Xóa dữ liệu bí mật Discord</button></div><p id="secretStatusText" class="helper"></p>
+          </div>
+
+          <div class="panel form-panel"><h2>Cấu hình nâng cao</h2><p>Chỉnh mọi nhóm JSON theo cấu trúc kiểm tra. Trước khi ghi file, phần mềm kiểm tra cấu trúc + liên kết chéo và tự sao lưu.</p>
+            <label>Nhóm cấu hình<select id="advancedConfigGroup"></select></label>
+            <textarea id="advancedConfigJson" class="code-editor" rows="16" spellcheck="false"></textarea>
+            <div class="actions"><button class="button ghost" id="loadAdvancedConfig">Tải</button><button class="button primary" id="saveAdvancedConfig">Kiểm tra + lưu</button></div><p id="advancedConfigHint" class="helper"></p>
+          </div>
+          <div class="panel danger-zone"><h2>Khẩn cấp</h2><p>Dừng toàn bộ chế độ rồi ngắt kết nối tất cả bot. Dùng khi cần ngắt tự động hóa ngay.</p><button class="button danger strong" id="emergencyStop">DỪNG KHẨN CẤP</button></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>

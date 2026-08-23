@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "kho",
+      "title": "ᴋʜᴏ ᴄʜứᴀ ▮▮▮▮▯▯▯▯",
+      "slotCount": 90,
+      "expected": "storage"
+    },
+    {
+      "id": "pv2",
+      "title": "ᴋʜᴏ đồ #2",
+      "slotCount": 90,
+      "expected": "personalVault2"
+    },
+    {
+      "id": "craft",
+      "title": "ᴄʜế ᴛạᴏ",
+      "slotCount": 90,
+      "expected": "crafting"
+    },
+    {
+      "id": "quantity",
+      "title": "ѕố ʟượɴɢ",
+      "slotCount": 90,
+      "expected": "craftingQuantity"
+    },
+    {
+      "id": "smelting",
+      "title": "ɴᴜɴɢ",
+      "slotCount": 90,
+      "expected": "smelting"
+    }
+  ]
+}

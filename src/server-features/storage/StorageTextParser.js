@@ -125,6 +125,32 @@ class StorageTextParser {
         return null;
     }
 
+    firstAbsoluteMatch(text, patterns = [], group = 'value') {
+        const source = String(text ?? '');
+        for (const pattern of patterns) {
+            const regex = new RegExp(pattern, 'i');
+            const match = regex.exec(source);
+            if (!match) continue;
+            const raw = match.groups?.[group] ?? match[1];
+            if (raw === null || raw === undefined) continue;
+
+            // Capacity telemetry can expose only a percentage, e.g.
+            // "Đã sử dụng: 100.0%". parseNumber() intentionally treats
+            // punctuation as thousands separators for integer item counts, so
+            // 100.0 would otherwise become 1000. Never accept a number as an
+            // absolute amount when the captured token is immediately followed
+            // by a percent sign.
+            const rawText = String(raw);
+            const withinMatch = match[0].lastIndexOf(rawText);
+            const end = match.index + (withinMatch >= 0 ? withinMatch + rawText.length : match[0].length);
+            if (/^\s*%/.test(source.slice(end))) continue;
+
+            const parsed = this.parseNumber(raw);
+            if (parsed !== null) return parsed;
+        }
+        return null;
+    }
+
     firstNumberAfterLabel(lines, labelExpression, maxOffset = 6) {
         const normalizedLines = (Array.isArray(lines) ? lines : []).map(line => this.normalizeText(line));
         const index = normalizedLines.findIndex(line => {
@@ -145,6 +171,28 @@ class StorageTextParser {
             const match = /([\d][\d.,]*)/.exec(normalizedLines[index + offset]);
             const parsed = this.parseNumber(match?.[1]);
             if (parsed !== null) return parsed;
+        }
+        return null;
+    }
+
+    firstAbsoluteNumberAfterLabel(lines, labelExpression, maxOffset = 6) {
+        const normalizedLines = (Array.isArray(lines) ? lines : []).map(line => this.normalizeText(line));
+        const index = normalizedLines.findIndex(line => {
+            labelExpression.lastIndex = 0;
+            return labelExpression.test(line);
+        });
+        if (index < 0) return null;
+
+        for (let offset = 0; offset <= maxOffset && index + offset < normalizedLines.length; offset += 1) {
+            const line = normalizedLines[index + offset];
+            const regex = /([\d][\d.,]*)/g;
+            let match = null;
+            while ((match = regex.exec(line))) {
+                const after = line.slice(match.index + match[0].length);
+                if (/^\s*%/.test(after)) continue;
+                const parsed = this.parseNumber(match[1]);
+                if (parsed !== null) return parsed;
+            }
         }
         return null;
     }

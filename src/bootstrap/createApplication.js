@@ -2,17 +2,23 @@
 
 try {
     require('dotenv').config({ quiet: true });
-} catch {}
+} catch (error) {
+    if (error?.code !== 'MODULE_NOT_FOUND') throw error;
+}
 
 const Application = require('../core/Application');
 const LifecycleCoordinator = require('../core/LifecycleCoordinator');
 const BotProfileAdminService = require('../discord/admin/BotProfileAdminService');
+const FleetScheduler = require('../fleet/FleetScheduler');
+const DurableIntentStore = require('../recovery/DurableIntentStore');
+const FleetControlService = require('../recovery/FleetControlService');
 const loadConfiguration = require('./loadConfiguration');
 const loadBotProfiles = require('./loadBotProfiles');
 const registerSharedServices = require('./registerSharedServices');
 const registerDiscordServices = require('./registerDiscordServices');
 const createBotRuntime = require('./createBotRuntime');
 const registerModules = require('./registerModules');
+const createModeCatalog = require('./createModeCatalog');
 
 async function createApplication({
     baseDir = process.cwd(),
@@ -22,12 +28,38 @@ async function createApplication({
     discord = null
 } = {}) {
     const configuration = await loadConfiguration({ baseDir });
+    const modeCatalog = createModeCatalog({ baseDir });
     const shared = registerSharedServices({ configuration, output, clientFactory });
+    shared.modeCatalog = modeCatalog;
     const logger = shared.loggerFactory.create('Application');
+    const controlConfig = configuration.registry.require('app').controlPlane || { enabled: false };
+    const intentStore = new DurableIntentStore({
+        baseDir,
+        enabled: controlConfig.enabled !== false,
+        file: controlConfig.intentFile,
+        maxBytes: controlConfig.maxBytes,
+        logger: shared.loggerFactory.create('DurableIntentStore'),
+        modeCatalog
+    });
+    await intentStore.initialize();
+    const fleetScheduler = new FleetScheduler({
+        concurrency: controlConfig.concurrency,
+        maxPending: controlConfig.maxPending,
+        taskTimeoutMs: controlConfig.taskTimeoutMs,
+        shutdownDrainMs: controlConfig.shutdownDrainMs,
+        logger: shared.loggerFactory.create('FleetScheduler')
+    });
+    const fleetControl = new FleetControlService({
+        store: intentStore,
+        scheduler: fleetScheduler,
+        botRegistry: shared.botRegistry,
+        modeCatalog,
+        logger: shared.loggerFactory.create('FleetControl')
+    });
 
     // Build the application and all Minecraft runtimes first. Discord is added to
     // the lifecycle afterwards so its admin panel can create/reload runtimes live.
-    const lifecycle = new LifecycleCoordinator([shared.runtimeLogOutput].filter(Boolean), {
+    const lifecycle = new LifecycleCoordinator([shared.runtimeLogOutput, fleetControl].filter(Boolean), {
         name: 'ApplicationLifecycle',
         logger
     });
@@ -35,18 +67,23 @@ async function createApplication({
         botRegistry: shared.botRegistry,
         loggerFactory: shared.loggerFactory,
         lifecycleCoordinator: lifecycle,
+        controlPlane: fleetControl,
         logger
     });
 
     const profiles = await loadBotProfiles({
         loader: configuration.loader,
         validator: configuration.validator,
-        directory: `${baseDir}/config/bots`
+        directory: 'config/bots',
+        environment
     });
-    const duplicateIds = [...new Set(profiles
-        .map(profile => profile.id)
-        .filter((id, index, all) => all.indexOf(id) !== index))];
-    if (duplicateIds.length > 0) throw new Error(`Duplicate bot profile id(s): ${duplicateIds.join(', ')}`);
+    configuration.crossValidator.assertValid(configuration.registry.snapshot(), { botProfiles: profiles });
+    fleetControl.setProfiles(profiles);
+    // A fresh desktop/application process starts a new operator session.
+    // Enabled bot profiles reconnect automatically, but modes never replay
+    // merely because they were active in the previous process. The same
+    // in-process intent remains durable across server kicks/reconnects.
+    await fleetControl.prepareApplicationSession({ source: 'application-startup-idle' });
 
     const enabledByUsername = new Map();
     for (const profile of profiles.filter(profile => profile.enabled)) {
@@ -64,8 +101,13 @@ async function createApplication({
         });
     }
 
-    const runtimes = profiles.map(profile => createBotRuntime({ profile, configuration, shared }));
+    const runtimes = profiles.map(profile => createBotRuntime({
+        profile: fleetControl.runtimeProfile(profile),
+        configuration,
+        shared
+    }));
     registerModules(application, runtimes);
+    lifecycle.add(shared.configMutations);
 
     const botProfileAdmin = new BotProfileAdminService({
         baseDir,
@@ -73,6 +115,8 @@ async function createApplication({
         shared,
         application,
         environment,
+        fleetControl,
+        mutationCoordinator: shared.configMutations,
         logger: shared.loggerFactory.create('BotProfileAdmin')
     });
     const discordService = registerDiscordServices({
@@ -80,7 +124,8 @@ async function createApplication({
         shared,
         environment,
         discord,
-        botProfileAdmin
+        botProfileAdmin,
+        fleetControl
     });
     lifecycle.add(discordService);
 
@@ -90,7 +135,11 @@ async function createApplication({
         shared,
         profiles,
         discordService,
-        botProfileAdmin
+        botProfileAdmin,
+        fleetControl,
+        intentStore,
+        fleetScheduler,
+        modeCatalog
     };
 }
 

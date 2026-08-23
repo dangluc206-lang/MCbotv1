@@ -85,3 +85,22 @@ test('StepRunner preserves nested leaf FlowError and appends parent context', as
         }
     );
 });
+
+test('FlowError.wrap preserves nested domain leaf code and cause while appending outer diagnostics', () => {
+    const rootCause = new Error('socket ended');
+    const leaf = new FlowError('GUI connection ended.', {
+        code: 'GUI_WAIT_DISCONNECTED', subsystem: 'gui-wait', operation: 'Waiter', step: 'await-event',
+        details: { expectedGeneration: 1 }, cause: rootCause
+    });
+    const wrapped = FlowError.wrap(leaf, {
+        code: 'GUI_OPEN_FAILED', subsystem: 'gui', operation: 'GuiManager', step: 'open', action: '/kho',
+        details: { timeoutMs: 100 }
+    });
+    assert.equal(wrapped.code, 'GUI_WAIT_DISCONNECTED');
+    assert.equal(wrapped.cause, rootCause);
+    assert.equal(wrapped.operation, 'GuiManager');
+    assert.equal(wrapped.step, 'open');
+    assert.equal(wrapped.details.expectedGeneration, 1);
+    assert.equal(wrapped.details.timeoutMs, 100);
+    assert.equal(wrapped.trace.at(-1).wrappedBy.code, 'GUI_OPEN_FAILED');
+});

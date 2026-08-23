@@ -1,13 +1,13 @@
 {
   "storage": {
     "title": {
-      "regex": "kho|storage"
+      "regex": "ᴋʜᴏ\\s*ᴄʜứᴀ|kho\\s*chua|storage"
     },
     "layout": {}
   },
   "personalVault2": {
     "title": {
-      "regex": "pv\\s*2|personal\\s*vault"
+      "regex": "ᴋʜᴏ\\s*đồ\\s*#?\\s*2|kho\\s*do\\s*#?\\s*2|pv\\s*2|personal\\s*vault"
     },
     "layout": {
       "slotCount": 90
@@ -15,13 +15,13 @@
   },
   "minerals": {
     "title": {
-      "regex": "khoáng|khoang|mineral|ks"
+      "regex": "^ᴋʜᴏáɴɢ\\s*ѕảɴ$|^khoáng\\s*sản$|^khoang\\s*san$|^minerals?$|^ks$"
     },
     "layout": {}
   },
   "smelting": {
     "title": {
-      "regex": "nung|smelt"
+      "regex": "^ɴᴜɴɢ\\s*ᴋʜᴏáɴɢ\\s*ѕảɴ$|^nung(?:\\s+khoang\\s+san)?$|^smelt(?:ing)?$"
     },
     "layout": {}
   },
@@ -64,5 +64,13 @@
         "context": "gui"
       }
     ]
+  },
+  "mineralConversion": {
+    "title": {
+      "regex": "ép phôi thành khối|ep phoi thanh khoi"
+    },
+    "layout": {
+      "slotCount": 54
+    }
   }
 }

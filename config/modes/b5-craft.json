@@ -1,0 +1,24 @@
+{
+  "enabled": true,
+  "teleportHomeOnEnable": true,
+  "autoResumeOnReconnect": true,
+  "pollIntervalMs": 10000,
+  "disconnectedPollMs": 1500,
+  "errorRetryMs": 5000,
+  "errorRetryMaxMs": 30000,
+  "craftLoopDelayMs": 300,
+  "reconciliation": {
+    "maxFreshReads": 3,
+    "retryMs": 1000,
+    "unresolvedPollMs": 15000,
+    "allowRetryAfterVerifiedNoEffect": true
+  },
+  "stability": {
+    "noProgressBackoffEnabled": true,
+    "noProgressBaseDelayMs": 10000,
+    "noProgressMaxDelayMs": 60000,
+    "sameBlockerThreshold": 2,
+    "logEveryNthRepeat": 5
+  },
+  "postB5CooldownMs": 1800000
+}

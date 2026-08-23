@@ -17,6 +17,7 @@ function harness({ positions = [{ x: 0, y: 64, z: 0 }], config = {}, generation 
     let index = 0;
     let now = 0;
     const controls = new Map();
+    const controlHistory = [];
     let clearCount = 0;
     const context = { require: () => currentBot, get: () => currentBot };
     const connectionState = {
@@ -29,7 +30,7 @@ function harness({ positions = [{ x: 0, y: 64, z: 0 }], config = {}, generation 
         botId: 'bot-01', queue: new OperationQueue(), lockPolicy: new OperationLockPolicy(), timeoutPolicy: new OperationTimeoutPolicy()
     });
     const controlStateManager = {
-        set: (key, value) => controls.set(key, Boolean(value)),
+        set: (key, value) => { controls.set(key, Boolean(value)); controlHistory.push([key, Boolean(value)]); },
         clear: () => { clearCount += 1; controls.clear(); }
     };
     const looks = [];
@@ -40,7 +41,7 @@ function harness({ positions = [{ x: 0, y: 64, z: 0 }], config = {}, generation 
         delay, clock: () => now
     });
     return {
-        bot, movement, operationManager, controls, looks,
+        bot, movement, operationManager, controls, controlHistory, looks,
         clearCount: () => clearCount,
         setGeneration: value => { currentGeneration = value; },
         setBot: value => { currentBot = value; },
@@ -58,6 +59,17 @@ test('FishingMovementOperation reaches destination and clears controls/listeners
     assert.equal(h.controls.size, 0);
     assert.equal(h.clearCount() >= 1, true);
     assert.equal(h.looks.length >= 1, true);
+});
+
+test('FishingMovementOperation always shift-walks to the fishing destination even if a profile disables sneak', async () => {
+    const h = harness({ positions: [{ x: 0, y: 64, z: 0 }, { x: 10, y: 64, z: 0 }] });
+    await h.movement.move({
+        destination: { x: 10, y: 64, z: 0 },
+        expectedGeneration: 1,
+        profile: { name: 'unsafe-profile', forward: true, sneak: false, sprint: false, jump: false }
+    });
+    assert.equal(h.controlHistory.some(([key, value]) => key === 'sneak' && value === true), true);
+    assert.equal(h.controlHistory.some(([key, value]) => key === 'sneak' && value === false), false);
 });
 
 test('FishingMovementOperation handles forcedMove storm without leaking listener', async () => {
@@ -111,9 +123,10 @@ test('FishingMovementOperation cancellation releases controls and active operati
 
 test('FishingMovementOperation lock contention fails safely and stop/destroy clear controls', async () => {
     const h = harness();
-    h.operationManager.lockPolicy.acquire(['movement'], 'other');
+    const otherOwner = h.operationManager.lockPolicy.createOwner('test-other');
+    h.operationManager.lockPolicy.acquire(['movement'], otherOwner);
     await assert.rejects(h.movement.move({ destination: { x: 1, y: 64, z: 1 }, expectedGeneration: 1 }), error => error.code === 'FISHING_MOVEMENT_BUSY');
-    h.operationManager.lockPolicy.release(['movement'], 'other');
+    h.operationManager.lockPolicy.release(['movement'], otherOwner);
     await h.movement.stop();
     await h.movement.destroy();
     assert.equal(h.controls.size, 0);

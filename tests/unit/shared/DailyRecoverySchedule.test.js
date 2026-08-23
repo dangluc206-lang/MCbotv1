@@ -12,17 +12,17 @@ function utcForLocal(hour, minute, second = 0) {
 const config = {
     enabled: true,
     timezoneOffsetMinutes: 420,
-    sky: { hour: 3, minute: 0, waitMinutes: 10, retryWindowMinutes: 20 },
-    server: { hour: 5, minute: 0, waitMinutes: 10, retryWindowMinutes: 20 }
+    sky: { hour: 3, minute: 0, waitMinutes: 5, retryWindowMinutes: 20 },
+    server: { hour: 5, minute: 0, waitMinutes: 5, retryWindowMinutes: 20 }
 };
 
-test('03:00 Sky window waits until 03:10 and remains retryable until 03:20', () => {
+test('03:00 Sky window waits until 03:05 and remains retryable until 03:20', () => {
     const schedule = new DailyRecoverySchedule(config);
-    const at0305 = schedule.state('sky', utcForLocal(3, 5));
-    assert.equal(at0305.active, true);
-    assert.equal(at0305.due, true);
-    assert.equal(at0305.waitMs, 5 * 60_000);
-    assert.equal(at0305.resumeAt, '03:10');
+    const at0302 = schedule.state('sky', utcForLocal(3, 2));
+    assert.equal(at0302.active, true);
+    assert.equal(at0302.due, true);
+    assert.equal(at0302.waitMs, 3 * 60_000);
+    assert.equal(at0302.resumeAt, '03:05');
 
     const at0312 = schedule.state('sky', utcForLocal(3, 12));
     assert.equal(at0312.active, false);
@@ -33,11 +33,11 @@ test('03:00 Sky window waits until 03:10 and remains retryable until 03:20', () 
     assert.equal(at0321.due, false);
 });
 
-test('05:00 server reconnect is held for the remainder of the 10-minute window', () => {
+test('05:00 server reconnect is held until 05:05', () => {
     const schedule = new DailyRecoverySchedule(config);
-    assert.equal(schedule.reconnectDelay(utcForLocal(5, 0)), 10 * 60_000);
-    assert.equal(schedule.reconnectDelay(utcForLocal(5, 7, 30)), 150_000);
-    assert.equal(schedule.reconnectDelay(utcForLocal(5, 10)), 0);
+    assert.equal(schedule.reconnectDelay(utcForLocal(5, 0)), 5 * 60_000);
+    assert.equal(schedule.reconnectDelay(utcForLocal(5, 4)), 60_000);
+    assert.equal(schedule.reconnectDelay(utcForLocal(5, 5)), 0);
 });
 
 test('schedule is inert when not explicitly enabled', () => {

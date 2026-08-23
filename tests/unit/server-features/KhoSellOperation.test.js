@@ -185,6 +185,22 @@ test('SELL ALL is disabled for production B1 by default', async () => {
     await assert.rejects(() => operation.execute('coal', { quantity: 'ALL' }), /SELL ALL is disabled/);
 });
 
+test('legacy fast-disposable whitelist no longer bypasses the production SELL ALL guard', async () => {
+    const operation = new KhoSellOperation({
+        commandService: {}, guiManager: {}, reader: {},
+        config: {
+            sell: {
+                enabled: true,
+                commandKey: 'storageSell',
+                allowAll: false,
+                fastDisposableSellAllIds: ['lapis_block'],
+                itemAliases: { lapis_block: 'LAPIS_BLOCK' }
+            }
+        }
+    });
+    await assert.rejects(() => operation.execute('lapis_block', { quantity: 'ALL' }), /SELL ALL is disabled/);
+});
+
 test('repeated sells keep one /kho sell session across source-less GUI transitions', async () => {
     let current = null;
     let sends = 0;
@@ -252,4 +268,84 @@ test('repeated sells keep one /kho sell session across source-less GUI transitio
     assert.equal(clicks, 3);
     assert.equal(current.source.command, '/kho sell');
     assert.equal(current.source.commandKey, 'storageSell');
+});
+
+
+test('close() does not close an unrelated /kho session when Sell GUI was never owned', async () => {
+    let closes = 0;
+    const current = makeSession({ id: 99, title: 'ᴋʜᴏ ᴄʜứᴀ', slots: [] }, { commandKey: 'storage', command: '/kho' });
+    const operation = new KhoSellOperation({
+        commandService: {},
+        guiManager: {
+            current() { return current; },
+            async closeCurrentWindow() { closes += 1; }
+        },
+        reader: {},
+        config: { sell: { commandKey: 'storageSell', closeSettleMs: 0 } }
+    });
+
+    const closed = await operation.close();
+    assert.equal(closed, false);
+    assert.equal(closes, 0);
+});
+
+test('close() closes an explicitly owned /kho sell session', async () => {
+    let closes = 0;
+    const current = makeSession({ id: 100, title: 'Kho', slots: [] }, { commandKey: 'storageSell', command: '/kho sell' });
+    const operation = new KhoSellOperation({
+        commandService: {},
+        guiManager: {
+            current() { return current; },
+            async closeCurrentWindow() { closes += 1; }
+        },
+        reader: {},
+        config: { sell: { commandKey: 'storageSell', closeSettleMs: 0 } }
+    });
+
+    const closed = await operation.close();
+    assert.equal(closed, true);
+    assert.equal(closes, 1);
+});
+
+test('Sell GUI transition with unreliable amount returns unverified evidence requiring fresh /kho', async () => {
+    let current = null;
+    const session = makeSession({ id: 301, title: 'Kho', slots: [] });
+    const operation = new KhoSellOperation({
+        commandService: { async send() { current = session; return { success: true }; } },
+        guiManager: {
+            current() { return current; }, syncCurrentWindow() { return current; },
+            markCurrent(source) { current?.setSource(source); return current; },
+            async closeCurrentWindow() { current = null; },
+            async clickAndWaitForTransition() { return current; }
+        },
+        reader: { read() { return { entries: { coal_block: { logicalId: 'coal_block', slot: 11, amount: null, amountReliable: false } } }; } },
+        config: { guiTimeoutMs: 100, sell: { enabled: true, commandKey: 'storageSell', allowAll: false, resultDelayMs: 0, openSettleMs: 0, closeSettleMs: 0, openPollMs: 5, openAttempts: 1, itemAliases: { coal_block: 'COAL_BLOCK' } } }
+    });
+    const result = await operation.execute('coal_block', { quantity: 64 });
+    assert.equal(result.transitioned, true);
+    assert.equal(result.verification.verified, false);
+    assert.equal(result.verification.verifiedSoldQuantity, null);
+    assert.equal(result.verification.requiresFreshStorage, true);
+});
+
+test('Sell GUI reliable partial amount returns only the observed delta as verified quantity', async () => {
+    let current = null;
+    let reads = 0;
+    const session = makeSession({ id: 302, title: 'Kho', slots: [] });
+    const operation = new KhoSellOperation({
+        commandService: { async send() { current = session; return { success: true }; } },
+        guiManager: {
+            current() { return current; }, syncCurrentWindow() { return current; },
+            markCurrent(source) { current?.setSource(source); return current; },
+            async closeCurrentWindow() { current = null; },
+            async clickAndWaitForTransition() { return current; }
+        },
+        reader: { read() { reads += 1; return { entries: { coal_block: { logicalId: 'coal_block', slot: 11, amount: reads <= 2 ? 200 : 168, amountReliable: true } } }; } },
+        config: { guiTimeoutMs: 100, sell: { enabled: true, commandKey: 'storageSell', allowAll: false, resultDelayMs: 0, openSettleMs: 0, closeSettleMs: 0, openPollMs: 5, openAttempts: 1, itemAliases: { coal_block: 'COAL_BLOCK' } } }
+    });
+    const result = await operation.execute('coal_block', { quantity: 64 });
+    assert.equal(result.verification.verified, true);
+    assert.equal(result.verification.verifiedSoldQuantity, 32);
+    assert.equal(result.verification.requestedQuantity, 64);
+    assert.equal(result.amountDelta, 32);
 });

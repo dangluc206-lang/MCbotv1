@@ -1,5 +1,0 @@
-{
-  "stuckThresholdMs": 5000,
-  "minimumMovement": 0.3,
-  "maxFallDistance": 4
-}

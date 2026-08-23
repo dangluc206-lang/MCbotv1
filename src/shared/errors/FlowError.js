@@ -64,6 +64,20 @@ class FlowError extends AppError {
 
     static wrap(error, context = {}) {
         if (error instanceof FlowError) {
+            const outerTrace = clean({
+                code: context.code || null,
+                subsystem: context.subsystem || null,
+                operation: context.operation || null,
+                step: context.step || null,
+                action: context.action || null,
+                resource: context.resource || null
+            });
+            const trace = [
+                ...(Array.isArray(error.trace) ? error.trace : []),
+                ...(Object.values(outerTrace || {}).some(value => value !== null && value !== undefined)
+                    ? [{ wrappedBy: outerTrace }]
+                    : [])
+            ];
             const merged = {
                 subsystem: context.subsystem ?? error.subsystem,
                 operation: context.operation ?? error.operation,
@@ -73,18 +87,28 @@ class FlowError extends AppError {
                 retryable: context.retryable ?? error.retryable,
                 attempt: context.attempt ?? error.attempt,
                 details: { ...(error.details || {}), ...(context.details || {}) },
-                trace: context.trace ?? error.trace,
+                trace,
                 cause: error.cause
             };
             const wrapped = new FlowError(context.message || error.message, {
-                code: context.code || error.code,
+                // A wrapper may add outer workflow context, but it must not erase
+                // a leaf domain code used by Result/status classification.
+                code: error.code || context.code || 'FLOW_STEP_FAILED',
                 ...merged
             });
             if (error.stack) wrapped.stack = error.stack;
             return wrapped;
         }
+        const leafCode = error?.code || null;
+        const outerCode = context.code || null;
+        // Generic timeout/cancellation leaves remain terminal, but a wrapper may
+        // specialize TIMEOUT into an explicit domain timeout code. Generic failure
+        // wrappers must never turn TIMEOUT into *_FAILED.
+        const code = leafCode === 'TIMEOUT' && typeof outerCode === 'string' && /_TIMEOUT$/.test(outerCode)
+            ? outerCode
+            : (leafCode || outerCode || 'FLOW_STEP_FAILED');
         return new FlowError(context.message || error?.message || String(error || 'Flow failed.'), {
-            code: context.code || error?.code || 'FLOW_STEP_FAILED',
+            code,
             subsystem: context.subsystem || null,
             operation: context.operation || null,
             step: context.step || null,

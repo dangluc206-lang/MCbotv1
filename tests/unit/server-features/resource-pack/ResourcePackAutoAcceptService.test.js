@@ -58,3 +58,39 @@ test('cleans listener on connection end', async () => {
     assert.equal(accepted, 0);
     await service.destroy();
 });
+
+test('old client resourcePack callback cannot publish ready for a replacement generation', async () => {
+    const eventBus = new EventBus();
+    const oldClient = new EventEmitter();
+    const newClient = new EventEmitter();
+    let client = oldClient;
+    let generation = 1;
+    let oldAccepted = 0;
+    let newAccepted = 0;
+    oldClient.acceptResourcePack = () => { oldAccepted += 1; };
+    newClient.acceptResourcePack = () => { newAccepted += 1; };
+    const context = {
+        get: () => client,
+        has: () => Boolean(client),
+        getGeneration: () => generation
+    };
+    const ready = [];
+    const service = new ResourcePackAutoAcceptService({ botId: 'bot-01', context, eventBus });
+    eventBus.on('resource-pack:ready', event => ready.push(event.connectionGeneration));
+    await service.initialize();
+    eventBus.emit('connection:client-attached', { botId: 'bot-01', connectionGeneration: 1 });
+
+    client = newClient;
+    generation = 2;
+    eventBus.emit('connection:client-attached', { botId: 'bot-01', connectionGeneration: 2 });
+    oldClient.emit('resourcePack', 'https://example.invalid/old.zip', 'old');
+    newClient.emit('resourcePack', 'https://example.invalid/new.zip', 'new');
+
+    assert.equal(oldAccepted, 0);
+    assert.equal(newAccepted, 1);
+    assert.deepEqual(ready, [2]);
+    assert.equal(oldClient.listenerCount('resourcePack'), 0);
+    assert.equal(newClient.listenerCount('resourcePack'), 1);
+    await service.destroy();
+    assert.equal(newClient.listenerCount('resourcePack'), 0);
+});

@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-08-23",
+  "adapter": "src/modes/legacy/LegacyModeAdapter.js",
+  "modes": [
+    {
+      "modeId": "collector-b5",
+      "legacySource": "src/modes/collector-b5/CollectorB5ModeService.js",
+      "migrationState": "STRANGLER_TASK_LIFECYCLE_CONVERGED",
+      "genericBoundary": [
+        "RuntimeModeRegistry",
+        "ModeControlService",
+        "ModeContext capability readiness",
+        "BotRuntime public service name resolves to LegacyModeAdapter; raw gameplay service remains lifecycle-internal",
+        "ModeLeaseSession shared with ManagedMode owns exact acquire/pause/resume/release/isHeld mechanics",
+        "TaskSupervisor owns main-loop cancellation lifetime plus bounded restart scheduling; domain recovery decisions remain mode-local"
+      ],
+      "remainingOwners": [
+        "Collector+B5 gameplay orchestration and domain recovery decisions"
+      ],
+      "exitTrigger": "Migrate another orchestration/task slice only when parity fixtures prove equivalent domain decision/recovery behavior; do not duplicate B5 policy."
+    },
+    {
+      "modeId": "fishing",
+      "legacySource": "src/modes/fishing/FishingModeService.js",
+      "migrationState": "STRANGLER_TASK_LIFECYCLE_CONVERGED",
+      "genericBoundary": [
+        "RuntimeModeRegistry",
+        "ModeControlService",
+        "ModeContext capability readiness",
+        "BotRuntime public service name resolves to LegacyModeAdapter; raw gameplay service remains lifecycle-internal",
+        "ModeLeaseSession shared with ManagedMode owns exact acquire/pause/resume/release/isHeld mechanics",
+        "TaskSupervisor owns main-loop cancellation lifetime plus bounded restart scheduling; domain recovery decisions remain mode-local"
+      ],
+      "remainingOwners": [
+        "Fishing gameplay orchestration and domain recovery decisions"
+      ],
+      "explicitProtocolException": "ConnectionPacketObserver remains the catalogued raw protocol owner; private fishing packet handling is not generalized.",
+      "exitTrigger": "Migrate another orchestration/task slice only when parity fixtures prove equivalent domain decision/recovery behavior. A second proven protocol consumer plus ADR is still required before extracting raw packet ownership."
+    }
+  ],
+  "sharedLeasePrimitive": "src/modes/ModeLeaseSession.js",
+  "sharedTaskSupervisor": "src/core/TaskSupervisor.js"
+}

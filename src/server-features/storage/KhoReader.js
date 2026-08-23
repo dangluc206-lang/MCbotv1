@@ -8,6 +8,12 @@ class KhoReader {
         Object.assign(this, { itemResolver, capacityReader, config, textParser });
     }
 
+    reconfigure(config) {
+        this.config = config || {};
+        this.capacityReader?.reconfigure?.(this.config);
+        return this;
+    }
+
     read(window) {
         const items = {};
         const sources = {};
@@ -43,16 +49,34 @@ class KhoReader {
 
         let capacity = this.capacityReader.read(window);
         const fallbackLimit = Number(this.config?.capacityIndicator?.fallbackLimit);
+        const itemUsed = Object.values(items).reduce((sum, amount) => {
+            const value = Number(amount);
+            return sum + (Number.isFinite(value) && value > 0 ? value : 0);
+        }, 0);
+
+        // Capacity text is advisory until it is internally consistent with the
+        // resource totals parsed from the same /kho window. A server revision
+        // can expose only percentages (for example "Đã sử dụng: 100.0%");
+        // older parsing interpreted 100.0 as the integer 1000. Reject any
+        // absolute telemetry that cannot even contain the visible item totals.
+        const parsedUsed = Number(capacity?.used);
+        const parsedFree = Number(capacity?.free);
+        const parsedLimit = Number(capacity?.limit ?? capacity?.total);
         const hasUsableRatio = Number.isFinite(Number(capacity?.usageRatio));
-        if (!hasUsableRatio && Number.isSafeInteger(fallbackLimit) && fallbackLimit > 0) {
+        const capacityContradictsItems = hasUsableRatio && (
+            (Number.isFinite(parsedUsed) && parsedUsed + 1e-9 < itemUsed)
+            || (Number.isFinite(parsedLimit) && parsedLimit + 1e-9 < itemUsed)
+            || (Number.isFinite(parsedUsed) && Number.isFinite(parsedFree) && Number.isFinite(parsedLimit)
+                && Math.abs((parsedUsed + parsedFree) - parsedLimit) > 1)
+        );
+        if (capacityContradictsItems) capacity = null;
+
+        if ((!Number.isFinite(Number(capacity?.usageRatio))) && Number.isSafeInteger(fallbackLimit) && fallbackLimit > 0) {
             // On this server /kho used-capacity is the sum of the stored item
             // amounts. Keep protection alive across cosmetic/layout changes of
             // the capacity indicator by deriving used from the same parsed item
             // telemetry, but mark it as derived so diagnostics can expose it.
-            const used = Object.values(items).reduce((sum, amount) => {
-                const value = Number(amount);
-                return sum + (Number.isFinite(value) && value > 0 ? value : 0);
-            }, 0);
+            const used = itemUsed;
             const free = Math.max(0, fallbackLimit - used);
             capacity = Object.freeze({
                 used,
@@ -62,7 +86,8 @@ class KhoReader {
                 usedPercent: (used / fallbackLimit) * 100,
                 freePercent: (free / fallbackLimit) * 100,
                 usageRatio: used / fallbackLimit,
-                derivedFromItems: true
+                derivedFromItems: true,
+                rejectedTelemetry: capacityContradictsItems
             });
         }
 

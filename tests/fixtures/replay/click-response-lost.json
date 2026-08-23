@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "name": "click applied but response lost",
+  "clockStartMs": 2000,
+  "runtime": {
+    "botId": "fault-fixture-bot",
+    "minimumCommandIntervalMs": 0
+  },
+  "faults": [
+    {
+      "id": "response-lost-after-click",
+      "match": {
+        "operation": "craft.quantity.click",
+        "path": "window:ks/slot:12"
+      },
+      "effect": {
+        "type": "after-error",
+        "code": "RESPONSE_LOST",
+        "message": "synthetic response loss"
+      }
+    }
+  ],
+  "entries": [
+    {
+      "id": "attach",
+      "atMs": 0,
+      "kind": "action",
+      "name": "connection.attach",
+      "payload": { "clientId": "fixture-client" }
+    },
+    {
+      "id": "open",
+      "atMs": 0,
+      "kind": "action",
+      "name": "gui.open",
+      "payload": { "windowId": "ks", "slotCount": 54 }
+    },
+    {
+      "id": "click",
+      "atMs": 1,
+      "kind": "action",
+      "name": "gui.click",
+      "payload": {
+        "slot": 12,
+        "operation": "craft.quantity.click",
+        "path": "window:ks/slot:12"
+      },
+      "expect": { "status": "rejected", "errorCode": "RESPONSE_LOST" }
+    },
+    {
+      "id": "snapshot",
+      "atMs": 2,
+      "kind": "action",
+      "name": "state.snapshot",
+      "payload": {}
+    }
+  ]
+}

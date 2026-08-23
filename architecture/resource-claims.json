@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "modeClaims": {
+    "primary-mode": {
+      "owner": "ModeCoordinator",
+      "reason": "Current production modes are mutually exclusive; this is the only proven cross-mode claim."
+    }
+  },
+  "operationClaims": {
+    "gui": { "owner": "OperationManager", "conflictsWith": ["gui"] },
+    "inventory": { "owner": "OperationManager", "conflictsWith": ["inventory"] },
+    "movement": { "owner": "OperationManager", "conflictsWith": ["movement"] },
+    "server-command": { "owner": "OperationManager", "conflictsWith": ["server-command"] }
+  },
+  "rules": {
+    "modeAcquire": "atomic-all-or-none",
+    "staleRelease": "lease-id-rejected",
+    "multiResourceOrder": "lexicographic-normalization",
+    "globalBooleanLocks": false
+  }
+}
