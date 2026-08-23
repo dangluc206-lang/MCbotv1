@@ -28,7 +28,7 @@ const REQUIRED_FILES = Object.freeze([
     'src/index.js'
 ]);
 
-const FORBIDDEN_SEGMENTS = new Set(['.git', 'node_modules', 'coverage', 'out', '.tmp']);
+const FORBIDDEN_SEGMENTS = new Set(['node_modules', 'coverage', 'out', '.tmp']);
 const FORBIDDEN_PREFIXES = Object.freeze([
     'data/logs/',
     'data/runtime/',

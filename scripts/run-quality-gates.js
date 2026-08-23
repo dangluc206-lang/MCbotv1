@@ -153,9 +153,8 @@ function fastGateDefinitions() {
         () => runNodeTests('fleet-control-status', 'POST-P5', 'Fleet reconciliation preserves timeout/disconnect result semantics', [
             'tests/unit/recovery/FleetControlService.test.js'
         ]),
-        () => runNodeTests('update-safety', 'WP-003', 'Runtime configuration transaction/fault closure, updater ownership and staged-file integrity', [
+        () => runNodeTests('update-safety', 'WP-003', 'Runtime configuration transaction/fault closure and local staged-file integrity', [
             'tests/unit/desktop/RuntimeConfigMigrator.test.js',
-            'tests/unit/desktop/GitHubUpdateService.test.js',
             'tests/unit/desktop/LocalZipUpdateService.test.js',
             'tests/unit/desktop/LocalUpdateHelper.test.js'
         ]),

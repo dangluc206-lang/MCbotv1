@@ -4,9 +4,9 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 
-const DEFAULT_IGNORED_DIRS = new Set(['.git', 'node_modules', 'data', 'out', 'dist', 'build', 'coverage', '.cache']);
+const DEFAULT_IGNORED_DIRS = new Set(['node_modules', 'data', 'out', 'dist', 'build', 'coverage', '.cache']);
 const ALLOWED_EXTENSIONS = new Set(['.js', '.cjs', '.mjs', '.json', '.md', '.txt', '.html', '.css', '.yml', '.yaml', '.toml', '.cmd', '.ps1', '.sh']);
-const ALWAYS_ALLOWED = new Set(['package-lock.json', 'package.json', '.gitignore']);
+const ALWAYS_ALLOWED = new Set(['package-lock.json', 'package.json']);
 
 function unix(value) { return String(value || '').replace(/\\/g, '/'); }
 
@@ -71,7 +71,7 @@ class ProjectWorkspace {
                 const rel = unix(path.relative(this.root, absolute));
                 const currentDepth = rel.split('/').filter(Boolean).length - baseDepth;
                 if (entry.isDirectory()) {
-                    if (DEFAULT_IGNORED_DIRS.has(entry.name) || currentDepth >= Math.max(0, Number(depth) || 0)) continue;
+                    if (entry.name.startsWith('.') || DEFAULT_IGNORED_DIRS.has(entry.name) || currentDepth >= Math.max(0, Number(depth) || 0)) continue;
                     await walk(absolute);
                     continue;
                 }
@@ -168,7 +168,7 @@ class ProjectWorkspace {
     #assertSafeRelative(relativePath) {
         const normalized = unix(relativePath);
         const segments = normalized.split('/').filter(Boolean);
-        if (segments.some(segment => DEFAULT_IGNORED_DIRS.has(segment))) throw this.#pathError(`Path is excluded from AI workspace: ${normalized}`);
+        if (segments.some(segment => segment.startsWith('.') || DEFAULT_IGNORED_DIRS.has(segment))) throw this.#pathError(`Path is excluded from AI workspace: ${normalized}`);
         const lower = normalized.toLowerCase();
         const basename = path.posix.basename(lower);
         const blockedFiles = new Set(['tk.env', 'secrets.json', 'credentials.json', 'credential.json', 'tokens.json', 'token.json']);

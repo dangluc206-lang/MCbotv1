@@ -8,7 +8,6 @@ const { spawn } = require('node:child_process');
 const DesktopController = require('./DesktopController');
 const DesktopSecretStore = require('./DesktopSecretStore');
 const DesktopPreferenceStore = require('./DesktopPreferenceStore');
-const GitHubUpdateService = require('./update/GitHubUpdateService');
 const LocalZipUpdateService = require('./update/LocalZipUpdateService');
 require('./update/local-update-helper');
 const localUpdateHelperPath = require.resolve('./update/local-update-helper');
@@ -33,10 +32,8 @@ let snapshotTimer = null;
 let powerBlockerId = null;
 let lastSnapshot = null;
 let windowStateTimer = null;
-let updateService = null;
 let localUpdateService = null;
 let runtimeMigrator = null;
-let automaticUpdateTimer = null;
 let aiService = null;
 const notificationHistory = new Map();
 const launchedHidden = process.argv.includes('--hidden');
@@ -71,65 +68,6 @@ async function prepareRuntimeDirectory() {
     if (report?.warnings?.length) console.warn('[MCbot migration] Cấu hình có cảnh báo khi migration:', report.warnings);
     return target;
 }
-
-function publishUpdateStatus() {
-    const status = updateService?.status?.() || null;
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mcbot:update:status', status);
-    return status;
-}
-
-async function checkForUpdates({ automatic = false } = {}) {
-    if (!updateService) throw new Error('Dịch vụ cập nhật chưa sẵn sàng.');
-    const status = await updateService.check();
-    publishUpdateStatus();
-    if (automatic && status.available && preferenceStore?.get('autoDownloadUpdates')) {
-        const downloaded = await updateService.download();
-        publishUpdateStatus();
-        if (downloaded.downloaded && preferenceStore?.get('autoInstallUpdatesWhenIdle') && app.isPackaged && process.platform === 'win32') {
-            const snapshot = controller?.snapshot?.();
-            const busy = snapshot?.lifecycle === 'STARTING' || snapshot?.lifecycle === 'STOPPING'
-                || (snapshot?.bots || []).some(bot => bot.modeOwner || ['CONNECTED','CONNECTING','RECONNECTING'].includes(bot.state?.connectionState));
-            if (!busy) await installDownloadedUpdate({ automatic: true });
-        }
-    }
-    return status;
-}
-
-async function installDownloadedUpdate({ automatic = false } = {}) {
-    if (!app.isPackaged || process.platform !== 'win32') throw new Error('Cài cập nhật tự động chỉ khả dụng trên bản MCbot đã cài trên Windows.');
-    const status = updateService?.status?.();
-    if (!status?.downloaded || !status.downloadedPath || !fs.existsSync(status.downloadedPath)) throw new Error('Chưa tải xong MCbot Setup.exe của bản cập nhật.');
-    const release = status.release;
-    let backup = null;
-    if (controller?.lifecycle === 'RUNNING') backup = await controller.backupConfig();
-    if (controller && controller.lifecycle !== 'STOPPED') await controller.stop('Đang chuẩn bị cài bản cập nhật phần mềm.');
-    const verifiedInstaller = await updateService.verifyDownloadedArtifact();
-    const installRecord = {
-        fromVersion: app.getVersion(),
-        toVersion: release?.version || null,
-        requestedAt: new Date().toISOString(),
-        automatic: Boolean(automatic),
-        configBackup: backup?.path || null,
-        installer: verifiedInstaller.path,
-        installerSize: verifiedInstaller.size,
-        installerDigest: verifiedInstaller.digest
-    };
-    const recordPath = path.join(app.getPath('userData'), 'pending-update.json');
-    await fs.promises.writeFile(recordPath, `${JSON.stringify(installRecord, null, 2)}
-`, 'utf8');
-    const child = spawn(verifiedInstaller.path, [], { detached: true, stdio: 'ignore', windowsHide: false });
-    await new Promise((resolve, reject) => {
-        child.once('spawn', resolve);
-        child.once('error', reject);
-    }).catch(error => {
-        notify('Cập nhật MCbot', `Không thể mở bộ cài: ${error.message}`, 'update-installer-launch');
-        throw error;
-    });
-    child.unref();
-    setTimeout(() => app.quit(), 200).unref?.();
-    return { launched: true, release: release?.version || null, backup: backup?.path || null };
-}
-
 
 async function selectLocalUpdateZip() {
     if (!localUpdateService) throw new Error('Dịch vụ cập nhật ZIP chưa sẵn sàng.');
@@ -281,25 +219,12 @@ function registerIpc() {
     safeHandle('mcbot:profiles:clone', (botId, newId) => controller.cloneProfile(botId, newId));
     safeHandle('mcbot:profiles:delete', botId => controller.deleteProfile(botId));
     safeHandle('mcbot:app:info', () => ({ version: app.getVersion(), name: app.getName(), packaged: app.isPackaged, platform: process.platform, arch: process.arch }));
-    safeHandle('mcbot:update:status', () => updateService?.status?.() || null);
-    safeHandle('mcbot:update:check', () => checkForUpdates({ automatic: false }));
-    safeHandle('mcbot:update:download', async () => { const value = await updateService.download(); publishUpdateStatus(); return value; });
-    safeHandle('mcbot:update:install', () => installDownloadedUpdate({ automatic: false }));
-    safeHandle('mcbot:update:clear-download', async () => { const value = await updateService.clearDownloaded(); publishUpdateStatus(); return value; });
     safeHandle('mcbot:update:migration-status', () => runtimeMigrator?.status?.() || null);
     safeHandle('mcbot:update:rollback-config', () => rollbackLastConfigMigration());
     safeHandle('mcbot:update:local-status', () => localUpdateService?.status?.() || null);
     safeHandle('mcbot:update:local-select', () => selectLocalUpdateZip());
     safeHandle('mcbot:update:local-clear', () => localUpdateService?.clear?.());
     safeHandle('mcbot:update:local-install', () => installLocalUpdateZip());
-    safeHandle('mcbot:update:open-release', async () => {
-        const target = updateService?.status?.().release?.htmlUrl;
-        if (!target) throw new Error('Không có trang bản phát hành để mở.');
-        const parsed = new URL(target);
-        if (parsed.protocol !== 'https:' || parsed.hostname !== 'github.com') throw new Error('Đường dẫn bản phát hành không được tin cậy.');
-        await shell.openExternal(target);
-        return { opened: true };
-    });
     safeHandle('mcbot:ai:status', options => aiService.status(options || {}));
     safeHandle('mcbot:ai:workspace:select', async () => {
         const result = await dialog.showOpenDialog(mainWindow || undefined, {
@@ -360,11 +285,9 @@ function registerIpc() {
     safeHandle('mcbot:preferences:set', async patch => {
         const values = await preferenceStore.update(patch || {});
         const loginItem = applyLoginItemSetting(values.launchAtLogin);
-        updateService?.configure?.({ repository: values.updateRepository, channel: values.updateChannel });
         updateTray();
         updatePowerBlocker();
         scheduleSnapshotLoop(true);
-        publishUpdateStatus();
         return { ...values, loginItem };
     });
     safeHandle('mcbot:shell:project', () => openPathChecked(runtimeDir));
@@ -526,14 +449,6 @@ if (hasSingleInstanceLock) {
         preferenceStore = new DesktopPreferenceStore({ filePath: path.join(app.getPath('userData'), 'preferences.json') });
         await preferenceStore.load();
         applyLoginItemSetting(preferenceStore.get('launchAtLogin'));
-        updateService = new GitHubUpdateService({
-            currentVersion: app.getVersion(),
-            repository: preferenceStore.get('updateRepository'),
-            trustedRepository: DesktopPreferenceStore.DEFAULTS.updateRepository,
-            channel: preferenceStore.get('updateChannel'),
-            updatesDir: path.join(app.getPath('userData'), 'updates')
-        });
-        updateService.on('status', () => publishUpdateStatus());
         localUpdateService = new LocalZipUpdateService({
             currentVersion: app.getVersion(),
             applicationRoot: templateRoot,
@@ -561,16 +476,6 @@ if (hasSingleInstanceLock) {
             try { await controller.start(); } catch (error) { reportDesktopFailure(error, 'backend-autostart'); }
             publishSnapshot();
         }
-        if (app.isPackaged && preferenceStore.get('autoCheckUpdates')) {
-            automaticUpdateTimer = setTimeout(() => {
-                automaticUpdateTimer = null;
-                checkForUpdates({ automatic: true }).catch(error => {
-                    controller?.reportRendererError?.({ message: `Kiểm tra cập nhật tự động thất bại: ${error.message}`, source: 'update-auto-check' });
-                    publishUpdateStatus();
-                });
-            }, 8000);
-            automaticUpdateTimer.unref?.();
-        }
         app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); else showMainWindow(); });
     });
 }
@@ -582,7 +487,6 @@ app.on('before-quit', event => {
     runDesktopShutdownSequence({
         cleanupSchedulers: () => {
             if (snapshotTimer) { clearTimeout(snapshotTimer); snapshotTimer = null; }
-            if (automaticUpdateTimer) { clearTimeout(automaticUpdateTimer); automaticUpdateTimer = null; }
             if (windowStateTimer) { clearTimeout(windowStateTimer); windowStateTimer = null; }
             if (powerBlockerId !== null) { powerSaveBlocker.stop(powerBlockerId); powerBlockerId = null; }
         },

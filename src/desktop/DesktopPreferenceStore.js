@@ -12,12 +12,7 @@ const DEFAULTS = Object.freeze({
     preventSystemSleepWhileActive: true,
     launchAtLogin: false,
     windowBounds: null,
-    windowMaximized: false,
-    autoCheckUpdates: true,
-    autoDownloadUpdates: false,
-    autoInstallUpdatesWhenIdle: false,
-    updateChannel: 'stable',
-    updateRepository: 'dangluc206-lang/MCbotv1'
+    windowMaximized: false
 });
 
 class DesktopPreferenceStore {
@@ -55,14 +50,14 @@ class DesktopPreferenceStore {
 
     async set(key, value) {
         if (!Object.prototype.hasOwnProperty.call(this.defaults, key)) {
-            throw new Error(`Unknown desktop preference: ${key}`);
+            throw new Error('Unknown desktop preference: ' + key);
         }
         return this.#enqueueMutation({ [key]: value });
     }
 
     async update(patch = {}) {
         const unknown = Object.keys(patch).filter(key => !Object.prototype.hasOwnProperty.call(this.defaults, key));
-        if (unknown.length) throw new Error(`Unknown desktop preference(s): ${unknown.join(', ')}`);
+        if (unknown.length) throw new Error('Unknown desktop preference(s): ' + unknown.join(', '));
         return this.#enqueueMutation(patch);
     }
 
@@ -95,14 +90,7 @@ class DesktopPreferenceStore {
             preventSystemSleepWhileActive: input.preventSystemSleepWhileActive !== false,
             launchAtLogin: input.launchAtLogin === true,
             windowBounds,
-            windowMaximized: input.windowMaximized === true,
-            autoCheckUpdates: input.autoCheckUpdates !== false,
-            autoDownloadUpdates: input.autoDownloadUpdates === true,
-            autoInstallUpdatesWhenIdle: input.autoInstallUpdatesWhenIdle === true,
-            updateChannel: ['stable', 'beta'].includes(String(input.updateChannel || '').toLowerCase()) ? String(input.updateChannel).toLowerCase() : DEFAULTS.updateChannel,
-            updateRepository: String(input.updateRepository || '').trim().toLowerCase() === DEFAULTS.updateRepository.toLowerCase()
-                ? DEFAULTS.updateRepository
-                : DEFAULTS.updateRepository
+            windowMaximized: input.windowMaximized === true
         };
     }
 
@@ -120,10 +108,10 @@ class DesktopPreferenceStore {
 
     async #persist(values) {
         await this.fs.mkdir(path.dirname(this.filePath), { recursive: true });
-        const temporary = `${this.filePath}.${process.pid}.${this.idFactory()}.tmp`;
+        const temporary = this.filePath + '.' + process.pid + '.' + this.idFactory() + '.tmp';
         this.lastCleanupWarning = null;
         try {
-            await this.fs.writeFile(temporary, `${JSON.stringify(values, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+            await this.fs.writeFile(temporary, JSON.stringify(values, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 });
             await this.fs.rename(temporary, this.filePath);
         } finally {
             try {
@@ -140,5 +128,4 @@ class DesktopPreferenceStore {
 }
 
 DesktopPreferenceStore.DEFAULTS = DEFAULTS;
-
 module.exports = DesktopPreferenceStore;

@@ -24,7 +24,6 @@ const state = {
   customModes: [],
   customModules: [],
   customDraft: null,
-  updateStatus: null,
   localUpdate: null,
   updateMigration: null,
   ai: { workspace: null, models: [], messages: [], trace: [], busy: false }
@@ -717,57 +716,30 @@ async function loadPreferences() {
     $('#prefPreventSleep').checked = state.preferences.preventSystemSleepWhileActive !== false;
     $('#prefLaunchAtLogin').checked = state.preferences.launchAtLogin === true;
     $('#prefLaunchAtLogin').disabled = state.preferences.loginItem?.supported === false;
-    $('#prefAutoCheckUpdates').checked = state.preferences.autoCheckUpdates !== false;
-    $('#prefAutoDownloadUpdates').checked = state.preferences.autoDownloadUpdates === true;
-    $('#prefAutoInstallUpdates').checked = state.preferences.autoInstallUpdatesWhenIdle === true;
-    $('#prefUpdateRepository').value = state.preferences.updateRepository || 'dangluc206-lang/MCbotv1';
-    $('#prefUpdateChannel').value = state.preferences.updateChannel || 'stable';
     const interval = String(state.preferences.snapshotIntervalMs || 900);
     if ([...$('#prefSnapshotInterval').options].some(option => option.value === interval)) $('#prefSnapshotInterval').value = interval;
     renderFreshness();
   } catch (error) { toast(error.message, 'error'); }
 }
 
-function viUpdatePhase(phase) {
-  return ({ IDLE:'Chưa kiểm tra', CHECKING:'Đang kiểm tra', AVAILABLE:'Có bản mới', UP_TO_DATE:'Đã mới nhất', DOWNLOADING:'Đang tải', DOWNLOADED:'Sẵn sàng cài', ERROR:'Lỗi' })[String(phase || '').toUpperCase()] || String(phase || 'Chưa kiểm tra');
-}
-
 function renderUpdateStatus() {
-  const status = state.updateStatus || {};
   const local = state.localUpdate || {};
-  $('#updateCurrentVersion').textContent = local.currentVersion || status.currentVersion || state.appInfo?.version || '—';
+  $('#updateCurrentVersion').textContent = local.currentVersion || state.appInfo?.version || '—';
   $('#localUpdateState').textContent = ({ IDLE:'Chưa chọn', INSPECTING:'Đang kiểm tra', READY:'Sẵn sàng', INSTALL_PENDING:'Đang chuẩn bị cài', ERROR:'Lỗi' })[String(local.phase || '').toUpperCase()] || String(local.phase || 'Chưa chọn');
   $('#localUpdateVersion').textContent = local.selected?.version || '—';
   $('#localUpdateFile').textContent = local.lastError?.message
-    || (local.selected ? `${local.selected.fileName} · ${local.selected.type === 'patch' ? 'Patch' : 'Full'} · ${local.selected.fileCount} file` : 'Chưa chọn gói cập nhật.');
-  $('#localUpdateNotes').textContent = local.selected?.notes?.length ? local.selected.notes.map(note => `• ${note}`).join('\n') : 'Chưa có ghi chú từ gói ZIP.';
+    || (local.selected ? local.selected.fileName + ' · ' + (local.selected.type === 'patch' ? 'Patch' : 'Full') + ' · ' + local.selected.fileCount + ' file' : 'Chưa chọn gói cập nhật.');
+  $('#localUpdateNotes').textContent = local.selected?.notes?.length ? local.selected.notes.map(note => '• ' + note).join('\n') : 'Chưa có ghi chú từ gói ZIP.';
   $('#installLocalUpdate').disabled = local.phase !== 'READY' || !local.selected;
   $('#clearLocalUpdate').disabled = !local.selected && local.phase !== 'ERROR';
-
-  $('#updateState').textContent = viUpdatePhase(status.phase);
-  $('#updateAvailableVersion').textContent = status.release?.version || '—';
-  $('#updateChannelLabel').textContent = state.preferences?.updateChannel === 'beta' ? 'Beta' : 'Ổn định';
-  const progress = status.progress || {};
-  const percent = Number.isFinite(Number(progress.percent)) ? Number(progress.percent) : 0;
-  $('#updateProgress').value = Math.max(0, Math.min(100, percent));
-  const size = value => Number.isFinite(Number(value)) ? `${(Number(value) / 1024 / 1024).toFixed(1)} MB` : '—';
-  $('#updateProgressText').textContent = status.phase === 'DOWNLOADING'
-    ? `Đang tải ${percent.toFixed(1)}% · ${size(progress.received)} / ${size(progress.total)}`
-    : status.lastError?.message || (status.downloaded ? 'Đã tải xong. Có thể cài và khởi động lại.' : status.checkedAt ? `Kiểm tra lúc ${new Date(status.checkedAt).toLocaleString('vi-VN')}` : 'Chưa có tác vụ cập nhật.');
-  $('#updateReleaseNotes').textContent = status.release?.notes || 'Chưa có ghi chú phát hành.';
-  $('#downloadUpdate').disabled = !status.available || status.phase === 'DOWNLOADING' || status.downloaded;
-  $('#installUpdate').disabled = !status.downloaded || state.appInfo?.packaged === false;
-  $('#openUpdateRelease').disabled = !status.release?.htmlUrl;
-  $('#checkUpdates').disabled = ['CHECKING','DOWNLOADING'].includes(status.phase);
   const migration = state.updateMigration;
-  $('#updateMigrationText').textContent = migration?.lastBackup ? `Backup migration gần nhất: ${migration.lastBackup}` : (state.appInfo?.packaged ? 'Chưa có backup migration.' : 'Migration cấu hình chỉ chạy trên bản đã cài.');
+  $('#updateMigrationText').textContent = migration?.lastBackup ? 'Backup migration gần nhất: ' + migration.lastBackup : (state.appInfo?.packaged ? 'Chưa có backup migration.' : 'Migration cấu hình chỉ chạy trên bản đã cài.');
   $('#rollbackConfigMigration').disabled = !migration?.lastBackup;
 }
 
 async function loadUpdateStatus() {
   try {
-    [state.updateStatus, state.localUpdate, state.updateMigration] = await Promise.all([
-      api(window.mcbot.updateStatus()),
+    [state.localUpdate, state.updateMigration] = await Promise.all([
       api(window.mcbot.localUpdateStatus()),
       api(window.mcbot.updateMigrationStatus())
     ]);
@@ -1246,15 +1218,10 @@ function bindEvents() {
   $('#aiNewChat').onclick = () => { state.ai.messages = []; state.ai.trace = []; renderAiMessages(); renderAiTrace(); $('#aiBusyText').textContent = 'Sẵn sàng.'; };
   $('#aiCopyLast').onclick = async () => { const last = [...state.ai.messages].reverse().find(message => message.role === 'assistant'); if (!last) return; await navigator.clipboard.writeText(last.content); toast('Đã sao chép trả lời AI.'); };
   $$('.ai-quick-actions [data-ai-prompt]').forEach(button => button.onclick = () => sendAiPrompt(button.dataset.aiPrompt).catch(error => toast(error.message, 'error')));
-
-  $('#checkUpdates').onclick = event => runAction({ key: 'update-check', button: event.currentTarget, success: null, refresh: false, fn: async () => { state.updateStatus = await api(window.mcbot.checkUpdates()); renderUpdateStatus(); toast(state.updateStatus.available ? `Có MCbot ${state.updateStatus.release?.version}.` : 'Bạn đang dùng phiên bản mới nhất.'); return state.updateStatus; } }).catch(() => {});
-  $('#downloadUpdate').onclick = event => runAction({ key: 'update-download', button: event.currentTarget, success: 'Đã tải bản cập nhật.', refresh: false, fn: async () => { state.updateStatus = await api(window.mcbot.downloadUpdate()); renderUpdateStatus(); return state.updateStatus; } }).catch(() => {});
-  $('#installUpdate').onclick = event => { if (!window.confirm('MCbot sẽ sao lưu cấu hình, dừng hệ thống nền, mở bộ cài và thoát để cập nhật. Tiếp tục?')) return; runAction({ key: 'update-install', button: event.currentTarget, success: 'Đã mở bộ cài cập nhật.', refresh: false, fn: () => api(window.mcbot.installUpdate()) }).catch(() => {}); };
-  $('#openUpdateRelease').onclick = () => runAction({ key: 'update-release', refresh: false, fn: () => api(window.mcbot.openUpdateRelease()) }).catch(() => {});
   $('#rollbackConfigMigration').onclick = event => { if (!window.confirm('Khôi phục cấu hình từ backup migration gần nhất? Hệ thống nền có thể được khởi động lại.')) return; runAction({ key: 'update-rollback-config', button: event.currentTarget, success: 'Đã khôi phục cấu hình trước migration.', refresh: false, fn: async () => { const result = await api(window.mcbot.rollbackConfigMigration()); await loadUpdateStatus(); return result; } }).catch(() => {}); };
 
   $('#savePreferences').onclick = event => runAction({ key: 'save-preferences', button: event.currentTarget, success: 'Đã lưu tùy chọn phần mềm.', refresh: false, fn: async () => {
-    state.preferences = await api(window.mcbot.setPreferences({ closeToTray: $('#prefCloseToTray').checked, notifyErrors: $('#prefNotifyErrors').checked, startBackendOnLaunch: $('#prefAutoStart').checked, preventSystemSleepWhileActive: $('#prefPreventSleep').checked, launchAtLogin: $('#prefLaunchAtLogin').checked, snapshotIntervalMs: Number($('#prefSnapshotInterval').value), autoCheckUpdates: $('#prefAutoCheckUpdates').checked, autoDownloadUpdates: $('#prefAutoDownloadUpdates').checked, autoInstallUpdatesWhenIdle: $('#prefAutoInstallUpdates').checked, updateChannel: $('#prefUpdateChannel').value, updateRepository: $('#prefUpdateRepository').value.trim() }));
+    state.preferences = await api(window.mcbot.setPreferences({ closeToTray: $('#prefCloseToTray').checked, notifyErrors: $('#prefNotifyErrors').checked, startBackendOnLaunch: $('#prefAutoStart').checked, preventSystemSleepWhileActive: $('#prefPreventSleep').checked, launchAtLogin: $('#prefLaunchAtLogin').checked, snapshotIntervalMs: Number($('#prefSnapshotInterval').value) }));
     return { success: true };
   }}).catch(() => {});
 
@@ -1290,7 +1257,6 @@ async function initialize() {
   loadAiLocalSettings();
   switchPage(state.page);
   window.mcbot.onSnapshot(acceptSnapshot);
-  window.mcbot.onUpdateStatus(status => { state.updateStatus = status; renderUpdateStatus(); });
   window.mcbot.onLog(log => {
     state.logs.push(log);
     if (state.logs.length > 2500) state.logs.splice(0, state.logs.length - 2500);

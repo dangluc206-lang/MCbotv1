@@ -21,18 +21,12 @@ contextBridge.exposeInMainWorld('mcbot', Object.freeze({
     cloneProfile: (botId, newId) => invoke('mcbot:profiles:clone', botId, newId),
     deleteProfile: botId => invoke('mcbot:profiles:delete', botId),
     appInfo: () => invoke('mcbot:app:info'),
-    updateStatus: () => invoke('mcbot:update:status'),
-    checkUpdates: () => invoke('mcbot:update:check'),
-    downloadUpdate: () => invoke('mcbot:update:download'),
-    installUpdate: () => invoke('mcbot:update:install'),
     localUpdateStatus: () => invoke('mcbot:update:local-status'),
     selectLocalUpdateZip: () => invoke('mcbot:update:local-select'),
     clearLocalUpdateZip: () => invoke('mcbot:update:local-clear'),
     installLocalUpdateZip: () => invoke('mcbot:update:local-install'),
-    clearDownloadedUpdate: () => invoke('mcbot:update:clear-download'),
     updateMigrationStatus: () => invoke('mcbot:update:migration-status'),
     rollbackConfigMigration: () => invoke('mcbot:update:rollback-config'),
-    openUpdateRelease: () => invoke('mcbot:update:open-release'),
     aiStatus: options => invoke('mcbot:ai:status', options),
     selectAiWorkspace: () => invoke('mcbot:ai:workspace:select'),
     inspectAiWorkspace: workspaceRoot => invoke('mcbot:ai:workspace:inspect', workspaceRoot),
@@ -88,6 +82,5 @@ contextBridge.exposeInMainWorld('mcbot', Object.freeze({
     openBackupFolder: () => invoke('mcbot:shell:backups'),
     openSupportFolder: () => invoke('mcbot:shell:support'),
     onLog: listener => subscribe('mcbot:log', listener),
-    onSnapshot: listener => subscribe('mcbot:snapshot', listener),
-    onUpdateStatus: listener => subscribe('mcbot:update:status', listener)
+    onSnapshot: listener => subscribe('mcbot:snapshot', listener)
 }));

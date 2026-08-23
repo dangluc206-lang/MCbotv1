@@ -47,18 +47,6 @@ test('desktop main routes tray/update quits through before-quit and owns only on
     assert.equal((source.match(/quitting\s*=\s*true/g) || []).length, 1, 'only before-quit may mark final quit ownership');
 });
 
-
-test('desktop installer launch re-verifies downloaded artifact immediately before spawn', () => {
-    const source = fs.readFileSync(path.resolve(__dirname, '../../../src/desktop/main.js'), 'utf8');
-    const verifyIndex = source.indexOf('await updateService.verifyDownloadedArtifact()');
-    const spawnIndex = source.indexOf('spawn(verifiedInstaller.path');
-    assert.ok(verifyIndex >= 0, 'desktop install path must await updater artifact verification');
-    assert.ok(spawnIndex > verifyIndex, 'installer spawn must happen only after integrity verification');
-    assert.match(source, /installerDigest:\s*verifiedInstaller\.digest/);
-    assert.match(source, /installerSize:\s*verifiedInstaller\.size/);
-    assert.doesNotMatch(source, /spawn\(status\.downloadedPath/);
-});
-
 test('desktop local ZIP handoff rolls back prepared state and restores a previously running backend when helper launch fails', () => {
     const source = fs.readFileSync(path.resolve(__dirname, '../../../src/desktop/main.js'), 'utf8');
     const prepareIndex = source.indexOf('const prepared = await localUpdateService.prepareInstall');

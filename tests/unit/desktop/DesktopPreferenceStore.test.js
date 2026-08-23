@@ -20,12 +20,7 @@ test('DesktopPreferenceStore loads defaults, persists normalized preferences and
         preventSystemSleepWhileActive: true,
         launchAtLogin: false,
         windowBounds: null,
-        windowMaximized: false,
-        autoCheckUpdates: true,
-        autoDownloadUpdates: false,
-        autoInstallUpdatesWhenIdle: false,
-        updateChannel: 'stable',
-        updateRepository: 'dangluc206-lang/MCbotv1'
+        windowMaximized: false
     });
 
     assert.equal((await store.set('snapshotIntervalMs', 50)).snapshotIntervalMs, 400);
@@ -42,12 +37,7 @@ test('DesktopPreferenceStore loads defaults, persists normalized preferences and
         preventSystemSleepWhileActive: true,
         launchAtLogin: false,
         windowBounds: null,
-        windowMaximized: false,
-        autoCheckUpdates: true,
-        autoDownloadUpdates: false,
-        autoInstallUpdatesWhenIdle: false,
-        updateChannel: 'stable',
-        updateRepository: 'dangluc206-lang/MCbotv1'
+        windowMaximized: false
     });
 
     fs.rmSync(dir, { recursive: true, force: true });
@@ -61,8 +51,6 @@ test('DesktopPreferenceStore clamps large intervals while preserving other store
     const loaded = await store.load();
     assert.equal(loaded.snapshotIntervalMs, 5000);
     assert.equal(loaded.startBackendOnLaunch, false);
-    assert.equal(loaded.updateChannel, 'stable');
-    assert.equal(loaded.autoCheckUpdates, true);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -79,24 +67,6 @@ test('DesktopPreferenceStore normalizes persisted window state for safe restore'
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-
-test('DesktopPreferenceStore normalizes update channel/repository preferences', async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcbot-desktop-update-pref-'));
-    const filePath = path.join(dir, 'preferences.json');
-    const store = new DesktopPreferenceStore({ filePath });
-    await store.load();
-    const saved = await store.update({ updateChannel: 'beta', updateRepository: 'example/project', autoDownloadUpdates: true, autoInstallUpdatesWhenIdle: true });
-    assert.equal(saved.updateChannel, 'beta');
-    assert.equal(saved.updateRepository, 'dangluc206-lang/MCbotv1');
-    assert.equal(saved.autoDownloadUpdates, true);
-    assert.equal(saved.autoInstallUpdatesWhenIdle, true);
-    await fs.promises.writeFile(filePath, JSON.stringify({ updateChannel: 'nightly', updateRepository: 'bad repo' }));
-    const reloaded = new DesktopPreferenceStore({ filePath });
-    const normalized = await reloaded.load();
-    assert.equal(normalized.updateChannel, 'stable');
-    assert.equal(normalized.updateRepository, 'dangluc206-lang/MCbotv1');
-    fs.rmSync(dir, { recursive: true, force: true });
-});
 
 test('DesktopPreferenceStore serializes concurrent mutations and uses unique atomic temp files', async () => {
     const fsp = require('node:fs/promises');

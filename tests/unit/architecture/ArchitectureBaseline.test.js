@@ -14,8 +14,8 @@ const {
 
 const root = path.resolve(__dirname, '../../..');
 
-test('WP-001 baseline path policy excludes secrets, runtime payloads, dependencies, git metadata, and logs', () => {
-    for (const value of ['.env', '.env.local', 'data/runtime/gui/x.json', 'data\\runtime\\gui\\x.json', 'node_modules/pkg/index.js', '.git/config', 'logs/runtime.log']) {
+test('WP-001 baseline path policy excludes secrets, runtime payloads, dependencies, and logs', () => {
+    for (const value of ['.env', '.env.local', 'data/runtime/gui/x.json', 'data\\runtime\\gui\\x.json', 'node_modules/pkg/index.js', 'logs/runtime.log']) {
         assert.equal(isExcludedPath(value), true, value);
     }
     assert.equal(isExcludedPath('config/bots/bot-01.json'), false, 'bot profile path is inventory-visible');

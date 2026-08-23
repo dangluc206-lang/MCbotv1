@@ -62,7 +62,7 @@ class AiToolRegistry {
         }
         if (this.#allowed('DEVELOP')) {
             definitions.push(tool('run_check', 'Run one allowlisted verification command. Arbitrary shell commands are not supported.', {
-                check: { type: 'string', enum: ['validate_structure', 'validate_architecture', 'npm_test', 'git_status', 'git_diff', 'node_check', 'test_file'] },
+                check: { type: 'string', enum: ['validate_structure', 'validate_architecture', 'npm_test', 'node_check', 'test_file'] },
                 path: { type: 'string', description: 'Required only for node_check or test_file.' }
             }, ['check']));
         }
@@ -102,8 +102,6 @@ class AiToolRegistry {
             validate_structure: [process.execPath, ['scripts/validate-structure.js']],
             validate_architecture: [process.execPath, ['scripts/validate-architecture.js']],
             npm_test: [process.platform === 'win32' ? 'npm.cmd' : 'npm', ['test']],
-            git_status: ['git', ['status', '--short']],
-            git_diff: ['git', ['diff', '--']],
         };
         if (check === 'node_check' || check === 'test_file') {
             if (!args.path) throw new Error(`${check} requires path.`);

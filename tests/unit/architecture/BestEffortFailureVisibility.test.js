@@ -13,7 +13,6 @@ const files = [
     'src/core/TaskSupervisor.js',
     'src/modes/collector-b5/CollectorB5ModeService.js',
     'src/desktop/DesktopController.js',
-    'src/desktop/update/GitHubUpdateService.js',
     'src/desktop/update/LocalZipUpdateService.js',
     'src/desktop/update/local-update-helper.js',
     'src/shared/logger/RuntimeLogOutput.js',

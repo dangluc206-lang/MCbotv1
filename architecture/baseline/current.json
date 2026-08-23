@@ -2,12 +2,11 @@
   "schemaVersion": 1,
   "baselineVersion": 1,
   "workPackage": "WP-001",
-  "generatedAt": "2026-08-23T09:16:03.372Z",
+  "generatedAt": "2026-08-23T21:27:42.830Z",
   "releaseVersion": "2.7.67",
   "scope": {
     "root": ".",
     "exclusions": [
-      ".git/**",
       ".env*",
       "data/**",
       "node_modules/**",
@@ -21,7 +20,7 @@
       "docs/architecture-roadmap/baseline/WP-001_GAP_REPORT.md"
     ],
     "reproducibleCommands": [
-      "rg --files --hidden -g '!.git/**' -g '!.env*' -g '!data/**' -g '!node_modules/**' -g '!*.log' -g '!architecture/baseline/current.json' -g '!docs/architecture-roadmap/baseline/WP-001_GAP_REPORT.md'",
+      "rg --files --hidden -g '!.env*' -g '!data/**' -g '!node_modules/**' -g '!*.log' -g '!architecture/baseline/current.json' -g '!docs/architecture-roadmap/baseline/WP-001_GAP_REPORT.md'",
       "node scripts/inspect-architecture-baseline.js",
       "node scripts/inspect-architecture-baseline.js --check",
       "node scripts/validate-architecture.js --json",
@@ -33,16 +32,16 @@
     "revision": null,
     "branch": null,
     "worktree": {
-      "state": "UNAVAILABLE",
+      "state": "STANDALONE",
       "inScopeChangedPaths": 0
     },
-    "reason": "No Git metadata is present in this packaged baseline.",
-    "sourceFingerprintSha256": "a49b547d2153202886e5bad7509a6185b6b84119ae6f0a4d8fc0e6fbdab73f68"
+    "reason": "Standalone source tree; version-control metadata is intentionally not required.",
+    "sourceFingerprintSha256": "631c5d4178ab725c0a39f5b03827abe1e50e4fc3a23ae15395f33a3a9e583819"
   },
   "counts": {
-    "files": 664,
-    "source": 304,
-    "tests": 180,
+    "files": 686,
+    "source": 303,
+    "tests": 179,
     "scripts": 30,
     "configJson": 34,
     "routes": 1
@@ -106,7 +105,7 @@
     },
     {
       "area": "desktop",
-      "files": 15,
+      "files": 14,
       "owner": "src/desktop/",
       "layer": "control-plane-desktop",
       "classification": "CURRENT"
@@ -230,13 +229,12 @@
           "src/desktop/DesktopPreferenceStore.js",
           "src/desktop/DesktopSecretStore.js",
           "src/desktop/DesktopShutdownSequence.js",
-          "src/desktop/update/GitHubUpdateService.js",
           "src/desktop/update/LocalZipUpdateService.js",
           "src/desktop/update/RuntimeConfigMigrator.js",
           "src/desktop/update/SquirrelLifecycle.js",
           "src/desktop/update/local-update-helper.js"
         ],
-        "reachableSourceFiles": 295
+        "reachableSourceFiles": 294
       },
       {
         "file": "src/desktop/preload.js",
@@ -333,7 +331,6 @@
       "src/desktop/main.js",
       "src/desktop/preload.js",
       "src/desktop/renderer/app.js",
-      "src/desktop/update/GitHubUpdateService.js",
       "src/desktop/update/LocalZipUpdateService.js",
       "src/desktop/update/RuntimeConfigMigrations.js",
       "src/desktop/update/RuntimeConfigMigrator.js",
@@ -634,7 +631,6 @@
       "src/desktop/main.js",
       "src/desktop/preload.js",
       "src/desktop/renderer/app.js",
-      "src/desktop/update/GitHubUpdateService.js",
       "src/desktop/update/LocalZipUpdateService.js",
       "src/desktop/update/RuntimeConfigMigrations.js",
       "src/desktop/update/RuntimeConfigMigrator.js",
@@ -2014,11 +2010,11 @@
     "valid": true,
     "catalog": {
       "version": 3,
-      "sourceFiles": 304,
-      "testFiles": 180,
+      "sourceFiles": 303,
+      "testFiles": 179,
       "scriptFiles": 30,
-      "sourceReachable": 304,
-      "runtimeReachable": 299,
+      "sourceReachable": 303,
+      "runtimeReachable": 298,
       "configGroups": 32,
       "connectionEvents": 31,
       "stalePaths": 42,

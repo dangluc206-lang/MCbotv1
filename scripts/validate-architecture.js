@@ -22,7 +22,7 @@ function relative(file) {
 function walk(directory, predicate = () => true, result = []) {
     if (!fs.existsSync(directory)) return result;
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-        if (['node_modules', '.git', 'data'].includes(entry.name)) continue;
+        if (['node_modules', 'data'].includes(entry.name)) continue;
         const full = path.join(directory, entry.name);
         if (entry.isDirectory()) walk(full, predicate, result);
         else if (entry.isFile() && predicate(full)) result.push(full);

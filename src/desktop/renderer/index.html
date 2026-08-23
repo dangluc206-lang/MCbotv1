@@ -243,7 +243,7 @@
             <label>Ollama / OpenAI-compatible URL<input id="aiBaseUrl" value="http://127.0.0.1:11434/v1" spellcheck="false"></label>
             <div class="actions"><button class="button ghost" id="aiRefreshModels">Kiểm tra Ollama</button></div>
             <label>Model<select id="aiModel"><option value="">Chưa tải model</option></select></label>
-            <label>Quyền của agent<select id="aiPermission"><option value="READ">READ · chỉ đọc/phân tích</option><option value="PATCH">PATCH · được sửa file</option><option value="DEVELOP">DEVELOP · sửa + test/validator/git diff</option><option value="ADMIN">ADMIN · DEVELOP + điều khiển bot whitelist</option></select></label>
+            <label>Quyền của agent<select id="aiPermission"><option value="READ">READ · chỉ đọc/phân tích</option><option value="PATCH">PATCH · được sửa file</option><option value="DEVELOP">DEVELOP · sửa + test/validator</option><option value="ADMIN">ADMIN · DEVELOP + điều khiển bot whitelist</option></select></label>
             <hr>
             <label>Project workspace<input id="aiWorkspace" readonly placeholder="Chưa chọn project"></label>
             <div class="actions"><button class="button primary" id="aiSelectWorkspace">Chọn project</button><button class="button ghost" id="aiInspectWorkspace">Quét lại</button></div>
@@ -289,18 +289,6 @@
               <p id="localUpdateFile" class="helper">Chưa chọn gói cập nhật.</p>
               <pre id="localUpdateNotes" class="compact-output">Chưa có ghi chú từ gói ZIP.</pre>
             </div>
-            <hr class="soft-separator">
-            <h3>Cập nhật trực tuyến</h3>
-            <div class="backend-overview"><div><span>Trạng thái</span><strong id="updateState">Chưa kiểm tra</strong></div><div><span>Phiên bản mới</span><strong id="updateAvailableVersion">—</strong></div><div><span>Kênh</span><strong id="updateChannelLabel">Ổn định</strong></div></div>
-            <label>Nguồn cập nhật chính thức<input id="prefUpdateRepository" autocomplete="off" readonly aria-readonly="true"><small class="hint">Được khóa theo bản phát hành để tránh tải bộ cài từ nguồn khác.</small></label>
-            <label>Kênh cập nhật<select id="prefUpdateChannel"><option value="stable">Ổn định</option><option value="beta">Thử nghiệm / beta</option></select></label>
-            <label class="check setting-check"><input id="prefAutoCheckUpdates" type="checkbox"> Tự kiểm tra cập nhật khi mở phần mềm</label>
-            <label class="check setting-check"><input id="prefAutoDownloadUpdates" type="checkbox"> Tự tải bản cập nhật mới</label>
-            <label class="check setting-check"><input id="prefAutoInstallUpdates" type="checkbox"> Tự cài khi không có bot/chế độ đang hoạt động</label>
-            <progress id="updateProgress" max="100" value="0" style="width:100%"></progress>
-            <p id="updateProgressText" class="helper">Chưa có tác vụ cập nhật.</p>
-            <div class="actions"><button class="button ghost" id="checkUpdates">Kiểm tra</button><button class="button primary" id="downloadUpdate">Tải bản mới</button><button class="button primary" id="installUpdate">Cài và khởi động lại</button><button class="button ghost" id="openUpdateRelease">Xem thay đổi</button></div>
-            <pre id="updateReleaseNotes" class="compact-output">Chưa có ghi chú phát hành.</pre>
             <div class="setting-row"><div><strong>Khôi phục cấu hình trước migration</strong><span>Chỉ khôi phục config; không hạ phiên bản chương trình.</span></div><button class="button warn" id="rollbackConfigMigration">Khôi phục</button></div>
             <p id="updateMigrationText" class="helper"></p>
           </div>

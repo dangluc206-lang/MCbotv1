@@ -54,7 +54,6 @@ function createForgeIgnore({ baseDir = process.cwd() } = {}) {
 
         // Re-implement Packager defaults because supplying IgnoreFunction means
         // the default ignore list is not applied automatically.
-        if (lower === '.git' || lower.startsWith('.git/')) return true;
         if (lower === 'out' || lower.startsWith('out/')) return true;
         if (lower === 'node_modules/.bin' || lower.startsWith('node_modules/.bin/')) return true;
         if (lower === 'node_modules/electron' || lower.startsWith('node_modules/electron/')) return true;
@@ -71,8 +70,7 @@ function createForgeIgnore({ baseDir = process.cwd() } = {}) {
             'data/support',
             'tests',
             'scripts',
-            'architecture',
-            '.github'
+            'architecture'
         ];
         if (excludedRoots.some(root => lower === root || lower.startsWith(`${root}/`))) return true;
         if (/^patch_(?:info|summary)/i.test(relative)) return true;
@@ -93,11 +91,9 @@ function createForgeIgnore({ baseDir = process.cwd() } = {}) {
             const rest = lower.slice(bedrockPrefix.length);
             if (rest && rest !== 'common' && !rest.startsWith('common/')) return true;
         }
-        if (lower === 'node_modules/minecraft-data/.github' || lower.startsWith('node_modules/minecraft-data/.github/')) return true;
         if (lower === 'node_modules/minecraft-data/doc' || lower.startsWith('node_modules/minecraft-data/doc/')) return true;
         if (lower === 'node_modules/minecraft-data/test' || lower.startsWith('node_modules/minecraft-data/test/')) return true;
         if (lower === 'node_modules/minecraft-data/typings' || lower.startsWith('node_modules/minecraft-data/typings/')) return true;
-        if (lower === 'node_modules/minecraft-data/minecraft-data/.github' || lower.startsWith('node_modules/minecraft-data/minecraft-data/.github/')) return true;
         if (lower === 'node_modules/minecraft-data/minecraft-data/doc' || lower.startsWith('node_modules/minecraft-data/minecraft-data/doc/')) return true;
         if (lower === 'node_modules/minecraft-data/minecraft-data/tools' || lower.startsWith('node_modules/minecraft-data/minecraft-data/tools/')) return true;
 

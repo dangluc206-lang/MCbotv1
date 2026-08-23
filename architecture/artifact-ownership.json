@@ -7,25 +7,96 @@
     "copy": "\\b(?:fs|fsp)\\.(?:cp|cpSync|copyFile|copyFileSync)\\s*\\("
   },
   "owners": [
-    { "file": "src/desktop/DesktopPreferenceStore.js", "scope": "desktop-user-data/preferences", "cleanupPolicy": "owned-file-only" },
-    { "file": "src/desktop/DesktopController.js", "scope": "desktop-user-selected/export-or-owned-runtime", "cleanupPolicy": "explicit-operation-only" },
-    { "file": "src/desktop/DesktopSecretStore.js", "scope": "desktop-user-data/secrets", "cleanupPolicy": "owned-file-only" },
-    { "file": "src/recovery/DurableIntentStore.js", "scope": "runtime-recovery-intent", "cleanupPolicy": "store-owned-files" },
-    { "file": "src/ai/knowledge/ProjectWorkspace.js", "scope": "configured-project-workspace", "cleanupPolicy": "workspace-guarded" },
-    { "file": "src/gui/observation/GuiObservationStore.js", "scope": "runtime-gui-observations", "cleanupPolicy": "store-owned-files" },
-    { "file": "src/shared/logger/RuntimeLogOutput.js", "scope": "runtime-log-output", "cleanupPolicy": "logger-owned-files" },
-    { "file": "src/diagnostics/runtime/RuntimeFailureRecorder.js", "scope": "runtime-failure-records", "cleanupPolicy": "recorder-owned-files" },
-    { "file": "src/modes/composable/CustomModeStore.js", "scope": "config/modes/custom", "cleanupPolicy": "validated-custom-mode-file" },
-    { "file": "src/discord/panels/DiscordPanelStore.js", "scope": "discord-panel-state", "cleanupPolicy": "store-owned-files" },
-    { "file": "src/discord/admin/BotProfileAdminService.js", "scope": "config/bots", "cleanupPolicy": "validated-profile-file" },
-    { "file": "src/discord/config/FishingBotConfigEditor.js", "scope": "bot-profile-fishing-config", "cleanupPolicy": "validated-profile-file" },
-    { "file": "src/discord/config/CollectorB5ConfigEditor.js", "scope": "bot-profile-collector-config", "cleanupPolicy": "validated-profile-file" },
-    { "file": "src/items/inventory/observation/InventoryObservationStore.js", "scope": "runtime-inventory-observations", "cleanupPolicy": "store-owned-files" },
-    { "file": "src/desktop/update/local-update-helper.js", "scope": "owned-update-plan/stage/backup", "cleanupPolicy": "journal-owned-artifacts" },
-    { "file": "src/desktop/update/RuntimeConfigMigrations.js", "scope": "runtime-config-files", "cleanupPolicy": "atomic-owned-temp" },
-    { "file": "src/desktop/update/GitHubUpdateService.js", "scope": "owned-update-download/stage", "cleanupPolicy": "service-owned-artifacts" },
-    { "file": "src/desktop/update/RuntimeConfigMigrator.js", "scope": "owned-runtime-config-transaction-roots", "cleanupPolicy": "ledger-proven-ownership" },
-    { "file": "src/desktop/update/LocalZipUpdateService.js", "scope": "owned-local-update-stage", "cleanupPolicy": "service-owned-artifacts" }
+    {
+      "file": "src/desktop/DesktopPreferenceStore.js",
+      "scope": "desktop-user-data/preferences",
+      "cleanupPolicy": "owned-file-only"
+    },
+    {
+      "file": "src/desktop/DesktopController.js",
+      "scope": "desktop-user-selected/export-or-owned-runtime",
+      "cleanupPolicy": "explicit-operation-only"
+    },
+    {
+      "file": "src/desktop/DesktopSecretStore.js",
+      "scope": "desktop-user-data/secrets",
+      "cleanupPolicy": "owned-file-only"
+    },
+    {
+      "file": "src/recovery/DurableIntentStore.js",
+      "scope": "runtime-recovery-intent",
+      "cleanupPolicy": "store-owned-files"
+    },
+    {
+      "file": "src/ai/knowledge/ProjectWorkspace.js",
+      "scope": "configured-project-workspace",
+      "cleanupPolicy": "workspace-guarded"
+    },
+    {
+      "file": "src/gui/observation/GuiObservationStore.js",
+      "scope": "runtime-gui-observations",
+      "cleanupPolicy": "store-owned-files"
+    },
+    {
+      "file": "src/shared/logger/RuntimeLogOutput.js",
+      "scope": "runtime-log-output",
+      "cleanupPolicy": "logger-owned-files"
+    },
+    {
+      "file": "src/diagnostics/runtime/RuntimeFailureRecorder.js",
+      "scope": "runtime-failure-records",
+      "cleanupPolicy": "recorder-owned-files"
+    },
+    {
+      "file": "src/modes/composable/CustomModeStore.js",
+      "scope": "config/modes/custom",
+      "cleanupPolicy": "validated-custom-mode-file"
+    },
+    {
+      "file": "src/discord/panels/DiscordPanelStore.js",
+      "scope": "discord-panel-state",
+      "cleanupPolicy": "store-owned-files"
+    },
+    {
+      "file": "src/discord/admin/BotProfileAdminService.js",
+      "scope": "config/bots",
+      "cleanupPolicy": "validated-profile-file"
+    },
+    {
+      "file": "src/discord/config/FishingBotConfigEditor.js",
+      "scope": "bot-profile-fishing-config",
+      "cleanupPolicy": "validated-profile-file"
+    },
+    {
+      "file": "src/discord/config/CollectorB5ConfigEditor.js",
+      "scope": "bot-profile-collector-config",
+      "cleanupPolicy": "validated-profile-file"
+    },
+    {
+      "file": "src/items/inventory/observation/InventoryObservationStore.js",
+      "scope": "runtime-inventory-observations",
+      "cleanupPolicy": "store-owned-files"
+    },
+    {
+      "file": "src/desktop/update/local-update-helper.js",
+      "scope": "owned-update-plan/stage/backup",
+      "cleanupPolicy": "journal-owned-artifacts"
+    },
+    {
+      "file": "src/desktop/update/RuntimeConfigMigrations.js",
+      "scope": "runtime-config-files",
+      "cleanupPolicy": "atomic-owned-temp"
+    },
+    {
+      "file": "src/desktop/update/RuntimeConfigMigrator.js",
+      "scope": "owned-runtime-config-transaction-roots",
+      "cleanupPolicy": "ledger-proven-ownership"
+    },
+    {
+      "file": "src/desktop/update/LocalZipUpdateService.js",
+      "scope": "owned-local-update-stage",
+      "cleanupPolicy": "service-owned-artifacts"
+    }
   ],
   "exceptions": []
 }

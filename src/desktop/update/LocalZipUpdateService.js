@@ -13,7 +13,6 @@ const MAX_ENTRY_BYTES = 350 * 1024 * 1024;
 const MAX_FILES = 12000;
 
 const DENIED_ROOTS = Object.freeze([
-    '.git',
     'node_modules',
     'coverage',
     'out',

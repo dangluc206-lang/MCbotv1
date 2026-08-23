@@ -2,7 +2,6 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const childProcess = require('node:child_process');
 const crypto = require('node:crypto');
 const catalog = require('../architecture/catalog.json');
 const ConfigSpecs = require('../src/configuration/ConfigSpecs');
@@ -13,7 +12,7 @@ const { audit: architectureAudit } = require('./validate-architecture');
 const DEFAULT_ROOT = path.resolve(__dirname, '..');
 const SCHEMA_VERSION = 1;
 const BASELINE_VERSION = 1;
-const EXCLUDED_SEGMENTS = new Set(['.git', 'node_modules', 'data']);
+const EXCLUDED_SEGMENTS = new Set(['node_modules', 'data']);
 const EXCLUDED_BASENAMES = [/^\.env(?:\.|$)/i, /\.log$/i];
 const CONTENT_SCAN_EXCLUSIONS = ['config/bots'];
 const SELF_OUTPUT_PATHS = new Set([
@@ -81,14 +80,6 @@ function readAllowed(root, relativePath) {
     return fs.readFileSync(path.join(root, relativePath), 'utf8');
 }
 
-function tryGit(root, args) {
-    try {
-        return childProcess.execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-    } catch (_) {
-        return null;
-    }
-}
-
 function sourceFingerprint(root, files) {
     const hash = crypto.createHash('sha256');
     for (const file of files) {
@@ -102,30 +93,6 @@ function sourceFingerprint(root, files) {
         hash.update('\0');
     }
     return hash.digest('hex');
-}
-
-function gitEvidence(root) {
-    const revision = tryGit(root, ['rev-parse', 'HEAD']);
-    const branch = tryGit(root, ['rev-parse', '--abbrev-ref', 'HEAD']);
-    const status = tryGit(root, ['status', '--short', '--untracked-files=all']);
-    if (!revision) {
-        return {
-            available: false,
-            revision: null,
-            branch: null,
-            worktree: { state: 'UNAVAILABLE', inScopeChangedPaths: 0 },
-            reason: 'No Git metadata is present in this packaged baseline.'
-        };
-    }
-    const changed = String(status || '').split(/\r?\n/).filter(Boolean).map(line => line.slice(3).trim()).filter(Boolean);
-    const inScope = changed.filter(file => !isExcludedPath(file));
-    return {
-        available: true,
-        revision,
-        branch: branch || null,
-        worktree: { state: inScope.length ? 'DIRTY' : 'CLEAN', inScopeChangedPaths: inScope.length },
-        reason: null
-    };
 }
 
 function requireRequests(source) {
@@ -475,11 +442,11 @@ function buildBaseline({ root = DEFAULT_ROOT, generatedAt = new Date().toISOStri
         releaseVersion: require(path.join(root, 'package.json')).version,
         scope: {
             root: '.',
-            exclusions: ['.git/**', '.env*', 'data/**', 'node_modules/**', '**/*.log'],
+            exclusions: ['.env*', 'data/**', 'node_modules/**', '**/*.log'],
             contentScanAdditionalExclusions: ['config/bots/**'],
             selfOutputsExcludedFromCounts: [...SELF_OUTPUT_PATHS].sort(),
             reproducibleCommands: [
-                "rg --files --hidden -g '!.git/**' -g '!.env*' -g '!data/**' -g '!node_modules/**' -g '!*.log' -g '!architecture/baseline/current.json' -g '!docs/architecture-roadmap/baseline/WP-001_GAP_REPORT.md'",
+                "rg --files --hidden -g '!.env*' -g '!data/**' -g '!node_modules/**' -g '!*.log' -g '!architecture/baseline/current.json' -g '!docs/architecture-roadmap/baseline/WP-001_GAP_REPORT.md'",
                 'node scripts/inspect-architecture-baseline.js',
                 'node scripts/inspect-architecture-baseline.js --check',
                 'node scripts/validate-architecture.js --json',
@@ -487,7 +454,11 @@ function buildBaseline({ root = DEFAULT_ROOT, generatedAt = new Date().toISOStri
             ]
         },
         revision: {
-            ...gitEvidence(root),
+            available: false,
+            revision: null,
+            branch: null,
+            worktree: { state: 'STANDALONE', inScopeChangedPaths: 0 },
+            reason: 'Standalone source tree; version-control metadata is intentionally not required.',
             sourceFingerprintSha256: sourceFingerprint(root, files)
         },
         counts: { files: files.length, source: sourceFiles.length, tests: testFiles.length, scripts: scriptFiles.length, configJson: configFiles.length, routes: routeFiles.length },
@@ -620,9 +591,9 @@ function renderGapReport(baseline) {
         `Release: ${baseline.releaseVersion}`, '',
         '## Capture scope', '',
         `- Files: ${baseline.counts.files}; source: ${baseline.counts.source}; tests: ${baseline.counts.tests}; scripts: ${baseline.counts.scripts}; config JSON: ${baseline.counts.configJson}.`,
-        `- Git: ${baseline.revision.available ? `${baseline.revision.branch}@${baseline.revision.revision}` : 'unavailable in packaged baseline'}; worktree: ${baseline.revision.worktree.state}.`,
+        `- Source tree: standalone; worktree metadata: ${baseline.revision.worktree.state}.`,
         `- Safe-scope source fingerprint: \`${baseline.revision.sourceFingerprintSha256}\` (bot-profile payload bytes excluded).`,
-        '- Excluded from inventory/content capture: `.git/**`, `.env*`, `data/**`, `node_modules/**`, `**/*.log`; bot profile payloads are not content-scanned.',
+        '- Excluded from inventory/content capture: `.env*`, `data/**`, `node_modules/**`, `**/*.log`; bot profile payloads are not content-scanned.',
         '- The manifest and generated gap report are excluded from `counts.files` to avoid self-referential count drift.', '',
         '## Current evidence', '',
         `- Architecture validator: ${baseline.architectureInspection.valid ? 'PASS' : 'FAIL'} with ${baseline.architectureInspection.findings.length} finding(s).`,
