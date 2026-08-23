@@ -1,14 +1,12 @@
-name: CI
+name: CI dependency qualification
 
 on:
-  push:
-    branches: [main]
   pull_request:
 
 jobs:
-  validate-and-test:
+  validate-and-export-runtime-deps:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -28,6 +26,27 @@ jobs:
         run: |
           set -o pipefail
           node scripts/run-quality-gates.js --lane release --json | tee /tmp/quality-gate-report.json
+
+      - name: Materialize production dependency graph
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEPS="$RUNNER_TEMP/runtime-deps"
+          mkdir -p "$DEPS"
+          cp package.json package-lock.json "$DEPS/"
+          cd "$DEPS"
+          npm ci --omit=dev --ignore-scripts
+          tar -czf "$RUNNER_TEMP/runtime-node-modules.tar.gz" node_modules
+
+      - name: Upload production dependencies
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-node-modules
+          path: ${{ runner.temp }}/runtime-node-modules.tar.gz
+          if-no-files-found: error
+          compression-level: 0
 
       - name: Upload quality gate report
         if: always()
