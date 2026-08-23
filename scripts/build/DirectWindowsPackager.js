@@ -15,20 +15,21 @@ function collectIncludedFiles(baseDir, ignore = createForgeIgnore({ baseDir })) 
             if (ignore(absolute)) continue;
             const relative = path.relative(root, absolute);
             if (!relative || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) continue;
+            const portableRelative = relative.replace(/\\/g, '/');
             if (entry.isDirectory()) {
-                directories.add(relative);
+                directories.add(portableRelative);
                 walk(absolute);
             } else if (entry.isFile()) {
-                directories.add(path.dirname(relative));
-                files.push(relative);
+                directories.add(path.dirname(relative).replace(/\\/g, '/'));
+                files.push(portableRelative);
             } else if (entry.isSymbolicLink()) {
                 const stat = fs.statSync(absolute);
                 if (stat.isDirectory()) {
-                    directories.add(relative);
+                    directories.add(portableRelative);
                     walk(absolute);
                 } else if (stat.isFile()) {
-                    directories.add(path.dirname(relative));
-                    files.push(relative);
+                    directories.add(path.dirname(relative).replace(/\\/g, '/'));
+                    files.push(portableRelative);
                 }
             }
         }
