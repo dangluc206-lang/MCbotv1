@@ -24,10 +24,13 @@ jobs:
           cache: npm
 
       - name: Validate standalone transformer syntax
-        run: python -m py_compile scripts/prepare-standalone-source.py
+        run: python -m py_compile scripts/prepare-standalone-source.py scripts/finalize-standalone-source.py
 
       - name: Convert source tree to standalone
         run: python scripts/prepare-standalone-source.py
+
+      - name: Finalize generated standalone source
+        run: python scripts/finalize-standalone-source.py
 
       - name: Install dependencies for verification
         run: npm ci --no-audit --no-fund
