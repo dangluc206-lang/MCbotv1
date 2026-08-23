@@ -47,13 +47,59 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          $ErrorActionPreference = "Stop"
+
           $tag = "${{ github.ref_name }}"
-          $setup = "out/make/squirrel.windows/x64/MCbot Setup.exe"
-          $releaseFile = "out/make/squirrel.windows/x64/RELEASES"
-          $packages = Get-ChildItem "out/make/squirrel.windows/x64/*.nupkg" | ForEach-Object { $_.FullName }
-          gh release view $tag *> $null
-          if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag $setup $releaseFile @packages --clobber
-          } else {
-            gh release create $tag $setup $releaseFile @packages --generate-notes --title "MCbot Desktop $tag"
+          $assetDir = "out/make/squirrel.windows/x64"
+
+          $assets = @(
+            "$assetDir/MCbot Setup.exe",
+            "$assetDir/RELEASES"
+          )
+
+          $packages = Get-ChildItem -Path $assetDir -Filter "*.nupkg" -File
+
+          foreach ($package in $packages) {
+            $assets += "$assetDir/$($package.Name)"
           }
+
+          Write-Host "Release tag: $tag"
+          Write-Host "Release assets:"
+
+          foreach ($asset in $assets) {
+            if (-not (Test-Path -LiteralPath $asset)) {
+              throw "Missing release asset: $asset"
+            }
+
+            Write-Host " - $asset"
+          }
+
+          gh release view $tag *> $null
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Creating GitHub Release $tag"
+
+            gh release create $tag `
+              --verify-tag `
+              --generate-notes `
+              --title "MCbot Desktop $tag"
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to create GitHub Release $tag"
+            }
+          }
+          else {
+            Write-Host "GitHub Release $tag already exists"
+          }
+
+          foreach ($asset in $assets) {
+            Write-Host "Uploading: $asset"
+
+            gh release upload $tag $asset --clobber
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to upload release asset: $asset"
+            }
+          }
+
+          Write-Host "GitHub Release assets uploaded successfully."
