@@ -27,12 +27,12 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          node scripts/run-quality-gates.js --lane release --json | tee quality-gate-report.json
+          node scripts/run-quality-gates.js --lane release --json | tee /tmp/quality-gate-report.json
 
       - name: Upload quality gate report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: quality-gate-report
-          path: quality-gate-report.json
+          path: /tmp/quality-gate-report.json
           if-no-files-found: warn
