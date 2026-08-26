@@ -619,7 +619,7 @@ class DesktopController {
         const current = this.bundle.configuration.registry.require('b5');
         const next = {
             ...current,
-            ...pick(fields, ['inventorySafetyEmptySlots','b3AllMinEmptySlots']),
+            ...pick(fields, ['inventorySafetyEmptySlots','b3AllMinEmptySlots','b2InputSource']),
             quantityOptimization: { ...current.quantityOptimization, ...(fields.quantityOptimization || {}) },
             personalVaultBackpressure: { ...current.personalVaultBackpressure, ...(fields.personalVaultBackpressure || {}) }
         };
@@ -903,6 +903,7 @@ class DesktopController {
             } : null,
             state,
             intent: this.bundle?.fleetControl?.intent?.(runtime.botId) || null,
+            connectionOnline: Boolean(client),
             connectionGeneration: runtime.context.getGeneration(),
             player: client ? {
                 username: client.username || profile?.username || null,

@@ -234,10 +234,18 @@ class B5PlanningService {
             const baseId = baseIds[0];
 
             const rawNeededFromStorage = Number(planWithoutStorage.missing[baseId] || 0);
-            const storedEffective = Number(effectiveStorageItems?.[baseId] || 0);
-            const storedTotalEffective = Number(totalEffectiveStorageItems?.[baseId] || storedEffective);
-            const immediateMissingRaw = Math.max(0, rawNeededFromStorage - storedEffective);
-            const missingRaw = Math.max(0, rawNeededFromStorage - storedTotalEffective);
+            const inventoryBase = this.config?.b2InputSource === 'inventory'
+                ? Math.max(0, Number(inventoryTotals?.[baseId] || 0))
+                : 0;
+            const storageEffective = Number(effectiveStorageItems?.[baseId] || 0);
+            const storageTotalEffective = Number(totalEffectiveStorageItems?.[baseId] || 0);
+            const storedEffective = storageEffective + inventoryBase;
+            const storedTotalEffective = storageTotalEffective + inventoryBase;
+            // planWithoutStorage already consumed inventory B1. Only storage
+            // may satisfy its remaining missing amount; subtracting inventory
+            // again here would double-count leftovers from an earlier batch.
+            const immediateMissingRaw = Math.max(0, rawNeededFromStorage - storageEffective);
+            const missingRaw = Math.max(0, rawNeededFromStorage - storageTotalEffective);
             const readyToReserve = missingRaw === 0;
             const b2Step = stepsByOutput.get(b2Id) || null;
             const b3Step = stepsByOutput.get(b3Id) || null;
@@ -253,6 +261,9 @@ class B5PlanningService {
                 rawPerB3: Number(baseRequirements[baseId] || 0),
                 rawNeededFromStorage,
                 storedLoose: Number(storageSnapshot?.items?.[baseId] || 0),
+                inventoryB1: inventoryBase,
+                storageEffective,
+                storageTotalEffective,
                 storedEffective,
                 storedTotalEffective,
                 decompressionBlocked: storedTotalEffective > storedEffective,
@@ -430,9 +441,14 @@ class B5PlanningService {
     }
 
     #knownIds() {
-        // B1 remains authoritative in /kho. B2-B5 may live in /pv 2 or inventory.
+        // Storage-direct keeps B1 authoritative in /kho. Inventory-source B2
+        // also counts leftover B1 so the next batch does not withdraw or
+        // accumulate a duplicate amount.
         const ids = new Set();
-        for (const tier of ['B2', 'B3', 'B4', 'B5']) {
+        const tiers = this.config?.b2InputSource === 'inventory'
+            ? ['B1', 'B2', 'B3', 'B4', 'B5']
+            : ['B2', 'B3', 'B4', 'B5'];
+        for (const tier of tiers) {
             for (const id of this.tiers?.[tier] || []) ids.add(id);
         }
         ids.add(this.b5Planner.targetId);

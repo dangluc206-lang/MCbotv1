@@ -47,6 +47,7 @@ class OperatorSnapshotProjector {
                 id: bot.botId,
                 label: bot.profile?.displayName || bot.botId,
                 enabled: bot.profile?.enabled !== false,
+                online: bot.connectionOnline === true,
                 connection: bot.state?.connectionState || 'UNKNOWN',
                 generation: bot.connectionGeneration ?? null,
                 desiredConnection: bot.intent?.desiredConnection || null,
@@ -71,7 +72,7 @@ class OperatorSnapshotProjector {
             fleet: {
                 total: bots.length,
                 enabled: bots.filter(bot => bot.enabled).length,
-                connected: bots.filter(bot => bot.connection === 'CONNECTED').length,
+                connected: bots.filter(bot => bot.online === true).length,
                 activeModes: bots.filter(bot => bot.mode.id).length,
                 openIncidents: openIncidents.length
             },

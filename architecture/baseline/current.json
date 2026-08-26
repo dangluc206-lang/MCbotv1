@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "baselineVersion": 1,
   "workPackage": "WP-001",
-  "generatedAt": "2026-08-25T15:15:15.084Z",
+  "generatedAt": "2026-08-26T05:54:05.110Z",
   "releaseVersion": "2.7.67",
   "scope": {
     "root": ".",
@@ -40,12 +40,12 @@
       "inScopeChangedPaths": 0
     },
     "reason": "Standalone source tree; version-control metadata is intentionally not required.",
-    "sourceFingerprintSha256": "9a0246090df4d412ce6861bb9af34dcc80296045d2daed90b9999934d6e4f782"
+    "sourceFingerprintSha256": "8b1c066b9a4cba80bce52931792c6498c6f8bf80a8f5abac7d82ab68113fae3a"
   },
   "counts": {
-    "files": 796,
-    "source": 363,
-    "tests": 217,
+    "files": 801,
+    "source": 368,
+    "tests": 220,
     "scripts": 38,
     "configJson": 34,
     "routes": 1
@@ -109,7 +109,7 @@
     },
     {
       "area": "desktop",
-      "files": 54,
+      "files": 55,
       "owner": "src/desktop/",
       "layer": "control-plane-desktop",
       "classification": "CURRENT"
@@ -172,7 +172,7 @@
     },
     {
       "area": "planning",
-      "files": 7,
+      "files": 9,
       "owner": "src/planning/",
       "layer": "pure-planning",
       "classification": "CURRENT"
@@ -186,7 +186,7 @@
     },
     {
       "area": "server-features",
-      "files": 54,
+      "files": 56,
       "owner": "src/server-features/",
       "layer": "server-domain-features",
       "classification": "CURRENT"
@@ -223,7 +223,7 @@
           "src/bootstrap/createApplication.js",
           "src/bootstrap/shutdown.js"
         ],
-        "reachableSourceFiles": 293
+        "reachableSourceFiles": 297
       },
       {
         "file": "src/desktop/main.js",
@@ -244,7 +244,7 @@
           "src/desktop/update/local-update-helper.js",
           "src/desktop/use-cases/DesktopRuntimeBootstrap.js"
         ],
-        "reachableSourceFiles": 341
+        "reachableSourceFiles": 345
       },
       {
         "file": "src/desktop/preload.js",
@@ -320,6 +320,12 @@
       },
       {
         "file": "src/desktop/renderer/features/modes/ModeViewModel.js",
+        "exists": true,
+        "directLocalDependencies": [],
+        "reachableSourceFiles": 1
+      },
+      {
+        "file": "src/desktop/renderer/features/connection/ConnectionViewModel.js",
         "exists": true,
         "directLocalDependencies": [],
         "reachableSourceFiles": 1
@@ -441,6 +447,7 @@
       "src/desktop/renderer/features/b5/B5JourneyPresenter.js",
       "src/desktop/renderer/features/b5/B5ViewModel.js",
       "src/desktop/renderer/features/builder/TypedModuleEditor.js",
+      "src/desktop/renderer/features/connection/ConnectionViewModel.js",
       "src/desktop/renderer/features/incidents/IncidentPresenter.js",
       "src/desktop/renderer/features/incidents/IncidentViewModel.js",
       "src/desktop/renderer/features/modes/ModeViewModel.js",
@@ -602,7 +609,9 @@
       "src/planning/crafting/CraftingPlanner.js",
       "src/planning/crafting/CraftingStep.js",
       "src/planning/crafting/MaterialCalculator.js",
+      "src/planning/storage/B1InventoryWithdrawalPlanner.js",
       "src/planning/storage/B1StorageProtectionPlanner.js",
+      "src/planning/storage/B1WithdrawQuantityResolver.js",
       "src/recovery/DurableIntentStore.js",
       "src/recovery/FleetControlService.js",
       "src/server-features/ServerFeatureFacade.js",
@@ -617,6 +626,7 @@
       "src/server-features/crafting/CraftingRecipeRegistry.js",
       "src/server-features/crafting/CraftingResultVerifier.js",
       "src/server-features/crafting/CraftingService.js",
+      "src/server-features/crafting/b5/flows/B2InputAcquisitionFlow.js",
       "src/server-features/crafting/b5/flows/B5CraftFlow.js",
       "src/server-features/crafting/b5/flows/B5DepositFlow.js",
       "src/server-features/crafting/b5/flows/B5InventoryReadFlow.js",
@@ -655,6 +665,7 @@
       "src/server-features/storage/KhoSellOperation.js",
       "src/server-features/storage/KhoService.js",
       "src/server-features/storage/KhoSnapshot.js",
+      "src/server-features/storage/KhoWithdrawOperation.js",
       "src/server-features/storage/SellGuiReader.js",
       "src/server-features/storage/StorageTextParser.js",
       "src/server-features/storage/b1/B1MaterialPolicy.js",
@@ -800,6 +811,7 @@
       "src/desktop/renderer/features/b5/B5JourneyPresenter.js",
       "src/desktop/renderer/features/b5/B5ViewModel.js",
       "src/desktop/renderer/features/builder/TypedModuleEditor.js",
+      "src/desktop/renderer/features/connection/ConnectionViewModel.js",
       "src/desktop/renderer/features/incidents/IncidentPresenter.js",
       "src/desktop/renderer/features/incidents/IncidentViewModel.js",
       "src/desktop/renderer/features/modes/ModeViewModel.js",
@@ -963,7 +975,9 @@
       "src/planning/crafting/CraftingPlanner.js",
       "src/planning/crafting/CraftingStep.js",
       "src/planning/crafting/MaterialCalculator.js",
+      "src/planning/storage/B1InventoryWithdrawalPlanner.js",
       "src/planning/storage/B1StorageProtectionPlanner.js",
+      "src/planning/storage/B1WithdrawQuantityResolver.js",
       "src/recovery/DurableIntentStore.js",
       "src/recovery/FleetControlService.js",
       "src/server-features/ServerFeatureFacade.js",
@@ -978,6 +992,7 @@
       "src/server-features/crafting/CraftingRecipeRegistry.js",
       "src/server-features/crafting/CraftingResultVerifier.js",
       "src/server-features/crafting/CraftingService.js",
+      "src/server-features/crafting/b5/flows/B2InputAcquisitionFlow.js",
       "src/server-features/crafting/b5/flows/B5CraftFlow.js",
       "src/server-features/crafting/b5/flows/B5DepositFlow.js",
       "src/server-features/crafting/b5/flows/B5InventoryReadFlow.js",
@@ -1016,6 +1031,7 @@
       "src/server-features/storage/KhoSellOperation.js",
       "src/server-features/storage/KhoService.js",
       "src/server-features/storage/KhoSnapshot.js",
+      "src/server-features/storage/KhoWithdrawOperation.js",
       "src/server-features/storage/SellGuiReader.js",
       "src/server-features/storage/StorageTextParser.js",
       "src/server-features/storage/b1/B1MaterialPolicy.js",
@@ -1390,6 +1406,7 @@
       "src/server-features/storage/B1StorageMaterialService.js",
       "src/server-features/storage/KhoSellOperation.js",
       "src/server-features/storage/KhoService.js",
+      "src/server-features/storage/KhoWithdrawOperation.js",
       "src/server-features/storage/b1/B1StartupReserveTrimmer.js",
       "src/shared/contracts/OperationResultContract.js",
       "src/shared/logger/CompactLogFormatter.js",
@@ -1560,6 +1577,7 @@
         "src/server-features/crafting/CraftingRecipeRegistry.js",
         "src/server-features/crafting/CraftingResultVerifier.js",
         "src/server-features/crafting/CraftingService.js",
+        "src/server-features/crafting/b5/flows/B2InputAcquisitionFlow.js",
         "src/server-features/crafting/b5/flows/B5CraftFlow.js",
         "src/server-features/crafting/b5/flows/B5DepositFlow.js",
         "src/server-features/crafting/b5/flows/B5InventoryReadFlow.js",
@@ -1586,6 +1604,7 @@
         "src/server-features/storage/KhoSellOperation.js",
         "src/server-features/storage/KhoService.js",
         "src/server-features/storage/KhoSnapshot.js",
+        "src/server-features/storage/KhoWithdrawOperation.js",
         "src/server-features/storage/SellGuiReader.js",
         "src/server-features/storage/StorageTextParser.js",
         "src/server-features/storage/b1/B1MaterialPolicy.js",
@@ -1644,6 +1663,7 @@
         "src/server-features/crafting/CraftingRecipeRegistry.js",
         "src/server-features/crafting/CraftingResultVerifier.js",
         "src/server-features/crafting/CraftingService.js",
+        "src/server-features/crafting/b5/flows/B2InputAcquisitionFlow.js",
         "src/server-features/crafting/b5/flows/B5CraftFlow.js",
         "src/server-features/crafting/b5/flows/B5DepositFlow.js",
         "src/server-features/crafting/b5/flows/B5InventoryReadFlow.js",
@@ -1681,6 +1701,7 @@
         "src/server-features/storage/KhoSellOperation.js",
         "src/server-features/storage/KhoService.js",
         "src/server-features/storage/KhoSnapshot.js",
+        "src/server-features/storage/KhoWithdrawOperation.js",
         "src/server-features/storage/SellGuiReader.js",
         "src/server-features/storage/StorageTextParser.js",
         "src/server-features/storage/b1/B1MaterialPolicy.js",
@@ -2216,11 +2237,11 @@
     "valid": true,
     "catalog": {
       "version": 3,
-      "sourceFiles": 363,
-      "testFiles": 217,
+      "sourceFiles": 368,
+      "testFiles": 220,
       "scriptFiles": 38,
-      "sourceReachable": 363,
-      "runtimeReachable": 357,
+      "sourceReachable": 368,
+      "runtimeReachable": 362,
       "configGroups": 32,
       "connectionEvents": 31,
       "stalePaths": 42,
@@ -2300,7 +2321,7 @@
       "code": "GENERATION_CANCELLATION_GUARDS_ACTIVE",
       "category": "CURRENT",
       "file": "src/core/events/EventEnvelope.js",
-      "summary": "Generation/cancellation contracts are active with 72 source file(s) carrying generation-guard evidence.",
+      "summary": "Generation/cancellation contracts are active with 73 source file(s) carrying generation-guard evidence.",
       "workPackages": [
         "WP-005"
       ]

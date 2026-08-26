@@ -58,3 +58,33 @@ test('connection state binding ignores stale ended event even after replacement 
     assert.equal(state.get().connectionState, 'DISCONNECTED');
     await binding.destroy();
 });
+
+test('login and authentication are valid online phases before intentional current-generation end', async () => {
+    const context = new BotContext('bot-01');
+    const client = {};
+    const generation = context.attach(client);
+    const state = new BotState();
+    const eventBus = new RawEventBus();
+    const binding = createConnectionStateBinding({ botId: 'bot-01', state, eventBus, context });
+    await binding.initialize();
+
+    eventBus.emit('connection:spawned', { botId: 'bot-01', connectionGeneration: generation });
+    assert.equal(state.get().connectionState, 'CONNECTED');
+    assert.equal(context.has(), true);
+
+    eventBus.emit('connection:login', { botId: 'bot-01', connectionGeneration: generation });
+    assert.equal(state.get().connectionState, 'LOGGED_IN');
+    assert.equal(context.has(), true);
+
+    eventBus.emit('server-login:started', { botId: 'bot-01', connectionGeneration: generation });
+    assert.equal(state.get().connectionState, 'AUTHENTICATING');
+    assert.equal(context.has(), true);
+
+    context.detach(client);
+    eventBus.emit('connection:ended', {
+        botId: 'bot-01', connectionGeneration: generation,
+        reason: 'runtime stopping', intentional: true
+    });
+    assert.equal(state.get().connectionState, 'DISCONNECTED');
+    await binding.destroy();
+});

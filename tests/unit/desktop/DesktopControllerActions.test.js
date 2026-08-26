@@ -6,6 +6,7 @@ const os = require('node:os');
 const fs = require('node:fs');
 const path = require('node:path');
 const DesktopController = require('../../../src/desktop/DesktopController');
+const BotContext = require('../../../src/bot/BotContext');
 
 function ok(status, data = null) {
     return { success: true, status, data };
@@ -108,6 +109,37 @@ test('DesktopController routes guarded B5 recovery through the mode use case wit
         expectedBotId: 'bot-01', expectedGeneration: 7, episodeId: 'episode-1',
         incidentId: 'incident-1', idempotencyKey: 'desktop-request-1', reason: 'desktop-operator'
     }]);
+});
+
+test('DesktopController snapshot separates client online presence from connection phase', () => {
+    const controller = new DesktopController({ baseDir: process.cwd() });
+    const context = new BotContext('bot-01');
+    const client = { username: 'Worker', inventory: { items: () => [], slots: [] } };
+    context.attach(client);
+    let state = { connectionState: 'AUTHENTICATING', lastError: null };
+    const runtime = {
+        botId: 'bot-01', context,
+        getState: () => state,
+        getService: () => null
+    };
+    controller.lifecycle = 'RUNNING';
+    controller.bundle = {
+        fleetControl: {
+            profileSnapshot: () => ({ 'bot-01': { id: 'bot-01', displayName: 'Worker', username: 'Worker', enabled: true } }),
+            intent: () => ({ desiredConnection: 'CONNECTED' })
+        },
+        application: { listRuntimes: () => [runtime], getState: () => 'RUNNING' }
+    };
+
+    const online = controller.snapshot().bots[0];
+    assert.equal(online.connectionOnline, true);
+    assert.equal(online.state.connectionState, 'AUTHENTICATING');
+
+    context.detach(client);
+    state = { connectionState: 'DISCONNECTED', lastError: null };
+    const offline = controller.snapshot().bots[0];
+    assert.equal(offline.connectionOnline, false);
+    assert.equal(offline.state.connectionState, 'DISCONNECTED');
 });
 test('DesktopController backupConfig creates a manifested catalog copy without mutating source', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcbot-desktop-backup-'));

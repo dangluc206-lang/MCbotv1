@@ -381,3 +381,66 @@ test('operator stop cleans a client that attaches late from an in-flight connect
     assert.equal(context.has(), false);
     assert.equal(client.endReason, 'runtime stopping');
 });
+
+async function connectedStopHarness(client) {
+    const context = new BotContext('stop-bot');
+    const eventBus = new EventBus();
+    const ended = [];
+    eventBus.on('connection:ended', event => ended.push(event));
+    const manager = new ConnectionManager({
+        botId: 'stop-bot', context,
+        sessionManager: new SessionManager({ botId: 'stop-bot' }),
+        connectionFactory: { create: () => client },
+        profile: { enabled: true, username: 'StopBot' },
+        server: { host: 'server', port: 25565 }, eventBus,
+        logger: { info() {}, warn() {}, error() {}, debug() {} }, readyTimeoutMs: 50
+    });
+    const pending = manager.connect();
+    queueMicrotask(() => client.emit('spawn'));
+    await pending;
+    return { manager, context, ended, generation: context.getGeneration() };
+}
+
+test('stop publishes one intentional terminal event when client.end does not emit end', async () => {
+    const client = fakeClient();
+    client.end = reason => { client.endReason = reason; };
+    const { manager, context, ended, generation } = await connectedStopHarness(client);
+    await manager.stop();
+    assert.equal(context.has(), false);
+    assert.equal(ended.length, 1);
+    assert.equal(ended[0].intentional, true);
+    assert.equal(ended[0].reason, 'runtime stopping');
+    assert.equal(ended[0].connectionGeneration, generation);
+});
+
+test('stop deduplicates synchronous client end event', async () => {
+    const client = fakeClient();
+    const { manager, ended } = await connectedStopHarness(client);
+    await manager.stop();
+    assert.equal(ended.length, 1);
+    assert.equal(ended[0].intentional, true);
+});
+
+test('late client end after stop cannot publish a second terminal event', async () => {
+    const client = fakeClient();
+    client.end = reason => { client.endReason = reason; };
+    const { manager, ended } = await connectedStopHarness(client);
+    await manager.stop();
+    client.emit('end', 'late socket end');
+    assert.equal(ended.length, 1);
+});
+
+test('late end from an old generation cannot detach a replacement client', async () => {
+    const client = fakeClient();
+    client.end = reason => { client.endReason = reason; };
+    const { manager, context, ended } = await connectedStopHarness(client);
+    context.detach(client);
+    const replacement = fakeClient();
+    const replacementGeneration = context.attach(replacement);
+    client.emit('end', 'old generation ended');
+    assert.equal(context.get(), replacement);
+    assert.equal(context.getGeneration(), replacementGeneration);
+    assert.equal(ended[0]?.connectionGeneration < replacementGeneration, true);
+    await manager.stop();
+    assert.equal(context.has(), false);
+});

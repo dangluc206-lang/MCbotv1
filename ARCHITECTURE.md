@@ -666,7 +666,10 @@ Planner không nên gọi server, timer hoặc GUI. `architecture/catalog.json` 
 B5 là một workflow server-specific trên framework:
 
 ```text
-B1 (storage /kho)
+B1 preparation (storage /kho)
+-> acquire B1 for B2
+   -> storage strategy: no-op, craft dùng /kho trực tiếp
+   -> inventory strategy: /kho overview -> material detail -> withdraw numeric amount -> verify inventory
 -> B2
 -> B3
 -> B4 (carbon/titanium/tungsten)
@@ -680,6 +683,7 @@ Responsibilities:
 - Read B1/storage + pressure/conversion/smelting: `B1StorageMaterialService`, storage/minerals/smelting services.
 - Read inventory/PV2: inventory + `PersonalVaultService`.
 - Server craft execution: `CraftingOperation`.
+- B2 input strategy fork: `B2InputAcquisitionFlow`; `KhoWithdrawOperation` sở hữu GUI withdrawal, còn pure quantity/capacity planning nằm trong `src/planning/storage/*`. Đây là một bước trong pipeline chung, không tạo mode hay B5 orchestrator thứ hai.
 - Result verification: `CraftingResultVerifier`.
 - Long B5 orchestration: `B5AutomationService`, `src/server-features/crafting/b5/flows/*`.
 - Long-running collector mode: `CollectorB5ModeService`.

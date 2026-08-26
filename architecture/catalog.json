@@ -27,6 +27,7 @@
     "src/desktop/renderer/features/incidents/IncidentPresenter.js",
     "src/desktop/renderer/features/builder/TypedModuleEditor.js",
     "src/desktop/renderer/features/modes/ModeViewModel.js",
+    "src/desktop/renderer/features/connection/ConnectionViewModel.js",
     "src/desktop/renderer/app.js"
   ],
   "configuration": {

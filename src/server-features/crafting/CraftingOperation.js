@@ -36,7 +36,8 @@ class CraftingOperation {
         cancellationToken = null,
         expectedGeneration = null,
         operationContext = null,
-        reconciliationBaseline = null
+        reconciliationBaseline = null,
+        inputSourceOverrides = null
     } = {}) {
         cancellationToken = operationContext?.cancellation?.token || cancellationToken;
         expectedGeneration = expectedGeneration ?? operationContext?.connectionGeneration ?? this.context?.getGeneration?.() ?? null;
@@ -233,7 +234,10 @@ class CraftingOperation {
                         {
                             amount: Number(perCraft || 0) * minimumCrafts,
                             perCraft: Number(perCraft || 0),
-                            source: recipe.inputSources?.[inputId] || recipe.inputSource || 'inventory'
+                            source: inputSourceOverrides?.[inputId]
+                                || recipe.inputSources?.[inputId]
+                                || recipe.inputSource
+                                || 'inventory'
                         }
                     ])
                 )
@@ -247,7 +251,10 @@ class CraftingOperation {
                 const inputBaselines = {};
                 const inputCountsBefore = {};
                 for (const [inputId] of Object.entries(recipe.inputs || {})) {
-                    const source = String(recipe.inputSources?.[inputId] || recipe.inputSource || 'inventory');
+                    const source = String(inputSourceOverrides?.[inputId]
+                        || recipe.inputSources?.[inputId]
+                        || recipe.inputSource
+                        || 'inventory');
                     const supplied = reconciliationBaseline?.inputs?.[inputId] || null;
                     let count = null;
                     if (supplied && String(supplied.source || source) === source && Number.isFinite(Number(supplied.count))) {

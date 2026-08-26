@@ -10,7 +10,7 @@ const B5PlanningService = require('../../../src/server-features/crafting/B5Plann
 const KhoSnapshot = require('../../../src/server-features/storage/KhoSnapshot');
 const PersonalVaultSnapshot = require('../../../src/server-features/personal-vault/PersonalVaultSnapshot');
 
-function createService({ loose = 0, blocks = 0, existingB5 = 0, pvEmptySlots = null, blockCraftable = true } = {}) {
+function createService({ loose = 0, blocks = 0, inventoryB1 = 0, existingB5 = 0, pvEmptySlots = null, blockCraftable = true, b2InputSource = 'storage' } = {}) {
     const recipes = {
         b2: { output: 'b2', outputAmount: 1, inputs: { b1: 16 } },
         b3: { output: 'b3', outputAmount: 1, inputs: { b2: 16 } },
@@ -35,14 +35,14 @@ function createService({ loose = 0, blocks = 0, existingB5 = 0, pvEmptySlots = n
         personalVault: {
             read: async () => ({ success: true, data: new PersonalVaultSnapshot({ totals: { b3: 1, b5: existingB5 }, slotCount: pvEmptySlots === null ? null : 54, emptySlotCount: pvEmptySlots }) })
         },
-        inventoryReader: { read: () => ({ items: [] }) },
-        inventoryCounter: { count: () => 0 },
+        inventoryReader: { read: () => ({ source: 'bot-inventory', items: inventoryB1 > 0 ? [{ logicalId: 'b1', count: inventoryB1 }] : [] }) },
+        inventoryCounter: { count: (_snapshot, id) => id === 'b1' ? inventoryB1 : 0 },
         b5Planner,
         materialCalculator,
         recipeRegistry,
         tiers,
         b1Materials,
-        config: { b1SupplyMode: 'continuous', personalVaultBackpressure: { minEmptySlots: 3, hardMinEmptySlots: 1 } }
+        config: { b1SupplyMode: 'continuous', b2InputSource, personalVaultBackpressure: { minEmptySlots: 3, hardMinEmptySlots: 1 } }
     });
 }
 
@@ -115,4 +115,20 @@ test('B5PlanningService preserves stable thrown dependency status instead of col
     assert.equal(result.success, false);
     assert.equal(result.status, 'DISCONNECTED');
     assert.equal(result.error?.code, 'DISCONNECTED');
+});
+
+test('inventory-source planning counts leftover B1 once and requires only the storage remainder', async () => {
+    const result = await createService({
+        loose: 192,
+        inventoryB1: 64,
+        b2InputSource: 'inventory'
+    }).inspectAdditional(1);
+    assert.equal(result.success, true);
+    const chain = result.data.chains[0];
+    assert.equal(chain.inventoryB1, 64);
+    assert.equal(chain.storageEffective, 192);
+    assert.equal(chain.storedEffective, 256);
+    assert.equal(chain.rawNeededFromStorage, 192, 'planner missing already excludes inventory B1');
+    assert.equal(chain.missingRaw, 0, 'storage remainder satisfies missing without counting inventory twice');
+    assert.equal(chain.readyToReserve, true);
 });

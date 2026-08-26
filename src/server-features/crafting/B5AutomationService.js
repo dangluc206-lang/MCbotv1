@@ -2,6 +2,7 @@
 
 const Operation = require('../../operations/Operation');
 const FlowError = require('../../shared/errors/FlowError');
+const Result = require('../../shared/result/Result');
 const Status = require('../../shared/result/Status');
 const B5ReadFlow = require('./b5/flows/B5ReadFlow');
 const B5PlanningFlow = require('./b5/flows/B5PlanningFlow');
@@ -9,6 +10,7 @@ const B5StorageFlow = require('./b5/flows/B5StorageFlow');
 const B5DepositFlow = require('./b5/flows/B5DepositFlow');
 const B5WithdrawFlow = require('./b5/flows/B5WithdrawFlow');
 const B5CraftFlow = require('./b5/flows/B5CraftFlow');
+const B2InputAcquisitionFlow = require('./b5/flows/B2InputAcquisitionFlow');
 const B5ProgressTracker = require('./b5/support/B5ProgressTracker');
 const B5InventoryState = require('./b5/support/B5InventoryState');
 const B5ActionDiagnostics = require('./b5/support/B5ActionDiagnostics');
@@ -53,6 +55,10 @@ class B5AutomationService {
             read: flows.read || new B5ReadFlow({ planningService, storage, personalVault, inventoryReader }),
             plan: flows.plan || new B5PlanningFlow({ recipeRegistry, config }),
             storage: flows.storage || new B5StorageFlow({ b1Materials }),
+            b2Input: flows.b2Input || new B2InputAcquisitionFlow({
+                storage,
+                source: config?.b2InputSource === 'inventory' ? 'inventory' : 'storage'
+            }),
             deposit: flows.deposit || new B5DepositFlow({ personalVault }),
             withdraw: flows.withdraw || new B5WithdrawFlow({ personalVault }),
             craft: flows.craft || new B5CraftFlow({ crafting })
@@ -269,6 +275,7 @@ class B5AutomationService {
                 plannedB3,
                 b2BatchSize,
                 useAllForB2,
+                b2InputSource,
                 basePerB2,
                 requiredRawForStart,
                 totalEffective: storedEffective,
@@ -314,14 +321,27 @@ class B5AutomationService {
                             blocked: chainPlan.decompressionBlocked
                         }
                     });
-                    const prepared = await this.#runStep(context, {
+                    const inventoryBaseBefore = b2InputSource === 'inventory'
+                        ? this.inventoryState.count(currentChain.baseId)
+                        : 0;
+                    const requiredStorageForStart = b2InputSource === 'inventory'
+                        ? Math.max(0, requiredRawForStart - inventoryBaseBefore)
+                        : requiredRawForStart;
+                    const prepared = inventoryBaseBefore >= requiredRawForStart
+                        ? Result.ok({
+                            ready: true,
+                            available: inventoryBaseBefore,
+                            skipped: true,
+                            reason: 'inventory-b1-already-sufficient'
+                        })
+                        : await this.#runStep(context, {
                         subsystem: 'b5', step: 'prepare-b1',
                         action: useAllForB2 ? 'ensure B1 is ready for guarded B2 ALL' : 'ensure enough B1 for complete B2 batches',
                         resource: currentChain.baseId,
                         details: { required: requiredRawForStart, plannedB2Exact, plannedB2, b2BatchSize, basePerB2, useAllForB2, storedEffective: storageKnown ? storedEffective : null, availableB2Crafts, b2RecipeId: currentChain.b2RecipeId }
                     }, () => this.flows.storage.prepareBase(
                         currentChain.baseId,
-                        requiredRawForStart,
+                        requiredStorageForStart,
                         this.#childOptions(context, {
                             decompressionPolicy,
                             decompressionMaxRatioOverride: decompressionMaxUsageRatio,
@@ -347,7 +367,7 @@ class B5AutomationService {
                             subsystem: 'b5', operation: 'B5Automation', step: 'prepare-b1',
                             action: useAllForB2 ? 'ensure B1 is ready for guarded B2 ALL' : 'ensure enough B1 for complete B2 batches',
                             resource: currentChain.baseId,
-                            details: { required: requiredRawForStart, plannedB2Exact, plannedB2, b2BatchSize, basePerB2, useAllForB2 }
+                            details: { required: requiredStorageForStart, requestedTotal: requiredRawForStart, plannedB2Exact, plannedB2, b2BatchSize, basePerB2, useAllForB2 }
                         });
                     }
                     if (prepared.data?.ready === false) {
@@ -378,6 +398,63 @@ class B5AutomationService {
                         };
                     }
                     actions.push({ baseId: currentChain.baseId, status: 'base-ready', data: prepared.data });
+
+                    const acquired = await this.#runStep(context, {
+                        subsystem: 'b5', step: 'acquire-b1-for-b2',
+                        action: b2InputSource === 'inventory'
+                            ? 'withdraw prepared B1 into inventory before B2'
+                            : 'use prepared B1 directly from storage',
+                        resource: currentChain.baseId,
+                        details: {
+                            source: b2InputSource,
+                            requiredAmount: requiredRawForStart,
+                            b2Id: currentChain.b2Id,
+                            plannedB2
+                        }
+                    }, () => this.flows.b2Input.acquire(
+                        currentChain.baseId,
+                        requiredRawForStart,
+                        this.#childOptions(context, {
+                            outputId: currentChain.b2Id,
+                            expectedOutputAmount: plannedB2 * Math.max(1, Number(currentChain.b2OutputAmount || 1)),
+                            minimumFreeSlots: this.config.inventorySafetyEmptySlots
+                        })
+                    ), { acceptFailedResult: true });
+                    if (acquired?.success === false) {
+                        if ([Status.NOT_READY, Status.NOT_FOUND, Status.BUSY].includes(acquired.status)) {
+                            actions.push({
+                                baseId: currentChain.baseId,
+                                status: 'waiting',
+                                reason: acquired?.error?.code || 'b1-acquisition-not-ready',
+                                data: acquired.meta || null
+                            });
+                            continue;
+                        }
+                        throw FlowError.fromResult(acquired, {
+                            subsystem: 'b5', operation: 'B5Automation', step: 'acquire-b1-for-b2',
+                            action: 'acquire B1 for B2', resource: currentChain.baseId,
+                            details: { source: b2InputSource, requiredAmount: requiredRawForStart, b2Id: currentChain.b2Id }
+                        });
+                    }
+                    reserveChain = {
+                        ...reserveChain,
+                        b2InputSource,
+                        reconciliationBaseline: {
+                            inputs: {
+                                [currentChain.baseId]: {
+                                    source: b2InputSource,
+                                    count: b2InputSource === 'inventory'
+                                        ? Number(acquired.data?.inventoryAfter || 0)
+                                        : preparedLoose
+                                }
+                            }
+                        }
+                    };
+                    actions.push({
+                        baseId: currentChain.baseId,
+                        status: b2InputSource === 'inventory' ? 'b1-withdrawn' : 'b1-storage-direct',
+                        data: acquired.data || null
+                    });
                 } else {
                     actions.push({
                         baseId: currentChain.baseId,
@@ -920,7 +997,10 @@ class B5AutomationService {
                     currentStep: { kind: 'B2', id: chain.b2Id, crafts: b2Remaining }
                 });
                 const crafted = await this.#craftOrThrow(chain.b2RecipeId, quantity, context, chain.b2Id, {
-                    reconciliationBaseline: chain.reconciliationBaseline || null
+                    reconciliationBaseline: chain.reconciliationBaseline || null,
+                    inputSourceOverrides: chain.b2InputSource === 'inventory'
+                        ? { [chain.baseId]: 'inventory' }
+                        : null
                 });
                 const actualCrafts = this.inventoryState.actualCrafts(crafted, quantity);
                 if (actualCrafts <= 0) {

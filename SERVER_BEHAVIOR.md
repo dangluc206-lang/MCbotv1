@@ -451,8 +451,17 @@ Status: **CONFIRMED**
 
 - `useAllForB2 = true`;
 - `b2BatchSize = 64` vẫn là fallback khi ALL bị tắt bằng config.
+- `b2InputSource = storage` là mặc định tương thích config cũ; lựa chọn còn lại là `inventory`.
 
-CURRENT strategy cho phép `ALL` ở B1 -> B2 **chỉ sau guard storage pressure**. Sau khi ALL làm đầy inventory, reserve-chain sẽ park tối thiểu một stack B2 vào PV2 khi cần để tạo slot cho B2 -> B3 ALL. Đây là bot policy có guard, không phải universal server rule.
+Với `storage`, strategy cho phép `ALL` ở B1 -> B2 **chỉ sau guard storage pressure**. Sau khi ALL làm đầy inventory, reserve-chain sẽ park tối thiểu một stack B2 vào PV2 khi cần để tạo slot cho B2 -> B3 ALL. Với `inventory`, bot rút đúng numeric amount đã plan và tắt B2 `ALL` để lượng input/output có thể kiểm soát. Đây là bot policy có guard, không phải universal server rule.
+
+### `/kho` material withdrawal
+
+Status: **PARTIALLY CONFIRMED (operator description; exact live identity unknown)**
+
+Luồng được xác nhận về mặt hành vi: `/kho` overview → click material B1 → material detail → semantic `Rút/Withdraw` → quantity GUI. Server có thể đưa ra `1`, `8`, `16`, `64`, `128`, `256`, `512`, `1 stack` và `đầy inventory`. Bot hiện chỉ dùng các numeric amount có identity text chính xác, chọn tổ hợp ít click và không vượt request; `1 stack`/`đầy inventory` được nhận diện là action riêng nhưng không được chọn mặc định. Exact title, fingerprint và slot cho material-detail/quantity GUI vẫn **UNKNOWN** cho tới khi có capture runtime; implementation vì vậy yêu cầu fresh `/kho` provenance, new-window transition và semantic live text thay vì hard-code slot.
+
+Withdrawal chạy sau smelting/conversion đưa B1 về đúng recipe form. Mỗi click được verify bằng delta B1 trong player inventory; nếu click báo lỗi nhưng delta đã xuất hiện thì coi action đã áp dụng và không click lại. Generation đổi ở bất kỳ boundary nào phải hủy flow trước B2.
 
 ## 16. B2 -> B3 Special Rule
 

@@ -134,7 +134,7 @@
             <p>Điều chỉnh khoảng trống an toàn, cách dùng ALL và ngưỡng chống đầy PV2. Các thay đổi này cần khởi động lại hệ thống nền.</p>
             <div class="inline-fields"><label>Ô trống an toàn trong túi đồ<input id="b5InventorySafety" type="number" min="0" step="1"></label><label>Ô trống tối thiểu để B3 dùng ALL<input id="b5B3MinSlots" type="number" min="0" step="1"></label></div>
             <div class="inline-fields"><label>PV2: ô trống mục tiêu<input id="b5PvMinEmpty" type="number" min="0" step="1"></label><label>PV2: ngưỡng ô trống tối thiểu<input id="b5PvHardMin" type="number" min="0" step="1"></label></div>
-            <div class="inline-fields"><label>Kích thước mẻ B2<input id="b5BatchSize" type="number" min="1" step="1"></label><label class="check"><input id="b5QuantityEnabled" type="checkbox"> Bật tối ưu số lượng</label></div>
+            <div class="inline-fields"><label>Nguồn B1 khi chế B2<select id="b5B2InputSource"><option value="storage">Dùng trực tiếp trong kho</option><option value="inventory">Rút ra inventory trước khi chế</option></select></label><label>Kích thước mẻ B2<input id="b5BatchSize" type="number" min="1" step="1"></label><label class="check"><input id="b5QuantityEnabled" type="checkbox"> Bật tối ưu số lượng</label></div>
             <label class="check"><input id="b5B2UseAll" type="checkbox"> Cho B2 dùng ALL</label>
             <label class="check"><input id="b5B3UseAll" type="checkbox"> Cho B3 dùng ALL khi đủ ô trống an toàn</label>
             <label class="check"><input id="b5B4UseAllExact" type="checkbox"> Cho B4 dùng ALL khi số lượng khớp chính xác</label>
@@ -376,6 +376,7 @@
   <script src="features/incidents/IncidentPresenter.js"></script>
   <script src="features/builder/TypedModuleEditor.js"></script>
   <script src="features/modes/ModeViewModel.js"></script>
+  <script src="features/connection/ConnectionViewModel.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

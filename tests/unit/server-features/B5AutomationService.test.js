@@ -5,6 +5,8 @@ const assert = require('node:assert/strict');
 const Result = require('../../../src/shared/result/Result');
 const FlowError = require('../../../src/shared/errors/FlowError');
 const B5AutomationService = require('../../../src/server-features/crafting/B5AutomationService');
+const B2InputAcquisitionFlow = require('../../../src/server-features/crafting/b5/flows/B2InputAcquisitionFlow');
+const B5PlanningFlow = require('../../../src/server-features/crafting/b5/flows/B5PlanningFlow');
 const Operation = require('../../../src/operations/Operation');
 const OperationManager = require('../../../src/operations/OperationManager');
 const OperationQueue = require('../../../src/operations/OperationQueue');
@@ -1518,4 +1520,110 @@ test('B5 recoveryOnly run never promotes or crafts when the proven B5 is no long
     assert.equal(result.data.recoveredExistingB5, false);
     assert.equal(craftCalls, 0);
     assert.equal(compactCalls, 0);
+});
+test('B2 input acquisition defaults to storage and performs no withdrawal', async () => {
+    let withdrawals = 0;
+    const flow = new B2InputAcquisitionFlow({
+        storage: { async withdrawB1() { withdrawals += 1; throw new Error('must not withdraw'); } }
+    });
+    const result = await flow.acquire('lapis_lazuli', 384);
+    assert.equal(result.success, true);
+    assert.equal(result.data.source, 'storage');
+    assert.equal(result.data.withdrawalRequired, false);
+    assert.equal(withdrawals, 0);
+});
+
+test('legacy B5 config defaults B2 input to storage while inventory source disables B2 ALL', () => {
+    const recipeRegistry = { require: () => ({ inputs: { coal: 16 } }) };
+    const chain = { baseId: 'coal', b2RecipeId: 'b2', b2Crafts: 64, b3Crafts: 0, storedEffective: 4096 };
+    const legacy = new B5PlanningFlow({
+        recipeRegistry,
+        config: { quantityOptimization: { enabled: true, useAllForB2: true, b2BatchSize: 64 } }
+    }).planChain(chain);
+    assert.equal(legacy.b2InputSource, 'storage');
+    assert.equal(legacy.useAllForB2, true);
+
+    const inventory = new B5PlanningFlow({
+        recipeRegistry,
+        config: { b2InputSource: 'inventory', quantityOptimization: { enabled: true, useAllForB2: true, b2BatchSize: 64 } }
+    }).planChain(chain);
+    assert.equal(inventory.b2InputSource, 'inventory');
+    assert.equal(inventory.useAllForB2, false);
+    assert.equal(inventory.requiredRawForStart, 1024);
+});
+
+test('inventory B2 source preserves iron raw/smelt preparation before withdraw, verify and B2 craft', async () => {
+    const calls = [];
+    const counts = { iron_ingot: 64, b2: 0, b3: 0 };
+    let inspections = 0;
+    const chain = {
+        baseId: 'iron_ingot', b2Id: 'b2', b3Id: 'b3',
+        b2RecipeId: 'b2-recipe', b3RecipeId: 'b3-recipe',
+        b2OutputAmount: 1, b3InputPerCraft: 16,
+        storedEffective: 1024, storedTotalEffective: 1024,
+        rawNeededFromStorage: 1024, readyToReserve: true,
+        b2Crafts: 64, b3Crafts: 4, vaultB2: 0, inventoryB2: 0, inventoryB3: 0
+    };
+    const recipes = {
+        'b2-recipe': { output: 'b2', outputAmount: 1, inputs: { iron_ingot: 16 } },
+        'b3-recipe': { output: 'b3', outputAmount: 1, inputs: { b2: 16 } },
+        super_alloy: { output: 'super_alloy', inputs: { x: 1 } }
+    };
+    const service = new B5AutomationService({
+        planningService: {
+            async inspectAdditional() {
+                inspections += 1;
+                return Result.ok({
+                    personalVault: { totals: { super_alloy: 0 } },
+                    fullPlan: { targetId: 'super_alloy', feasible: false }, finalSteps: [],
+                    chains: inspections === 1 ? [chain] : []
+                });
+            }
+        },
+        crafting: {
+            async craft(recipeId, quantity, options) {
+                calls.push(`craft:${recipeId}:${quantity}`);
+                if (recipeId === 'b2-recipe') {
+                    assert.deepEqual(options.inputSourceOverrides, { iron_ingot: 'inventory' });
+                    assert.ok(counts.iron_ingot >= 1024, 'withdrawal must finish before B2 craft');
+                    counts.iron_ingot -= 1024;
+                    counts.b2 += 64;
+                    return Result.ok({ actualCrafts: 64 });
+                }
+                if (recipeId === 'b3-recipe') {
+                    counts.b2 = 0; counts.b3 = 4;
+                    return Result.ok({ actualCrafts: 4 });
+                }
+                return Result.ok({ actualCrafts: Number(quantity) || 1 });
+            }
+        },
+        personalVault: { async deposit() { return Result.ok({}); }, async withdraw() { return Result.ok({}); } },
+        storage: {
+            async withdrawB1(id, options) {
+                calls.push(`withdraw:${id}:${options.requiredAmount}`);
+                counts[id] = options.requiredAmount;
+                return Result.ok({ source: 'inventory', inventoryAfter: counts[id], actualDelta: counts[id] });
+            }
+        },
+        b1Materials: {
+            async ensureBaseAvailable(baseId, amount) {
+                calls.push(`smelt-and-prepare:${baseId}:${amount}`);
+                return Result.ok({ ready: true, available: amount });
+            },
+            async compact() { return Result.ok({}); }, async compactAll() { return Result.ok({}); }
+        },
+        inventoryReader: { readBotInventory: () => ({ source: 'bot-inventory', emptySlotCount: 20, counts: { ...counts } }) },
+        inventoryCounter: { count: (snapshot, id) => Number(snapshot.counts?.[id] || 0) },
+        recipeRegistry: { require: id => recipes[id] }, operationManager: operationManager(),
+        config: {
+            targetId: 'super_alloy', timeoutMs: 1000, inventorySafetyEmptySlots: 2,
+            b2InputSource: 'inventory', b3AllMinEmptySlots: 1,
+            quantityOptimization: { enabled: true, useAllForB2: true, useAllForB3: true, useAllForB4WhenExact: true, useAllForB5: false, b2BatchSize: 64 }
+        }
+    });
+    const result = await service.runNext();
+    assert.equal(result.success, true);
+    assert.ok(calls.indexOf('smelt-and-prepare:iron_ingot:960') < calls.indexOf('withdraw:iron_ingot:1024'));
+    assert.ok(calls.indexOf('withdraw:iron_ingot:1024') < calls.indexOf('craft:b2-recipe:64'));
+    assert.equal(calls.some(call => call === 'craft:b2-recipe:ALL'), false);
 });

@@ -428,7 +428,7 @@ class ConnectionManager {
 
     #bindClientEvents(client, generation) {
         let cleaned = false;
-        const signals = { kickReason: null, errorCode: null, errorMessage: null, endReason: null };
+        const signals = { kickReason: null, errorCode: null, errorMessage: null, endReason: null, endedEventPublished: false };
         this.clientSignals.set(client, signals);
 
         const isCurrent = () => this.sessionManager.isCurrent(client, generation);
@@ -495,15 +495,7 @@ class ConnectionManager {
             this.context.detach(client);
             this.sessionManager.close(client);
 
-            this.logger?.warn?.('Minecraft connection ended.', {
-                botId: this.botId,
-                connectionGeneration: generation,
-                reason,
-                intentional: this.stopping
-            });
-            this.eventBus?.emit('connection:ended', {
-                botId: this.botId,
-                connectionGeneration: generation,
+            this.#emitConnectionEndedOnce(client, generation, {
                 reason,
                 intentional: this.stopping
             });
@@ -543,6 +535,27 @@ class ConnectionManager {
         this.clientCleanups.get(client)?.();
     }
 
+    #emitConnectionEndedOnce(client, generation, { reason = null, intentional = false } = {}) {
+        const signals = this.clientSignals.get(client) || { endedEventPublished: false };
+        if (signals.endedEventPublished) return false;
+        signals.endedEventPublished = true;
+        signals.endReason = reason == null ? null : String(reason);
+        this.clientSignals.set(client, signals);
+        this.logger?.warn?.('Minecraft connection ended.', {
+            botId: this.botId,
+            connectionGeneration: generation,
+            reason,
+            intentional: Boolean(intentional)
+        });
+        this.eventBus?.emit('connection:ended', {
+            botId: this.botId,
+            connectionGeneration: generation,
+            reason,
+            intentional: Boolean(intentional)
+        });
+        return true;
+    }
+
     #stringifyReason(reason) {
         if (typeof reason === 'string') return reason;
         try {
@@ -561,12 +574,17 @@ class ConnectionManager {
         const client = this.context.get();
 
         if (client) {
+            const generation = this.context.getGeneration();
             try {
                 client.end?.('runtime stopping');
             } finally {
                 this.#cleanupClient(client);
                 this.context.detach(client);
                 this.sessionManager.close(client);
+                this.#emitConnectionEndedOnce(client, generation, {
+                    reason: 'runtime stopping',
+                    intentional: true
+                });
             }
         }
 
@@ -579,12 +597,17 @@ class ConnectionManager {
         // operator disconnect can never leave a late client online.
         const lateClient = this.context.get();
         if (lateClient) {
+            const generation = this.context.getGeneration();
             try {
                 lateClient.end?.('runtime stopping');
             } finally {
                 this.#cleanupClient(lateClient);
                 this.context.detach(lateClient);
                 this.sessionManager.close(lateClient);
+                this.#emitConnectionEndedOnce(lateClient, generation, {
+                    reason: 'runtime stopping',
+                    intentional: true
+                });
             }
         }
     }

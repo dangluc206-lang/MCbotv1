@@ -23,6 +23,9 @@ class ItemNormalizer {
             name: item.name || item.itemName || item.carrier || '',
             type: item.type ?? null,
             count: item.count ?? 0,
+            maxStackSize: Number.isInteger(Number(item.maxStackSize)) && Number(item.maxStackSize) > 0
+                ? Number(item.maxStackSize)
+                : 64,
             metadata: item.metadata ?? null,
             displayName: String(displayName),
             lore: Array.isArray(lore) ? lore.map(String) : [],

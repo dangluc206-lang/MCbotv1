@@ -112,7 +112,11 @@ function connClass(status) {
 }
 
 function viConnection(status) {
-  return ({ CONNECTED: 'Đã kết nối', CONNECTING: 'Đang kết nối', RECONNECTING: 'Đang kết nối lại', DISCONNECTED: 'Đã ngắt', FAILED: 'Lỗi', IDLE: 'Đang rảnh' })[String(status || '').toUpperCase()] || String(status || 'Không rõ');
+  return ({ CONNECTED: 'Đã kết nối', CONNECTING: 'Đang kết nối', LOGGED_IN: 'Đã đăng nhập Minecraft', AUTHENTICATING: 'Đang đăng nhập server', AUTHENTICATION_FAILED: 'Đăng nhập server thất bại', KICKED: 'Bị máy chủ ngắt', RECONNECTING: 'Đang kết nối lại', DISCONNECTED: 'Đã ngắt', DISABLED: 'Đã tắt kết nối', FAILED: 'Lỗi kết nối', IDLE: 'Đang rảnh' })[String(status || '').toUpperCase()] || String(status || 'Không rõ');
+}
+
+function connectionControlState(bot) {
+  return window.MCbotConnectionViewModel.controlState(bot);
 }
 
 function viModeBadge(className) {
@@ -173,7 +177,7 @@ function buttonHtml({ label, action, bot, mode = '', kind = 'ghost', disabled = 
 
 function renderMetrics() {
   const bots = state.snapshot?.bots || [];
-  const connected = bots.filter(bot => bot.state?.connectionState === 'CONNECTED').length;
+  const connected = bots.filter(bot => bot.connectionOnline === true).length;
   const runningModes = bots.filter(bot => bot.modeOwner).length;
   const activeOps = bots.reduce((sum, bot) => sum + Number(bot.operation?.active || 0), 0);
   const errors = bots.filter(bot => bot.state?.lastError).length;
@@ -190,8 +194,7 @@ function renderMetrics() {
 function botCard(bot, fullActions = false) {
   const profile = bot.profile || {};
   const connection = bot.state?.connectionState || 'DISCONNECTED';
-  const connected = connection === 'CONNECTED';
-  const connecting = connection === 'RECONNECTING' || connection === 'CONNECTING';
+  const connectionView = connectionControlState(bot);
   const mode = modeInfo(bot);
   const player = bot.player;
   const operation = activeOperation(bot);
@@ -202,9 +205,9 @@ function botCard(bot, fullActions = false) {
   const b5RecoveryButton = b5CanRetry ? `<div class="actions"><button class="button warn" data-action="b5-retry-storage" data-bot="${esc(id)}">Thử lại bảo vệ kho</button></div>` : '';
   const held = player?.heldItem?.displayName || player?.heldItem?.name || '—';
   const mainActions = `<div class="actions">
-    ${buttonHtml({ label: 'Kết nối', action: 'connect', bot: id, kind: 'primary', disabled: connected || connecting, key: `connect:${id}` })}
-    ${buttonHtml({ label: 'Về đảo', action: 'home', bot: id, disabled: !connected, key: `home:${id}` })}
-    ${buttonHtml({ label: 'Ngắt riêng bot này', action: 'disconnect', bot: id, kind: 'danger', disabled: !connected && !connecting, key: `disconnect:${id}` })}
+    ${buttonHtml({ label: 'Kết nối', action: 'connect', bot: id, kind: 'primary', disabled: profile.enabled === false || !connectionView.canConnect, key: `connect:${id}` })}
+    ${buttonHtml({ label: 'Về đảo', action: 'home', bot: id, disabled: !connectionView.online, key: `home:${id}` })}
+    ${buttonHtml({ label: 'Ngắt riêng bot này', action: 'disconnect', bot: id, kind: 'danger', disabled: !connectionView.canDisconnect, key: `disconnect:${id}` })}
   </div>`;
   const availableModes = bot.modes?.available || [
     { definition: { id: 'b5-craft', label: 'Chế B5 thuần' }, readiness: { ready: true } },
@@ -219,10 +222,10 @@ function botCard(bot, fullActions = false) {
     const blocked = !readiness.ready;
     const missing = (readiness.missingCapabilities || []).join(', ');
     return buttonHtml({
-      label: `${entry.definition?.label || modeId || 'Chế độ'}${!connected && !connecting ? ' · tự kết nối' : ''}`,
+      label: `${entry.definition?.label || modeId || 'Chế độ'}${!connectionView.online && !connectionView.connecting && !connectionView.wantsConnected ? ' · tự kết nối' : ''}`,
       action: 'mode-start', bot: id, mode: modeId, kind: 'primary',
       disabled: profileDisabled || blocked || sameMode,
-      title: profileDisabled ? 'Hồ sơ bot đang tắt.' : blocked ? `Chưa sẵn sàng: ${missing || 'service mode chưa được bind'}` : !connected ? 'Bật mode và tự kết nối bot.' : '',
+      title: profileDisabled ? 'Hồ sơ bot đang tắt.' : blocked ? `Chưa sẵn sàng: ${missing || 'service mode chưa được bind'}` : !connectionView.online && !connectionView.wantsConnected ? 'Bật mode và tự kết nối bot.' : '',
       key: `mode:${id}`
     });
   }).join('');
@@ -1023,6 +1026,7 @@ async function loadB5Rules() {
   const quantity = c.quantityOptimization || {};
   const pv = c.personalVaultBackpressure || {};
   $('#b5InventorySafety').value = c.inventorySafetyEmptySlots ?? 2;
+  $('#b5B2InputSource').value = c.b2InputSource === 'inventory' ? 'inventory' : 'storage';
   $('#b5B3MinSlots').value = c.b3AllMinEmptySlots ?? 1;
   $('#b5PvMinEmpty').value = pv.minEmptySlots ?? 3;
   $('#b5PvHardMin').value = pv.hardMinEmptySlots ?? 1;
@@ -1033,6 +1037,15 @@ async function loadB5Rules() {
   $('#b5B4UseAllExact').checked = quantity.useAllForB4WhenExact !== false;
   $('#b5B5UseAll').checked = quantity.useAllForB5 === true;
   $('#b5KeepSurplusPv2').checked = quantity.keepSurplusInPv2 !== false;
+  syncB2InputSourceUi();
+}
+
+function syncB2InputSourceUi() {
+  const inventorySource = $('#b5B2InputSource').value === 'inventory';
+  $('#b5B2UseAll').disabled = inventorySource;
+  $('#b5B2UseAll').title = inventorySource
+    ? 'Nguồn inventory luôn dùng lượng B1 đã kiểm soát; B2 ALL sẽ không được dùng.'
+    : '';
 }
 
 async function saveB5Rules() {
@@ -1040,6 +1053,7 @@ async function saveB5Rules() {
   return api(window.mcbot.updateB5RulesConfig({
     inventorySafetyEmptySlots: Number($('#b5InventorySafety').value),
     b3AllMinEmptySlots: Number($('#b5B3MinSlots').value),
+    b2InputSource: $('#b5B2InputSource').value === 'inventory' ? 'inventory' : 'storage',
     quantityOptimization: {
       enabled: $('#b5QuantityEnabled').checked,
       useAllForB2: $('#b5B2UseAll').checked,
@@ -1257,6 +1271,7 @@ function bindEvents() {
   $('#loadB5PureConfig').onclick = () => loadB5PureConfig().catch(error => toast(error.message, 'error'));
   $('#saveB5PureConfig').onclick = event => runAction({ key: 'b5-pure-config', button: event.currentTarget, success: 'Đã lưu cấu hình B5 thuần.', refresh: false, fn: saveB5PureConfig }).catch(() => {});
   $('#loadB5Rules').onclick = () => loadB5Rules().catch(error => toast(error.message, 'error'));
+  $('#b5B2InputSource').addEventListener('change', syncB2InputSourceUi);
   $('#saveB5Rules').onclick = event => runAction({ key: 'b5-rules-config', button: event.currentTarget, success: 'Đã lưu quy tắc B5. Hãy khởi động lại hệ thống nền để áp dụng đầy đủ.', refresh: false, fn: saveB5Rules }).catch(() => {});
   $('#loadStorageProtect').onclick = () => loadStorageProtection().catch(error => toast(error.message, 'error'));
   $('#saveStorageProtect').onclick = event => runAction({ key: 'storage-protect-config', button: event.currentTarget, success: 'Đã lưu và áp dụng mức bảo vệ kho cho các bot đang chạy.', refresh: false, fn: saveStorageProtection }).catch(() => {});

@@ -68,6 +68,18 @@ test('all active configuration groups have schemas, validate, and reject unknown
     }
 });
 
+test('legacy B5/storage config without B2 input source or withdrawal policy remains valid', () => {
+    const current = snapshot();
+    const legacyB5 = clone(current.b5);
+    const legacyStorage = clone(current.storage);
+    delete legacyB5.b2InputSource;
+    delete legacyStorage.withdraw;
+    assert.equal(groupSchemas.b5(legacyB5).valid, true);
+    assert.equal(groupSchemas.storage(legacyStorage).valid, true);
+    const invalid = { ...legacyB5, b2InputSource: 'automatic' };
+    assert.equal(groupSchemas.b5(invalid).valid, false);
+});
+
 
 test('mineral conversion schema enforces the complete ordered B5 smelting contract', () => {
     const valid = snapshot().mineralConversions;

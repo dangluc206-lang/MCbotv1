@@ -7,11 +7,12 @@ const FlowError = require('../../shared/errors/FlowError');
 const Operation = require('../../operations/Operation');
 
 class KhoService {
-    constructor({ commandService, guiManager, reader, sellOperation = null, config, guiKnowledge = null, operationManager = null, context = null, logger = null }) {
+    constructor({ commandService, guiManager, reader, sellOperation = null, withdrawOperation = null, config, guiKnowledge = null, operationManager = null, context = null, logger = null }) {
         this.commandService = commandService;
         this.guiManager = guiManager;
         this.reader = reader;
         this.sellOperation = sellOperation;
+        this.withdrawOperation = withdrawOperation;
         this.guiKnowledge = guiKnowledge;
         this.operationManager = operationManager;
         this.context = context;
@@ -26,6 +27,7 @@ class KhoService {
         this.config = next;
         this.reader?.reconfigure?.(next);
         this.sellOperation?.reconfigure?.(next);
+        this.withdrawOperation?.reconfigure?.(next);
         this.source = Object.freeze({ commandKey: next.commandKey, command: '/kho', guiId: next.guiId, clicks: [], actions: [], source: 'operation' });
         this.lastKhoSessionId = null;
         return this;
@@ -146,6 +148,54 @@ class KhoService {
                 details: { logicalId, quantity, gui: this.guiManager.describeCurrent?.() || null }
             });
             return Result.fail(Operation.statusForError(error), wrapped.message, wrapped, wrapped.toDiagnostic());
+        }
+    }
+
+    setWithdrawOperation(operation) {
+        this.withdrawOperation = operation;
+        return this;
+    }
+
+    async withdrawB1(logicalId, options = {}) {
+        const { operationContext = null } = options;
+        if (this.operationManager && !operationContext) {
+            return this.#runManaged('KhoService.withdrawB1', ['gui', 'storage', 'inventory'], options,
+                context => this.withdrawB1(logicalId, {
+                    ...options,
+                    operationContext: context,
+                    cancellationToken: context.cancellation.token,
+                    expectedGeneration: context.connectionGeneration
+                }),
+                { logicalId, requiredAmount: options.requiredAmount });
+        }
+        if (!this.withdrawOperation) {
+            return Result.fail(Status.NOT_READY, 'Storage withdrawal operation is unavailable.', null, {
+                code: 'KHO_WITHDRAW_UNAVAILABLE', step: 'b1-withdraw', resource: logicalId
+            });
+        }
+        try {
+            const expectedGeneration = this.#expectedGeneration(options);
+            this.#assertGeneration(expectedGeneration);
+            return await this.withdrawOperation.execute(logicalId, { ...options, expectedGeneration, operationContext });
+        } catch (error) {
+            const wrapped = FlowError.wrap(error, {
+                code: error?.code || 'KHO_WITHDRAW_FAILED', subsystem: 'storage', operation: 'KhoService',
+                step: 'b1-withdraw', action: '/kho material withdrawal', resource: logicalId,
+                details: { requiredAmount: options.requiredAmount, gui: this.guiManager.describeCurrent?.() || null }
+            });
+            return Result.fail(Operation.statusForError(error), wrapped.message, wrapped, wrapped.toDiagnostic());
+        } finally {
+            try {
+                const expectedGeneration = this.#expectedGeneration(options);
+                if (expectedGeneration == null || Number(expectedGeneration) === Number(this.context?.getGeneration?.())) {
+                    await this.guiManager.closeCurrentWindow?.();
+                }
+            } catch (cleanupError) {
+                this.logger?.debug?.('B1 withdrawal GUI cleanup failed.', {
+                    operation: 'KhoService', step: 'b1-withdraw-cleanup', resource: logicalId,
+                    error: cleanupError?.message || String(cleanupError)
+                });
+            }
         }
     }
 

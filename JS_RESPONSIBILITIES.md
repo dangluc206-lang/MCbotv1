@@ -1337,6 +1337,19 @@ Tài liệu này mô tả từng file JavaScript thực tế trong repository. S
 
 - **Scope:** Bot-scoped
 - **Trách nhiệm:** Cung cấp capability nghiệp vụ qua Result contract. Thành phần: `KhoService`. Phải xác minh semantic `/kho` bằng capacity hoặc provenance/source đã được `/kho` command xác nhận; không được coi `/nung`, `/ks` hay crafting GUI là `/kho` chỉ vì chúng chứa item B1 parse được.
+- **B1 withdrawal:** expose `withdrawB1()` qua OperationManager với lock `gui/storage/inventory`; cleanup window chỉ khi generation còn đúng.
+
+### `src/server-features/storage/KhoWithdrawOperation.js`
+- **Scope:** Bot-scoped `/kho` withdrawal transaction.
+- **Trách nhiệm:** Mở fresh overview, chọn material theo slot đã parse từ snapshot, xác minh transition sang detail, resolve semantic withdraw/numeric quantity, click qua `GuiManager`, verify inventory delta và reconcile lost response. Không hard-code slot hoặc dùng `1 stack`/`đầy inventory` mặc định.
+
+### `src/planning/storage/B1WithdrawQuantityResolver.js`
+- **Scope:** Pure planner.
+- **Trách nhiệm:** Phân rã exact requested amount thành các numeric action server đang hiển thị, tối thiểu số click và ưu tiên quantity lớn khi hòa.
+
+### `src/planning/storage/B1InventoryWithdrawalPlanner.js`
+- **Scope:** Pure inventory-capacity planner.
+- **Trách nhiệm:** Tính merge capacity/empty slots cần cho B1 và reserve capacity cho B2 output trước khi cho phép withdrawal.
 - **Dependency được phép:** module cùng capability, primitive tầng thấp hơn và dependency được inject.
 - **Dependency bị cấm:** mode/controller tầng cao, global bot, secret và dữ liệu server hard-code.
 - **Lifecycle/cleanup:** cleanup mọi listener, timer, lock, queue hoặc connection do file sở hữu; stateless không giữ tài nguyên.
@@ -2054,6 +2067,10 @@ Tài liệu này mô tả từng file JavaScript thực tế trong repository. S
 
 - **Scope:** Stateless B5 step calculator.
 - **Trách nhiệm:** Chuyển chain snapshot thành bước B1/B2/B3 tiếp theo, tách total stock khỏi immediately-executable stock và không phát side effect.
+
+### `src/server-features/crafting/b5/flows/B2InputAcquisitionFlow.js`
+- **Scope:** Bot-scoped B2 input strategy adapter.
+- **Trách nhiệm:** `storage` trả no-op tương thích cũ; `inventory` gọi capability `storage.withdrawB1()` sau B1 preparation và trước B2. Không sở hữu craft B2 hoặc các tầng B3/B4/B5.
 
 ### `src/server-features/crafting/b5/flows/B5SellFlow.js`
 
