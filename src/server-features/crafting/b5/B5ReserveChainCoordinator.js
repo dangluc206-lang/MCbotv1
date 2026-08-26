@@ -177,9 +177,9 @@ class B5ReserveChainCoordinator {
     }
 
     #b2Quantity(chain, state, craftableByBase) {
-        if (chain.useAllForB2 === true && craftableByBase <= state.b2Remaining) return { quantity: 'ALL', reason: 'inventory-b1-all-bounded-by-current-material-plan' };
-        if (state.b2Remaining >= 64 && craftableByBase >= 64) return { quantity: 64, reason: 'exact-64-after-b1-withdraw' };
-        return { quantity: 1, reason: 'exact-one-after-b1-withdraw' };
+        if (chain.useAllForB2 === true && craftableByBase <= state.b2Remaining) return { quantity: 'ALL', reason: 'storage-b1-all-bounded-by-current-material-state' };
+        if (state.b2Remaining >= 64 && craftableByBase >= 64) return { quantity: 64, reason: 'exact-64-after-current-b1-preparation' };
+        return { quantity: 1, reason: 'exact-one-after-current-b1-preparation' };
     }
 
     async #tryFreeSlot(chain, state, view, context) {
@@ -233,14 +233,6 @@ class B5ReserveChainCoordinator {
         throw new FlowError(`Craft ${chain.b2Id} reported no completed crafts.`, {
             code: 'B5_B2_CRAFT_ZERO', subsystem: 'b5', step: 'reserve-b3-chain', action: `craft quantity ${quantity}`, resource: chain.b2Id,
             details: { quantity, crafted, baseCount, craftableByBase, b2Count, b2Remaining: state.b2Remaining, b3Remaining: state.b3Remaining }, trace: context.trace
-        });
-    }
-
-    #throwStalled(chain, state, view, context) {
-        throw new FlowError(`Cannot continue B3 reserve chain for ${chain.baseId}; insufficient ${chain.b2Id}.`, {
-            code: 'B5_RESERVE_INPUT_STALLED', subsystem: 'b5', step: 'reserve-b3-chain', action: 'choose next B2/B3 ALL action', resource: chain.b2Id,
-            details: { b2Count: view.b2Count, b2Remaining: state.b2Remaining, b3Remaining: state.b3Remaining, vaultB2Remaining: state.vaultB2Remaining,
-                emptySlotCount: view.inventory.emptySlotCount, chain }, trace: context.trace
         });
     }
 }
