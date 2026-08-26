@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - fix/b5-b1-expand-compact-cycle
+  pull_request:
+    branches:
+      - main
+    types: [synchronize, opened, reopened]
 
 jobs:
   package:
