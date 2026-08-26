@@ -1,11 +1,5 @@
 'use strict';
 
-try {
-    require('dotenv').config({ quiet: true });
-} catch (error) {
-    if (error?.code !== 'MODULE_NOT_FOUND') throw error;
-}
-
 const Application = require('../core/Application');
 const LifecycleCoordinator = require('../core/LifecycleCoordinator');
 const BotProfileAdminService = require('../discord/admin/BotProfileAdminService');
@@ -19,14 +13,22 @@ const registerDiscordServices = require('./registerDiscordServices');
 const createBotRuntime = require('./createBotRuntime');
 const registerModules = require('./registerModules');
 const createModeCatalog = require('./createModeCatalog');
+const loadRuntimeEnvironment = require('./RuntimeEnvironment');
 
 async function createApplication({
     baseDir = process.cwd(),
     output = null,
     clientFactory = null,
-    environment = process.env,
+    environment = null,
     discord = null
 } = {}) {
+    const environmentSource = environment === null || environment === undefined
+        ? loadRuntimeEnvironment({ baseDir })
+        : environment;
+    if (!environmentSource || typeof environmentSource !== 'object' || Array.isArray(environmentSource)) {
+        throw new TypeError('createApplication environment must be an object.');
+    }
+    const resolvedEnvironment = Object.freeze({ ...environmentSource });
     const configuration = await loadConfiguration({ baseDir });
     const modeCatalog = createModeCatalog({ baseDir });
     const shared = registerSharedServices({ configuration, output, clientFactory });
@@ -75,7 +77,7 @@ async function createApplication({
         loader: configuration.loader,
         validator: configuration.validator,
         directory: 'config/bots',
-        environment
+        environment: resolvedEnvironment
     });
     configuration.crossValidator.assertValid(configuration.registry.snapshot(), { botProfiles: profiles });
     fleetControl.setProfiles(profiles);
@@ -114,7 +116,7 @@ async function createApplication({
         configuration,
         shared,
         application,
-        environment,
+        environment: resolvedEnvironment,
         fleetControl,
         mutationCoordinator: shared.configMutations,
         logger: shared.loggerFactory.create('BotProfileAdmin')
@@ -122,7 +124,7 @@ async function createApplication({
     const discordService = registerDiscordServices({
         configuration,
         shared,
-        environment,
+        environment: resolvedEnvironment,
         discord,
         botProfileAdmin,
         fleetControl

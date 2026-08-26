@@ -6,6 +6,11 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { applyRuntimeConfigMigrations } = require('./RuntimeConfigMigrations');
 const FlowError = require('../../shared/errors/FlowError');
+const RuntimeTransactionJournal = require('./RuntimeTransactionJournal');
+const RuntimeConfigVersionReader = require('./RuntimeConfigVersionReader');
+const RuntimeConfigTreeVerifier = require('./RuntimeConfigTreeVerifier');
+const RuntimeFilesystemApplier = require('./RuntimeFilesystemApplier');
+const RuntimeRecoveryCoordinator = require('./RuntimeRecoveryCoordinator');
 
 function isPlainObject(value) {
     return Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -36,6 +41,10 @@ class RuntimeConfigMigrator {
         this.migrationRunner = migrationRunner;
         this.fs = fsOps;
         this.metadataPath = path.join(this.runtimeRoot, '.mcbot-runtime.json');
+        this.versionReader = new RuntimeConfigVersionReader({ fsOps:this.fs, metadataPath:this.metadataPath });
+        this.treeVerifier = new RuntimeConfigTreeVerifier({ fsOps:this.fs, existsSync:fs.existsSync });
+        this.filesystemApplier = new RuntimeFilesystemApplier({ fsOps:this.fs });
+        this.recoveryCoordinator = new RuntimeRecoveryCoordinator();
     }
 
     async #createTransactionContext(operation) {
@@ -47,7 +56,7 @@ class RuntimeConfigMigrator {
             workRoot: root,
             tempCounter: 0,
             closureRepairCount: 0,
-            ledger: { nextSequence: 1, attempts: [] },
+            ledger: RuntimeTransactionJournal.create(),
             artifacts: [],
             verifiedSources: [],
             unownedCollisions: [],
@@ -75,10 +84,7 @@ class RuntimeConfigMigrator {
     }
 
     #recordTx(tx, entry = {}) {
-        if (!tx?.ledger) return entry;
-        const item = { sequence: tx.ledger.nextSequence++, ...entry };
-        tx.ledger.attempts.push(item);
-        return item;
+        return RuntimeTransactionJournal.append(tx?.ledger, entry);
     }
 
     #registerArtifact(tx, artifact = {}) {
@@ -1386,7 +1392,7 @@ class RuntimeConfigMigrator {
 
         let verifiedSource = null;
         const verifiedSources = [];
-        for (const source of sources || []) {
+        for (const source of this.recoveryCoordinator.candidates(sources)) {
             if (!source || !fs.existsSync(source)) continue;
             try {
                 await this.#verifyTreeDigest(source, expectedDigest);
@@ -1803,7 +1809,7 @@ class RuntimeConfigMigrator {
             }
             if (!entry.isFile()) continue;
             if (!fs.existsSync(destination)) {
-                await this.fs.copyFile(source, destination);
+                await this.filesystemApplier.copyFile(source, destination);
                 report.filesAdded += 1;
                 continue;
             }
@@ -1833,7 +1839,7 @@ class RuntimeConfigMigrator {
                         throw new Error('Runtime config JSON merge requires an owned transaction context.');
                     }
                     let renameError = null;
-                    try { await this.fs.rename(temporary, destination); } catch (error) { renameError = error; }
+                    try { await this.filesystemApplier.rename(temporary, destination); } catch (error) { renameError = error; }
                     if (tx) {
                         this.#recordTx(tx, {
                             phase: 'MUTATE_CONFIG', stage: 'merge-config-install-call', operation: 'rename-call',
@@ -1898,34 +1904,11 @@ class RuntimeConfigMigrator {
     }
 
     async #treeDigest(root) {
-        if (!root || !fs.existsSync(root)) throw new Error('Runtime config tree is missing.');
-        const rows = [];
-        const walk = async (dir, relative = '') => {
-            const entries = await this.fs.readdir(dir, { withFileTypes: true });
-            entries.sort((a, b) => a.name.localeCompare(b.name));
-            for (const entry of entries) {
-                const absolute = path.join(dir, entry.name);
-                const rel = path.posix.join(relative.replace(/\\/g, '/'), entry.name);
-                if (entry.isDirectory()) {
-                    rows.push(`D:${rel}`);
-                    await walk(absolute, rel);
-                } else if (entry.isFile()) {
-                    const content = await this.fs.readFile(absolute);
-                    rows.push(`F:${rel}:${content.length}:${crypto.createHash('sha256').update(content).digest('hex')}`);
-                }
-            }
-        };
-        await walk(root);
-        return crypto.createHash('sha256').update(rows.join('\n')).digest('hex');
+        return this.treeVerifier.digest(root);
     }
 
     async #verifyTreeDigest(root, expectedDigest) {
-        if (!root || !expectedDigest || !fs.existsSync(root)) {
-            throw new Error('Runtime config transaction backup is missing or has no expected digest.');
-        }
-        const actual = await this.#treeDigest(root);
-        if (actual !== expectedDigest) throw new Error('Runtime config transaction backup verification failed.');
-        return actual;
+        return this.treeVerifier.verify(root, expectedDigest);
     }
 
     async #backupConfig(runtimeConfig, fromVersion) {
@@ -1938,19 +1921,7 @@ class RuntimeConfigMigrator {
     }
 
     async #captureMetadataSnapshot() {
-        try {
-            const raw = await this.fs.readFile(this.metadataPath);
-            const bytes = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
-            return {
-                existed: true,
-                bytes,
-                digest: crypto.createHash('sha256').update(bytes).digest('hex'),
-                parsed: JSON.parse(bytes.toString('utf8'))
-            };
-        } catch (error) {
-            if (error?.code === 'ENOENT') return { existed: false, bytes: null, digest: null, parsed: null };
-            throw error;
-        }
+        return this.versionReader.capture();
     }
 
     async #metadataCurrentDigest() {
@@ -2176,8 +2147,7 @@ class RuntimeConfigMigrator {
     }
 
     async #readMetadata() {
-        try { return JSON.parse(await this.fs.readFile(this.metadataPath, 'utf8')); }
-        catch (error) { if (error?.code === 'ENOENT') return null; throw error; }
+        return this.versionReader.read();
     }
 
     async #writeMetadata(value, { tempTag = null, serializedBytes = null, expectedDigest = null, onTemp = null, tx = null } = {}) {

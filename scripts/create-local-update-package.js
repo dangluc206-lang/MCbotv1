@@ -21,7 +21,7 @@ const output = path.resolve(getArg('--out', path.join(baseDir, 'out', `MCbot_${p
 const type = getArg('--type', fromVersion ? 'patch' : 'full');
 if (!['patch', 'full'].includes(type)) throw new Error('--type phải là patch hoặc full.');
 if (type === 'patch' && !fromVersion) throw new Error('Patch cần --from <version>.');
-if (process.platform !== 'win32') throw new Error('Script tạo ZIP hiện dùng PowerShell Compress-Archive và chỉ chạy trên Windows.');
+if (process.platform !== 'win32') throw new Error('Script tạo ZIP hiện dùng .NET ZipFile qua PowerShell và chỉ chạy trên Windows.');
 
 function included(relative) {
     const rp = relative.replace(/\\/g, '/');
@@ -74,7 +74,10 @@ async function copyTree(stage) {
         await fsp.rm(output, { force: true });
         const escapedStage = stage.replace(/'/g, "''");
         const escapedOutput = output.replace(/'/g, "''");
-        const command = `Compress-Archive -Path '${escapedStage}\\*' -DestinationPath '${escapedOutput}' -CompressionLevel Optimal -Force`;
+        // Use the .NET ZIP API directly instead of the optional
+        // Microsoft.PowerShell.Archive module. Some Windows installations can
+        // launch PowerShell but cannot autoload Compress-Archive.
+        const command = `Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::CreateFromDirectory('${escapedStage}', '${escapedOutput}', [System.IO.Compression.CompressionLevel]::Optimal, $false)`;
         const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { stdio: 'inherit' });
         if (result.status !== 0 || !fs.existsSync(output)) throw new Error('Không tạo được ZIP cập nhật.');
         const verification = await verifyReleaseZip(output);

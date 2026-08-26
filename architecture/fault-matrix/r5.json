@@ -1,0 +1,21 @@
+{
+  "contract": "r5-fault-matrix-v1",
+  "version": 1,
+  "cases": [
+    {"id":"command-timeout","severity":"LIGHT","faultClass":"COMMAND","expectedState":"WAITING_RETRY","safeOutcome":"bounded retry","evidenceTest":"tests/unit/simulation/FaultMatrixContract.test.js"},
+    {"id":"gui-response-lost","severity":"MEDIUM","faultClass":"GUI","expectedState":"RECONCILING","safeOutcome":"no duplicate click","evidenceTest":"tests/unit/simulation/FaultMatrixContract.test.js"},
+    {"id":"inventory-stale-generation","severity":"MEDIUM","faultClass":"INVENTORY","expectedState":"STALE_ABORT","safeOutcome":"discard old generation","evidenceTest":"tests/unit/modes/B5CraftModeService.test.js"},
+    {"id":"b5-protection-timeout","severity":"MEDIUM","faultClass":"STORAGE","expectedState":"WAITING_BLOCKED","safeOutcome":"bounded blocker episode","evidenceTest":"tests/unit/modes/B5CraftModeService.test.js"},
+    {"id":"b5-verified-continuation","severity":"LIGHT","faultClass":"STORAGE","expectedState":"CONTINUING","safeOutcome":"business failure quota unchanged","evidenceTest":"tests/unit/modes/B5CraftModeService.test.js"},
+    {"id":"mode-circuit-open","severity":"HEAVY","faultClass":"MODE","expectedState":"NEEDS_ACTION","safeOutcome":"no restart storm","evidenceTest":"tests/unit/modes/ModeFaultPolicy.test.js"},
+    {"id":"reconnect-late-client","severity":"HEAVY","faultClass":"CONNECTION","expectedState":"DISCONNECTED","safeOutcome":"late client ended by owner","evidenceTest":"tests/unit/connection/ConnectionManager.test.js"},
+    {"id":"incident-index-corruption","severity":"HEAVY","faultClass":"DIAGNOSTICS","expectedState":"RECOVERED_EMPTY","safeOutcome":"warning retained","evidenceTest":"tests/unit/desktop/IncidentIndexStore.test.js"},
+    {"id":"backup-integrity-mismatch","severity":"HEAVY","faultClass":"PERSISTENCE","expectedState":"RESTORE_REJECTED","safeOutcome":"active config unchanged","evidenceTest":"tests/unit/desktop/BackupCatalogService.test.js"},
+    {"id":"migration-rename-after-effect","severity":"HEAVY","faultClass":"PERSISTENCE","expectedState":"PRESTATE_RECOVERED","safeOutcome":"joint gate exact","evidenceTest":"tests/unit/desktop/RuntimeConfigMigrator.test.js"},
+    {"id":"desktop-fatal-relaunch","severity":"HEAVY","faultClass":"DESKTOP","expectedState":"RECOVERY_VISIBLE","safeOutcome":"crash marker preserved","evidenceTest":"tests/unit/desktop/DesktopFatalRecovery.test.js"},
+    {"id":"fleet-partial-stop","severity":"HEAVY","faultClass":"FLEET","expectedState":"PARTIAL","safeOutcome":"every bot attempted","evidenceTest":"tests/unit/recovery/FleetControlService.test.js"},
+    {"id":"renderer-hostile-ipc","severity":"MEDIUM","faultClass":"SECURITY","expectedState":"REQUEST_REJECTED","safeOutcome":"no handler invocation","evidenceTest":"tests/unit/desktop/DesktopApiContract.test.js"},
+    {"id":"custom-mode-revision-conflict","severity":"MEDIUM","faultClass":"CONFIG","expectedState":"SAVE_REJECTED","safeOutcome":"newer operator bytes retained","evidenceTest":"tests/unit/modes/ComposableModePlatform.test.js"},
+    {"id":"release-canary-regression","severity":"HEAVY","faultClass":"RELEASE","expectedState":"ROLLBACK","safeOutcome":"no rollout advance","evidenceTest":"tests/unit/desktop/ReleaseCanaryPolicy.test.js"}
+  ]
+}

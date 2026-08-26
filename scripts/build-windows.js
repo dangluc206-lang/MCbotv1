@@ -4,10 +4,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 const { createForgeIgnore } = require('./build/ForgePackagingPolicy');
+const {
+    evaluatePackagingFootprint,
+    loadPackagingFootprintContract
+} = require('./build/PackagingFootprintContract');
 
 const ROOT = path.resolve(__dirname, '..');
 const OUT_DIR = path.join(ROOT, 'out');
-const BUILDER_REVISION = '2.6.17-round2-audit-hardening';
+const BUILDER_REVISION = '2.7.0-roadmap-closure';
 
 function formatDuration(ms) {
     const totalSeconds = Math.max(0, Math.round(Number(ms) / 1000));
@@ -276,10 +280,14 @@ async function main() {
 
     const packageInput = packagingInputStats(ROOT);
     console.log(`[BUILD] Direct package input: ${packageInput.megabytes} MB | ${packageInput.files} files | ${packageInput.ignoredDirectories} directories skipped.`);
-    const maxPackagingInputMb = Number(process.env.MCBOT_MAX_PACKAGE_INPUT_MB) || 300;
-    if (packageInput.megabytes > maxPackagingInputMb) {
-        throw new Error(`Packaging input is unexpectedly large (${packageInput.megabytes} MB > ${maxPackagingInputMb} MB). The filter may be ineffective.`);
+    const footprintContract = loadPackagingFootprintContract(ROOT);
+    const footprint = evaluatePackagingFootprint(packageInput, footprintContract, {
+        requestedMaximum: process.env.MCBOT_MAX_PACKAGE_INPUT_MB
+    });
+    if (!footprint.valid) {
+        throw new Error(`Packaging footprint contract failed (${footprint.failures.join(', ')}): ${packageInput.megabytes} MB / ${packageInput.files} files, maximum ${footprint.maximumMegabytes} MB.`);
     }
+    console.log(`[BUILD] Packaging footprint contract v${footprint.contractVersion} PASS (baseline ${footprint.baselineMegabytes} MB, hard maximum ${footprint.maximumMegabytes} MB).`);
 
     const buildEnv = { ...process.env };
     if (options.verbose) {
@@ -329,6 +337,8 @@ module.exports = {
     findPackagedExecutable,
     formatDuration,
     installerPath,
+    evaluatePackagingFootprint,
+    loadPackagingFootprintContract,
     packagingInputStats,
     packageManifest,
     parseArgs,

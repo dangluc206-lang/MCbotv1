@@ -342,7 +342,7 @@ Khi thêm mode mới:
 ## B5 thuần và Mode Builder rules (v2.3+)
 
 - `b5-craft` là B5 mode khuyến nghị. Không thêm movement/pathfinder/pickup. Storage protection được phép gọi `/nung` chỉ cho raw iron và raw gold theo contract đã được user xác nhận.
-- Boundary trước mỗi đợt B5 bắt buộc theo thứ tự: fresh `/kho` -> nung raw iron/raw gold -> nén mọi B1 family có block form -> chốt immutable sell baseline -> bán surplus bằng đúng quantity `64` -> giữ lại phần dư dưới `64` -> verify còn tối thiểu 1.5 B5 -> mới craft.
+- Boundary trước mỗi đợt B5 bắt buộc theo thứ tự: fresh `/kho` -> nung raw iron/raw gold -> nén mọi B1 family có block form -> chốt immutable sell baseline với sàn tính toán 1.5 B5 -> bán surplus khối bằng đúng quantity `64` -> giữ lại phần dư dưới `64` -> craft ngay khi toàn bộ action baseline đã được acknowledgement; không fresh-read hoặc verify lại mức 1.5 sau sell. Sau khi một B5 mới được xác nhận chế và cất xong, chạy thêm một lượt nung raw iron/raw gold; nếu lượt nung cuối lỗi thì boundary đợt sau retry trước craft.
 - Sell episode lớn phải chia thành bounded slices và tiếp tục đúng immutable baseline/episode; không chạy lại nung/nén, không hấp thụ inflow mới và không tính verified continuation là business failure.
 - `collector-b5` là legacy/compatibility, không dùng làm template cho feature mới.
 - Workflow đơn giản nên thử ghép bằng `src/modes/composable/*` trước khi tạo mode code mới.

@@ -23,6 +23,21 @@
       "cleanupPolicy": "owned-file-only"
     },
     {
+      "file": "src/desktop/DesktopFatalRecovery.js",
+      "scope": "desktop-user-data/crash-recovery",
+      "cleanupPolicy": "owned-marker-only"
+    },
+    {
+      "file": "src/desktop/backup/BackupCatalogService.js",
+      "scope": "desktop-owned-config-backup-catalog",
+      "cleanupPolicy": "manifest-verified-transaction-and-retention-only"
+    },
+    {
+      "file": "src/desktop/incidents/IncidentIndexStore.js",
+      "scope": "desktop-runtime-incident-index",
+      "cleanupPolicy": "store-owned-atomic-file-only"
+    },
+    {
       "file": "src/recovery/DurableIntentStore.js",
       "scope": "runtime-recovery-intent",
       "cleanupPolicy": "store-owned-files"
@@ -91,6 +106,11 @@
       "file": "src/desktop/update/RuntimeConfigMigrator.js",
       "scope": "owned-runtime-config-transaction-roots",
       "cleanupPolicy": "ledger-proven-ownership"
+    },
+    {
+      "file": "src/desktop/update/RuntimeFilesystemApplier.js",
+      "scope": "runtime-config-migration-allowlisted-targets",
+      "cleanupPolicy": "transaction-owned-contained-paths-only"
     },
     {
       "file": "src/desktop/update/LocalZipUpdateService.js",

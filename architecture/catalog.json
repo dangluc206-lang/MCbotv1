@@ -15,6 +15,18 @@
     "src/index.js",
     "src/desktop/main.js",
     "src/desktop/preload.js",
+    "src/desktop/renderer/core/RendererApiClient.js",
+    "src/desktop/renderer/core/Html.js",
+    "src/desktop/renderer/core/RendererRouter.js",
+    "src/desktop/renderer/core/KeyedDom.js",
+    "src/desktop/renderer/components/AccessibleDialog.js",
+    "src/desktop/renderer/pages/PageCatalog.js",
+    "src/desktop/renderer/features/b5/B5ViewModel.js",
+    "src/desktop/renderer/features/b5/B5JourneyPresenter.js",
+    "src/desktop/renderer/features/incidents/IncidentViewModel.js",
+    "src/desktop/renderer/features/incidents/IncidentPresenter.js",
+    "src/desktop/renderer/features/builder/TypedModuleEditor.js",
+    "src/desktop/renderer/features/modes/ModeViewModel.js",
     "src/desktop/renderer/app.js"
   ],
   "configuration": {

@@ -1,0 +1,20 @@
+{
+  "contract": "mcbot-slo-v1",
+  "generatedForVersion": "2.7.67",
+  "defaultScope": "LOCAL_ONLY",
+  "remoteTelemetry": "OPT_IN_ONLY_NOT_IMPLEMENTED",
+  "cardinalityBudgetPerMetric": 64,
+  "forbiddenDimensions": ["username", "displayName", "message", "stack", "secret", "token", "password", "item", "nbt", "chat"],
+  "exportPolicy": "Support bundle summary only; no raw labels outside the allowlist.",
+  "objectives": [
+    { "id": "mode-start-success", "metric": "mode_start_outcome", "target": ">= 99%", "measurement": "MEASURABLE_LOCALLY" },
+    { "id": "b5-batch-outcome", "metric": "b5_batch_outcome", "target": ">= 99% safe terminal outcome", "measurement": "MEASURABLE_LOCALLY" },
+    { "id": "b5-blocker-dwell", "metric": "b5_blocker_dwell_ms", "target": "p95 <= 15 minutes after operator action", "measurement": "MEASURABLE_LOCALLY" },
+    { "id": "retry-count", "metric": "retry_count", "target": "bounded by validated policy", "measurement": "MEASURABLE_LOCALLY" },
+    { "id": "reconnect-outcome", "metric": "reconnect_outcome", "target": ">= 99% verified or explicitly blocked", "measurement": "MEASURABLE_LOCALLY" },
+    { "id": "incident-mtta", "metric": "incident_mtta_ms", "target": "p95 <= 5 minutes", "measurement": "NOT_MEASURABLE_YET", "reason": "Acknowledgement workflow is planned for XP-102." },
+    { "id": "incident-mttr", "metric": "incident_mttr_ms", "target": "tracked by severity", "measurement": "NOT_MEASURABLE_YET", "reason": "Incident close lifecycle is planned for XP-102." },
+    { "id": "operation-queue-age", "metric": "operation_queue_age_ms", "target": "p95 <= 2 seconds excluding server waits", "measurement": "MEASURABLE_LOCALLY" },
+    { "id": "desktop-render-duration", "metric": "desktop_render_duration_ms", "target": "p95 <= 100 milliseconds", "measurement": "MEASURABLE_LOCALLY" }
+  ]
+}

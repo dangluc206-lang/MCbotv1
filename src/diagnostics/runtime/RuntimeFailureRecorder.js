@@ -4,11 +4,10 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createFailureEvent, signature: failureSignature } = require('./RuntimeFailureEvent');
 const Redactor = require('../../shared/security/Redactor');
+const Layout = require('./RuntimeFailureArtifactLayout');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const BOT_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{1,31}$/;
 const MIN_RECORD_BYTES = 768;
-const ROTATED_FILE_PATTERN = /^errors-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-\d{4}\.jsonl$/;
 
 class RuntimeFailureRecorder {
     constructor({
@@ -31,7 +30,7 @@ class RuntimeFailureRecorder {
         if (Number(config.maxFileMb) <= 0 || Number(config.maxTotalMb) <= 0) throw new RangeError('RuntimeFailureRecorder file quotas must be > 0.');
         if (Number(config.maxTotalMb) < Number(config.maxFileMb)) throw new RangeError('RuntimeFailureRecorder maxTotalMb must be >= maxFileMb.');
         if (Number(config.retentionDays) < 0) throw new RangeError('RuntimeFailureRecorder retentionDays must be >= 0.');
-        if (!BOT_ID_PATTERN.test(String(botId || ''))) throw new TypeError('RuntimeFailureRecorder botId must match ^[a-z0-9][a-z0-9_-]{1,31}$.');
+        Layout.assertBotId(botId);
         if (typeof baseDir !== 'string' || !baseDir.trim()) throw new TypeError('RuntimeFailureRecorder baseDir is required.');
 
         Object.assign(this, { botId, eventBus, guiManager, inventoryObservationService, logger, clock });
@@ -44,10 +43,9 @@ class RuntimeFailureRecorder {
             cleanupIntervalMs: Number(config.cleanupIntervalMs)
         });
         this.baseDirectory = path.resolve(baseDir);
-        this.directory = path.resolve(this.baseDirectory, botId);
-        this.#assertContainedDirectory();
-        this.activeFile = path.join(this.directory, 'errors.jsonl');
-        this.lastFile = path.join(this.directory, 'last-error.json');
+        this.directory = Layout.resolveBotDirectory(this.baseDirectory, botId);
+        this.activeFile = Layout.resolveChild(this.directory, Layout.ACTIVE_JOURNAL_FILE);
+        this.lastFile = Layout.resolveChild(this.directory, Layout.LAST_ERROR_FILE);
         this.unsubscribers = [];
         this.repeatBuckets = new Map();
         this.seenFailureIds = new Map();
@@ -311,8 +309,8 @@ class RuntimeFailureRecorder {
         const files = [];
         for (const entry of entries) {
             if (!entry.isFile()) continue;
-            const active = entry.name === 'errors.jsonl';
-            if (!active && !ROTATED_FILE_PATTERN.test(entry.name)) continue;
+            const active = entry.name === Layout.ACTIVE_JOURNAL_FILE;
+            if (!active && !Layout.ROTATED_JOURNAL_PATTERN.test(entry.name)) continue;
             const filePath = this.#verifiedChildPath(entry.name);
             const stat = await fs.lstat(filePath);
             if (!stat.isFile() || stat.isSymbolicLink()) continue;
@@ -322,9 +320,7 @@ class RuntimeFailureRecorder {
     }
 
     #verifiedChildPath(name) {
-        const child = path.resolve(this.directory, name);
-        if (path.dirname(child) !== this.directory) throw new Error(`Unsafe runtime failure path: ${name}`);
-        return child;
+        return Layout.resolveChild(this.directory, name);
     }
 
     async #cleanupStaleTempsUnsafe() {
@@ -333,18 +329,11 @@ class RuntimeFailureRecorder {
         catch (error) { if (error?.code === 'ENOENT') return; throw error; }
         for (const entry of entries) {
             if (!entry.isFile()) continue;
-            if (entry.name.startsWith('last-error.json.') && entry.name.endsWith('.tmp')) {
+            if (Layout.TEMP_LAST_ERROR_PATTERN.test(entry.name)) {
                 const filePath = this.#verifiedChildPath(entry.name);
                 const stat = await fs.lstat(filePath);
                 if (stat.isFile() && !stat.isSymbolicLink()) await fs.rm(filePath, { force: true });
             }
-        }
-    }
-
-    #assertContainedDirectory() {
-        const relative = path.relative(this.baseDirectory, this.directory);
-        if (!relative || path.isAbsolute(relative) || relative === '..' || relative.startsWith(`..${path.sep}`)) {
-            throw new Error(`Unsafe runtime failure bot directory for botId ${this.botId}.`);
         }
     }
 

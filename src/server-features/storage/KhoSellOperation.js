@@ -39,15 +39,34 @@ class KhoSellOperation {
             throw new Error('SELL ALL is disabled for production B1.');
         }
 
-        const session = await this.#ensureOpen({ logicalId, cancellationToken, expectedGeneration, operationContext });
-        const before = this.reader.read(session.window);
-        const entry = before.entries?.[logicalId] || null;
+        let session = await this.#ensureOpen({ logicalId, cancellationToken, expectedGeneration, operationContext });
+        let before = this.reader.read(session.window);
+        let entry = before.entries?.[logicalId] || null;
+        let targetRefreshAttempted = false;
+        if (!entry) {
+            // A source-owned Sell session can still expose a stale entry set
+            // immediately after the previous material refreshed the container.
+            // Reopen once before classifying the next baseline material as
+            // unavailable. This is bounded and never changes the sell plan.
+            targetRefreshAttempted = true;
+            session = await this.#ensureOpen({
+                logicalId,
+                cancellationToken,
+                expectedGeneration,
+                operationContext,
+                forceReopen: true
+            });
+            before = this.reader.read(session.window);
+            entry = before.entries?.[logicalId] || null;
+        }
         if (!entry) {
             return {
                 logicalId,
                 quantity: normalizedQuantity,
                 skipped: true,
                 reason: 'material-not-visible-in-sell-gui',
+                targetRefreshAttempted,
+                availableLogicalIds: Object.keys(before.entries || {}).sort(),
                 before,
                 after: before
             };
@@ -86,16 +105,28 @@ class KhoSellOperation {
             });
         }
 
-        // A sale may refresh the same container or replace the GuiSession. The
-        // replacement session often loses source metadata. Re-attach /kho sell
-        // provenance immediately so the next sale in the same burst reuses the
-        // current GUI instead of closing it and sending `/kho sell` again.
+        // A sale may refresh the same container or replace the GuiSession. Do
+        // not reclaim provenance until the replacement still exposes semantic
+        // Sell entries; a transition to an unrelated GUI is not a sale ack.
+        const unmarkedAfter = this.reader.read(current.window);
+        const afterEntryCount = Object.keys(unmarkedAfter?.entries || {}).length;
+        if (afterEntryCount === 0) {
+            this.sellSessionOwned = false;
+            throw new FlowError('Sell click transitioned to a GUI without readable Sell entries.', {
+                code: 'KHO_SELL_GUI_IDENTITY_LOST', subsystem: 'storage', operation: 'KhoSellOperation',
+                step: 'sell-verify', action: `sell ${normalizedQuantity}`, resource: logicalId,
+                retryable: true, details: { logicalId, quantity: normalizedQuantity, slot: entry.slot }
+            });
+        }
+
+        // The replacement session often loses source metadata. Re-attach
+        // command provenance only after the semantic check above succeeds.
         const sellSource = this.#sellSource(entry.slot);
         const markedCurrent = this.guiManager.markCurrent?.(sellSource) || current;
         markedCurrent?.setSource?.(sellSource);
         this.sellSessionOwned = true;
 
-        const after = this.reader.read((markedCurrent || current).window);
+        const after = unmarkedAfter;
         const beforeEntry = before.entries?.[logicalId] || null;
         const afterEntry = after.entries?.[logicalId] || null;
         const beforeAmount = beforeEntry?.amount;
@@ -109,6 +140,7 @@ class KhoSellOperation {
             : null;
         const amountDecreased = Number.isFinite(amountDelta) ? amountDelta > 0 : null;
         const verifiedSoldQuantity = amountDecreased === true ? amountDelta : null;
+        const semanticAcknowledged = transitioned && afterEntryCount > 0;
         const verification = Object.freeze({
             verified: Number.isFinite(verifiedSoldQuantity),
             source: Number.isFinite(verifiedSoldQuantity) ? 'sell-gui-amount' : null,
@@ -118,6 +150,7 @@ class KhoSellOperation {
             amountDelta,
             amountDecreased,
             transitioned,
+            semanticAcknowledged,
             requiresFreshStorage: !Number.isFinite(verifiedSoldQuantity)
         });
 
@@ -138,7 +171,8 @@ class KhoSellOperation {
             amountChanged,
             amountDelta,
             verifiedSoldQuantity,
-            transitioned
+            transitioned,
+            semanticAcknowledged
         });
 
         return {
@@ -154,6 +188,7 @@ class KhoSellOperation {
             amountDecreased,
             verifiedSoldQuantity,
             transitioned,
+            semanticAcknowledged,
             verification,
             before,
             after
@@ -181,7 +216,7 @@ class KhoSellOperation {
         return true;
     }
 
-    async #ensureOpen({ logicalId = null, cancellationToken = null, expectedGeneration = null, operationContext = null } = {}) {
+    async #ensureOpen({ logicalId = null, cancellationToken = null, expectedGeneration = null, operationContext = null, forceReopen = false } = {}) {
         const sell = this.config.sell;
         let current = this.guiManager.syncCurrentWindow?.() || this.guiManager.current();
         const source = this.#sellSource();
@@ -190,7 +225,8 @@ class KhoSellOperation {
         const currentHasExplicitOtherSource = Boolean(current?.source)
             && !currentIsExplicitSell;
 
-        if ((currentIsExplicitSell || (this.sellSessionOwned && !currentHasExplicitOtherSource))
+        if (!forceReopen
+            && (currentIsExplicitSell || (this.sellSessionOwned && !currentHasExplicitOtherSource))
             && current?.window && this.#hasSellEntries(current.window)) {
             const marked = this.guiManager.markCurrent?.(source) || current;
             marked?.setSource?.(source);
@@ -202,7 +238,7 @@ class KhoSellOperation {
         // example `/kho`, `/ks`, `/nung`), old Sell ownership is stale. Never
         // infer Sell GUI from layout alone because /kho and /kho sell are nearly
         // identical on this server.
-        if (currentHasExplicitOtherSource || !current) this.sellSessionOwned = false;
+        if (forceReopen || currentHasExplicitOtherSource || !current) this.sellSessionOwned = false;
         const maxAttempts = Math.max(1, Number(sell.openAttempts || 3));
         const timeoutMs = Math.max(250, Number(sell.openTimeoutMs || this.config.guiTimeoutMs || 5000));
         const closeSettleMs = Math.max(0, Number(sell.closeSettleMs ?? 180));

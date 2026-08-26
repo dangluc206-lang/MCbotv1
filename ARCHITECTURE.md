@@ -27,7 +27,7 @@ Strong MMOItems identity là contract một-một. Mọi B2–B5 phải có iden
 
 ### CURRENT
 
-Entry point là `src/index.js`. Ứng dụng được dựng bởi `src/bootstrap/createApplication.js`.
+Package entry mặc định `npm start` là Desktop qua `src/desktop/main.js`. Headless dùng explicit `npm run core:start` qua `src/index.js`. Cả hai cuối cùng đều dựng ứng dụng bằng `src/bootstrap/createApplication.js`.
 
 ```text
 Discord / operator intent
@@ -179,8 +179,21 @@ Mineflayer/client events
 ### CURRENT
 
 ```text
-node src/index.js
--> createApplication(baseDir)
+npm start
+-> Electron src/desktop/main.js
+-> DesktopRuntimeBootstrap
+   -> RuntimeConfigMigrator: application defaults -> AppData runtime/runtime-dev
+   -> RuntimeEnvironment (DEV): process -> .env fill-missing
+   -> DesktopSecretStore overlay cuối cùng
+-> DesktopController.start()
+-> createApplication(runtimeBaseDir, resolvedEnvironment)
+
+npm run core:start
+-> node src/index.js
+-> RuntimeEnvironment: process -> .env fill-missing
+-> createApplication(projectBaseDir, resolvedEnvironment)
+
+createApplication(...)
 -> loadConfiguration()
    -> ConfigSpecs
    -> ConfigLoader/ConfigValidator/ConfigurationContractValidator
@@ -1062,6 +1075,8 @@ Desktop 2.3 có editor chuyên dụng cho `b5CraftMode`, B5 quantity/PV2 rules, 
 
 Desktop tách application tree khỏi mutable runtime tree. Bản cài dùng `AppData/.../runtime`; bản DEV dùng `AppData/.../runtime-dev`. `RuntimeConfigMigrator` merge default mới nhưng giữ giá trị người dùng, vì vậy cập nhật code không được dùng `config/` trong application tree làm state vận hành trực tiếp.
 
+Environment được resolve trước lần `DesktopController.start()` đầu tiên. Ở DEV, precedence là `process environment` → `.env` chỉ điền key còn thiếu → encrypted `DesktopSecretStore` phủ cuối; bản packaged bỏ `.env` và dùng process + encrypted store. `DesktopRuntimeProvenanceService` so sánh hash/path của application defaults với runtime config theo budget, báo `IN_SYNC`, `RUNTIME_CUSTOMIZED` hoặc fail-closed `RUNTIME_INCOMPLETE`; contract không gửi nội dung file hay giá trị environment ra renderer.
+
 Fresh process boundary:
 
 ```text
@@ -1166,3 +1181,39 @@ Các invariant:
 WP-001 thêm một baseline tool **read-only** cho migration/audit. `scripts/inspect-architecture-baseline.js` dựng baseline từ source/config/test hiện tại và chỉ xuất stdout; `--check` chỉ xác minh committed manifest, exclusion policy và so sánh lại các số liệu architecture validator. Inspector không tự ghi/mutate repository.
 
 Baseline ghi source-area ownership/layer, runtime/project reachability, raw side-effect owner/callsite, connection event producer/generation guard, ModeCatalog/capability binding, vị trí MinerUA fact và config consumer/reload evidence. Nó không đọc `.env*`, `data/**`, `node_modules/**` hoặc log; payload `config/bots/**` không được content-scan. Baseline là evidence CURRENT, không có authority sửa gameplay và không tự khắc phục DEBT.
+
+## 2.7.67 - Product experience và decomposition closure
+
+CURRENT Desktop operator path dùng contract/projection thay vì gửi toàn bộ runtime object:
+
+```text
+BotRuntime / failure artifacts / configuration
+  -> Desktop operator services
+     -> IncidentIndexStore / OperatorHealthService / B5OperatorProjection
+     -> ConfigurationWorkspaceService / BackupCatalogService
+  -> OperatorSnapshotProjector
+  -> DesktopApiContract + trusted preload IPC
+  -> renderer core/page/feature presenters
+```
+
+Snapshot có revision/digest và được coalesce bằng `SnapshotDeliveryCoordinator`. Detail incident, bot và B5 được tải theo use case riêng. Renderer vẫn giữ `app.js` làm compatibility façade trong giai đoạn strangler; module mới nằm dưới `core/components/pages/features`, và static quality manifest khóa size/complexity hiện tại để façade không phình thêm.
+
+Desktop composition tiếp tục được tách vật lý: `DesktopRuntimeBootstrap` sở hữu thứ tự migrate/runtime-root/environment/provenance, còn `BotProfileUseCases` sở hữu allowlist và lời gọi quản trị profile. `DesktopController` và Electron `main.js` chỉ giữ façade/dispatch tương thích, và static-quality gate cấm chúng tăng trở lại.
+
+B5 mode giữ nguyên side-effect order và owner. Phần state/policy được tách ra:
+
+```text
+B5CraftModeService (lifecycle + side-effect façade)
+  -> B5CampaignSession
+  -> B5BatchCoordinator
+  -> StorageProtectionEpisode
+  -> B5FaultPolicyAdapter
+  -> B5StatusProjection
+  -> B1StorageMaterialService / B5AutomationService capabilities
+```
+
+`RuntimeConfigMigrator` giữ public façade nhưng delegating seam đã có cho version reader, pure planner, journal, filesystem applier, tree verifier và recovery coordinator. Mọi mutation file mới phải được khai báo trong `architecture/artifact-ownership.json`.
+
+Composable Mode Builder dùng presentation schema cho đủ 17 module, typed start/loop/stop editor, bounded `if/repeat`, static dry-run không gọi capability, template metadata và deterministic package manifest. Unknown field bị loại khi normalize; storage protection không có toggle để bỏ nung sắt/vàng.
+
+R6 hiện là quyết định `NO_GO_MONOLITH_SUFFICIENT`, không phải work package bị quên. Benchmark synthetic 1/8/16/32/64 bot đạt contract operator projection hiện tại; không có bằng chứng cho thấy worker/process isolation đáng đổi lấy protocol, split-brain và vận hành phức tạp hơn. Quyết định phải mở lại nếu field SLO hoặc incident driver đáp ứng điều kiện XP-500.

@@ -168,13 +168,13 @@ class ProjectWorkspace {
     #assertSafeRelative(relativePath) {
         const normalized = unix(relativePath);
         const segments = normalized.split('/').filter(Boolean);
-        if (segments.some(segment => segment.startsWith('.') || DEFAULT_IGNORED_DIRS.has(segment))) throw this.#pathError(`Path is excluded from AI workspace: ${normalized}`);
         const lower = normalized.toLowerCase();
         const basename = path.posix.basename(lower);
         const blockedFiles = new Set(['tk.env', 'secrets.json', 'credentials.json', 'credential.json', 'tokens.json', 'token.json']);
-        if (basename.startsWith('.env') || blockedFiles.has(basename)) {
+        if (segments.some(segment => segment.toLowerCase().startsWith('.env')) || blockedFiles.has(basename)) {
             throw this.#pathError('Secret/environment files are not available to Local AI.');
         }
+        if (segments.some(segment => segment.startsWith('.') || DEFAULT_IGNORED_DIRS.has(segment))) throw this.#pathError(`Path is excluded from AI workspace: ${normalized}`);
     }
 
     #isReadableFile(relativePath) {

@@ -12,7 +12,7 @@ const { audit: architectureAudit } = require('./validate-architecture');
 const DEFAULT_ROOT = path.resolve(__dirname, '..');
 const SCHEMA_VERSION = 1;
 const BASELINE_VERSION = 1;
-const EXCLUDED_SEGMENTS = new Set(['node_modules', 'data']);
+const EXCLUDED_SEGMENTS = new Set(['.git', '.tmp', 'coverage', 'data', 'node_modules', 'out']);
 const EXCLUDED_BASENAMES = [/^\.env(?:\.|$)/i, /\.log$/i];
 const CONTENT_SCAN_EXCLUSIONS = ['config/bots'];
 const SELF_OUTPUT_PATHS = new Set([
@@ -232,7 +232,10 @@ function modeInventory(root) {
 function capabilityInventory(root) {
     const file = 'src/bootstrap/registerBotServices.js';
     const source = readAllowed(root, file) || '';
-    const match = source.match(/const\s+capabilities\s*=\s*\{([\s\S]*?)\};\s*\n?\s*for\s*\(const\s+\[capabilityId/);
+    // Capability registration may be delegated to an installer. Inventory the
+    // declared provider object itself instead of coupling the parser to the
+    // exact loop/call that follows the declaration.
+    const match = source.match(/const\s+capabilities\s*=\s*\{([\s\S]*?)\};/);
     if (!match) return { sourceFile: file, ids: [], parseStatus: 'UNKNOWN' };
     const ids = [];
     const body = match[1];
@@ -442,11 +445,11 @@ function buildBaseline({ root = DEFAULT_ROOT, generatedAt = new Date().toISOStri
         releaseVersion: require(path.join(root, 'package.json')).version,
         scope: {
             root: '.',
-            exclusions: ['.env*', 'data/**', 'node_modules/**', '**/*.log'],
+            exclusions: ['.env*', '.git/**', '.tmp/**', 'coverage/**', 'data/**', 'node_modules/**', 'out/**', '**/*.log'],
             contentScanAdditionalExclusions: ['config/bots/**'],
             selfOutputsExcludedFromCounts: [...SELF_OUTPUT_PATHS].sort(),
             reproducibleCommands: [
-                "rg --files --hidden -g '!.env*' -g '!data/**' -g '!node_modules/**' -g '!*.log' -g '!architecture/baseline/current.json' -g '!docs/architecture-roadmap/baseline/WP-001_GAP_REPORT.md'",
+                "rg --files --hidden -g '!.env*' -g '!.git/**' -g '!.tmp/**' -g '!coverage/**' -g '!data/**' -g '!node_modules/**' -g '!out/**' -g '!*.log' -g '!architecture/baseline/current.json' -g '!docs/architecture-roadmap/baseline/WP-001_GAP_REPORT.md'",
                 'node scripts/inspect-architecture-baseline.js',
                 'node scripts/inspect-architecture-baseline.js --check',
                 'node scripts/validate-architecture.js --json',

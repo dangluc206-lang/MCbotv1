@@ -19,6 +19,9 @@ test('DesktopPreferenceStore loads defaults, persists normalized preferences and
         startBackendOnLaunch: true,
         preventSystemSleepWhileActive: true,
         launchAtLogin: false,
+        experienceLevel: 'standard',
+        colorTheme: 'dark',
+        firstRun: { status: 'NOT_STARTED', step: 1, startedAt: null, completedAt: null, durationMs: null },
         windowBounds: null,
         windowMaximized: false
     });
@@ -36,12 +39,36 @@ test('DesktopPreferenceStore loads defaults, persists normalized preferences and
         startBackendOnLaunch: true,
         preventSystemSleepWhileActive: true,
         launchAtLogin: false,
+        experienceLevel: 'standard',
+        colorTheme: 'dark',
+        firstRun: { status: 'NOT_STARTED', step: 1, startedAt: null, completedAt: null, durationMs: null },
         windowBounds: null,
         windowMaximized: false
     });
 
     fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('DesktopPreferenceStore persists presentation level and resumable first-run metadata without credentials', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcbot-desktop-first-run-'));
+    const filePath = path.join(dir, 'preferences.json');
+    const store = new DesktopPreferenceStore({ filePath });
+    await store.load();
+    const startedAt = '2026-08-25T00:00:00.000Z';
+    const value = await store.update({
+        experienceLevel: 'advanced', colorTheme: 'high-contrast',
+        firstRun: { status: 'IN_PROGRESS', step: 4, startedAt, secret: 'must-not-persist' }
+    });
+    assert.equal(value.experienceLevel, 'advanced');
+    assert.equal(value.colorTheme, 'high-contrast');
+    assert.deepEqual(value.firstRun, { status: 'IN_PROGRESS', step: 4, startedAt, completedAt: null, durationMs: null });
+    assert.equal((await fspRead(filePath)).includes('must-not-persist'), false);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+function fspRead(filePath) {
+    return require('node:fs/promises').readFile(filePath, 'utf8');
+}
 
 test('DesktopPreferenceStore clamps large intervals while preserving other stored preferences', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcbot-desktop-pref-limit-'));

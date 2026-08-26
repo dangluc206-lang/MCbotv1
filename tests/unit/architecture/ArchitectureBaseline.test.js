@@ -15,7 +15,7 @@ const {
 const root = path.resolve(__dirname, '../../..');
 
 test('WP-001 baseline path policy excludes secrets, runtime payloads, dependencies, and logs', () => {
-    for (const value of ['.env', '.env.local', 'data/runtime/gui/x.json', 'data\\runtime\\gui\\x.json', 'node_modules/pkg/index.js', 'logs/runtime.log']) {
+    for (const value of ['.env', '.env.local', '.git/objects/aa/history', '.tmp/stage/file', 'coverage/report.json', 'data/runtime/gui/x.json', 'data\\runtime\\gui\\x.json', 'node_modules/pkg/index.js', 'out/release.zip', 'logs/runtime.log']) {
         assert.equal(isExcludedPath(value), true, value);
     }
     assert.equal(isExcludedPath('config/bots/bot-01.json'), false, 'bot profile path is inventory-visible');
@@ -38,6 +38,7 @@ test('WP-001 generated baseline validates and matches architecture inspection co
     assert.ok(baseline.capabilities.ids.includes('storage'));
     assert.ok(baseline.capabilities.ids.includes('crafting'));
     assert.ok(baseline.capabilities.ids.includes('skyblock'));
+    assert.equal(baseline.capabilities.parseStatus, 'CURRENT');
     assert.ok(baseline.sourceAreas.every(area => area.classification === 'CURRENT' && area.layer !== 'UNCLASSIFIED' && typeof area.owner === 'string' && area.owner.length > 0));
     assert.equal(baseline.dynamicConfiguration.find(item => item.id === 'bot-profiles')?.contentCaptured, false);
 });

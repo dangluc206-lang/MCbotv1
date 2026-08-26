@@ -35,13 +35,26 @@ test('support bundle includes the latest B5 replay fixture without requiring ver
             intent: () => null
         },
         botProfileAdmin: { listProfiles: async () => [] },
-        configuration: { registry: { require: () => ({ runtimeFailures: { directory: 'data/runtime/errors' } }) } }
+        configuration: { registry: { require: () => ({ diagnostics: { runtimeFailures: { directory: 'data/runtime/errors', maxFileMb: 8 } } }) } }
     };
     controller.lifecycle = 'RUNNING';
-    const out = await controller.exportSupportBundle();
+    const oversizedDir = path.join(baseDir, 'data', 'runtime', 'errors', 'bot-01');
+    await fs.mkdir(oversizedDir, { recursive: true });
+    await fs.writeFile(path.join(oversizedDir, 'last-error.json'), JSON.stringify({ padding: 'x'.repeat(129 * 1024) }), 'utf8');
+    const preview = await controller.supportBundlePreview();
+    assert.match(preview.previewId, /^support-preview:/);
+    assert.ok(preview.warnings.some(entry => entry.code === 'SUPPORT_RUNTIME_FAILURE_OVERSIZE_SKIPPED'));
+    const out = await controller.exportSupportBundle({ previewId: preview.previewId });
     const payload = JSON.parse(await fs.readFile(out.path, 'utf8'));
-    assert.equal(payload.b5Replays.length, 1);
-    assert.equal(payload.b5Replays[0].botId, 'bot-01');
-    assert.equal(payload.b5Replays[0].fixture.version, 1);
+    assert.equal(out.manifestHash, preview.manifestHash, 'the confirmed preview must be the exact exported bundle');
+    assert.equal(payload.version, 2);
+    const replayEntry = payload.files.find(entry => entry.path.startsWith('evidence/replay-b5-'));
+    assert.ok(replayEntry);
+    const replay = JSON.parse(replayEntry.content);
+    assert.match(replay.botId, /^bot-/);
+    assert.notEqual(replay.botId, 'bot-01');
+    assert.equal(replay.fixture.version, 1);
+    assert.equal(require('../../../src/diagnostics/support/SupportBundleBuilder').validate(payload).valid, true);
+    await assert.rejects(controller.exportSupportBundle({ previewId: preview.previewId }), error => error.code === 'SUPPORT_BUNDLE_PREVIEW_EXPIRED');
     await fs.rm(baseDir, { recursive: true, force: true });
 });

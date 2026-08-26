@@ -23,8 +23,8 @@ async function waitUntil(predicate, timeoutMs = 500) {
     }
 }
 
-function harness({ enabled = true, generationRef = { value: 7 }, craftImplementation = null, planningImplementation = null, protectionImplementation = null, protectionEvidenceKeyImplementation = null, stability = null, reconciliation = null, logger = null } = {}) {
-    const calls = { home: 0, protect: 0, protectOptions: [], operationRuns: [], inspect: 0, craft: 0, craftOptions: [], skyDemand: [], skyRelease: [], sequence: [] };
+function harness({ enabled = true, generationRef = { value: 7 }, craftImplementation = null, planningImplementation = null, protectionImplementation = null, protectionEvidenceKeyImplementation = null, stability = null, reconciliation = null, logger = null, failurePolicy = null, failurePublisher = null } = {}) {
+    const calls = { home: 0, protect: 0, protectOptions: [], postSmelt: 0, operationRuns: [], inspect: 0, craft: 0, craftOptions: [], skyDemand: [], skyRelease: [], sequence: [] };
     const catalog = new ModeCatalog([{ id: 'b5-craft', serviceName: 'b5CraftMode', label: 'Chế B5 thuần' }]).seal();
     const caps = new CapabilityRegistry({ botId: 'bot-01' }).seal();
     const eventBus = new EventBus();
@@ -62,6 +62,11 @@ function harness({ enabled = true, generationRef = { value: 7 }, craftImplementa
             if (protectionImplementation) return protectionImplementation(options, calls);
             return { success: true, data: { protected: true } };
         },
+        async preprocessForCraft() {
+            calls.postSmelt += 1;
+            calls.sequence.push('post-smelt');
+            return { success: true, data: { actions: [] } };
+        },
         protectionEvidenceKey(blocker) {
             return protectionEvidenceKeyImplementation ? protectionEvidenceKeyImplementation(blocker, calls) : null;
         },
@@ -81,6 +86,7 @@ function harness({ enabled = true, generationRef = { value: 7 }, craftImplementa
     const mode = new B5CraftModeService({
         botId: 'bot-01', modeContext, modeCoordinator: coordinator, catalog,
         island, skyTarget: 'sky1', skyblockReadiness: { isGenerationReady: () => true, requireTarget(target, options) { calls.skyDemand.push({ target, options }); }, releaseTarget(owner) { calls.skyRelease.push(owner); } }, b1Materials, b5Planning, b5Automation,
+        failurePolicy, failurePublisher,
         logger,
         config: {
             enabled, teleportHomeOnEnable: true, autoResumeOnReconnect: true,
@@ -424,6 +430,12 @@ test('B5 craft mode runs storage protection again before the campaign after a co
     await mode.disable('test complete');
     assert.ok(calls.protect >= 2, 'every campaign after B5 completion must begin with storage protection');
     assert.ok(calls.craft >= 2);
+    assert.equal(calls.postSmelt, 1, 'completed B5 must trigger one immediate iron/gold smelting pass');
+    const completedCraft = calls.sequence.indexOf('craft');
+    const postSmelt = calls.sequence.indexOf('post-smelt');
+    const nextProtection = calls.sequence.indexOf('protect', postSmelt + 1);
+    assert.ok(completedCraft < postSmelt && postSmelt < nextProtection,
+        `expected craft -> post-smelt -> next protection, got ${calls.sequence.join(' -> ')}`);
 });
 
 test('B5 craft mode keeps productive partial B2/B3 progress inside the same protected campaign', async () => {
@@ -663,6 +675,45 @@ test('B5 verified storage continuation never opens craft early or consumes busin
     assert.equal(status.details.protectionEpisode.lastProgress.soldClicks, 128);
 });
 
+test('B5 reserve-input continuation keeps the locked baseline and never becomes a business blocker', async () => {
+    let poll = 0;
+    const { mode, coordinator, calls } = harness({
+        protectionImplementation: async () => {
+            poll += 1;
+            if (poll <= 2) {
+                return {
+                    success: true,
+                    data: {
+                        continuationRequired: true,
+                        completeForEpisode: false,
+                        trimmed: {
+                            continuationRequired: true,
+                            waitingForReserveInput: true,
+                            nextDelayMs: 1,
+                            baselineDigest: 'locked-baseline',
+                            actionsRemaining: 0,
+                            reserveShortages: [{ baseId: 'cobblestone', coverage: 1.25, missingBaseUnits: 4 }],
+                            finalCoverage: { cobblestone: { coverage: 1.25 } }
+                        }
+                    }
+                };
+            }
+            return { success: true, data: { continuationRequired: false, completeForEpisode: true } };
+        }
+    });
+    await coordinator.initialize(); await coordinator.start();
+    assert.equal((await mode.enable()).success, true);
+    await waitUntil(() => calls.protect === 3 && calls.craft >= 1, 400);
+    const status = mode.status();
+    await mode.disable('test complete');
+
+    assert.deepEqual(calls.sequence.slice(0, 4), ['protect', 'protect', 'protect', 'craft']);
+    assert.equal(status.details.protectionEpisode.businessFailureAttempts, 0);
+    assert.equal(status.details.protectionEpisode.baselineDigest, 'locked-baseline');
+    assert.equal(status.details.protectionEpisode.lastProgress.step, 'reserve-input-checkpoint');
+    assert.equal(status.details.protectionEpisode.lastProgress.reserveShortages[0].baseId, 'cobblestone');
+});
+
 test('B5 timeout blocker signature ignores changing operation ids and exhausts as one blocker', async () => {
     const { mode, coordinator, calls } = harness({
         protectionImplementation: async () => {
@@ -739,6 +790,49 @@ test('B5 protection relevant evidence change grants one controlled retry without
     assert.equal(status.details.protectionEpisode.episodeId, episodeId);
     assert.equal(status.details.protectionEpisode.state, 'WAITING_BLOCKED');
     assert.equal(status.details.protectionEpisode.totalAttempts, 4);
+});
+
+test('XP-014 guarded operator retry accepts only the current blocked episode and is idempotent', async () => {
+    const published = [];
+    const { mode, coordinator, calls } = harness({
+        failurePublisher: { publish: event => { published.push(event); return event; } },
+        protectionImplementation: async () => stableProtectionBlocker()
+    });
+    await coordinator.initialize(); await coordinator.start();
+    try {
+        assert.equal((await mode.enable()).success, true);
+        await waitUntil(() => mode.status().phase === 'WAITING_BLOCKED', 400);
+        const status = mode.status();
+        const episode = status.details.protectionEpisode;
+        assert.ok(status.details.recovery.allowedActions.includes('retry-storage-protection'));
+
+        const stale = mode.requestStorageProtectionRetry({
+            expectedBotId: 'bot-01', expectedGeneration: 6, episodeId: episode.episodeId,
+            incidentId: episode.correlationId, idempotencyKey: 'stale-retry'
+        });
+        assert.equal(stale.success, false);
+        assert.equal(stale.error.code, 'B5_RETRY_STALE_GENERATION');
+
+        const request = {
+            expectedBotId: 'bot-01', expectedGeneration: 7, episodeId: episode.episodeId,
+            incidentId: episode.correlationId, idempotencyKey: 'operator-retry-1'
+        };
+        const accepted = mode.requestStorageProtectionRetry(request);
+        const duplicate = mode.requestStorageProtectionRetry(request);
+        assert.equal(accepted.success, true);
+        assert.equal(duplicate, accepted);
+        const conflict = mode.requestStorageProtectionRetry({ ...request, expectedGeneration: 6 });
+        assert.equal(conflict.success, false);
+        assert.equal(conflict.error.code, 'B5_RETRY_IDEMPOTENCY_CONFLICT');
+        const deadline = Date.now() + 600;
+        while (calls.protect < 4 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 2));
+        assert.ok(calls.protect >= 4, JSON.stringify(mode.status()));
+        await new Promise(resolve => setTimeout(resolve, 30));
+        assert.equal(mode.status().details.protectionEpisode.state, 'WAITING_BLOCKED');
+        assert.equal(published.filter(event => event.details?.faultClass === 'BUSINESS_BLOCKER').length, 1);
+    } finally {
+        await mode.disable('test complete');
+    }
 });
 
 test('B5 protection forwards one root operation context through each attempt with stable business correlation', async () => {

@@ -1,0 +1,107 @@
+{
+  "contract": "r1-fault-matrix-v1",
+  "version": "2.7.67",
+  "scope": "XP-010..017 plus XP-403 R1 closure",
+  "cases": [
+    {
+      "id": "command-response-ambiguous",
+      "faultClass": "COMMAND",
+      "injection": "quantity click applied but response lost",
+      "expectedState": "UNRESOLVED_RECONCILIATION",
+      "allowedActions": ["inspect-diagnostic", "export-support"],
+      "artifact": "runtime failure plus replay trace",
+      "cleanupAssertion": "identical click is not replayed",
+      "evidenceTest": "tests/unit/simulation/FaultMatrixContract.test.js"
+    },
+    {
+      "id": "gui-stale-window",
+      "faultClass": "GUI",
+      "injection": "window identity changes before click",
+      "expectedState": "REJECTED_STALE_WINDOW",
+      "allowedActions": ["inspect-diagnostic"],
+      "artifact": "structured GUI error",
+      "cleanupAssertion": "no click reaches replacement window",
+      "evidenceTest": "tests/unit/gui/Gui.test.js"
+    },
+    {
+      "id": "inventory-inflow-after-baseline",
+      "faultClass": "INVENTORY",
+      "injection": "new B1 inflow arrives during immutable sell episode",
+      "expectedState": "DEFERRED_TO_NEXT_EPISODE",
+      "allowedActions": ["inspect-diagnostic"],
+      "artifact": "B5 protection episode progress",
+      "cleanupAssertion": "current click budget never expands",
+      "evidenceTest": "tests/unit/server-features/B1StorageMaterialService.test.js"
+    },
+    {
+      "id": "connection-generation-change",
+      "faultClass": "CONNECTION",
+      "injection": "generation changes during protection/craft/reconciliation",
+      "expectedState": "STALE_ABORT_OR_FRESH_RECONCILE",
+      "allowedActions": ["inspect-diagnostic", "reconnect-bot"],
+      "artifact": "B5 trace with explicit generation",
+      "cleanupAssertion": "old result cannot release or mutate new generation",
+      "evidenceTest": "tests/unit/modes/B5CraftModeService.test.js"
+    },
+    {
+      "id": "mode-loop-repeat-throw",
+      "faultClass": "MODE",
+      "injection": "same loop fault repeats to policy budget",
+      "expectedState": "CIRCUIT_OPEN",
+      "allowedActions": ["inspect-diagnostic", "retry-guarded", "export-support"],
+      "artifact": "mode-fault-snapshot-v1 and one runtime incident",
+      "cleanupAssertion": "finite attempts and no active task after stop",
+      "evidenceTest": "tests/unit/modes/ModeFaultPolicy.test.js"
+    },
+    {
+      "id": "storage-partial-64-sale",
+      "faultClass": "STORAGE",
+      "injection": "sale delta is positive but less than requested 64",
+      "expectedState": "WAITING_BLOCKED_OR_RECONCILE",
+      "allowedActions": ["inspect-diagnostic", "retry-storage-protection", "export-support"],
+      "artifact": "runtime failure and immutable episode evidence",
+      "cleanupAssertion": "no quantity-1 tail and no baseline expansion",
+      "evidenceTest": "tests/unit/server-features/B1StorageMaterialService.test.js"
+    },
+    {
+      "id": "persistence-corrupt-secret",
+      "faultClass": "PERSISTENCE",
+      "injection": "secret JSON corrupt or ciphertext cannot decrypt",
+      "expectedState": "CORRUPT_OR_DECRYPT_FAILED",
+      "allowedActions": ["reset-secret-store"],
+      "artifact": "non-secret desktop-secret-state-v1",
+      "cleanupAssertion": "write is fail-closed and reset affects secrets only",
+      "evidenceTest": "tests/unit/desktop/DesktopSecretStore.test.js"
+    },
+    {
+      "id": "desktop-boot-or-renderer-fatal",
+      "faultClass": "DESKTOP",
+      "injection": "application start throws or renderer terminates",
+      "expectedState": "FAILED_WITH_RECOVERY_OR_ONE_RELOAD",
+      "allowedActions": ["inspect-diagnostic", "edit-config", "export-support"],
+      "artifact": "boot envelope or crash marker",
+      "cleanupAssertion": "bounded drain and no relaunch/reload loop",
+      "evidenceTest": "tests/unit/desktop/DesktopFatalRecovery.test.js"
+    },
+    {
+      "id": "fleet-one-bot-fails",
+      "faultClass": "FLEET",
+      "injection": "one connection stop throws while another succeeds",
+      "expectedState": "PARTIAL",
+      "allowedActions": ["retry-emergency-stop", "inspect-diagnostic"],
+      "artifact": "fleet-emergency-stop-v1 per-bot result",
+      "cleanupAssertion": "all bot intents revoked and every bot attempted",
+      "evidenceTest": "tests/unit/recovery/FleetControlService.test.js"
+    },
+    {
+      "id": "support-corrupt-or-large-entry",
+      "faultClass": "DIAGNOSTICS",
+      "injection": "optional artifact is corrupt or above size budget",
+      "expectedState": "BUNDLE_CREATED_WITH_WARNING",
+      "allowedActions": ["export-support", "inspect-diagnostic"],
+      "artifact": "support-bundle v2 manifest warning",
+      "cleanupAssertion": "no protected path or unbounded content included",
+      "evidenceTest": "tests/unit/diagnostics/TraceSupportBundle.test.js"
+    }
+  ]
+}

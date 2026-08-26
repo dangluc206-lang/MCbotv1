@@ -1,4 +1,5 @@
 'use strict';
+const DiscordInteractionRouter = require('./DiscordInteractionRouter');
 
 class DiscordService {
     constructor({
@@ -14,6 +15,7 @@ class DiscordService {
         this.config = config;
         this.commands = commands ? [...commands] : (command ? [command] : []);
         this.panelManager = panelManager;
+        this.interactionRouter = new DiscordInteractionRouter({ panelManager, commands:this.commands });
         this.environment = environment;
         this.logger = logger;
         this.discord = discord;
@@ -47,7 +49,7 @@ class DiscordService {
         this.client = new discord.Client({ intents: [discord.GatewayIntentBits.Guilds] });
         this.onInteraction = interaction => {
             if (this.stopping) return;
-            const task = Promise.resolve().then(() => this.#handleInteraction(interaction));
+            const task = Promise.resolve().then(() => this.interactionRouter.handle(interaction));
             this.activeInteractions.add(task);
             task.catch(error => {
                 this.logger?.error?.('Discord interaction handler failed.', { error });
@@ -122,14 +124,6 @@ class DiscordService {
     }
 
     async destroy() { await this.stop(); }
-
-    async #handleInteraction(interaction) {
-        if (this.panelManager && await this.panelManager.handleInteraction(interaction)) return true;
-        for (const command of this.commands) {
-            if (await command.execute(interaction)) return true;
-        }
-        return false;
-    }
 
     #requiredEnv(name) {
         const value = this.environment[name];

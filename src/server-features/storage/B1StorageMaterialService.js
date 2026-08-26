@@ -128,8 +128,9 @@ class B1StorageMaterialService {
      *
      * Order is intentionally fixed and has no pressure/burst/click policy:
      *   fresh /kho -> smelt raw iron/gold -> compact every B1 family ->
-     *   sell surplus in verified 64-only slices above reserve -> verify fresh
-     *   /kho. Sub-64 surplus is deliberately retained.
+     *   sell surplus in acknowledged 64-only slices above the immutable
+     *   baseline floor -> craft immediately. There is no post-sell /kho
+     *   reserve verification. Sub-64 surplus is deliberately retained.
      *
      * Stone is never smelted because only the allowlisted iron/gold recipes can
      * enter this service. Craft-time code must never call this method mid-batch.

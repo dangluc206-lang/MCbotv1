@@ -14,6 +14,19 @@ function printFailures(result) {
 }
 
 function main() {
+    if (process.argv.includes('--write')) {
+        const baseline = buildBaseline({ root });
+        const result = validateBaseline(baseline, { root, compareArchitecture: true });
+        if (!result.valid) {
+            printFailures(result);
+            process.exitCode = 1;
+            return;
+        }
+        fs.writeFileSync(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`, 'utf8');
+        console.log('Architecture baseline updated: architecture/baseline/current.json');
+        return;
+    }
+
     if (process.argv.includes('--check')) {
         if (!fs.existsSync(baselinePath)) throw new Error('Baseline artifact is missing: architecture/baseline/current.json');
         const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));

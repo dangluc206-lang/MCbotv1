@@ -1,9 +1,14 @@
 'use strict';
 
+const { randomUUID } = require('node:crypto');
 const Result = require('../shared/result/Result');
 const Status = require('../shared/result/Status');
 const Operation = require('../operations/Operation');
+const Timeout = require('../shared/time/Timeout');
 const { immutableClone } = require('../shared/utils/object');
+
+const EMERGENCY_TRANSACTION_LIMIT = 32;
+const EMERGENCY_TRANSACTION_TTL_MS = 5 * 60 * 1000;
 
 class FleetControlService {
     constructor({ store, scheduler, botRegistry, modeCatalog = null, logger = null } = {}) {
@@ -19,6 +24,7 @@ class FleetControlService {
         this.offRegistry = null;
         this.lifecycleState = 'CREATED';
         this.lastOutcomes = new Map();
+        this.emergencyTransactions = new Map();
     }
 
     setProfiles(profiles) {
@@ -164,6 +170,155 @@ class FleetControlService {
         }));
     }
 
+    emergencyStop(botIds = null, {
+        source = 'operator-emergency',
+        idempotencyKey = randomUUID(),
+        timeoutMs = 15000
+    } = {}) {
+        const ids = [...new Set((botIds || [...this.profiles.keys()]).map(value => String(value || '').trim()).filter(Boolean))].sort();
+        if (ids.length === 0) return Promise.resolve(immutableClone({ contract: 'fleet-emergency-stop-v1', transactionId: idempotencyKey, outcome: 'SUCCESS', botCount: 0, terminalCount: 0, results: [] }));
+        const key = String(idempotencyKey || '').trim();
+        if (!/^[a-z0-9][a-z0-9:._-]{0,127}$/i.test(key)) throw new TypeError('Emergency stop idempotencyKey is invalid.');
+        const fingerprint = JSON.stringify(ids);
+        this.#trimEmergencyTransactions();
+        const existing = this.emergencyTransactions.get(key);
+        if (existing) {
+            if (existing.fingerprint !== fingerprint) throw Object.assign(new Error('Emergency stop idempotencyKey was reused for a different bot set.'), { code: 'FLEET_EMERGENCY_IDEMPOTENCY_CONFLICT' });
+            return existing.promise;
+        }
+        if (this.emergencyTransactions.size >= EMERGENCY_TRANSACTION_LIMIT) {
+            const settledKey = [...this.emergencyTransactions].find(([, entry]) => entry?.settledAt !== null)?.[0];
+            if (settledKey) this.emergencyTransactions.delete(settledKey);
+            else throw Object.assign(new Error('Too many emergency-stop transactions are still in flight.'), { code: 'FLEET_EMERGENCY_TRANSACTION_LIMIT' });
+        }
+        const safeTimeoutMs = Math.max(250, Math.min(60000, Number(timeoutMs) || 15000));
+        const entry = { fingerprint, createdAt: Date.now(), settledAt: null, promise: null };
+        entry.promise = this.#runEmergencyStop(ids, { source, idempotencyKey: key, timeoutMs: safeTimeoutMs })
+            .finally(() => {
+                entry.settledAt = Date.now();
+                this.#trimEmergencyTransactions();
+            });
+        this.emergencyTransactions.set(key, entry);
+        this.#trimEmergencyTransactions();
+        return entry.promise;
+    }
+
+    async #runEmergencyStop(botIds, { source, idempotencyKey, timeoutMs }) {
+        const snapshots = botIds.map(botId => {
+            try {
+                const runtime = this.#requireRuntime(botId);
+                return { botId, connectionGeneration: runtime.context?.getGeneration?.() ?? null, runtime, snapshotError: null };
+            } catch (error) {
+                return { botId, connectionGeneration: null, runtime: null, snapshotError: error };
+            }
+        });
+
+        // Phase 1 revokes every durable intent before waiting on any slow disconnect.
+        const revocations = await Promise.allSettled(snapshots.map(async snapshot => {
+            if (snapshot.snapshotError) throw snapshot.snapshotError;
+            const reconnectManager = snapshot.runtime.getService?.('reconnectManager');
+            if (typeof reconnectManager?.suspend === 'function') reconnectManager.suspend(`Fleet emergency stop requested by ${source}.`);
+            else reconnectManager?.cancelPending?.(`Fleet emergency stop requested by ${source}.`);
+            return this.store.setIntent(snapshot.botId, {
+                desiredConnection: 'DISCONNECTED', desiredMode: null, modeState: null, source
+            });
+        }));
+
+        // Phase 2 is all-settled and independently bounded for each bot. A durable
+        // write failure still takes the direct owner path so safety is best-effort.
+        const settled = await Promise.allSettled(snapshots.map((snapshot, index) => Timeout.withTimeout(
+            this.#emergencyStopBot(snapshot, revocations[index], source),
+            timeoutMs,
+            { message: `Emergency stop timed out for ${snapshot.botId}.` }
+        )));
+        const results = snapshots.map((snapshot, index) => {
+            const entry = settled[index];
+            if (entry.status === 'fulfilled') return entry.value;
+            const status = entry.reason?.code === 'TIMEOUT' ? 'TIMEOUT' : 'FAILED';
+            return {
+                botId: snapshot.botId,
+                connectionGeneration: snapshot.connectionGeneration,
+                status,
+                terminal: false,
+                intentRevoked: revocations[index].status === 'fulfilled',
+                code: entry.reason?.code || 'FLEET_EMERGENCY_STOP_FAILED',
+                message: entry.reason?.message || 'Emergency stop failed.'
+            };
+        });
+        for (const result of results) {
+            if (result.terminal) continue;
+            snapshots.find(snapshot => snapshot.botId === result.botId)?.runtime?.getService?.('runtimeFailurePublisher')?.publish?.({
+                source: 'fleet', subsystem: 'fleet', severity: 'critical', code: result.code || 'FLEET_EMERGENCY_STOP_PARTIAL',
+                operation: 'FleetEmergencyStop', step: 'verify-terminal', message: result.message,
+                retryable: true, connectionGeneration: result.connectionGeneration,
+                details: { transactionId: idempotencyKey, status: result.status }
+            });
+        }
+        const terminalCount = results.filter(result => result.terminal).length;
+        let outcome = 'PARTIAL';
+        if (terminalCount === results.length) outcome = 'SUCCESS';
+        else if (terminalCount === 0 && results.every(result => result.status === 'TIMEOUT')) outcome = 'TIMEOUT';
+        else if (terminalCount === 0) outcome = 'FAILED';
+        return immutableClone({
+            contract: 'fleet-emergency-stop-v1',
+            transactionId: idempotencyKey,
+            source,
+            outcome,
+            botCount: results.length,
+            terminalCount,
+            results
+        });
+    }
+
+    async #emergencyStopBot(snapshot, revocation, source) {
+        if (snapshot.snapshotError) throw snapshot.snapshotError;
+        const { runtime, botId, connectionGeneration } = snapshot;
+        let intentRevoked = revocation.status === 'fulfilled';
+        let reconcile = null;
+        let cleanupError = null;
+        if (intentRevoked) {
+            reconcile = await this.reconcileBot(botId, {
+                reason: `fleet-emergency:${source}`,
+                priority: 'high',
+                expectedRevision: revocation.value.revision
+            });
+        } else {
+            try {
+                await this.#resetRuntime(runtime, 'Fleet emergency stop direct fallback.');
+                await runtime.requireService('connectionManager').stop();
+            } catch (error) { cleanupError = error; }
+        }
+
+        // Close a client that appeared after the first stop while reconnect is suspended.
+        if (runtime.context?.has?.()) {
+            try { await runtime.requireService('connectionManager').stop(); }
+            catch (error) { cleanupError ||= error; }
+        }
+        const terminal = !runtime.context?.has?.();
+        const success = terminal && !cleanupError && (reconcile?.success !== false || !intentRevoked);
+        return {
+            botId,
+            connectionGeneration,
+            status: success ? 'SUCCESS' : terminal ? 'PARTIAL' : 'FAILED',
+            terminal,
+            intentRevoked,
+            code: cleanupError?.code || reconcile?.error?.code || (success ? null : 'FLEET_EMERGENCY_STOP_NOT_TERMINAL'),
+            message: cleanupError?.message || reconcile?.message || (success ? 'Bot is disconnected and reconnect is suspended.' : 'Bot did not reach a verified terminal state.')
+        };
+    }
+
+    #trimEmergencyTransactions() {
+        const now = Date.now();
+        for (const [key, entry] of this.emergencyTransactions) {
+            if (entry?.settledAt !== null && now - entry.settledAt >= EMERGENCY_TRANSACTION_TTL_MS) this.emergencyTransactions.delete(key);
+        }
+        while (this.emergencyTransactions.size > EMERGENCY_TRANSACTION_LIMIT) {
+            const settledKey = [...this.emergencyTransactions].find(([, entry]) => entry?.settledAt !== null)?.[0];
+            if (!settledKey) break;
+            this.emergencyTransactions.delete(settledKey);
+        }
+    }
+
     async reconcileBot(botId, {
         reason = 'reconcile',
         priority = 'normal',
@@ -242,6 +397,7 @@ class FleetControlService {
         await this.stop();
         await this.scheduler.destroy();
         await this.store.destroy();
+        this.emergencyTransactions.clear();
         this.lifecycleState = 'DESTROYED';
     }
 

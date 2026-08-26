@@ -3,35 +3,29 @@
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
-const createApplication = require('../bootstrap/createApplication');
+const { randomUUID } = require('node:crypto');
 const Redactor = require('../shared/security/Redactor');
-const CollectorB5ConfigEditor = require('../discord/config/CollectorB5ConfigEditor');
-const FishingBotConfigEditor = require('../discord/config/FishingBotConfigEditor');
 const ConfigSpecs = require('../configuration/ConfigSpecs');
-const CustomModeStore = require('../modes/composable/CustomModeStore');
-const WorkflowDefinitionValidator = require('../modes/composable/WorkflowDefinitionValidator');
 const DesktopLogPolicy = require('./DesktopLogPolicy');
 const VietnamTime = require('../shared/time/VietnamTime');
+const RuntimeFailureArtifactRepository = require('../diagnostics/runtime/RuntimeFailureArtifactRepository');
+const SupportBundleBuilder = require('../diagnostics/support/SupportBundleBuilder');
+const BootFailureContract = require('./BootFailureContract');
+const IncidentIndexStore = require('./incidents/IncidentIndexStore');
+const OperatorHealthService = require('./health/OperatorHealthService');
+const B5OperatorProjection = require('./b5/B5OperatorProjection');
+const ConfigurationWorkspaceService = require('./configuration/ConfigurationWorkspaceService');
+const BackupCatalogService = require('./backup/BackupCatalogService');
+const OperatorSnapshotProjector = require('./projection/OperatorSnapshotProjector');
+const CustomModeUseCases = require('./use-cases/CustomModeUseCases');
+const BotProfileUseCases = require('./use-cases/BotProfileUseCases');
+const ModeConfigurationUseCases = require('./use-cases/ModeConfigurationUseCases');
+const FleetControlUseCases = require('./use-cases/FleetControlUseCases');
+const { plainError, resultPayload } = require('./contracts/DesktopResult');
 
-function plainError(error) {
-    if (!error) return null;
-    return {
-        name: error.name || 'Error',
-        code: error.code || null,
-        message: error.message || String(error)
-    };
-}
-
-function resultPayload(result) {
-    if (!result || typeof result !== 'object') return result;
-    return {
-        success: result.success !== false,
-        status: result.status || null,
-        message: result.message || null,
-        data: result.data ?? null,
-        error: plainError(result.error)
-    };
-}
+const SUPPORT_PREVIEW_TTL_MS = 60000;
+const SUPPORT_DIAGNOSTIC_MAX_BYTES = 128 * 1024;
+const BOT_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{1,31}$/;
 
 function pick(source, keys) {
     const output = {};
@@ -39,20 +33,71 @@ function pick(source, keys) {
     return output;
 }
 
+function botIdFromLogRecord(record) {
+    const explicit = String(record?.meta?.botId || '').trim();
+    if (BOT_ID_PATTERN.test(explicit)) return explicit;
+    const match = /^BotRuntime:([a-z0-9][a-z0-9_-]{1,31})$/.exec(String(record?.scope || '').trim());
+    return match ? match[1] : null;
+}
+
 class DesktopController {
-    constructor({ baseDir = process.cwd(), environment = process.env, maxLogs = 1200, logPolicy = null } = {}) {
+    constructor({ baseDir = process.cwd(), environment = process.env, maxLogs = 1200, logPolicy = null, applicationFactory = null, incidentIndexStore = null, backupCatalogService = null, appVersion = 'unknown' } = {}) {
         this.baseDir = path.resolve(baseDir);
-        this.environment = { ...environment, MCBOT_DESKTOP: '1' };
+        this.environment = {};
         this.maxLogs = Math.max(100, Number(maxLogs) || 1200);
         this.logPolicy = logPolicy || new DesktopLogPolicy({ repeatWindowMs: 15000 });
+        this.applicationFactory = applicationFactory;
         this.bundle = null;
         this.lifecycle = 'STOPPED';
+        this.configureEnvironment(environment);
         this.logs = [];
         this.logListeners = new Set();
         this.startPromise = null;
         this.startedAt = null;
         this.logPersistenceFailure = null;
         this.logListenerFailure = null;
+        this.bootFailure = null;
+        this.bootStage = null;
+        this.runtimeFailureArtifactRepository = null;
+        this.supportPreviewCache = null;
+        this.incidentIndexStore = incidentIndexStore || new IncidentIndexStore({ filePath: path.join(this.baseDir, 'data', 'runtime', 'incidents', 'index.json') });
+        this.backupCatalogService = backupCatalogService || new BackupCatalogService({ baseDir: this.baseDir, appVersion });
+        this.operatorHealthService = new OperatorHealthService({ snapshotProvider: () => this.snapshot() });
+        this.operatorSnapshotProjector = new OperatorSnapshotProjector();
+        this.configurationWorkspaceService = new ConfigurationWorkspaceService({
+            loadGroup: key => this.configGroup(key),
+            saveGroup: (key, value) => this.saveConfigGroup(key, value),
+            validateGroup: (key, value) => this.#validateConfigWorkspaceGroup(key, value)
+        });
+        this.incidentActionCache = new Map();
+        this.customModeUseCases = new CustomModeUseCases({
+            baseDir:this.baseDir,
+            mutationCoordinator:() => this.bundle?.shared?.configMutations || null,
+            modeCatalog:() => this.bundle?.shared?.modeCatalog || null
+        });
+        this.botProfileUseCases = new BotProfileUseCases({
+            bundleProvider: () => this.bundle,
+            requireRunning: () => this.#requireRunning()
+        });
+        this.modeConfigurationUseCases = new ModeConfigurationUseCases({
+            baseDir: this.baseDir,
+            bundleProvider: () => this.bundle,
+            requireRunning: () => this.#requireRunning()
+        });
+        this.fleetControlUseCases = new FleetControlUseCases({
+            bundleProvider: () => this.bundle,
+            requireRunning: () => this.#requireRunning()
+        });
+    }
+
+    configureEnvironment(environment = process.env) {
+        if (['STARTING', 'RUNNING', 'STOPPING'].includes(this.lifecycle)) {
+            throw Object.assign(new Error('Desktop environment can only be replaced while the backend is stopped.'), {
+                code: 'DESKTOP_ENVIRONMENT_REPLACE_UNSAFE'
+            });
+        }
+        this.environment = Object.freeze({ ...(environment || {}), MCBOT_DESKTOP: '1' });
+        return Object.freeze({ updated: true, desktopMarker: true });
     }
 
     onLog(listener) {
@@ -92,16 +137,23 @@ class DesktopController {
 
     async #startInternal() {
         this.lifecycle = 'STARTING';
+        this.bootStage = 'APPLICATION_CREATE';
         try {
             const output = record => this.#publishLog(record);
+            const createApplication = this.applicationFactory || require('../bootstrap/createApplication');
             this.bundle = await createApplication({
                 baseDir: this.baseDir,
                 environment: this.environment,
                 output
             });
+            this.bootStage = 'RUNTIME_START';
             await this.bundle.application.initialize();
             await this.bundle.application.start();
             this.lifecycle = 'RUNNING';
+            this.bootFailure = null;
+            this.bootStage = null;
+            this.runtimeFailureArtifactRepository = null;
+            this.supportPreviewCache = null;
             this.startedAt = Date.now();
             this.#publishLog({
                 timestamp: VietnamTime.iso(),
@@ -113,6 +165,8 @@ class DesktopController {
             return this.snapshot();
         } catch (error) {
             this.lifecycle = 'FAILED';
+            this.bootFailure = BootFailureContract.create(error, { stage: this.bootStage, baseDir: this.baseDir });
+            this.bootStage = null;
             this.#publishLog({
                 timestamp: VietnamTime.iso(),
                 level: 'error',
@@ -150,6 +204,8 @@ class DesktopController {
             this.bundle = null;
             this.lifecycle = 'STOPPED';
             this.startedAt = null;
+            this.runtimeFailureArtifactRepository = null;
+            this.supportPreviewCache = null;
             this.logPolicy?.reset?.();
             this.#publishLog({
                 timestamp: VietnamTime.iso(),
@@ -172,6 +228,7 @@ class DesktopController {
             appState: bundle?.application?.getState?.() || null,
             bots,
             fleet: bundle?.fleetControl?.status?.() || null,
+            bootFailure: this.bootFailure,
             system: {
                 startedAt: this.startedAt ? new Date(this.startedAt).toISOString() : null,
                 uptimeMs: this.startedAt ? Math.max(0, Date.now() - this.startedAt) : 0,
@@ -183,123 +240,147 @@ class DesktopController {
         };
     }
 
-    async listProfiles() {
-        this.#requireRunning();
-        const profiles = await this.bundle.botProfileAdmin.listProfiles();
-        return profiles.map(profile => Redactor.sanitize(profile));
+    operatorHealth(options = {}) {
+        return this.operatorHealthService.sample(options);
     }
 
-    async updateProfile(botId, fields) {
-        this.#requireRunning();
-        const safeFields = {};
-        for (const key of ['displayName', 'username', 'auth', 'version', 'serverProfile', 'skyblockSelection', 'enabled']) {
-            if (Object.prototype.hasOwnProperty.call(fields || {}, key)) safeFields[key] = fields[key];
-        }
-        return Redactor.sanitize(await this.bundle.botProfileAdmin.updateProfile(botId, safeFields));
+    operatorSnapshot() {
+        return this.operatorSnapshotProjector.project(this.snapshot(), { incidents: this.incidentIndexStore.snapshot({ states: ['OPEN','RECOVERING','NEEDS_ACTION'], limit: 20 }) });
     }
 
-    async createProfile(fields = {}) {
-        this.#requireRunning();
-        const safeFields = {};
-        for (const key of ['id', 'displayName', 'username', 'auth', 'version', 'serverProfile', 'skyblockSelection']) {
-            if (Object.prototype.hasOwnProperty.call(fields || {}, key)) safeFields[key] = fields[key];
-        }
-        return Redactor.sanitize(await this.bundle.botProfileAdmin.createProfile(safeFields));
+    botOperatorDetail(botId, expectedRevision = null) {
+        const projection = this.operatorSnapshot();
+        if (expectedRevision !== null && Number(expectedRevision) > Number(projection.revision)) throw Object.assign(new Error('Requested operator snapshot revision is not available.'), { code: 'DESKTOP_SNAPSHOT_REVISION_INVALID' });
+        const bot = this.snapshot().bots.find(item => item.botId === botId);
+        if (!bot) throw Object.assign(new Error(`Bot does not exist: ${botId}`), { code: 'DESKTOP_BOT_NOT_FOUND' });
+        return { contract: 'operator-bot-detail-v1', snapshotRevision: projection.revision, snapshotDigest: projection.digest, bot };
     }
 
-    async cloneProfile(botId, newId) {
-        this.#requireRunning();
-        return Redactor.sanitize(await this.bundle.botProfileAdmin.cloneProfile(botId, newId));
+    b5OperatorJourney(botId = null) {
+        const bots = this.snapshot().bots || [];
+        const selected = botId ? bots.filter(bot => bot.botId === botId) : bots;
+        if (botId && selected.length === 0) throw Object.assign(new Error(`Bot does not exist: ${botId}`), { code: 'DESKTOP_BOT_NOT_FOUND' });
+        return { contract: B5OperatorProjection.CONTRACT, items: selected.map(bot => B5OperatorProjection.projectBot(bot)), projectedAt: VietnamTime.iso() };
     }
 
-    async deleteProfile(botId) {
-        this.#requireRunning();
-        return Redactor.sanitize(await this.bundle.botProfileAdmin.deleteProfile(botId));
-    }
-
-    async connect(botId) {
-        this.#requireRunning();
-        return resultPayload(await this.bundle.fleetControl.requestConnection(botId, 'CONNECTED', { source: 'desktop-bot-card' }));
-    }
-
-    async disconnect(botId) {
-        this.#requireRunning();
-        return resultPayload(await this.bundle.fleetControl.requestConnection(botId, 'DISCONNECTED', { source: 'desktop-bot-card' }));
-    }
-
-    async startMode(botId, mode) {
-        this.#requireRunning();
-        return resultPayload(await this.bundle.fleetControl.requestMode(botId, mode, { state: 'ACTIVE', source: 'desktop' }));
-    }
-
-    async pauseMode(botId) {
-        this.#requireRunning();
-        return resultPayload(await this.bundle.fleetControl.requestModeState(botId, 'PAUSED', { source: 'desktop' }));
-    }
-
-    async resumeMode(botId) {
-        this.#requireRunning();
-        return resultPayload(await this.bundle.fleetControl.requestModeState(botId, 'ACTIVE', { source: 'desktop' }));
-    }
-
-    async stopMode(botId) {
-        this.#requireRunning();
-        return resultPayload(await this.bundle.fleetControl.requestMode(botId, null, { source: 'desktop' }));
-    }
-
-    async restartMode(botId) {
-        this.#requireRunning();
-        const intent = this.bundle.fleetControl.intent(botId);
-        if (!intent?.desiredMode) throw new Error(`No durable mode intent exists for ${botId}.`);
-        return resultPayload(await this.bundle.fleetControl.restartMode(botId, intent.desiredMode, { source: 'desktop' }));
-    }
-
-
-    async reconcileFleet(reason = 'desktop-reconcile') {
-        this.#requireRunning();
-        return Redactor.sanitize(await this.bundle.fleetControl.reconcileAll({ reason, priority: 'high' }));
-    }
-
-    async fleetAction(action) {
-        this.#requireRunning();
-        const profiles = this.bundle.fleetControl.profileSnapshot();
-        const enabledBotIds = Object.keys(profiles).filter(botId => profiles[botId]?.enabled !== false);
-        const botIds = ['pause-all', 'resume-all'].includes(action)
-            ? enabledBotIds.filter(botId => Boolean(this.bundle.fleetControl.intent?.(botId)?.desiredMode))
-            : enabledBotIds;
-        if (action === 'emergency-stop') {
-            const results = [];
-            for (const botId of botIds) {
-                const stopped = resultPayload(await this.bundle.fleetControl.requestMode(botId, null, { source: 'desktop-emergency' }));
-                const disconnected = resultPayload(await this.bundle.fleetControl.requestConnection(botId, 'DISCONNECTED', { source: 'desktop-emergency' }));
-                results.push({ botId, result: { success: stopped.success !== false && disconnected.success !== false, stopped, disconnected } });
+    async incidents({ limit = 100, states = null, botId = null } = {}) {
+        await this.incidentIndexStore.load();
+        const artifacts = this.#runtimeFailureArtifacts().list({ limit: Math.min(100, Number(limit) || 100), botId, hydrateMetadata: true });
+        for (const artifact of artifacts.items || []) {
+            try {
+                const record = this.#runtimeFailureArtifacts().read(artifact.id);
+                await this.incidentIndexStore.ingest(record, { artifactId: artifact.id });
+            } catch (error) {
+                this.#publishLog({ timestamp: VietnamTime.iso(), level: 'warn', scope: 'IncidentCenter', message: 'Không thể lập chỉ mục một runtime failure artifact.', meta: { artifactId: artifact.id, code: error?.code || null } }, { persist: false });
             }
-            return { action, success: results.every(entry => entry.result.success), results };
         }
-        const runners = {
-            'connect-all': botId => this.bundle.fleetControl.requestConnection(botId, 'CONNECTED', { source: 'desktop-fleet' }),
-            'pause-all': botId => this.bundle.fleetControl.requestModeState(botId, 'PAUSED', { source: 'desktop-fleet' }),
-            'resume-all': botId => this.bundle.fleetControl.requestModeState(botId, 'ACTIVE', { source: 'desktop-fleet' }),
-            'stop-modes-all': botId => this.bundle.fleetControl.requestMode(botId, null, { source: 'desktop-fleet' }),
-            'disconnect-all': botId => this.bundle.fleetControl.requestConnection(botId, 'DISCONNECTED', { source: 'desktop-fleet' }),
-            'home-all': async botId => {
-                const runtime = this.#runtime(botId);
-                if (!runtime.context.has()) return { success: true, status: 'SKIPPED_DISCONNECTED', data: { botId } };
-                return runtime.requireService('serverFeatureFacade').island().goHome();
-            }
-        };
-        const run = runners[action];
-        if (!run) throw new Error(`Unknown fleet action: ${action}`);
-        const settled = await Promise.allSettled(botIds.map(async botId => ({ botId, result: resultPayload(await run(botId)) })));
-        const results = settled.map((entry, index) => entry.status === 'fulfilled'
-            ? entry.value
-            : { botId: botIds[index], result: { success: false, error: plainError(entry.reason) } });
-        return {
-            action,
-            success: results.every(entry => entry.result?.success !== false),
-            results
-        };
+        return { contract: IncidentIndexStore.CONTRACT, items: this.incidentIndexStore.snapshot({ limit, states, botId }), warnings: artifacts.warnings || [] };
     }
+
+    async incident(id) {
+        await this.incidents({ limit: 100 });
+        const incident = this.incidentIndexStore.find(id);
+        if (!incident) throw Object.assign(new Error('Incident does not exist.'), { code: 'DESKTOP_INCIDENT_NOT_FOUND' });
+        return incident;
+    }
+
+    async transitionIncident(id, state, options = {}) {
+        return this.incidentIndexStore.transition(id, state, options);
+    }
+
+    async executeIncidentAction(id, action, request = {}) {
+        const incident = await this.incident(id);
+        const normalizedAction = String(action || '');
+        if (!incident.allowedActions.includes(normalizedAction)) throw Object.assign(new Error('Action is not allowed for this incident.'), { code: 'DESKTOP_INCIDENT_ACTION_NOT_ALLOWED' });
+        const actionContract = require('../shared/contracts/OperatorErrorContract').ACTION_CATALOG[normalizedAction];
+        if (!actionContract) throw Object.assign(new Error('Unknown incident action.'), { code: 'DESKTOP_INCIDENT_ACTION_UNKNOWN' });
+        if (actionContract.confirmation === 'DESTRUCTIVE' && request.confirmed !== true) throw Object.assign(new Error('Incident action requires explicit confirmation.'), { code: 'DESKTOP_INCIDENT_CONFIRMATION_REQUIRED' });
+        if (actionContract.generationGuard && Number(request.expectedGeneration) !== Number(incident.generation)) throw Object.assign(new Error('Incident action connection generation is stale.'), { code: 'DESKTOP_INCIDENT_STALE_GENERATION' });
+        const idempotencyKey = String(request.idempotencyKey || '').trim();
+        if (actionContract.idempotencyRequired && !/^[a-z0-9][a-z0-9:._-]{0,127}$/i.test(idempotencyKey)) throw Object.assign(new Error('Incident action requires a valid idempotency key.'), { code: 'DESKTOP_INCIDENT_IDEMPOTENCY_REQUIRED' });
+        const fingerprint = JSON.stringify({ id, action: normalizedAction, generation: request.expectedGeneration ?? null });
+        this.#trimIncidentActionCache();
+        const cached = idempotencyKey && this.incidentActionCache.get(idempotencyKey);
+        if (cached) {
+            if (cached.fingerprint !== fingerprint) throw Object.assign(new Error('Incident idempotency key was reused for another action.'), { code: 'DESKTOP_INCIDENT_IDEMPOTENCY_CONFLICT' });
+            return cached.result;
+        }
+        let result;
+        if (normalizedAction === 'inspect-diagnostic') {
+            const artifactId = incident.evidenceRefs.at(-1);
+            result = { artifactId, diagnostic: artifactId ? this.readDiagnostic(artifactId) : null };
+        } else if (normalizedAction === 'export-support') {
+            result = await this.supportBundlePreview();
+        } else if (normalizedAction === 'retry-storage-protection') {
+            const runtime = this.#runtime(incident.botId);
+            const mode = runtime.getService?.('b5CraftMode')?.status?.();
+            const episode = mode?.details?.protectionEpisode;
+            if (!episode) throw Object.assign(new Error('Current B5 storage-protection episode no longer exists.'), { code: 'B5_RETRY_STALE_EPISODE' });
+            result = await this.retryB5StorageProtection(incident.botId, {
+                expectedGeneration: request.expectedGeneration,
+                episodeId: episode.episodeId,
+                incidentId: episode.correlationId,
+                idempotencyKey
+            });
+        } else if (normalizedAction === 'reconnect-bot') {
+            const runtime = this.#runtime(incident.botId);
+            if (runtime.context.getGeneration() !== Number(request.expectedGeneration)) throw Object.assign(new Error('Connection generation changed before reconnect action.'), { code: 'DESKTOP_INCIDENT_STALE_GENERATION' });
+            result = await this.connect(incident.botId);
+        } else if (normalizedAction === 'edit-config') {
+            result = { navigateTo: 'settings', readOnlyAction: true };
+        } else {
+            throw Object.assign(new Error('Incident action has no Desktop executor.'), { code: 'DESKTOP_INCIDENT_ACTION_UNIMPLEMENTED' });
+        }
+        await this.incidentIndexStore.transition(id, normalizedAction === 'inspect-diagnostic' || normalizedAction === 'export-support' || normalizedAction === 'edit-config' ? incident.state : 'RECOVERING', { reason: normalizedAction, actionResult: result, expectedGeneration: actionContract.generationGuard ? request.expectedGeneration : undefined });
+        if (idempotencyKey) this.incidentActionCache.set(idempotencyKey, { fingerprint, result, expiresAt: Date.now() + 120000 });
+        return result;
+    }
+
+    openConfigWorkspace(key) { return this.configurationWorkspaceService.open(key); }
+    previewConfigWorkspace(sessionId, value) { return this.configurationWorkspaceService.preview(sessionId, value); }
+    saveConfigWorkspace(sessionId, value, options) { return this.configurationWorkspaceService.save(sessionId, value, options); }
+    undoConfigWorkspace(sessionId) { return this.configurationWorkspaceService.undo(sessionId); }
+    closeConfigWorkspace(sessionId) { return { closed: this.configurationWorkspaceService.close(sessionId) }; }
+
+    backupCatalog(options) { return this.backupCatalogService.list(options); }
+    previewConfigRestore(id) { return this.backupCatalogService.previewRestore(id); }
+
+    async restoreConfigBackup(id) {
+        if (this.lifecycle === 'RUNNING' || this.lifecycle === 'STARTING' || this.lifecycle === 'STOPPING') throw Object.assign(new Error('Backend must be stopped before restoring configuration.'), { code: 'CONFIG_BACKUP_BACKEND_MUST_STOP' });
+        return this.backupCatalogService.restore(id, { verifyTarget: () => this.#validateConfigurationTree() });
+    }
+
+    listProfiles() { return this.botProfileUseCases.list(); }
+    updateProfile(botId, fields) { return this.botProfileUseCases.update(botId, fields); }
+    createProfile(fields = {}) { return this.botProfileUseCases.create(fields); }
+    cloneProfile(botId, newId) { return this.botProfileUseCases.clone(botId, newId); }
+    deleteProfile(botId) { return this.botProfileUseCases.remove(botId); }
+
+    connect(botId) { return this.fleetControlUseCases.connect(botId); }
+    disconnect(botId) { return this.fleetControlUseCases.disconnect(botId); }
+    startMode(botId, mode) { return this.fleetControlUseCases.startMode(botId, mode); }
+    pauseMode(botId) { return this.fleetControlUseCases.pauseMode(botId); }
+    resumeMode(botId) { return this.fleetControlUseCases.resumeMode(botId); }
+    stopMode(botId) { return this.fleetControlUseCases.stopMode(botId); }
+    restartMode(botId) { return this.fleetControlUseCases.restartMode(botId); }
+
+    async retryB5StorageProtection(botId, request = {}) {
+        const runtime = this.#runtime(botId);
+        const service = runtime.getService?.('b5CraftMode');
+        if (!service?.requestStorageProtectionRetry) throw new Error(`B5 craft mode recovery is unavailable for ${botId}.`);
+        return resultPayload(service.requestStorageProtectionRetry({
+            expectedBotId: botId,
+            expectedGeneration: request.expectedGeneration,
+            episodeId: request.episodeId,
+            incidentId: request.incidentId,
+            idempotencyKey: request.idempotencyKey,
+            reason: 'desktop-operator'
+        }));
+    }
+
+
+    reconcileFleet(reason = 'desktop-reconcile') { return this.fleetControlUseCases.reconcile(reason); }
+    fleetAction(action) { return this.fleetControlUseCases.fleetAction(action); }
 
     async sendRegisteredCommand(botId, { commandKey, args = {}, confirm = false, timeoutMs = 5000 } = {}) {
         const runtime = this.#runtime(botId);
@@ -375,106 +456,104 @@ class DesktopController {
     }
 
     async backupConfig() {
-        const source = path.join(this.baseDir, 'config');
-        const timestamp = VietnamTime.iso().replace(/[:.]/g, '-');
-        const destination = path.join(this.baseDir, 'data', 'backups', `config-${timestamp}`);
-        await fsp.mkdir(path.dirname(destination), { recursive: true });
-        await fsp.cp(source, destination, { recursive: true, errorOnExist: true });
+        const backup = await this.backupCatalogService.create({ reason: 'manual', sourceAction: 'desktop-backup' });
         this.#publishLog({
             timestamp: VietnamTime.iso(),
             level: 'info',
             scope: 'Desktop',
             message: 'Configuration backup created.',
-            meta: { destination }
+            meta: { backupId: backup.id }
         });
-        return { path: destination, createdAt: VietnamTime.iso() };
+        return { id: backup.id, path: backup.path, createdAt: backup.createdAt, manifest: backup.manifest };
     }
 
-    async exportSupportBundle() {
+    async exportSupportBundle({ previewId = null } = {}) {
         const directory = path.join(this.baseDir, 'data', 'support');
         await fsp.mkdir(directory, { recursive: true });
-        const createdAt = VietnamTime.iso();
+        const now = Date.now();
+        let payload = null;
+        if (previewId) {
+            const cached = this.supportPreviewCache;
+            if (!cached || cached.previewId !== String(previewId) || cached.expiresAt <= now) {
+                throw Object.assign(new Error('Bản xem trước gói hỗ trợ đã hết hạn; hãy xem trước lại trước khi xuất.'), { code: 'SUPPORT_BUNDLE_PREVIEW_EXPIRED' });
+            }
+            payload = cached.bundle;
+        } else {
+            const createdAt = VietnamTime.iso();
+            payload = new SupportBundleBuilder().build(await this.#supportBundleInput(createdAt));
+        }
+        const createdAt = payload.createdAt;
         const filePath = path.join(directory, `support-${createdAt.replace(/[:.]/g, '-')}.json`);
-        const diagnosticNames = this.diagnostics({ limit: 20 }).map(entry => entry.name);
-        const diagnostics = [];
-        for (const name of diagnosticNames) {
-            try { diagnostics.push({ name, data: this.readDiagnostic(name) }); } catch (error) {
-                diagnostics.push({ name, error: plainError(error) });
+        await fsp.writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+        if (previewId) this.supportPreviewCache = null;
+        return { path: filePath, createdAt, manifestHash: payload.manifestHash, warnings: payload.warnings };
+    }
+
+    async supportBundlePreview() {
+        const createdAt = VietnamTime.iso();
+        const builder = new SupportBundleBuilder();
+        const bundle = builder.build(await this.#supportBundleInput(createdAt));
+        const previewId = `support-preview:${randomUUID()}`;
+        const expiresAt = Date.now() + SUPPORT_PREVIEW_TTL_MS;
+        this.supportPreviewCache = { previewId, expiresAt, bundle };
+        return { ...builder.previewBundle(bundle), previewId, expiresAt: new Date(expiresAt).toISOString() };
+    }
+
+    async #supportBundleInput(createdAt) {
+        const diagnosticIndex = this.#runtimeFailureArtifacts().list({ limit: 20, hydrateMetadata: false });
+        const entries = [
+            { path: 'evidence/platform-snapshot-desktop.json', value: this.snapshot() },
+            { path: 'evidence/log-summary-desktop.json', value: this.logSnapshot({ limit: 250 }), optional: true }
+        ];
+        const warnings = [...(diagnosticIndex.warnings || [])];
+        let diagnosticSequence = 0;
+        for (const artifact of diagnosticIndex.items) {
+            if (Number(artifact.size) > SUPPORT_DIAGNOSTIC_MAX_BYTES) {
+                warnings.push({
+                    code: 'SUPPORT_RUNTIME_FAILURE_OVERSIZE_SKIPPED',
+                    artifactId: artifact.id,
+                    bytes: artifact.size,
+                    maxBytes: SUPPORT_DIAGNOSTIC_MAX_BYTES
+                });
+                continue;
+            }
+            try {
+                diagnosticSequence += 1;
+                entries.push({
+                    path: `evidence/runtime-failure-${String(diagnosticSequence).padStart(3, '0')}.json`,
+                    value: { id: artifact.id, botId: artifact.botId, data: this.readDiagnostic(artifact.id) },
+                    optional: true
+                });
+            } catch (error) {
+                warnings.push({ code: 'SUPPORT_RUNTIME_FAILURE_SKIPPED', artifactId: artifact.id, message: error.message });
             }
         }
         const b5Replays = this.bundle?.application?.listRuntimes?.().map(runtime => ({
             botId: runtime.botId,
             fixture: runtime.getService?.('b5TraceRecorder')?.latestReplayFixture?.() || null
         })).filter(entry => entry.fixture) || [];
-        const payload = Redactor.sanitize({
+        for (const [index, replay] of b5Replays.entries()) {
+            entries.push({ path: `evidence/replay-b5-${String(index + 1).padStart(3, '0')}.json`, value: replay, optional: true });
+        }
+        if (this.lifecycle === 'RUNNING') {
+            try { entries.push({ path: 'evidence/mode-status-profiles.json', value: await this.listProfiles(), optional: true }); }
+            catch (error) { warnings.push({ code: 'SUPPORT_PROFILES_SKIPPED', message: error.message }); }
+        }
+        return {
             createdAt,
-            snapshot: this.snapshot(),
-            profiles: this.bundle ? await this.listProfiles() : [],
-            logs: this.logSnapshot({ limit: 500 }),
-            diagnostics,
-            b5Replays
-        });
-        await fsp.writeFile(filePath, `${JSON.stringify(payload, null, 2)}
-`, 'utf8');
-        return { path: filePath, createdAt };
+            entries,
+            warnings,
+            pseudonymSalt: randomUUID()
+        };
     }
 
-    async goHome(botId) {
-        const runtime = this.#runtime(botId);
-        const island = runtime.requireService('serverFeatureFacade').island();
-        return resultPayload(await island.goHome());
-    }
+    goHome(botId) { return this.fleetControlUseCases.home(botId); }
 
 
-    async collectorConfig(botId) {
-        this.#requireRunning();
-        const editor = new CollectorB5ConfigEditor({
-            baseDir: this.baseDir,
-            configuration: this.bundle.configuration,
-            botRegistry: this.bundle.shared.botRegistry,
-            botId,
-            logger: this.bundle.shared.loggerFactory.create('DesktopCollectorConfig'),
-            mutationCoordinator: this.bundle.shared.configMutations
-        });
-        return Redactor.sanitize(await editor.read());
-    }
-
-    async updateCollectorConfig(botId, fields = {}) {
-        this.#requireRunning();
-        const editor = new CollectorB5ConfigEditor({
-            baseDir: this.baseDir,
-            configuration: this.bundle.configuration,
-            botRegistry: this.bundle.shared.botRegistry,
-            botId,
-            logger: this.bundle.shared.loggerFactory.create('DesktopCollectorConfig'),
-            mutationCoordinator: this.bundle.shared.configMutations
-        });
-        return Redactor.sanitize(await editor.update(fields));
-    }
-
-    async fishingConfig(botId) {
-        this.#requireRunning();
-        const editor = new FishingBotConfigEditor({
-            baseDir: this.baseDir,
-            configuration: this.bundle.configuration,
-            botRegistry: this.bundle.shared.botRegistry,
-            logger: this.bundle.shared.loggerFactory.create('DesktopFishingConfig'),
-            mutationCoordinator: this.bundle.shared.configMutations
-        });
-        return Redactor.sanitize(await editor.read(botId));
-    }
-
-    async updateFishingArea(botId, fields = {}) {
-        this.#requireRunning();
-        const editor = new FishingBotConfigEditor({
-            baseDir: this.baseDir,
-            configuration: this.bundle.configuration,
-            botRegistry: this.bundle.shared.botRegistry,
-            logger: this.bundle.shared.loggerFactory.create('DesktopFishingConfig'),
-            mutationCoordinator: this.bundle.shared.configMutations
-        });
-        return Redactor.sanitize(await editor.setAreaPosition({ botId, ...fields }));
-    }
+    collectorConfig(botId) { return this.modeConfigurationUseCases.collector(botId); }
+    updateCollectorConfig(botId, fields = {}) { return this.modeConfigurationUseCases.updateCollector(botId, fields); }
+    fishingConfig(botId) { return this.modeConfigurationUseCases.fishing(botId); }
+    updateFishingArea(botId, fields = {}) { return this.modeConfigurationUseCases.updateFishingArea(botId, fields); }
 
 
 
@@ -640,22 +719,34 @@ class DesktopController {
     }
 
     customModeModules() {
-        return new WorkflowDefinitionValidator().moduleCatalog();
+        return this.customModeUseCases.modules();
+    }
+
+    customModeTemplates() { return this.customModeUseCases.templates(); }
+
+    customModeDryRun(definition, simulation = {}) {
+        return Redactor.sanitize(this.customModeUseCases.dryRun(definition, simulation));
+    }
+
+    customModePackage(definition) {
+        return Redactor.sanitize(this.customModeUseCases.package(definition));
+    }
+
+    modePresentations() {
+        this.#requireRunning();
+        return this.customModeUseCases.presentations();
     }
 
     customModes() {
-        const store = new CustomModeStore({ baseDir: this.baseDir });
-        return store.list();
+        return this.customModeUseCases.list();
     }
 
-    async saveCustomMode(definition) {
-        const store = new CustomModeStore({ baseDir: this.baseDir, mutationCoordinator: this.bundle?.shared?.configMutations });
-        return Redactor.sanitize(await store.save(definition));
+    async saveCustomMode(definition, options = {}) {
+        return Redactor.sanitize(await this.customModeUseCases.save(definition, options));
     }
 
     async deleteCustomMode(modeId) {
-        const store = new CustomModeStore({ baseDir: this.baseDir, mutationCoordinator: this.bundle?.shared?.configMutations });
-        return Redactor.sanitize(await store.remove(modeId));
+        return Redactor.sanitize(await this.customModeUseCases.remove(modeId));
     }
 
     async inspectGui(botId, { commandKey, slots = [], timeoutMs = 7000 } = {}) {
@@ -696,33 +787,54 @@ class DesktopController {
         return [...system, ...scoped];
     }
 
-    diagnostics({ limit = 40 } = {}) {
-        const directory = path.resolve(this.baseDir, this.bundle?.configuration?.registry?.require('app')?.runtimeFailures?.directory || 'data/runtime/errors');
-        if (!fs.existsSync(directory)) return [];
-        return fs.readdirSync(directory, { withFileTypes: true })
-            .filter(entry => entry.isFile() && entry.name.endsWith('.json'))
-            .map(entry => {
-                const full = path.join(directory, entry.name);
-                const stat = fs.statSync(full);
-                return { name: entry.name, modifiedAt: stat.mtime.toISOString(), size: stat.size };
-            })
-            .sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt))
-            .slice(0, Math.max(1, Math.min(200, Number(limit) || 40)));
+    diagnostics({ limit = 40, botId = null } = {}) {
+        return this.#runtimeFailureArtifacts().list({ limit, botId });
     }
 
-    readDiagnostic(name) {
-        const safeName = path.basename(String(name || ''));
-        if (!safeName.endsWith('.json')) throw new Error('Invalid diagnostic file name.');
-        const directory = path.resolve(this.baseDir, this.bundle?.configuration?.registry?.require('app')?.runtimeFailures?.directory || 'data/runtime/errors');
-        const full = path.join(directory, safeName);
-        const text = fs.readFileSync(full, 'utf8');
-        return Redactor.sanitize(JSON.parse(text));
+    readDiagnostic(id) {
+        return this.#runtimeFailureArtifacts().read(id);
     }
+
+    #runtimeFailureArtifacts() {
+        if (!this.runtimeFailureArtifactRepository) {
+            this.runtimeFailureArtifactRepository = new RuntimeFailureArtifactRepository({
+                baseDir: this.baseDir,
+                configuration: this.bundle?.configuration || null
+            });
+        }
+        return this.runtimeFailureArtifactRepository;
+    }
+
 
 
     #configMutation(work) {
         const coordinator = this.bundle?.shared?.configMutations;
         return coordinator?.run ? coordinator.run('config-set', work) : work();
+    }
+
+    #validateConfigWorkspaceGroup(key, value) {
+        this.#requireRunning();
+        const spec = ConfigSpecs.find(entry => entry.key === key);
+        if (!spec) return { valid: false, errors: [`Unknown configuration group: ${key}`] };
+        const local = this.bundle.configuration.validator.validate(spec.schema, value);
+        if (!local.valid) return local;
+        const profiles = Object.values(this.bundle.fleetControl.profileSnapshot() || {});
+        return this.bundle.configuration.crossValidator.validate({ ...this.bundle.configuration.registry.snapshot(), [key]: value }, { botProfiles: profiles, requireComplete: true });
+    }
+
+    async #validateConfigurationTree() {
+        const loadConfiguration = require('../bootstrap/loadConfiguration');
+        const loadBotProfiles = require('../bootstrap/loadBotProfiles');
+        const configuration = await loadConfiguration({ baseDir: this.baseDir });
+        const profiles = await loadBotProfiles({ loader: configuration.loader, validator: configuration.validator, directory: 'config/bots', environment: {} });
+        configuration.crossValidator.assertValid(configuration.registry.snapshot(), { botProfiles: profiles, requireComplete: true });
+        return { valid: true, groups: ConfigSpecs.length, profiles: profiles.length };
+    }
+
+    #trimIncidentActionCache() {
+        const now = Date.now();
+        for (const [key, entry] of this.incidentActionCache) if (!entry || entry.expiresAt <= now) this.incidentActionCache.delete(key);
+        while (this.incidentActionCache.size > 64) this.incidentActionCache.delete(this.incidentActionCache.keys().next().value);
     }
 
     async #writeConfigAtomic(relativeFile, value, key = 'config') {
@@ -832,9 +944,19 @@ class DesktopController {
             const directory = path.join(this.baseDir, 'data', 'logs');
             fs.mkdirSync(directory, { recursive: true });
             const day = String(record.timestamp || VietnamTime.iso()).slice(0, 10);
-            fs.appendFile(path.join(directory, `mcbot-desktop-${day}.jsonl`), `${JSON.stringify(record)}\n`, error => {
-                if (error) this.#recordLogPersistenceFailure(error);
-            });
+            const targets = [path.join(directory, `mcbot-desktop-${day}.jsonl`)];
+            const botId = botIdFromLogRecord(record);
+            if (botId) {
+                const botDirectory = path.join(directory, 'bots', botId);
+                fs.mkdirSync(botDirectory, { recursive: true });
+                targets.push(path.join(botDirectory, `mcbot-desktop-${botId}-${day}.jsonl`));
+            }
+            const line = `${JSON.stringify(record)}\n`;
+            for (const target of targets) {
+                fs.appendFile(target, line, error => {
+                    if (error) this.#recordLogPersistenceFailure(error);
+                });
+            }
         } catch (error) {
             this.#recordLogPersistenceFailure(error);
         }
@@ -848,12 +970,13 @@ class DesktopController {
     }
 
     #publishLog(record, { persist = true } = {}) {
+        const botId = botIdFromLogRecord(record);
         const sanitized = Redactor.sanitize({
             timestamp: record?.timestamp || VietnamTime.iso(),
             level: record?.level || 'info',
             scope: record?.scope || 'Application',
             message: record?.message || '',
-            meta: record?.meta || null
+            meta: botId ? { ...(record?.meta || {}), botId } : record?.meta || null
         });
 
         // The JSONL file remains the detailed forensic source. The desktop view

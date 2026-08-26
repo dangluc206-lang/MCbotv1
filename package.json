@@ -9,7 +9,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "start": "node src/index.js",
+    "start": "electron .",
     "test": "node scripts/run-tests.js",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=src/**/*.js --test-coverage-lines=80 --test-coverage-branches=65 --test-coverage-functions=80 tests/**/*.test.js",
     "validate": "npm run validate:structure && npm run validate:architecture",
@@ -17,6 +17,7 @@
     "validate:architecture": "node scripts/validate-architecture.js",
     "baseline:inspect": "node scripts/inspect-architecture-baseline.js",
     "baseline:report": "node scripts/inspect-architecture-baseline.js --report",
+    "baseline:update": "node scripts/inspect-architecture-baseline.js --write",
     "baseline:check": "node scripts/inspect-architecture-baseline.js --check",
     "inspect:config": "node scripts/validate-config.js",
     "inspect:architecture": "node scripts/validate-architecture.js --json",
@@ -42,7 +43,18 @@
     "artifact:verify": "node scripts/verify-release-zip.js",
     "scale:measure": "node --expose-gc scripts/measure-scale-baseline.js",
     "scale:check": "node --expose-gc scripts/measure-scale-baseline.js --check",
-    "scale:baseline:check": "node scripts/measure-scale-baseline.js --validate-file architecture/scale/current.json"
+    "scale:baseline:check": "node scripts/measure-scale-baseline.js --validate-file architecture/scale/current.json",
+    "check:error-vocabulary": "node scripts/check-error-vocabulary.js",
+    "check:slo": "node scripts/check-slo-contract.js",
+    "test:e2e:desktop": "node --test tests/e2e/desktop/desktop-critical-flow.test.js",
+    "support:validate": "node scripts/validate-support-bundle.js --self-check",
+    "support:validate:file": "node scripts/validate-support-bundle.js",
+    "check:product-docs": "node scripts/check-product-docs.js",
+    "check:static": "node scripts/check-static-quality.js",
+    "perf:operator": "node scripts/measure-operator-performance.js --check",
+    "test:fault-matrix:r1": "node --test tests/unit/simulation/R1RecoveryFaultMatrix.test.js tests/unit/simulation/FaultMatrixContract.test.js tests/unit/gui/Gui.test.js tests/unit/modes/ModeFaultPolicy.test.js tests/unit/recovery/FleetControlService.test.js tests/unit/desktop/DesktopSecretStore.test.js tests/unit/desktop/DesktopFatalRecovery.test.js tests/unit/diagnostics/TraceSupportBundle.test.js",
+    "test:fault-matrix:r5": "node --test tests/unit/simulation/R5FaultMatrixContract.test.js tests/unit/simulation/FaultMatrixContract.test.js tests/unit/modes/B5CraftModeService.test.js tests/unit/desktop/RuntimeConfigMigrator.test.js tests/unit/recovery/FleetControlService.test.js tests/unit/desktop/DesktopApiContract.test.js tests/unit/desktop/ReleaseCanaryPolicy.test.js",
+    "check:release-canary": "node scripts/check-release-canary-policy.js"
   },
   "dependencies": {
     "dotenv": "^17.4.2",

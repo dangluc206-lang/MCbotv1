@@ -6,15 +6,20 @@ const { pathToFileURL } = require('node:url');
 const { app, BrowserWindow, ipcMain, shell, safeStorage, Tray, Menu, Notification, powerMonitor, powerSaveBlocker, screen, dialog } = require('electron');
 const { spawn } = require('node:child_process');
 const DesktopController = require('./DesktopController');
-const DesktopSecretStore = require('./DesktopSecretStore');
 const DesktopPreferenceStore = require('./DesktopPreferenceStore');
+const DesktopRuntimeBootstrap = require('./use-cases/DesktopRuntimeBootstrap');
 const LocalZipUpdateService = require('./update/LocalZipUpdateService');
 require('./update/local-update-helper');
 const localUpdateHelperPath = require.resolve('./update/local-update-helper');
-const RuntimeConfigMigrator = require('./update/RuntimeConfigMigrator');
 const LocalAiService = require('../ai/LocalAiService');
 const { handleSquirrelLifecycle } = require('./update/SquirrelLifecycle');
 const { runDesktopShutdownSequence } = require('./DesktopShutdownSequence');
+const { CrashMarkerStore, createDesktopFatalRecovery } = require('./DesktopFatalRecovery');
+const IncidentIndexStore = require('./incidents/IncidentIndexStore');
+const DesktopReadinessService = require('./readiness/DesktopReadinessService');
+const CommandPaletteCatalog = require('./presentation/CommandPaletteCatalog');
+const DesktopApiContract = require('./contracts/DesktopApiContract');
+const SnapshotDeliveryCoordinator = require('./projection/SnapshotDeliveryCoordinator');
 
 const templateRoot = path.resolve(__dirname, '..', '..');
 const rendererFile = path.join(__dirname, 'renderer', 'index.html');
@@ -34,9 +39,27 @@ let lastSnapshot = null;
 let windowStateTimer = null;
 let localUpdateService = null;
 let runtimeMigrator = null;
+let runtimeBootstrap = null;
 let aiService = null;
+let readinessService = null;
+let operatorSnapshotDelivery = null;
+let rendererRecovery = { startedAt: 0, count: 0 };
 const notificationHistory = new Map();
 const launchedHidden = process.argv.includes('--hidden');
+const crashMarkerStore = new CrashMarkerStore({ directory: path.join(app.getPath('userData'), 'crash-recovery') });
+const fatalRecovery = createDesktopFatalRecovery({
+    markerStore: crashMarkerStore,
+    timeoutMs: 5000,
+    drain: async () => {
+        if (snapshotTimer) { clearTimeout(snapshotTimer); snapshotTimer = null; }
+        if (windowStateTimer) { clearTimeout(windowStateTimer); windowStateTimer = null; }
+        await Promise.allSettled([preferenceStore?.drain?.(), controller?.stop?.('Desktop fatal recovery.')]);
+    },
+    relaunch: () => app.relaunch(),
+    terminate: code => app.exit(code)
+});
+process.on('uncaughtException', error => { fatalRecovery.handle(error, 'uncaught-exception'); });
+process.on('unhandledRejection', reason => { fatalRecovery.handle(reason instanceof Error ? reason : new Error(String(reason)), 'unhandled-rejection'); });
 
 
 function reportDesktopFailure(error, source) {
@@ -56,18 +79,6 @@ function reportDesktopFailure(error, source) {
 const squirrelHandled = handleSquirrelLifecycle({ app });
 const hasSingleInstanceLock = squirrelHandled ? false : app.requestSingleInstanceLock();
 if (!squirrelHandled && !hasSingleInstanceLock) app.quit();
-
-async function prepareRuntimeDirectory() {
-    // Never run the backend directly from the immutable/default application
-    // tree. DEV gets its own AppData runtime so a local ZIP update can safely
-    // replace source/default files without overwriting operator configuration.
-    const runtimeName = app.isPackaged ? 'runtime' : 'runtime-dev';
-    const target = path.join(app.getPath('userData'), runtimeName);
-    runtimeMigrator = new RuntimeConfigMigrator({ templateRoot, runtimeRoot: target, appVersion: app.getVersion() });
-    const report = await runtimeMigrator.prepare();
-    if (report?.warnings?.length) console.warn('[MCbot migration] Cấu hình có cảnh báo khi migration:', report.warnings);
-    return target;
-}
 
 async function selectLocalUpdateZip() {
     if (!localUpdateService) throw new Error('Dịch vụ cập nhật ZIP chưa sẵn sàng.');
@@ -140,8 +151,23 @@ async function rollbackLastConfigMigration() {
     return result;
 }
 
+async function restoreConfigBackup(backupId) {
+    const wasRunning = controller?.lifecycle === 'RUNNING';
+    if (wasRunning) await controller.stop('Đang khôi phục backup cấu hình.');
+    try {
+        const result = await controller.restoreConfigBackup(backupId);
+        if (wasRunning) await controller.start();
+        publishSnapshot();
+        return result;
+    } catch (error) {
+        if (wasRunning && controller?.lifecycle !== 'RUNNING') await controller.start().catch(startError => reportDesktopFailure(startError, 'config-restore-backend-recovery'));
+        publishSnapshot();
+        throw error;
+    }
+}
+
 function serializeFailure(error) {
-    return { success: false, error: { name: error?.name || 'Error', code: error?.code || null, message: error?.message || String(error) } };
+    return DesktopApiContract.failure(error);
 }
 
 function isTrustedSender(event) {
@@ -150,6 +176,7 @@ function isTrustedSender(event) {
 }
 
 function safeHandle(channel, handler) {
+    if (!DesktopApiContract.CATALOG[channel]) throw new Error(`Desktop IPC channel is not declared in DesktopApiContract: ${channel}`);
     ipcMain.handle(channel, async (event, ...args) => {
         try {
             if (!isTrustedSender(event)) {
@@ -157,7 +184,8 @@ function safeHandle(channel, handler) {
                 error.code = 'DESKTOP_IPC_UNTRUSTED_SENDER';
                 throw error;
             }
-            return { success: true, data: await handler(...args) };
+            DesktopApiContract.validateRequest(channel, args);
+            return DesktopApiContract.success(await handler(...args));
         } catch (error) {
             return serializeFailure(error);
         }
@@ -181,7 +209,7 @@ async function openPathChecked(target) {
 
 async function restartBackend() {
     await controller.stop('Backend restart requested from desktop.').catch(error => reportDesktopFailure(error, 'backend-restart-stop'));
-    controller.environment = secretStore.environment(process.env);
+    controller.configureEnvironment(runtimeBootstrap.resolveEnvironment());
     const result = await controller.start();
     publishSnapshot();
     return result;
@@ -213,6 +241,15 @@ function registerIpc() {
     safeHandle('mcbot:backend:stop', async () => { const value = await controller.stop('Stopped from desktop UI.'); publishSnapshot(); return value; });
     safeHandle('mcbot:backend:restart', () => restartBackend());
     safeHandle('mcbot:snapshot', () => controller.snapshot());
+    safeHandle('mcbot:operator-snapshot', () => controller.operatorSnapshot());
+    safeHandle('mcbot:bot:detail', (botId, expectedRevision) => controller.botOperatorDetail(botId, expectedRevision));
+    safeHandle('mcbot:health', options => controller.operatorHealth(options || {}));
+    safeHandle('mcbot:readiness', () => readinessService.sample());
+    safeHandle('mcbot:b5:journey', botId => controller.b5OperatorJourney(botId));
+    safeHandle('mcbot:incidents:list', options => controller.incidents(options || {}));
+    safeHandle('mcbot:incidents:read', incidentId => controller.incident(incidentId));
+    safeHandle('mcbot:incidents:transition', (incidentId, state, options) => controller.transitionIncident(incidentId, state, options || {}));
+    safeHandle('mcbot:incidents:action', (incidentId, action, request) => controller.executeIncidentAction(incidentId, action, request || {}));
     safeHandle('mcbot:profiles:list', () => controller.listProfiles());
     safeHandle('mcbot:profiles:update', (botId, fields) => controller.updateProfile(botId, fields));
     safeHandle('mcbot:profiles:create', fields => controller.createProfile(fields));
@@ -245,6 +282,7 @@ function registerIpc() {
     safeHandle('mcbot:mode:resume', botId => controller.resumeMode(botId));
     safeHandle('mcbot:mode:stop', botId => controller.stopMode(botId));
     safeHandle('mcbot:mode:restart', botId => controller.restartMode(botId));
+    safeHandle('mcbot:mode:b5-retry-storage-protection', (botId, request) => controller.retryB5StorageProtection(botId, request));
     safeHandle('mcbot:bot:home', botId => controller.goHome(botId));
     safeHandle('mcbot:fleet:action', action => controller.fleetAction(action));
     safeHandle('mcbot:commands', () => controller.commandOptions());
@@ -268,19 +306,33 @@ function registerIpc() {
     safeHandle('mcbot:config:groups', () => controller.configGroups());
     safeHandle('mcbot:config:group:get', key => controller.configGroup(key));
     safeHandle('mcbot:config:group:save', (key, value) => controller.saveConfigGroup(key, value));
+    safeHandle('mcbot:config:workspace:open', key => controller.openConfigWorkspace(key));
+    safeHandle('mcbot:config:workspace:preview', (sessionId, value) => controller.previewConfigWorkspace(sessionId, value));
+    safeHandle('mcbot:config:workspace:save', (sessionId, value, options) => controller.saveConfigWorkspace(sessionId, value, options || {}));
+    safeHandle('mcbot:config:workspace:undo', sessionId => controller.undoConfigWorkspace(sessionId));
+    safeHandle('mcbot:config:workspace:close', sessionId => controller.closeConfigWorkspace(sessionId));
     safeHandle('mcbot:custom-mode:modules', () => controller.customModeModules());
+    safeHandle('mcbot:custom-mode:templates', () => controller.customModeTemplates());
+    safeHandle('mcbot:custom-mode:dry-run', (definition, simulation) => controller.customModeDryRun(definition, simulation || {}));
+    safeHandle('mcbot:custom-mode:package', definition => controller.customModePackage(definition));
+    safeHandle('mcbot:mode:presentations', () => controller.modePresentations());
     safeHandle('mcbot:custom-mode:list', () => controller.customModes());
-    safeHandle('mcbot:custom-mode:save', definition => controller.saveCustomMode(definition));
+    safeHandle('mcbot:custom-mode:save', (definition, options) => controller.saveCustomMode(definition, options || {}));
     safeHandle('mcbot:custom-mode:delete', modeId => controller.deleteCustomMode(modeId));
     safeHandle('mcbot:config:backup', () => controller.backupConfig());
+    safeHandle('mcbot:config:backups', options => controller.backupCatalog(options || {}));
+    safeHandle('mcbot:config:restore-preview', backupId => controller.previewConfigRestore(backupId));
+    safeHandle('mcbot:config:restore', backupId => restoreConfigBackup(backupId));
     safeHandle('mcbot:gui:inspect', (botId, options) => controller.inspectGui(botId, options));
     safeHandle('mcbot:logs', limit => controller.logSnapshot({ limit }));
     safeHandle('mcbot:diagnostics:list', limit => controller.diagnostics({ limit }));
-    safeHandle('mcbot:diagnostics:read', name => controller.readDiagnostic(name));
-    safeHandle('mcbot:support:export', () => controller.exportSupportBundle());
+    safeHandle('mcbot:diagnostics:read', artifactId => controller.readDiagnostic(artifactId));
+    safeHandle('mcbot:support:export', request => controller.exportSupportBundle(request));
+    safeHandle('mcbot:support:preview', () => controller.supportBundlePreview());
     safeHandle('mcbot:secrets:status', () => secretStore.status());
     safeHandle('mcbot:secrets:set', (key, value) => secretStore.set(key, value));
     safeHandle('mcbot:secrets:clear', key => secretStore.clear(key));
+    safeHandle('mcbot:secrets:reset', () => secretStore.reset());
     safeHandle('mcbot:preferences:get', () => ({ ...preferenceStore.snapshot(), loginItem: getLoginItemSetting() }));
     safeHandle('mcbot:preferences:set', async patch => {
         const values = await preferenceStore.update(patch || {});
@@ -290,6 +342,7 @@ function registerIpc() {
         scheduleSnapshotLoop(true);
         return { ...values, loginItem };
     });
+    safeHandle('mcbot:presentation:search', (query, options) => CommandPaletteCatalog.search(query, { experienceLevel: preferenceStore.get('experienceLevel'), ...(options || {}) }));
     safeHandle('mcbot:shell:project', () => openPathChecked(runtimeDir));
     safeHandle('mcbot:shell:logs', () => openPathChecked(path.join(runtimeDir, 'data', 'logs')));
     safeHandle('mcbot:shell:backups', () => openPathChecked(path.join(runtimeDir, 'data', 'backups')));
@@ -344,6 +397,13 @@ function createWindow() {
     mainWindow.webContents.on('will-navigate', event => event.preventDefault());
     mainWindow.webContents.on('render-process-gone', (_event, details) => {
         notify('MCbot Desktop', `Giao diện đã dừng: ${details.reason}`, 'renderer-gone');
+        const now = Date.now();
+        if (now - rendererRecovery.startedAt > 60000) rendererRecovery = { startedAt: now, count: 0 };
+        rendererRecovery.count += 1;
+        try { crashMarkerStore.record(Object.assign(new Error(`Renderer stopped: ${details.reason}`), { code: 'DESKTOP_RENDERER_GONE' }), 'renderer-gone'); } catch (error) { reportDesktopFailure(error, 'renderer-crash-marker'); }
+        if (rendererRecovery.count === 1 && mainWindow && !mainWindow.isDestroyed()) {
+            setTimeout(() => mainWindow?.webContents?.reload?.(), 250).unref?.();
+        }
     });
     mainWindow.on('unresponsive', () => notify('MCbot Desktop', 'Giao diện đang không phản hồi.', 'renderer-unresponsive'));
     mainWindow.on('close', event => {
@@ -421,6 +481,7 @@ function publishSnapshot() {
     updatePowerBlocker(snapshot);
     if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
         mainWindow.webContents.send('mcbot:snapshot', snapshot);
+        operatorSnapshotDelivery?.offer?.(controller.operatorSnapshot());
     }
     return snapshot;
 }
@@ -444,8 +505,18 @@ if (hasSingleInstanceLock) {
     app.on('second-instance', () => showMainWindow());
 
     app.whenReady().then(async () => {
-        runtimeDir = await prepareRuntimeDirectory();
-        secretStore = new DesktopSecretStore({ filePath: path.join(app.getPath('userData'), 'secrets.json'), safeStorage });
+        runtimeBootstrap = new DesktopRuntimeBootstrap({
+            templateRoot,
+            userDataRoot: app.getPath('userData'),
+            isPackaged: app.isPackaged,
+            appVersion: app.getVersion(),
+            safeStorage
+        });
+        const preparedRuntime = await runtimeBootstrap.prepare();
+        runtimeDir = preparedRuntime.runtimeRoot;
+        runtimeMigrator = preparedRuntime.migrator;
+        secretStore = preparedRuntime.secretStore;
+        if (preparedRuntime.migrationReport?.warnings?.length) console.warn('[MCbot migration] Cấu hình có cảnh báo khi migration:', preparedRuntime.migrationReport.warnings);
         preferenceStore = new DesktopPreferenceStore({ filePath: path.join(app.getPath('userData'), 'preferences.json') });
         await preferenceStore.load();
         applyLoginItemSetting(preferenceStore.get('launchAtLogin'));
@@ -454,7 +525,20 @@ if (hasSingleInstanceLock) {
             applicationRoot: templateRoot,
             userDataRoot: app.getPath('userData')
         });
-        controller = new DesktopController({ baseDir: runtimeDir, environment: secretStore.environment(process.env) });
+        const incidentIndexStore = new IncidentIndexStore({ filePath: path.join(app.getPath('userData'), 'incidents.json') });
+        controller = new DesktopController({ baseDir: runtimeDir, environment: preparedRuntime.environment, incidentIndexStore, appVersion: app.getVersion() });
+        readinessService = new DesktopReadinessService({
+            baseDir: runtimeDir,
+            controllerProvider: () => controller,
+            secretStoreProvider: () => secretStore,
+            versionProvider: () => app.getVersion(),
+            runtimeProvenanceProvider: () => preparedRuntime.provenanceService.sample()
+        });
+        operatorSnapshotDelivery = new SnapshotDeliveryCoordinator({
+            send: snapshot => {
+                if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) mainWindow.webContents.send('mcbot:operator-snapshot', snapshot);
+            }
+        });
         aiService = new LocalAiService({ controllerProvider: () => controller });
         registerIpc();
         controller.onLog(record => {
@@ -477,7 +561,7 @@ if (hasSingleInstanceLock) {
             publishSnapshot();
         }
         app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); else showMainWindow(); });
-    });
+    }).catch(error => fatalRecovery.handle(error, 'desktop-bootstrap'));
 }
 
 app.on('before-quit', event => {

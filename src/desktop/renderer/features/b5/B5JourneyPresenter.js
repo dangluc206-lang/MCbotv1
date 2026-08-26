@@ -1,0 +1,11 @@
+(function universal(root, factory) {
+  const value = factory();
+  if (typeof module === 'object' && module.exports) module.exports = value;
+  else root.MCbotB5JourneyPresenter = value;
+}(typeof globalThis !== 'undefined' ? globalThis : this, function create() {
+  'use strict';
+  function render(items, esc) {
+    return items.length ? items.map(item => `<article class="panel b5-journey-card"><div class="panel-title"><div><h2>${esc(item.botId)}</h2><p>${esc(item.status)} · ${esc(item.safeState)}</p></div><span class="badge ${item.status === 'NEEDS_ACTION' ? 'failed' : item.status === 'AUTO_RETRYING' || item.status === 'WAITING_CONDITION' ? 'pending' : item.status === 'RUNNING' ? 'running' : ''}">${esc(item.status)}</span></div><div class="b5-stage-list">${item.stages.map(stage => `<div class="b5-stage ${String(stage.state).toLowerCase()}">${esc(stage.label)}</div>`).join('')}</div><div class="b5-contract-grid"><div><span>Dự trữ đã xác minh</span><strong>${esc(item.reserve.verifiedCoverage ?? 'Chưa có')} / 1,5 B5</strong></div><div><span>Baseline bất biến</span><strong title="${esc(item.sell.immutableBaselineDigest || '')}">${esc(item.sell.immutableBaselineDigest ? item.sell.immutableBaselineDigest.slice(0, 12) : 'Chưa chốt')}</strong></div><div><span>Còn phải bán</span><strong>${esc(item.sell.remainingStacks ?? 'Chưa biết')} stack × 64</strong></div><div><span>Tổng phần dư giữ lại</span><strong>${esc(item.sell.retainedRemainderItems ?? 'Chưa biết')} · mỗi loại dưới 64</strong></div></div>${item.reserve.pendingFamilies?.length ? `<p class="helper">Đang chờ đủ dự trữ: ${item.reserve.pendingFamilies.map(entry => `${esc(entry.baseId)} (${esc(entry.coverage ?? '?')}/1,5)`).join(', ')}. Baseline bán vẫn được giữ nguyên.</p>` : ''}<p class="helper">Postcondition gần nhất: ${esc(item.lastVerifiedPostcondition?.kind || 'Chưa có')} · ETA: ${esc(item.etaLabel)}</p>${item.recovery.allowedActions.includes('retry-storage-protection') ? `<button class="button warn" data-b5-journey-retry="${esc(item.botId)}">Thử lại bảo vệ kho có guard</button>` : ''}</article>`).join('') : '<div class="empty panel">Chưa có bot trong projection B5.</div>';
+  }
+  return Object.freeze({ render });
+}));

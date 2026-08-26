@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
+const RuntimeMigrationPlanner = require('./RuntimeMigrationPlanner');
 
 function parseVersion(value) {
     const match = String(value || '').trim().match(/^(\d+)\.(\d+)\.(\d+)/);
@@ -821,9 +822,8 @@ async function applyRuntimeConfigMigrations(context) {
     const applied = [];
     const files = new Set();
     const reports = [];
-    for (const migration of migrations) {
-        const targetComparison = compareVersions(context?.toVersion, migration.target);
-        if (targetComparison !== null && targetComparison < 0) continue;
+    const planner = new RuntimeMigrationPlanner({ compareVersions });
+    for (const migration of planner.plan({ migrations, fromVersion: context?.fromVersion, toVersion: context?.toVersion })) {
         const result = await migration.run(context);
         if (!result?.changed) continue;
         const migrationId = result.migrationId || migration.run.name;

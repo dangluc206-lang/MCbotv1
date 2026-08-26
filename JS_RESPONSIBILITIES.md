@@ -88,6 +88,12 @@ Tài liệu này mô tả từng file JavaScript thực tế trong repository. S
 - **Lifecycle/cleanup:** cleanup mọi listener, timer, lock, queue hoặc connection do file sở hữu; stateless không giữ tài nguyên.
 - **Không được làm:** chiếm trách nhiệm của executor/manager/service khác hoặc expose mutable state nội bộ.
 
+### `src/bootstrap/RuntimeEnvironment.js`
+
+- **Scope:** Bootstrap-only environment resolver.
+- **Trách nhiệm:** Tạo bản sao process environment, nạp `.env` theo explicit base directory với `FILL_MISSING_ONLY`, trả provenance không chứa giá trị secret và fail-closed với lỗi khác `ENOENT`.
+- **Không được làm:** mutate `process.env`, log/serialize giá trị environment hoặc quyết định Desktop secret precedence.
+
 ### `src/bootstrap/createBotRuntime.js`
 
 - **Scope:** Bootstrap-only
@@ -2109,3 +2115,105 @@ Tài liệu này mô tả từng file JavaScript thực tế trong repository. S
 - `src/ai/tools/AiToolRegistry.js`: permission/tool definitions, allowlisted verification runner và DesktopController runtime boundary.
 - `src/desktop/main.js`: trusted IPC owner cho `mcbot:ai:*` và folder picker; không implement reasoning/tool logic.
 - `src/desktop/renderer/*`: AI page, model/workspace/permission selection, chat + tool trace; không gọi Ollama trực tiếp.
+
+## Product experience và recovery R1 (2.7.67+)
+
+### `src/shared/contracts/OperatorErrorContract.js`
+
+- **Scope:** Stateless shared operator-error projection.
+- **Trách nhiệm:** Chuẩn hóa category/severity/retry class, incident/correlation identity và action catalog có guard; unknown input phải fail-safe.
+- **Không được:** chứa callback, raw slash command, secret hoặc quyết định gameplay.
+
+### `src/diagnostics/metrics/SloMetricContract.js`
+
+- **Scope:** Stateless local SLO/privacy contract.
+- **Trách nhiệm:** Chỉ cho phép metric/dimension cardinality thấp đã khai báo; reject PII, secret và label không giới hạn.
+- **Không được:** tự gửi telemetry, truy cập Mineflayer hoặc biến giá trị đo thành policy runtime.
+
+### `src/diagnostics/runtime/RuntimeFailureArtifactLayout.js`
+
+- **Scope:** Stateless runtime-failure path contract.
+- **Trách nhiệm:** Xác thực bot ID, tên artifact và containment cho layout canonical dùng chung giữa recorder/repository.
+- **Không được:** tự đọc/ghi/xóa artifact.
+
+### `src/diagnostics/runtime/RuntimeFailureArtifactRepository.js`
+
+- **Scope:** Read-only desktop/diagnostic repository.
+- **Trách nhiệm:** List/read/tail artifact qua opaque ID, regular-file/symlink/containment guard và byte/I/O budget; corrupt entry trả warning có cấu trúc.
+- **Không được:** nhận raw path từ renderer, mutate artifact hoặc vượt configured read limit.
+
+### `src/modes/ModeFaultPolicy.js`
+
+- **Scope:** Bot/mode-scoped fault lifecycle policy.
+- **Trách nhiệm:** Phân loại wait/transient/business/unexpected/stale/cancelled, quản lý finite circuit/backoff và publish tối đa một lần trong mỗi incident episode đang mở.
+- **Không được:** tính business blocker/stale/cancelled vào crash-loop budget hoặc reset circuit bằng một recovery không liên quan.
+
+### `src/desktop/BootFailureContract.js`
+
+- **Scope:** Stateless Desktop boot-failure projection.
+- **Trách nhiệm:** Map lỗi boot vào stage/code/path workspace-relative/correlation/action đã sanitize để renderer hiển thị an toàn.
+- **Không được:** expose absolute path, secret, callback hoặc raw error object.
+
+### `src/desktop/DesktopFatalRecovery.js`
+
+- **Scope:** Desktop main-process fatal recovery và owned crash marker.
+- **Trách nhiệm:** Ghi atomic marker đã redact trong exact userData root, chống fatal reentrancy/relaunch loop, bounded drain rồi bắt buộc terminate.
+- **Không được:** tiếp tục process sau fatal, ghi ngoài owned marker root hoặc chiếm `before-quit` final-quit ownership.
+
+## Product experience, decomposition và release evidence (R2–R5)
+
+### Desktop operator domain
+
+- `src/desktop/incidents/IncidentIndexStore.js`: lightweight persistent incident episode/index, bounded timeline, validated state transition và evidence/action projection; không lưu raw runtime object.
+- `src/desktop/readiness/DesktopReadinessService.js`: read-only readiness checklist có timeout/status/remediation; không tự connect hoặc sửa config.
+- `src/desktop/readiness/DesktopRuntimeProvenanceService.js`: bounded hash/path comparison giữa application defaults và runtime config; không trả nội dung file, absolute path hoặc environment value.
+- `src/desktop/health/OperatorHealthService.js`: async bounded health sampler, cache/staleness semantics và probe aggregation; optional capability không làm global health fail.
+- `src/desktop/b5/B5OperatorProjection.js`: B5 presentation DTO cho stage, reserve, immutable baseline, 64-only sell continuation và verification; không điều phối gameplay.
+- `src/desktop/configuration/ConfigurationWorkspaceService.js`: revision/digest workspace, semantic diff, validation, conflict và undo boundary; renderer không ghi file trực tiếp.
+- `src/desktop/backup/BackupCatalogService.js`: manifest/hash catalog, bounded parse/read, transaction exclusion, exact-tree restore, pre-restore rollback và retention; chỉ mutate config/backup tree thuộc owner.
+- `src/desktop/projection/OperatorSnapshotProjector.js`: compact versioned fleet/bot/incident projection và stable digest; mode-specialized data chỉ là optional extension.
+- `src/desktop/projection/SnapshotDeliveryCoordinator.js`: coalesce/backpressure theo revision/digest; không bỏ critical summary state.
+- `src/desktop/contracts/DesktopApiContract.js`: exact preload/IPC channel catalog và result envelope V1.
+- `src/desktop/contracts/DesktopResult.js`: normalized immutable success/error result dùng chung cho Desktop use cases; không giữ raw exception state.
+- `src/desktop/use-cases/CustomModeUseCases.js`: façade use-case cho module/template/dry-run/package/presentation/store; không gọi Mineflayer.
+- `src/desktop/use-cases/DesktopRuntimeBootstrap.js`: điều phối migrate runtime tree → tạo secret store → resolve first-start environment → dựng provenance service; không tự ghi config hay giải mã secret ngoài owner hiện hữu.
+- `src/desktop/use-cases/BotProfileUseCases.js`: allowlist field và route CRUD profile qua `BotProfileAdminService`; luôn redact output.
+- `src/desktop/use-cases/ModeConfigurationUseCases.js`: route Collector/Fishing config qua editor và mutation owner hiện hữu; không chứa gameplay hoặc raw file write.
+- `src/desktop/use-cases/FleetControlUseCases.js`: connect/disconnect/mode/fleet/emergency/home application use cases qua `FleetControlService` và capability hiện hữu; không gọi Mineflayer trực tiếp.
+- `src/desktop/DesktopEnvironmentResolver.js`: contract precedence process/DEV-dotenv/encrypted-store; packaged bỏ dotenv và không expose value trong provenance.
+
+### Renderer strangler boundary
+
+- `src/desktop/renderer/core/*`: API envelope, escaping, routing và keyed DOM primitives.
+- `src/desktop/renderer/components/AccessibleDialog.js`: confirm/prompt focus restoration và keyboard-safe dialog.
+- `src/desktop/renderer/features/incidents/*`: incident view model/presenter; chỉ render validated action/state.
+- `src/desktop/renderer/features/b5/*`: B5 operator view model/presenter; luôn hiển thị sell theo contract 64-only.
+- `src/desktop/renderer/features/builder/TypedModuleEditor.js`: schema-driven nested typed editor; không eval/raw JS/raw filesystem.
+- `src/desktop/renderer/features/modes/ModeViewModel.js`: generic mode resolution theo descriptor/status contract.
+- `src/desktop/renderer/pages/PageCatalog.js`: `Operate/Build/Maintain/Advanced` và route alias compatibility.
+
+### B5 façade decomposition
+
+- `src/modes/b5-craft/campaign/B5CampaignSession.js`: immutable campaign identity/generation lifecycle.
+- `src/modes/b5-craft/campaign/B5BatchCoordinator.js`: pure phase transition owner.
+- `src/modes/b5-craft/storage/StorageProtectionEpisode.js`: bounded blocker/backoff/checkpoint state.
+- `src/modes/b5-craft/fault/B5FaultPolicyAdapter.js`: B5 result sang common mode-fault/incident mapping.
+- `src/modes/b5-craft/status/B5StatusProjection.js`: compact operator/developer status DTO.
+- `src/modes/b5-craft/B5CraftModeService.js`: lifecycle/side-effect façade tương thích; legacy size/complexity bị khóa không được tăng trong static debt budget.
+
+### Migration, bootstrap, Discord và extension
+
+- `src/desktop/update/RuntimeConfigVersionReader.js`: capture/read current version state.
+- `src/desktop/update/RuntimeMigrationPlanner.js`: pure ordered migration plan.
+- `src/desktop/update/RuntimeTransactionJournal.js`: transaction state/evidence journal projection.
+- `src/desktop/update/RuntimeFilesystemApplier.js`: allowlisted filesystem mutation adapter dưới migrator owner.
+- `src/desktop/update/RuntimeConfigTreeVerifier.js`: digest/post-apply tree verification.
+- `src/desktop/update/RuntimeRecoveryCoordinator.js`: deterministic ordered recovery candidate selection.
+- `src/bootstrap/installers/*`: capability/runtime-platform/lifecycle installer; composition root vẫn sở hữu wiring.
+- `src/discord/DiscordInteractionRouter.js`: interaction authorization/routing vào control-plane use case; không chứa gameplay.
+- `src/modes/composable/WorkflowModulePresentationCatalog.js`: presentation schema của đủ 17 module.
+- `src/modes/composable/WorkflowDryRunService.js`: bounded static simulation, zero capability call và selected/unreached path evidence.
+- `src/modes/composable/CustomModePackageService.js`: deterministic package manifest/hash và exact manifest verification.
+- `src/modes/composable/CustomModeTemplateGallery.js`: template metadata, compatibility, support status, dependency/resource claims.
+- `src/modes/ModePresentationService.js`: generic mode presentation từ ModeCatalog metadata.
+- `src/desktop/update/ReleaseCanaryPolicy.js`: pure 5% sang 25% sang 100% hold/advance/rollback decision; được chạy bởi release quality gate.

@@ -134,7 +134,7 @@ test('WP-204 composable execution has no arbitrary JavaScript/import path and re
     assert.doesNotMatch(composable, /new\s+Function\s*\(/);
     assert.doesNotMatch(composable, /=\s*require\s*\(\s*[A-Za-z_$]/);
     const renderer = fs.readFileSync(path.join(root, 'src/desktop/renderer/app.js'), 'utf8');
-    assert.match(renderer, /window\.mcbot\.saveCustomMode\(definition\)/);
+    assert.match(renderer, /window\.mcbot\.saveCustomMode\(definition, \{ expectedDigest:/);
     assert.doesNotMatch(renderer, /(?:node:fs|require\(['\"]fs|writeFileSync|writeFile\s*\()/);
 });
 
@@ -165,6 +165,19 @@ test('CustomModeStore surfaces temp cleanup warning without converting a committ
     assert.equal(store.lastCleanupWarning, result.cleanupWarning);
     assert.equal(fs.existsSync(path.join(baseDir, result.file)), true);
     await fsp.rm(baseDir, { recursive: true, force: true });
+});
+
+test('XP-302 custom mode save uses digest concurrency control and versions its schema', async () => {
+    const baseDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'mcbot-custom-revision-'));
+    const store = new CustomModeStore({ baseDir });
+    const initial = await store.save(definition('revision-mode'));
+    const [listed] = await store.list();
+    assert.equal(listed.schemaVersion, 1);
+    assert.match(listed.digest, /^sha256:[0-9a-f]{64}$/);
+    await store.save({ ...definition('revision-mode'), label:'new label' }, { expectedDigest:listed.digest });
+    await assert.rejects(store.save({ ...definition('revision-mode'), label:'stale writer' }, { expectedDigest:listed.digest }), error => error.code === 'CUSTOM_MODE_REVISION_CONFLICT');
+    assert.match(initial.digest, /^sha256:[0-9a-f]{64}$/);
+    await fsp.rm(baseDir, { recursive:true, force:true });
 });
 
 test('CustomModeStore cleanup failure never replaces the primary save failure', async () => {
@@ -242,4 +255,49 @@ test('CustomModeStore temp ownership remains unique when wall-clock timestamps c
         Date.now = oldNow;
         await fsp.rm(baseDir, { recursive: true, force: true });
     }
+});
+
+test('QA upgrade: custom mode listing and saving reject symlink targets', async t => {
+    const baseDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'mcbot-custom-symlink-'));
+    t.after(() => fsp.rm(baseDir, { recursive:true, force:true }));
+    const directory = path.join(baseDir, 'config/modes/custom');
+    await fsp.mkdir(directory, { recursive:true });
+    const outside = path.join(baseDir, 'outside.json');
+    await fsp.writeFile(outside, JSON.stringify(definition('linked-mode')));
+    const link = path.join(directory, 'linked-mode.json');
+    try { await fsp.symlink(outside, link, 'file'); }
+    catch (error) { if (['EPERM','EACCES'].includes(error.code)) return t.skip('Host does not permit file symlink creation.'); throw error; }
+    const store = new CustomModeStore({ baseDir });
+    const [listed] = await store.list();
+    assert.equal(listed.valid, false);
+    assert.equal(listed.raw, null);
+    await assert.rejects(store.save(definition('linked-mode')), { code:'CUSTOM_MODE_UNSAFE_TARGET' });
+    assert.equal(JSON.parse(await fsp.readFile(outside, 'utf8')).id, 'linked-mode');
+});
+
+test('QA upgrade: custom mode reads are bounded before JSON parsing', async t => {
+    const baseDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'mcbot-custom-size-'));
+    t.after(() => fsp.rm(baseDir, { recursive:true, force:true }));
+    const directory = path.join(baseDir, 'config/modes/custom');
+    await fsp.mkdir(directory, { recursive:true });
+    await fsp.writeFile(path.join(directory, 'oversize.json'), ' '.repeat(4097));
+    const store = new CustomModeStore({ baseDir, maxFileBytes:4096 });
+    assert.deepEqual(store.loadSync(), []);
+    const [listed] = await store.list();
+    assert.equal(listed.valid, false);
+    assert.match(listed.errors[0], /bounded size/);
+});
+
+test('QA upgrade: custom mode save never follows a backup symlink', async t => {
+    const baseDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'mcbot-custom-backup-link-'));
+    t.after(() => fsp.rm(baseDir, { recursive:true, force:true }));
+    const store = new CustomModeStore({ baseDir });
+    const initial = await store.save(definition('backup-link'));
+    const target = path.join(baseDir, initial.file);
+    const outside = path.join(baseDir, 'outside.txt');
+    await fsp.writeFile(outside, 'unchanged');
+    try { await fsp.symlink(outside, `${target}.bak`, 'file'); }
+    catch (error) { if (['EPERM','EACCES'].includes(error.code)) return t.skip('Host does not permit file symlink creation.'); throw error; }
+    await assert.rejects(store.save({ ...definition('backup-link'), label:'changed' }), { code:'CUSTOM_MODE_UNSAFE_BACKUP_TARGET' });
+    assert.equal(await fsp.readFile(outside, 'utf8'), 'unchanged');
 });

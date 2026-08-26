@@ -16,6 +16,15 @@ function createRunningController() {
     const runtime = {
         botId: 'bot-01',
         context: { getGeneration: () => 7, has: () => true },
+        getService(name) {
+            if (name === 'b5CraftMode') return {
+                requestStorageProtectionRetry(request) {
+                    calls.push(['b5-retry', request]);
+                    return ok('SUCCESS', { accepted: true });
+                }
+            };
+            return null;
+        },
         requireService(name) {
             if (name === 'commandService') return { send: async (key, options) => { calls.push(['command', key, options]); return ok('SUCCESS', { key }); } };
             if (name === 'serverFeatureFacade') return { island: () => ({ goHome: async () => ok('SUCCESS') }) };
@@ -27,6 +36,10 @@ function createRunningController() {
     controller.bundle = {
         fleetControl: {
             profileSnapshot: () => ({ 'bot-01': { enabled: true }, 'bot-02': { enabled: false } }),
+            emergencyStop: async (botIds, options) => {
+                calls.push(['emergency', [...botIds], options]);
+                return { contract: 'fleet-emergency-stop-v1', transactionId: options.idempotencyKey, outcome: 'SUCCESS', botCount: botIds.length, terminalCount: botIds.length, results: botIds.map(botId => ({ botId, status: 'SUCCESS', terminal: true })) };
+            },
             requestConnection: async (botId, desired, options) => { calls.push(['connection', botId, desired, options]); return ok('SUCCESS'); },
             requestMode: async (botId, mode, options) => { calls.push(['mode', botId, mode, options]); return ok('SUCCESS'); },
             requestModeState: async (botId, state, options) => { calls.push(['mode-state', botId, state, options]); return ok('SUCCESS'); },
@@ -45,7 +58,7 @@ function createRunningController() {
     return { controller, calls };
 }
 
-test('DesktopController fleet actions target enabled profiles and emergency stop is ordered', async () => {
+test('DesktopController fleet actions target enabled profiles and delegate emergency stop transaction', async () => {
     const { controller, calls } = createRunningController();
     const connected = await controller.fleetAction('connect-all');
     assert.equal(connected.success, true);
@@ -55,10 +68,10 @@ test('DesktopController fleet actions target enabled profiles and emergency stop
     calls.length = 0;
     const emergency = await controller.fleetAction('emergency-stop');
     assert.equal(emergency.success, true);
-    assert.deepEqual(calls.map(call => call.slice(0, 3)), [
-        ['mode', 'bot-01', null],
-        ['connection', 'bot-01', 'DISCONNECTED']
-    ]);
+    assert.equal(emergency.outcome, 'SUCCESS');
+    assert.equal(calls[0][0], 'emergency');
+    assert.deepEqual(calls[0][1], ['bot-01']);
+    assert.match(calls[0][2].idempotencyKey, /^desktop:/);
 });
 
 test('DesktopController sends only registered non-login commands with captured generation', async () => {
@@ -81,13 +94,30 @@ test('DesktopController restarts the durable primary mode instead of guessing fr
     assert.equal(result.success, true);
     assert.deepEqual(calls[0].slice(0, 3), ['mode-restart', 'bot-01', 'collector-b5']);
 });
-test('DesktopController backupConfig creates a timestamped copy without mutating source', async () => {
+
+test('DesktopController routes guarded B5 recovery through the mode use case without raw side effects', async () => {
+    const { controller, calls } = createRunningController();
+    const result = await controller.retryB5StorageProtection('bot-01', {
+        expectedGeneration: 7,
+        episodeId: 'episode-1',
+        incidentId: 'incident-1',
+        idempotencyKey: 'desktop-request-1'
+    });
+    assert.equal(result.success, true);
+    assert.deepEqual(calls[0], ['b5-retry', {
+        expectedBotId: 'bot-01', expectedGeneration: 7, episodeId: 'episode-1',
+        incidentId: 'incident-1', idempotencyKey: 'desktop-request-1', reason: 'desktop-operator'
+    }]);
+});
+test('DesktopController backupConfig creates a manifested catalog copy without mutating source', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcbot-desktop-backup-'));
     fs.mkdirSync(path.join(dir, 'config'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'config', 'sample.json'), '{"ok":true}\n');
     const controller = new DesktopController({ baseDir: dir });
     const result = await controller.backupConfig();
-    assert.equal(fs.existsSync(path.join(result.path, 'sample.json')), true);
+    assert.equal(fs.existsSync(path.join(result.path, 'files', 'sample.json')), true);
+    assert.equal(result.manifest.contract, 'mcbot-config-backup-v1');
+    assert.equal(result.manifest.files[0].path, 'sample.json');
     assert.equal(fs.readFileSync(path.join(dir, 'config', 'sample.json'), 'utf8'), '{"ok":true}\n');
     fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -266,5 +296,40 @@ test('DesktopController isolates log listener and persistence failures but expos
     const snapshot = controller.snapshot();
     assert.match(snapshot.system.logListenerFailure?.error?.message || '', /listener boom/);
     assert.ok(snapshot.system.logPersistenceFailure?.error?.message);
+    fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('DesktopController persists an exact bot log beside the aggregate desktop log', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mcbot-desktop-bot-log-'));
+    const controller = new DesktopController({
+        baseDir: root,
+        applicationFactory: async ({ output }) => {
+            output({
+                timestamp: '2026-08-25T22:00:00.000+07:00',
+                level: 'info',
+                scope: 'BotRuntime:bot-01',
+                message: 'bot scoped event',
+                meta: { step: 'test' }
+            });
+            return {
+                application: {
+                    async initialize() {}, async start() {}, async stop() {}, async destroy() {},
+                    listRuntimes() { return []; }, getState() { return 'RUNNING'; }
+                }
+            };
+        }
+    });
+    await controller.start();
+    const botFile = path.join(root, 'data', 'logs', 'bots', 'bot-01', 'mcbot-desktop-bot-01-2026-08-25.jsonl');
+    for (let attempt = 0; attempt < 20 && (!fs.existsSync(botFile) || fs.statSync(botFile).size === 0); attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 5));
+    }
+    assert.equal(fs.existsSync(botFile) && fs.statSync(botFile).size > 0, true);
+    const record = JSON.parse(fs.readFileSync(botFile, 'utf8').trim().split('\n')[0]);
+    assert.equal(record.meta.botId, 'bot-01');
+    assert.equal(record.message, 'bot scoped event');
+    assert.equal(fs.existsSync(path.join(root, 'data', 'logs', 'mcbot-desktop-2026-08-25.jsonl')), true);
+    await controller.stop('test complete');
+    await new Promise(resolve => setTimeout(resolve, 10));
     fs.rmSync(root, { recursive: true, force: true });
 });

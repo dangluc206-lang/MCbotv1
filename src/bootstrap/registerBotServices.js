@@ -4,6 +4,9 @@ const EventBus=require('../core/EventBus');
 const HealthRegistry=require('../core/HealthRegistry');
 const RuntimePlatformService=require('../core/RuntimePlatformService');
 const CapabilityRegistry=require('../core/registry/CapabilityRegistry');
+const CapabilityInstaller=require('./installers/CapabilityInstaller');
+const RuntimePlatformInstaller=require('./installers/RuntimePlatformInstaller');
+const LifecycleInstaller=require('./installers/LifecycleInstaller');
 const createConnectionStateBinding=require('./createConnectionStateBinding');
 const createConnectionEventBinding=require('./createConnectionEventBinding');
 const BotIdentity=require('../bot/BotIdentity');
@@ -167,11 +170,10 @@ function registerBotServices({profile,configuration,shared}){
   storage,'b1-materials':b1Materials,'personal-vault':personalVault,minerals,smelting,crafting,island,dungeon,skyblock,afk:afkAreas,fishing,
   'b5-planning':b5Planning,'b5-automation':b5Automation,'b5-trace':b5TraceRecorder
  };
- for(const [capabilityId,provider] of Object.entries(capabilities)){if(!provider)continue;const reference=capabilityId==='storage'?{version:'1.0.0',scope:'connection',dependencies:[{id:'commands',version:'1.x'},{id:'gui',version:'1.x'},{id:'inventory',version:'1.x'}],description:'Profile-backed semantic storage capability'}:{};capabilityRegistry.register(capabilityId,provider,reference);}
- capabilityRegistry.seal();
+ new CapabilityInstaller({registry:capabilityRegistry}).install(capabilities,{storage:{version:'1.0.0',scope:'connection',dependencies:[{id:'commands',version:'1.x'},{id:'gui',version:'1.x'},{id:'inventory',version:'1.x'}],description:'Profile-backed semantic storage capability'}});
  const modeContext=new ModeContext({botId,botContext:context,capabilityRegistry,eventBus,operationManager,logger});
  const b5CraftConfig={...configuration.registry.require('b5CraftMode'),...serverProfile.requireCatalog('serverTimings')};
- const b5CraftMode=new B5CraftModeService({botId,modeContext,modeCoordinator,catalog:shared.modeCatalog,island,skyblockReadiness:skyblockAutoJoin,skyTarget,b1Materials,b5Planning,b5Automation,config:b5CraftConfig,logger});
+ const b5CraftMode=new B5CraftModeService({botId,modeContext,modeCoordinator,catalog:shared.modeCatalog,island,skyblockReadiness:skyblockAutoJoin,skyTarget,b1Materials,b5Planning,b5Automation,failurePublisher:runtimeFailurePublisher,failurePolicy,config:b5CraftConfig,logger});
  const customModes={};
  for(const definition of shared.modeCatalog.list().filter(item=>item.metadata?.kind==='composable')){
   customModes[definition.serviceName]=new ComposableModeService({botId,modeId:definition.id,definition:{workflow:definition.metadata.workflow},modeContext,modeCoordinator,catalog:shared.modeCatalog,logger});
@@ -181,11 +183,9 @@ function registerBotServices({profile,configuration,shared}){
  const modeRegistry=new RuntimeModeRegistry({botId,catalog:shared.modeCatalog,capabilityRegistry,services:servicesByName});const modeControl=new ModeControlService({botId,registry:modeRegistry,logger});const modeSdk=new ModeSdk({botId,catalog:shared.modeCatalog,modeContext,modeRegistry,modeControl,capabilityRegistry});
  const itemInspector=new ItemInspector({normalizer:shared.itemNormalizer,resolver:itemResolver});const guiSnapshotSerializer=new GuiSnapshotSerializer();const guiInspectionService=new GuiInspectionService({botId,context,eventBus,commandService,guiManager,serializer:guiSnapshotSerializer,operationManager,observationService:guiObservationService,logger});const runtimeFailureRecorder=new RuntimeFailureRecorder({botId,eventBus,baseDir:path.resolve(configuration.loader.baseDir,runtimeFailureConfig.directory),config:runtimeFailureConfig,guiManager,inventoryObservationService,logger});const diagnostics=new DiagnosticsManager({gui:new GuiDiagnostics({guiManager}),slots:new SlotDiagnostics({slotInspector,guiManager}),items:new ItemDiagnostics({itemInspector}),movement:new MovementDiagnostics({movementState,positionService}),commands:new CommandDiagnostics({commandRegistry:commands})});
  const healthRegistry=new HealthRegistry({botId});
- healthRegistry.register('connection',()=>context.has()?{state:'HEALTHY'}:{state:'UNKNOWN',message:'Bot is disconnected.'});
- healthRegistry.register('mode-readiness',()=>{const modes=modeRegistry.status().modes;const blocked=modes.filter(mode=>!mode.readiness.ready);return blocked.length?{state:'UNHEALTHY',message:'One or more registered modes are not ready.',details:{blocked:blocked.map(mode=>({modeId:mode.definition.id,missingCapabilities:mode.readiness.missingCapabilities,serviceBound:mode.readiness.serviceBound}))}}:{state:'HEALTHY'};},{critical:true});
- healthRegistry.register('operations',()=>{const snapshot=operationManager.snapshot();return snapshot.closed?{state:'UNKNOWN',message:'Operation queue is closed.',details:snapshot}:{state:'HEALTHY',details:{active:snapshot.active,pending:snapshot.pending,running:snapshot.running}};});
+ new RuntimePlatformInstaller({healthRegistry,context,modeRegistry,operationManager}).install();
  const runtimePlatform=new RuntimePlatformService({botId,capabilityRegistry,modeRegistry,modeCoordinator,operationManager,healthRegistry,eventBus});
- const lifecycleComponents=[connectionStateBinding,connectionEventBinding,guiManager];if(guiKnowledge)lifecycleComponents.push(guiKnowledge);if(guiObservationService)lifecycleComponents.push(guiObservationService);if(inventoryObservationService)lifecycleComponents.push(inventoryObservationService);lifecycleComponents.push(runtimeFailurePublisher,runtimeFailureRecorder,reconnectManager,resourcePackAutoAccept,serverLoginService,skyblockAutoJoin,connectionManager,operationManager,movementManager,fishingPacketObserver,fishingMovement,modeCoordinator,collectorB5Mode,b5CraftMode,fishingMode,...Object.values(customModes));const lifecycle=new BotLifecycle(lifecycleComponents,{logger});
+ const lifecycleComponents=LifecycleInstaller.collect([connectionStateBinding,connectionEventBinding,guiManager],[guiKnowledge,guiObservationService,inventoryObservationService,runtimeFailurePublisher,runtimeFailureRecorder,reconnectManager,resourcePackAutoAccept,serverLoginService,skyblockAutoJoin,connectionManager,operationManager,movementManager,fishingPacketObserver,fishingMovement,modeCoordinator,collectorB5Mode,b5CraftMode,fishingMode],customModes);const lifecycle=new BotLifecycle(lifecycleComponents,{logger});
  return new BotRuntime({identity,context,state,lifecycleCoordinator:lifecycle,logger,services:{serverProfile,eventBus,connectionManager,reconnectManager,commandService,slashCommandService,skyCommandService,resourcePackAutoAccept,serverLoginService,guiManager,guiIdentityEngine,guiKnowledge,guiObservationService,guiInspectionService,movementManager,operationManager,modeCoordinator,modeRegistry,modeControl,modeContext,modeSdk,capabilityRegistry,healthRegistry,runtimePlatform,inventoryReader,inventoryCounter,inventoryObservationService,inventorySyncService,runtimeFailurePublisher,runtimeFailureRecorder,serverFeatureFacade,b1Materials,b5Planning,b5Automation,b5ExecutionPlanner,b5TraceRecorder,collectorB5Mode:collectorB5ModeAdapter,b5CraftMode,fishingMode:fishingModeAdapter,...customModes,afkAreas,fishing,connectionStateView,fishingPacketObserver,fishingMovement,fishingMovementProbe,fishingPositionGuard,fishingWorldReadiness,fishingRecoveryPolicy,skyblockAutoJoin,diagnostics,slotResolver,routeRegistry}});
 }
 module.exports=registerBotServices;

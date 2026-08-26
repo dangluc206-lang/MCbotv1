@@ -162,8 +162,8 @@ class KhoService {
         }
     }
 
-    // Compatibility shim for old callers. SELL ALL remains denied globally and
-    // is accepted only for an explicitly configured fast-disposable sell ID.
+    // Compatibility shim for old callers. Production keeps allowAll=false;
+    // when explicitly enabled, the executor applies it as a global Sell policy.
     async sellAll(logicalId, options = {}) {
         return this.sell(logicalId, { ...options, quantity: 'ALL' });
     }

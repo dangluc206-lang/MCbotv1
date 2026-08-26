@@ -98,6 +98,7 @@ function runSyntaxGate() {
 function fastGateDefinitions() {
     return [
         () => runSyntaxGate(),
+        () => runProcessGate({ id: 'incremental-static-quality', wp: 'XP-207/XP-400', description: 'Incremental file-size, complexity and forbidden-pattern budget', command: process.execPath, args: ['scripts/check-static-quality.js'] }),
         () => runNodeTests('targeted-contracts', 'WP-002/WP-200/WP-201/WP-202', 'Shared result/capability/mode/task contract tests', [
             'tests/unit/shared/contracts/OperationResultContract.test.js',
             'tests/unit/core/CapabilityRegistryContract.test.js',
@@ -118,6 +119,8 @@ function fastGateDefinitions() {
         () => runProcessGate({ id: 'architecture-boundaries', wp: 'WP-001/WP-004/WP-005', description: 'Architecture reachability/ownership/generation catalog validation', command: process.execPath, args: ['scripts/validate-architecture.js'] }),
         () => runProcessGate({ id: 'baseline', wp: 'WP-001', description: 'Committed architecture baseline freshness', command: process.execPath, args: ['scripts/inspect-architecture-baseline.js', '--check'] }),
         () => runProcessGate({ id: 'scale-baseline', wp: 'PRE-WP-500', description: 'Committed scale evidence schema, event-loss and crash-isolation contract', command: process.execPath, args: ['scripts/measure-scale-baseline.js', '--validate-file', 'architecture/scale/current.json'] }),
+        () => runProcessGate({ id: 'operator-performance', wp: 'XP-202/XP-404/XP-500', description: 'Operator projection p50/p95/p99 at 1/8/16/32/64 bots', command: process.execPath, args: ['scripts/measure-operator-performance.js', '--check'] }),
+        () => runProcessGate({ id: 'release-canary-policy', wp: 'XP-405', description: 'Canary hold, advance, rollback and safety prerequisite decisions', command: process.execPath, args: ['scripts/check-release-canary-policy.js'] }),
         () => runProcessGate({ id: 'side-effect-ownership', wp: 'WP-004', description: 'Raw side-effect and destructive artifact ownership audit', command: process.execPath, args: ['scripts/audit-side-effect-ownership.js'] }),
         () => runProcessGate({ id: 'config-cross-reference', wp: 'WP-100/WP-102/WP-103/WP-104', description: 'Configuration schema and cross-reference validation', command: process.execPath, args: ['scripts/validate-config.js'] }),
         () => runProcessGate({ id: 'server-profile', wp: 'WP-101/WP-105', description: 'MinerUA profile inventory freshness', command: process.execPath, args: ['scripts/inspect-minerua-knowledge.js', '--check'] }),
@@ -160,7 +163,8 @@ function fastGateDefinitions() {
         ]),
         () => runNodeTests('fault-matrix', 'WP-401', 'Deterministic virtual-time replay and selected fault matrix', [
             'tests/unit/simulation/FaultMatrixContract.test.js',
-            'tests/unit/simulation/ReplayHarness.test.js'
+            'tests/unit/simulation/ReplayHarness.test.js',
+            'tests/unit/simulation/R5FaultMatrixContract.test.js'
         ]),
         () => runNodeTests('release-zip-contract', 'WP-402', 'Source/update ZIP completeness and secret/runtime exclusion contract', [
             'tests/unit/release/ReleaseZipContract.test.js'

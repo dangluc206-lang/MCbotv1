@@ -72,59 +72,74 @@ class WorkflowDefinitionValidator {
         if (!step || typeof step !== 'object' || Array.isArray(step)) throw new TypeError(`${path} phải là object.`);
         const type = String(step.type || '').trim();
         if (!this.modules.has(type)) throw new TypeError(`${path}.type không được hỗ trợ: ${type || '<trống>'}.`);
-        const normalized = { ...step, type };
-        if (type === 'command') {
+        // Fail closed by rebuilding from the declared schema. Unknown fields
+        // (including prototype-shaped keys and removed legacy toggles) never
+        // reach persistence or an executor.
+        const normalized = { type };
+        switch (type) {
+        case 'command':
             if (!String(step.commandKey || '').trim()) throw new TypeError(`${path}.commandKey là bắt buộc.`);
             normalized.commandKey = String(step.commandKey).trim();
             normalized.args = step.args && typeof step.args === 'object' && !Array.isArray(step.args) ? { ...step.args } : {};
             normalized.confirm = step.confirm === true;
             normalized.timeoutMs = this.#number(step.timeoutMs ?? 5000, `${path}.timeoutMs`, 100, 30000);
-        } else if (type === 'sky-command') {
+            break;
+        case 'sky-command':
             if (!String(step.commandId || '').trim()) throw new TypeError(`${path}.commandId là bắt buộc.`);
             normalized.commandId = String(step.commandId).trim();
             normalized.skyId = step.skyId == null || step.skyId === '' ? null : String(step.skyId).trim();
             normalized.args = step.args && typeof step.args === 'object' && !Array.isArray(step.args) ? { ...step.args } : {};
-        } else if (type === 'slash-command') {
-            const command = String(step.command || '').trim();
-            if (!command.startsWith('/')) throw new TypeError(`${path}.command phải bắt đầu bằng /.`);
-            if (command.length > 256 || /[\r\n\0]/.test(command)) throw new TypeError(`${path}.command không hợp lệ.`);
-            if (/^\/(?:login|register|reg|l|auth|password|changepassword|cp)\b/i.test(command)) throw new TypeError(`${path}.command không được chứa lệnh đăng nhập/mật khẩu.`);
-            normalized.command = command;
-        } else if (type === 'gui-click') {
+            break;
+        case 'slash-command':
+            normalized.command = this.#slashCommand(step, path);
+            break;
+        case 'gui-click':
             normalized.slot = this.#integer(step.slot, `${path}.slot`, 0, 1000);
             normalized.button = this.#integer(step.button ?? 0, `${path}.button`, 0, 2);
             normalized.mode = this.#integer(step.mode ?? 0, `${path}.mode`, 0, 6);
             normalized.verifyGui = step.verifyGui === true;
             normalized.timeoutMs = this.#number(step.timeoutMs ?? 3000, `${path}.timeoutMs`, 100, 30000);
-        } else if (type === 'wait') {
+            break;
+        case 'wait':
             normalized.ms = this.#number(step.ms ?? 1000, `${path}.ms`, 0, this.maxWaitMs);
-        } else if (type === 'move') {
+            break;
+        case 'move':
             normalized.x = this.#finite(step.x, `${path}.x`); normalized.y = this.#finite(step.y, `${path}.y`); normalized.z = this.#finite(step.z, `${path}.z`);
             normalized.radius = this.#number(step.radius ?? 1.2, `${path}.radius`, 0.1, 100);
             normalized.timeoutMs = this.#number(step.timeoutMs ?? 30000, `${path}.timeoutMs`, 100, this.maxWaitMs);
-        } else if (type === 'sky-join') {
+            break;
+        case 'sky-join':
             normalized.selection = step.selection == null || step.selection === '' ? null : String(step.selection);
-        } else if (type === 'storage-protect') {
+            break;
+        case 'storage-protect':
             // B5 storage protection always owns iron/gold smelting. There is no
             // per-workflow toggle because disabling smelting would violate the
             // batch-boundary contract.
-        } else if (type === 'wait-gui') {
+            break;
+        case 'wait-gui':
             normalized.guiId = step.guiId == null || step.guiId === '' ? null : String(step.guiId);
             normalized.timeoutMs = this.#number(step.timeoutMs ?? 5000, `${path}.timeoutMs`, 100, 30000);
-        } else if (type === 'look') {
+            break;
+        case 'look':
             normalized.yaw = this.#finite(step.yaw, `${path}.yaw`);
             normalized.pitch = this.#finite(step.pitch, `${path}.pitch`);
             normalized.force = step.force !== false;
-        } else if (type === 'log') {
+            break;
+        case 'log':
             normalized.message = String(step.message || '').slice(0, 1000);
             normalized.level = ['debug','info','warn','error'].includes(step.level) ? step.level : 'info';
-        } else if (type === 'if') {
+            break;
+        case 'if':
             normalized.condition = this.#condition(step.condition, `${path}.condition`);
             normalized.then = this.#steps(step.then || [], `${path}.then`, depth + 1);
             normalized.else = this.#steps(step.else || [], `${path}.else`, depth + 1);
-        } else if (type === 'repeat') {
+            break;
+        case 'repeat':
             normalized.count = this.#integer(step.count ?? 1, `${path}.count`, 1, this.maxRepeat);
             normalized.steps = this.#steps(step.steps || [], `${path}.steps`, depth + 1);
+            break;
+        default:
+            break;
         }
         return Object.freeze(normalized);
     }
@@ -134,6 +149,14 @@ class WorkflowDefinitionValidator {
         const type = String(condition.type || 'connected');
         if (!['connected','gui-open','not-gui-open'].includes(type)) throw new TypeError(`${path}.type không được hỗ trợ.`);
         return Object.freeze({ type, guiId: condition.guiId == null ? null : String(condition.guiId) });
+    }
+
+    #slashCommand(step, path) {
+        const command = String(step.command || '').trim();
+        if (!command.startsWith('/')) throw new TypeError(`${path}.command phải bắt đầu bằng /.`);
+        if (command.length > 256 || /[\r\n\0]/.test(command)) throw new TypeError(`${path}.command không hợp lệ.`);
+        if (/^\/(?:login|register|reg|l|auth|password|changepassword|cp)\b/i.test(command)) throw new TypeError(`${path}.command không được chứa lệnh đăng nhập/mật khẩu.`);
+        return command;
     }
 
     #collectCapabilities(steps, set) {

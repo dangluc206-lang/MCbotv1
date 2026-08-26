@@ -28,7 +28,7 @@ const REQUIRED_FILES = Object.freeze([
     'src/index.js'
 ]);
 
-const FORBIDDEN_SEGMENTS = new Set(['node_modules', 'coverage', 'out', '.tmp']);
+const FORBIDDEN_SEGMENTS = new Set(['.git', '.tmp', 'coverage', 'data', 'node_modules', 'out']);
 const FORBIDDEN_PREFIXES = Object.freeze([
     'data/logs/',
     'data/runtime/',
@@ -54,11 +54,14 @@ function normalizeEntryName(name) {
 }
 
 function forbiddenReason(file) {
-    const parts = file.split('/');
+    const normalized = String(file || '').replace(/\\/g, '/').toLowerCase();
+    const parts = normalized.split('/');
     if (parts.some(part => FORBIDDEN_SEGMENTS.has(part))) return 'forbidden-directory';
     const base = parts.at(-1);
     if (base === '.env' || (base.startsWith('.env.') && base !== '.env.example')) return 'secret-env-file';
-    if (FORBIDDEN_PREFIXES.some(prefix => file.startsWith(prefix))) return 'runtime-or-user-data';
+    if (base === 'secrets.json') return 'secret-store-file';
+    if (base.endsWith('.log')) return 'runtime-log-file';
+    if (FORBIDDEN_PREFIXES.some(prefix => normalized.startsWith(prefix))) return 'runtime-or-user-data';
     return null;
 }
 

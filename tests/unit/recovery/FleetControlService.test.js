@@ -371,3 +371,46 @@ test('fleet reconciliation preserves stale-generation mode failure as DISCONNECT
     assert.equal(result.error?.code, 'COMMAND_STALE_GENERATION');
     assert.equal(result.status, Status.DISCONNECTED);
 });
+
+test('XP-012 emergency stop revokes all intents before all-settled disconnect and isolates one bot failure', async t => {
+    const bot1 = fakeRuntime('bot-01', { connected: true, fishing: fakeMode({ enabled: true }) });
+    const bot2 = fakeRuntime('bot-02', { connected: true, collector: fakeMode({ enabled: true }) });
+    const { control, registry, store } = await harness(t, {
+        runtime: bot1,
+        profiles: [{ id: 'bot-01', enabled: true }, { id: 'bot-02', enabled: true }]
+    });
+    registry.register(bot2);
+    control.upsertProfile({ id: 'bot-02', enabled: true });
+    await store.setIntent('bot-01', { desiredConnection: 'CONNECTED', desiredMode: 'fishing', modeState: 'ACTIVE', source: 'test' });
+    await store.setIntent('bot-02', { desiredConnection: 'CONNECTED', desiredMode: 'collector-b5', modeState: 'ACTIVE', source: 'test' });
+    bot1.getService('connectionManager').stop = async () => { bot1.calls.stop += 1; throw Object.assign(new Error('bot-01 stop failed'), { code: 'CONNECTION_STOP_FAILED' }); };
+
+    const result = await control.emergencyStop(['bot-01', 'bot-02'], { source: 'unit-emergency', idempotencyKey: 'emergency-1', timeoutMs: 500 });
+    assert.equal(result.outcome, 'PARTIAL');
+    assert.equal(result.botCount, 2);
+    assert.equal(result.terminalCount, 1);
+    assert.equal(result.results.find(entry => entry.botId === 'bot-01').terminal, false);
+    assert.equal(result.results.find(entry => entry.botId === 'bot-02').terminal, true);
+    assert.equal(bot2.calls.stop, 1, 'bot-02 must still be attempted after bot-01 fails');
+    assert.equal(control.intent('bot-01').desiredConnection, 'DISCONNECTED');
+    assert.equal(control.intent('bot-02').desiredConnection, 'DISCONNECTED');
+    assert.equal(bot1.calls.reconnectSuspend >= 1, true);
+    assert.equal(bot2.calls.reconnectSuspend >= 1, true);
+});
+
+test('XP-012 emergency stop is idempotent for duplicate transaction keys and bounded per bot', async t => {
+    const runtime = fakeRuntime('bot-01', { connected: true });
+    const { control, store } = await harness(t, { runtime, taskTimeoutMs: 1000 });
+    await store.setIntent('bot-01', { desiredConnection: 'CONNECTED', desiredMode: null, modeState: null, source: 'test' });
+    const gate = deferred();
+    runtime.getService('connectionManager').stop = async () => { runtime.calls.stop += 1; await gate.promise; };
+    const first = control.emergencyStop(['bot-01'], { idempotencyKey: 'duplicate-key', timeoutMs: 250 });
+    const second = control.emergencyStop(['bot-01'], { idempotencyKey: 'duplicate-key', timeoutMs: 250 });
+    assert.equal(first, second);
+    assert.throws(() => control.emergencyStop(['bot-02'], { idempotencyKey: 'duplicate-key', timeoutMs: 250 }), error => error.code === 'FLEET_EMERGENCY_IDEMPOTENCY_CONFLICT');
+    const result = await first;
+    assert.equal(result.outcome, 'TIMEOUT');
+    assert.equal(result.results[0].status, 'TIMEOUT');
+    assert.equal(runtime.calls.reconnectSuspend >= 1, true);
+    gate.resolve();
+});

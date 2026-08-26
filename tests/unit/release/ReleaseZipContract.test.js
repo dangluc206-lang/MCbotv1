@@ -36,14 +36,24 @@ test('release ZIP contract rejects the exact packaging regression that omitted s
 test('release ZIP contract rejects secrets, runtime state, traversal and case collisions', () => {
     const report = validateEntryNames(validNames([
         '.env.local',
+        '.ENV.PRODUCTION',
+        '.git/objects/aa/history',
         'data/runtime/control/intents.json',
+        'DATA/other/operator-state.json',
+        'logs/runtime.LOG',
+        'desktop/secrets.json',
         'node_modules/mineflayer/index.js',
         '../escape.js',
         'SRC/index.js'
     ]));
     assert.equal(report.valid, false);
     assert.ok(report.failures.some(item => item.code === 'ZIP_FORBIDDEN_FILE' && item.entry === '.env.local'));
+    assert.ok(report.failures.some(item => item.code === 'ZIP_FORBIDDEN_FILE' && item.entry === '.ENV.PRODUCTION'));
+    assert.ok(report.failures.some(item => item.code === 'ZIP_FORBIDDEN_FILE' && item.entry === '.git/objects/aa/history'));
     assert.ok(report.failures.some(item => item.code === 'ZIP_FORBIDDEN_FILE' && item.entry === 'data/runtime/control/intents.json'));
+    assert.ok(report.failures.some(item => item.code === 'ZIP_FORBIDDEN_FILE' && item.entry === 'DATA/other/operator-state.json'));
+    assert.ok(report.failures.some(item => item.code === 'ZIP_FORBIDDEN_FILE' && item.entry === 'logs/runtime.LOG'));
+    assert.ok(report.failures.some(item => item.code === 'ZIP_FORBIDDEN_FILE' && item.entry === 'desktop/secrets.json'));
     assert.ok(report.failures.some(item => item.code === 'ZIP_FORBIDDEN_FILE' && item.entry === 'node_modules/mineflayer/index.js'));
     assert.ok(report.failures.some(item => item.code === 'ZIP_ENTRY_UNSAFE' && item.entry === '../escape.js'));
     assert.ok(report.failures.some(item => item.code === 'ZIP_CASE_COLLISION' && item.entry === 'SRC/index.js'));

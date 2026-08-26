@@ -61,3 +61,31 @@ test('RuntimeFailureRecorder persists structured error plus GUI and inventory st
     assert.equal(data.runtimeState.gui.windowId, 9);
     assert.equal(data.runtimeState.inventory.views[0].items[0].identityComponents[0], 'MMOITEMS_ITEM_ID:DADOTINHLUYEN');
 });
+
+test('RuntimeFailureRecorder retention removes old rotated journals using shared artifact layout', async () => {
+    const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mcbot-errors-retention-'));
+    const botDir = path.join(baseDir, 'bot-01');
+    await fs.mkdir(botDir, { recursive: true });
+    const rotated = path.join(botDir, 'errors-2026-08-01T00-00-00-000Z-0001.jsonl');
+    await fs.writeFile(rotated, '{}\n', 'utf8');
+    const now = Date.parse('2026-08-24T12:00:00.000Z');
+    await fs.utimes(rotated, (now - 3 * 24 * 60 * 60 * 1000) / 1000, (now - 3 * 24 * 60 * 60 * 1000) / 1000);
+    const recorder = new RuntimeFailureRecorder({
+        botId: 'bot-01',
+        eventBus: null,
+        baseDir,
+        clock: () => now,
+        config: {
+            enabled: true,
+            repeatWindowMs: 100,
+            maxFileMb: 1,
+            maxTotalMb: 4,
+            retentionDays: 1,
+            cleanupIntervalMs: 0
+        }
+    });
+    await recorder.initialize();
+    await assert.rejects(fs.stat(rotated), error => error?.code === 'ENOENT');
+    await recorder.stop();
+    await fs.rm(baseDir, { recursive: true, force: true });
+});

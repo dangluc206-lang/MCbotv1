@@ -171,10 +171,61 @@ test('/kho sell opener accepts any readable sell entry, then lets execute skip a
     });
 
     const result = await operation.execute('gold_ingot', { quantity: 64 });
-    assert.equal(sends, 1);
+    assert.equal(sends, 2, 'a missing target gets one bounded Sell GUI refresh before it is skipped');
     assert.equal(result.skipped, true);
     assert.equal(result.reason, 'material-not-visible-in-sell-gui');
+    assert.equal(result.targetRefreshAttempted, true);
+    assert.deepEqual(result.availableLogicalIds, ['gold_block']);
     assert.equal(current.source.command, '/kho sell');
+});
+
+test('/kho sell refreshes a stale cross-material session once and resolves the next material from the new GUI', async () => {
+    let current = null;
+    let sends = 0;
+    let clicks = 0;
+    const staleSession = makeSession({ id: 16, title: 'Sell stale', slots: [] }, { commandKey: 'storageSell', command: '/kho sell' });
+    const refreshedSession = makeSession({ id: 17, title: 'Sell refreshed', slots: [] });
+    current = staleSession;
+    const operation = new KhoSellOperation({
+        commandService: {
+            async send() {
+                sends += 1;
+                current = refreshedSession;
+                return { success: true };
+            }
+        },
+        guiManager: {
+            current() { return current; },
+            syncCurrentWindow() { return current; },
+            markCurrent(source) { current?.setSource(source); return current; },
+            async closeCurrentWindow() { current = null; },
+            async clickAndWaitForTransition() { clicks += 1; return current; },
+            describeCurrent() { return current ? { windowId: current.window.id, title: current.window.title } : null; }
+        },
+        reader: {
+            read(window) {
+                return window.id === staleSession.window.id
+                    ? { entries: { redstone_block: { logicalId: 'redstone_block', slot: 11, amount: null, amountReliable: false } } }
+                    : { entries: { lapis_block: { logicalId: 'lapis_block', slot: 14, amount: null, amountReliable: false } } };
+            }
+        },
+        config: {
+            guiTimeoutMs: 100,
+            sell: {
+                enabled: true, commandKey: 'storageSell', allowAll: false,
+                resultDelayMs: 0, openSettleMs: 0, closeSettleMs: 0,
+                openAfterCloseSettleMs: 0, openPollMs: 5, openAttempts: 1,
+                itemAliases: { redstone_block: 'REDSTONE_BLOCK', lapis_block: 'LAPIS_BLOCK' }
+            }
+        }
+    });
+
+    const result = await operation.execute('lapis_block', { quantity: 64 });
+    assert.equal(result.skipped, false);
+    assert.equal(result.logicalId, 'lapis_block');
+    assert.equal(result.slot, 14);
+    assert.equal(sends, 1);
+    assert.equal(clicks, 1);
 });
 
 test('SELL ALL is disabled for production B1 by default', async () => {
@@ -323,9 +374,38 @@ test('Sell GUI transition with unreliable amount returns unverified evidence req
     });
     const result = await operation.execute('coal_block', { quantity: 64 });
     assert.equal(result.transitioned, true);
+    assert.equal(result.semanticAcknowledged, true);
     assert.equal(result.verification.verified, false);
     assert.equal(result.verification.verifiedSoldQuantity, null);
     assert.equal(result.verification.requiresFreshStorage, true);
+});
+
+test('transition to a GUI without semantic Sell entries is never acknowledged as a 64 sale', async () => {
+    let current = null;
+    const sellSession = makeSession({ id: 401, title: 'Sell', slots: [] });
+    const otherSession = makeSession({ id: 402, title: 'Other', slots: [] }, { commandKey: 'other' });
+    const operation = new KhoSellOperation({
+        commandService: { async send() { current = sellSession; return { success: true }; } },
+        guiManager: {
+            current() { return current; }, syncCurrentWindow() { return current; },
+            markCurrent(source) { current?.setSource(source); return current; },
+            async closeCurrentWindow() { current = null; },
+            async clickAndWaitForTransition() { current = otherSession; return current; }
+        },
+        reader: {
+            read(window) {
+                return window.title === 'Sell'
+                    ? { entries: { coal_block: { logicalId: 'coal_block', slot: 11, amount: null, amountReliable: false } } }
+                    : { entries: {} };
+            }
+        },
+        config: { guiTimeoutMs: 100, sell: { enabled: true, commandKey: 'storageSell', allowAll: false, resultDelayMs: 0, openSettleMs: 0, closeSettleMs: 0, openPollMs: 5, openAttempts: 1, itemAliases: { coal_block: 'COAL_BLOCK' } } }
+    });
+    await assert.rejects(
+        () => operation.execute('coal_block', { quantity: 64 }),
+        error => error?.code === 'KHO_SELL_GUI_IDENTITY_LOST'
+    );
+    assert.equal(otherSession.source.commandKey, 'other', 'unrelated GUI provenance must not be overwritten');
 });
 
 test('Sell GUI reliable partial amount returns only the observed delta as verified quantity', async () => {

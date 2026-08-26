@@ -186,7 +186,7 @@ Sell amount parsing:
 Bot policy CURRENT:
 
 - `sell.allowAll = false` cho production B1 nói chung.
-- `fastDisposableSellAllIds` hiện chứa `lapis_block`, nên ALL chỉ được mở theo explicit policy đó hoặc nếu `allowAll=true`.
+- CURRENT executor không còn per-item SELL ALL whitelist; `fastDisposableSellAllIds` là field legacy và không vượt qua global gate. Nếu `allowAll=true`, quyền ALL áp dụng cho mọi configured `itemAliases`, vì vậy production phải giữ `false`.
 - `blockOnly = true` cho strategy trim hiện tại.
 
 Server rule (click semantics) phải tách khỏi bot policy (material nào được phép ALL).
@@ -637,7 +637,7 @@ Không biến bot strategy thành “server bắt buộc” nếu chưa có evid
 - Stylized GUI title có thể đổi do resource pack/server update; route knowledge/provenance và fingerprints quan trọng hơn exact title đơn lẻ.
 - `fallbackLimit = 800000` phải được verify lại nếu server nâng storage capacity.
 
-## Project policy: chế B5 thuần (MCbot 2.3)
+## Project policy CURRENT: chế B5 thuần (MCbot 2.7.67)
 
 Phần này là **project policy**, không phải khẳng định mechanic mới của server.
 
@@ -646,8 +646,12 @@ Mode `b5-craft` được cố ý tách khỏi Collector để chỉ làm chuỗi
 ```text
 chờ Skyblock ready
 → /is
-→ đọc /kho
-→ bảo vệ kho nếu cần
+→ fresh /kho
+→ chỉ nung raw iron/raw gold
+→ nén mọi B1 family có block form
+→ chốt immutable sell baseline
+→ bán block surplus 64-only, giữ remainder <64
+→ không đọc/xác minh lại reserve sau sell
 → đổi base/block B1 khi planner/crafting cần
 → B2 → B3 → B4 → B5
 ```
@@ -658,9 +662,12 @@ Policy bắt buộc:
 - chỉ gọi `/nung` cho raw iron và raw gold tại boundary bảo vệ kho; không nung stone hoặc resource khác;
 - bảo vệ `/kho` vẫn được compact base → block và bán block surplus theo reserve/pressure policy;
 - khi cần base B1, block → base chỉ được thực hiện qua conversion capability với capacity guard hiện có;
-- B5 thuần có thể dùng `/nung` khi `/kho` cần bảo vệ; thứ tự là chỉ nung raw iron/raw gold -> nén phôi/base thành block -> bảo vệ/bán block dư -> tiếp tục planner/crafting; vẫn không dùng movement/pathfinder;
-- sau khi nén xong, sell baseline được chốt một lần cho đợt B5; mỗi click bán đúng `64`, không có click `1` cuối. Phần surplus dưới `64` và inflow phát sinh sau baseline đều để lại cho đợt B5 kế tiếp;
+- B5 thuần bắt buộc chạy boundary trước mỗi đợt; `/nung` chỉ được dùng cho raw iron/raw gold, sau đó nén phôi/base thành block rồi mới chốt baseline và bán; vẫn không dùng movement/pathfinder;
+- sau khi nén xong, sell baseline được chốt một lần cho đợt B5; mỗi click bán đúng `64`, không có click `1` cuối. Amount/delta đọc được sau click không được dùng để đổi hoặc ngắt kế hoạch bất biến; right-click đúng material trong verified Sell GUI và semantic transition tương ứng là acknowledgement của action `64`. Phần surplus dưới `64` và inflow phát sinh sau baseline đều để lại cho đợt B5 kế tiếp;
 - kho lớn được bán qua nhiều bounded slice cùng episode; continuation chỉ tiếp tục remaining budget đã verify, không nung/nén hoặc lập baseline mới;
+- không fresh-read `/kho` sau sell để kiểm tra amount, inflow hoặc mức 1.5; mọi thay đổi sau baseline thuộc đợt B5 kế tiếp;
+- trong một Sell session, slot phải được resolve lại trước từng click và có thể đổi khi server refresh GUI. Khi chuyển loại mà target chưa xuất hiện, client được reopen `/kho sell` đúng một lần; nếu vẫn không có target thì hoãn riêng action của loại đó, tiếp tục loại khác đã nằm trong baseline, rồi báo blocker có `sellId` cùng danh sách entry thực tế. Retry không được bán lại action đã acknowledgement;
+- mở crafting ngay khi mọi full-stack action của immutable baseline đã được acknowledgement; `1.5 B5` chỉ là sàn tính action tại baseline, không phải postcondition. Family thiếu từ baseline không được bán và không giữ mode chờ. Sau khi B5 mới được xác nhận chế và cất xong, chạy một lượt nung raw iron/raw gold; nếu lỗi, boundary đợt sau retry trước craft;
 - `collector-b5` giữ behavior cũ riêng và không định nghĩa contract của `b5-craft`.
 
 Các ngưỡng pressure/sell/reserve là config project (`config/minerals/conversions.json`, `config/storage/kho.json`), không phải server constant.

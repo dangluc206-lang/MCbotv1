@@ -88,10 +88,19 @@ class B1StartupReserveTrimmer {
                     policy: { id: 'b5-storage-protection', revision: 'v1' }
                 });
                 if (planned.blockers.length) {
+                    const primary = planned.blockers[0];
                     const error = new FlowError('B5 storage protection planner rejected the sell baseline.', {
-                        code: 'B1_B5_PROTECTION_PLAN_BLOCKED', subsystem: 'b1', operation: 'B1ReserveTrimmer',
-                        step: 'sell-baseline-plan', action: 'compile immutable 64-only sell plan', retryable: true,
-                        details: { blockers: planned.blockers, expectedGeneration, batchId, episodeId }
+                        code: 'B1_B5_PROTECTION_PLAN_BLOCKED',
+                        subsystem: 'b1', operation: 'B1ReserveTrimmer',
+                        step: 'sell-baseline-plan',
+                        action: 'compile immutable 64-only sell plan',
+                        resource: primary?.baseId || null,
+                        retryable: true,
+                        details: {
+                            blockers: planned.blockers,
+                            resource: primary?.baseId || null,
+                            expectedGeneration, batchId, episodeId
+                        }
                     });
                     return Result.fail(Status.NOT_READY, error.message, error, error.toDiagnostic());
                 }
@@ -108,9 +117,11 @@ class B1StartupReserveTrimmer {
                     correlationId: operationContext?.correlationId || null,
                     baseline,
                     baselineCoverage,
+                    baselineReserveShortages: planned.reserveShortages || [],
                     budget,
                     decisionEnvelope: planned.replayEnvelope,
                     actions: budget.actions,
+                    pendingActionIndexes: budget.actions.map((_action, index) => index),
                     nextActionIndex: 0,
                     baselineDigest,
                     baselineCapturedAt: baseline?.capturedAt || null,
@@ -131,7 +142,11 @@ class B1StartupReserveTrimmer {
                     blockedInitialSurplus: {},
                     sellEvidence: [],
                     sellEvidenceCount: 0,
+                    acknowledgedActions: 0,
+                    pendingAction: null,
+                    secondaryCauses: [],
                     finalVerificationIssues: [],
+                    reserveShortages: [],
                     reserveViolations: [],
                     completeForEpisode: false,
                     continuationRequired: false,
@@ -148,7 +163,8 @@ class B1StartupReserveTrimmer {
                     episodeId, batchId: episode.batchId, trigger: episode.trigger,
                     baselineDigest, reserveCoverage, sellQuantity: B5_SELL_QUANTITY,
                     clickBudget: episode.clickBudget, retainedRemainderItems: episode.retainedRemainderItems,
-                    initialSellBudget: budget.byMaterial
+                    initialSellBudget: budget.byMaterial,
+                    baselineReserveShortages: episode.baselineReserveShortages
                 });
             } else {
                 episode.operationId = operationContext?.operationId || episode.operationId;
@@ -163,6 +179,7 @@ class B1StartupReserveTrimmer {
             episode.continuationRequired = false;
             episode.deadlineYielded = false;
             episode.blocker = null;
+            const unavailableLogicalIdsThisRun = new Set();
 
             if (sellConfig.enabled === false && budget.totalSellItems > 0) {
                 episode.blocker = {
@@ -180,7 +197,7 @@ class B1StartupReserveTrimmer {
                 return Result.fail(Status.NOT_READY, error.message, error, this.#episodeDiagnostic(episode));
             }
 
-            while (episode.nextActionIndex < episode.actions.length
+            while (episode.pendingActionIndexes.length > 0
                 && episode.sliceClicks < episode.maxClicksPerSlice) {
                 cancellationToken?.throwIfCancelled?.();
                 const rawRemainingMs = typeof operationContext?.remainingMs === 'function'
@@ -192,7 +209,9 @@ class B1StartupReserveTrimmer {
                     break;
                 }
 
-                const action = episode.actions[episode.nextActionIndex];
+                const actionIndex = episode.pendingActionIndexes[0];
+                const action = episode.actions[actionIndex];
+                if (unavailableLogicalIdsThisRun.has(action.logicalId)) break;
                 if (action.quantity !== B5_SELL_QUANTITY) {
                     throw new FlowError('B5 storage protection generated a non-64 sell action.', {
                         code: 'B1_B5_PROTECTION_SELL_QUANTITY_INVALID',
@@ -202,12 +221,21 @@ class B1StartupReserveTrimmer {
                     });
                 }
                 delete episode.blockedInitialSurplus[action.logicalId];
+                episode.pendingAction = {
+                    actionIndex,
+                    logicalId: action.logicalId,
+                    baseId: action.baseId,
+                    quantity: action.quantity,
+                    state: 'PENDING',
+                    connectionGeneration: expectedGeneration
+                };
 
                 const sold = await this.storage.sell(action.logicalId, {
                     quantity: B5_SELL_QUANTITY,
                     ...childOptions
                 });
                 if (!sold.success) {
+                    episode.pendingAction.state = 'FAILED';
                     episode.blockedInitialSurplus[action.logicalId] = Number(episode.remainingInitialBudget[action.logicalId] || 0);
                     episode.blocker = {
                         material: action.baseId,
@@ -221,33 +249,36 @@ class B1StartupReserveTrimmer {
                     break;
                 }
                 if (sold.data?.skipped) {
-                    episode.unavailableCandidates.push({
+                    episode.pendingAction.state = 'SKIPPED';
+                    const unavailable = {
                         material: action.baseId,
                         sellId: action.logicalId,
-                        reason: sold.data.reason || 'candidate-unavailable'
-                    });
-                    episode.blockedInitialSurplus[action.logicalId] = Number(episode.remainingInitialBudget[action.logicalId] || 0);
-                    episode.blocker = {
-                        material: action.baseId,
-                        sellId: action.logicalId,
-                        quantity: action.quantity,
-                        attempt: episode.soldClicks + 1,
-                        clickBudget: episode.clickBudget,
                         reason: sold.data.reason || 'candidate-unavailable',
-                        retryable: true
+                        targetRefreshAttempted: sold.data.targetRefreshAttempted === true,
+                        availableLogicalIds: Array.isArray(sold.data.availableLogicalIds)
+                            ? [...sold.data.availableLogicalIds]
+                            : []
                     };
-                    break;
+                    episode.unavailableCandidates.push(unavailable);
+                    unavailableLogicalIdsThisRun.add(action.logicalId);
+                    const deferredIndexes = episode.pendingActionIndexes
+                        .filter(index => episode.actions[index]?.logicalId === action.logicalId);
+                    episode.pendingActionIndexes = episode.pendingActionIndexes
+                        .filter(index => episode.actions[index]?.logicalId !== action.logicalId)
+                        .concat(deferredIndexes);
+                    episode.blockedInitialSurplus[action.logicalId] = Number(episode.remainingInitialBudget[action.logicalId] || 0);
+                    episode.pendingAction = null;
+                    continue;
                 }
 
                 episode.soldClicks += 1;
                 episode.sliceClicks += 1;
-                const evidence = await this.#verifySaleAmount({
+                const evidence = this.#acknowledgeSaleAction({
                     action,
+                    actionIndex,
                     sold: sold.data || {},
-                    baseline,
                     episode,
-                    childOptions,
-                    cancellationToken
+                    expectedGeneration
                 });
                 episode.sellEvidenceCount += 1;
                 episode.sellEvidence.push(evidence);
@@ -264,8 +295,16 @@ class B1StartupReserveTrimmer {
 
                 if (evidence.exactRequested === true
                     && verifiedQuantity === B5_SELL_QUANTITY) {
-                    episode.nextActionIndex += 1;
+                    episode.acknowledgedActions += 1;
+                    episode.pendingAction = {
+                        ...episode.pendingAction,
+                        state: 'ACKNOWLEDGED',
+                        source: evidence.source
+                    };
+                    episode.pendingActionIndexes.shift();
+                    episode.nextActionIndex = episode.actions.length - episode.pendingActionIndexes.length;
                     delete episode.blockedInitialSurplus[action.logicalId];
+                    episode.pendingAction = null;
                 } else {
                     const reconciliation = this.reconciliationBarrier.evaluate({
                         expectedGeneration, currentGeneration: expectedGeneration,
@@ -287,91 +326,83 @@ class B1StartupReserveTrimmer {
                 }
             }
 
+            const hasRunnablePendingAction = episode.pendingActionIndexes.some(index =>
+                !unavailableLogicalIdsThisRun.has(episode.actions[index]?.logicalId));
+            if (!episode.blocker && unavailableLogicalIdsThisRun.size > 0 && !hasRunnablePendingAction) {
+                const unavailableId = [...unavailableLogicalIdsThisRun][0];
+                const unavailableAction = episode.actions.find(action => action.logicalId === unavailableId);
+                const unavailableEvidence = [...episode.unavailableCandidates]
+                    .reverse()
+                    .find(candidate => candidate.sellId === unavailableId);
+                episode.blocker = {
+                    material: unavailableAction?.baseId || null,
+                    sellId: unavailableId,
+                    quantity: B5_SELL_QUANTITY,
+                    attempt: episode.soldClicks + 1,
+                    clickBudget: episode.clickBudget,
+                    reason: unavailableEvidence?.reason || 'candidate-unavailable',
+                    retryable: true,
+                    targetRefreshAttempted: unavailableEvidence?.targetRefreshAttempted === true,
+                    availableLogicalIds: unavailableEvidence?.availableLogicalIds || []
+                };
+            }
+
             cancellationToken?.throwIfCancelled?.();
             const closed = await this.storage.closeSellGui?.(childOptions);
             if (closed?.success === false) return closed;
             cancellationToken?.throwIfCancelled?.();
 
-            const finalRead = await this.storage.read({ ...childOptions, refresh: true, forceReopen: true });
-            if (!finalRead.success) return finalRead;
-            const finalSnapshot = finalRead.data;
+            // The immutable baseline already proves the 1.5-B5 sell floor.
+            // Once every planned 64-block action is acknowledged, craft may
+            // start immediately. Do not perform a post-sell /kho read or turn
+            // later inflow/depletion into a blocker for this episode.
+            const finalSnapshot = {
+                ...baseline,
+                items: { ...(baseline?.items || {}) }
+            };
+            for (const [logicalId, soldAmount] of Object.entries(episode.soldAmount || {})) {
+                finalSnapshot.items[logicalId] = Math.max(0,
+                    Number(finalSnapshot.items[logicalId] || 0) - Math.max(0, Number(soldAmount || 0)));
+            }
             const finalCoverage = this.materialPolicy.coverageSnapshot(finalSnapshot);
-
             episode.finalVerificationIssues = [];
+            episode.reserveShortages = [];
             episode.reserveViolations = [];
             episode.deferredNewInput = {};
             const baselineBudgetProven = Object.values(episode.remainingInitialBudget)
                 .every(value => Math.max(0, Number(value || 0)) === 0)
-                && episode.nextActionIndex >= episode.actions.length
+                && episode.pendingActionIndexes.length === 0
                 && Object.keys(episode.blockedInitialSurplus).length === 0;
-
-            for (const [logicalId, entry] of Object.entries(budget.byMaterial)) {
-                const baselineCount = Math.max(0, Number(baseline?.items?.[logicalId] || 0));
-                const verifiedSoldCount = Math.max(0, Number(episode.soldAmount[logicalId] || 0));
-                const expectedAfterVerifiedSales = Math.max(0, baselineCount - verifiedSoldCount);
-                const finalCount = Math.max(0, Number(finalSnapshot?.items?.[logicalId] || 0));
-
-                if (finalCount < expectedAfterVerifiedSales) {
-                    episode.finalVerificationIssues.push({
-                        material: entry.material,
-                        sellId: logicalId,
-                        reason: 'final-count-below-verified-sale-expectation',
-                        baselineCount,
-                        verifiedSoldCount,
-                        expectedAfterVerifiedSales,
-                        finalCount
-                    });
-                } else if (finalCount > expectedAfterVerifiedSales) {
-                    // This positive delta arrived after the immutable baseline.
-                    // It is observable for diagnostics but never expands the
-                    // current episode budget, even across continuation slices.
-                    episode.deferredNewInput[logicalId] = finalCount - expectedAfterVerifiedSales;
-                }
-            }
-
-            episode.reserveViolations = Object.values(finalCoverage || {})
-                .filter(family => Number(family?.coverage || 0) + 1e-9 < reserveCoverage)
-                .map(family => ({
-                    baseId: family.baseId,
-                    coverage: family.coverage,
-                    requiredCoverage: reserveCoverage,
-                    effectiveB1: family.effectiveB1,
-                    requiredPerB5: family.requiredPerB5
-                }));
 
             const remaining = Object.values(episode.remainingInitialBudget)
                 .reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0);
-            const actionsRemaining = Math.max(0, episode.actions.length - episode.nextActionIndex);
+            const actionsRemaining = episode.pendingActionIndexes.length;
             episode.completeForEpisode = baselineBudgetProven
-                && Object.keys(episode.blockedInitialSurplus).length === 0
-                && episode.finalVerificationIssues.length === 0
-                && episode.reserveViolations.length === 0;
+                && Object.keys(episode.blockedInitialSurplus).length === 0;
             episode.continuationRequired = !episode.completeForEpisode
                 && !episode.blocker
-                && episode.finalVerificationIssues.length === 0
-                && episode.reserveViolations.length === 0
                 && remaining > 0
                 && actionsRemaining > 0;
             episode.finalCoverage = finalCoverage;
             episode.finalSnapshot = finalSnapshot;
             episode.completionReason = episode.completeForEpisode
-                ? 'initial-baseline-budget-verified-and-reserve-held'
+                ? 'immutable-baseline-sales-acknowledged'
                 : episode.continuationRequired
                     ? (episode.deadlineYielded ? 'yielded-before-operation-deadline' : 'bounded-64-click-slice-complete')
-                : episode.reserveViolations.length > 0
-                    ? 'final-reserve-verification-failed'
-                    : episode.finalVerificationIssues.length > 0
-                        ? 'final-sale-verification-ambiguous'
-                        : 'initial-baseline-surplus-blocked';
+                    : 'initial-baseline-surplus-blocked';
 
             if (episode.continuationRequired) {
                 const diagnostic = this.#episodeDiagnostic(episode);
+                const waitingForReserveInput = false;
+                const nextDelayMs = B5_SELL_SLICE_CONTINUATION_DELAY_MS;
                 this.logger?.debug?.('B5 STORAGE PROTECTION: 64-only sell slice checkpointed for continuation.', {
                     operation: 'B1ReserveTrimmer', step: 'sell-slice-checkpoint',
                     episodeId, batchId: episode.batchId, sliceNumber: episode.sliceNumber,
                     sliceClicks: episode.sliceClicks, soldClicks: episode.soldClicks,
                     clickBudget: episode.clickBudget, actionsRemaining,
                     deferredNewInput: episode.deferredNewInput,
+                    waitingForReserveInput,
+                    reserveShortages: episode.reserveShortages,
                     deadlineYielded: episode.deadlineYielded
                 });
                 return Result.ok({
@@ -380,7 +411,8 @@ class B1StartupReserveTrimmer {
                     finalCoverage,
                     finalSnapshot,
                     continuationRequired: true,
-                    nextDelayMs: B5_SELL_SLICE_CONTINUATION_DELAY_MS
+                    waitingForReserveInput,
+                    nextDelayMs
                 });
             }
 
@@ -389,19 +421,19 @@ class B1StartupReserveTrimmer {
                     evidence?.exactRequested !== true
                     && evidence?.reason !== 'candidate-unavailable'
                     && evidence?.reason !== 'retained-sub-64-remainder');
-                const code = episode.reserveViolations.length > 0
-                    ? 'B1_B5_PROTECTION_RESERVE_UNDERRUN'
-                    : episode.finalVerificationIssues.length > 0 || hasUnverifiedSaleEvidence
-                        ? 'B1_B5_PROTECTION_SELL_UNVERIFIED'
-                        : 'B1_B5_PROTECTION_SELL_BLOCKED';
-                const error = new FlowError('B5 storage protection could not verify the immutable sell baseline and hard reserve.', {
+                episode.secondaryCauses = [];
+                const code = hasUnverifiedSaleEvidence
+                    ? 'B1_B5_PROTECTION_SELL_UNVERIFIED'
+                    : 'B1_B5_PROTECTION_SELL_BLOCKED';
+                const error = new FlowError('B5 storage protection could not finish the immutable sell baseline.', {
                     code,
                     subsystem: 'b1', operation: 'B1ReserveTrimmer', step: 'sell-baseline',
-                    action: 'verify immutable 64-only baseline sales and final 1.5 B5 reserve',
+                    action: 'acknowledge immutable 64-only baseline sales',
+                    resource: episode.blocker?.sellId || episode.blocker?.material || null,
                     retryable: episode.blocker?.retryable !== false,
                     details: this.#episodeDiagnostic(episode)
                 });
-                const status = code === 'B1_B5_PROTECTION_SELL_UNVERIFIED' || code === 'B1_B5_PROTECTION_RESERVE_UNDERRUN'
+                const status = code === 'B1_B5_PROTECTION_SELL_UNVERIFIED'
                     ? Status.VERIFICATION_FAILED
                     : Status.NOT_READY;
                 return Result.fail(status, error.message, error, this.#episodeDiagnostic(episode));
@@ -441,7 +473,7 @@ class B1StartupReserveTrimmer {
         }
     }
 
-    async #verifySaleAmount({ action, sold, baseline, episode, childOptions, cancellationToken }) {
+    #acknowledgeSaleAction({ action, actionIndex, sold, episode, expectedGeneration }) {
         const verificationQuantity = sold?.verification?.verifiedSoldQuantity;
         const directQuantity = sold?.verifiedSoldQuantity;
         const guiVerified = sold?.verification?.verified === true
@@ -455,63 +487,28 @@ class B1StartupReserveTrimmer {
             ? verificationQuantity
             : directVerified ? directQuantity : null;
 
-        if (Number.isFinite(guiQuantity)) {
-            return {
-                sellId: action.logicalId,
-                requestedQuantity: action.quantity,
-                verifiedSoldQuantity: Math.max(0, guiQuantity),
-                exactRequested: Math.abs(guiQuantity - action.quantity) < 1e-9,
-                source: sold?.verification?.source || 'sell-gui-amount',
-                reason: Math.abs(guiQuantity - action.quantity) < 1e-9
-                    ? null
-                    : guiQuantity < action.quantity ? 'partial-sale' : 'oversold-or-ambiguous-sale',
-                transitioned: sold?.transitioned === true,
-                amountReliable: sold?.amountReliable === true
-            };
-        }
-
-        // GUI transition alone is not amount evidence. Close the Sell GUI and
-        // reconcile against the authoritative full /kho snapshot. This read is
-        // verification only and cannot expand the immutable episode budget.
-        await this.storage.closeSellGui?.(childOptions);
-        cancellationToken?.throwIfCancelled?.();
-        const checkpoint = await this.storage.read({ ...childOptions, refresh: true, forceReopen: true });
-        if (!checkpoint.success) {
-            return {
-                sellId: action.logicalId,
-                requestedQuantity: action.quantity,
-                verifiedSoldQuantity: 0,
-                exactRequested: false,
-                source: 'fresh-kho',
-                reason: checkpoint.error?.code || checkpoint.status || 'fresh-kho-sale-verification-failed'
-            };
-        }
-
-        const baselineCount = Math.max(0, Number(baseline?.items?.[action.logicalId] || 0));
-        const previouslyVerified = Math.max(0, Number(episode.soldAmount[action.logicalId] || 0));
-        const expectedBefore = Math.max(0, baselineCount - previouslyVerified);
-        const observedAfter = Math.max(0, Number(checkpoint.data?.items?.[action.logicalId] || 0));
-        const delta = expectedBefore - observedAfter;
-        const exactRequested = Math.abs(delta - action.quantity) < 1e-9;
-        let reason = null;
-        if (!exactRequested) {
-            if (delta === 0) reason = 'sale-noop-unverified';
-            else if (delta > 0 && delta < action.quantity) reason = 'partial-sale';
-            else if (delta > action.quantity) reason = 'oversold-or-external-depletion';
-            else reason = 'sale-vs-inflow-ambiguous';
-        }
+        const transitioned = sold?.transitioned === true || sold?.verification?.transitioned === true;
+        const sellGuiAcknowledged = sold?.semanticAcknowledged === true
+            || sold?.verification?.semanticAcknowledged === true;
+        const semanticAcknowledged = sellGuiAcknowledged
+            && episode?.pendingAction?.state === 'PENDING'
+            && Number(episode.pendingAction.actionIndex) === Number(actionIndex)
+            && Number(episode.pendingAction.connectionGeneration) === Number(expectedGeneration)
+            && episode.pendingAction.logicalId === action.logicalId
+            && Number(action.quantity) === B5_SELL_QUANTITY;
+        const acknowledged = semanticAcknowledged || Number.isFinite(guiQuantity);
         return {
             sellId: action.logicalId,
             requestedQuantity: action.quantity,
-            verifiedSoldQuantity: Math.max(0, delta),
-            exactRequested,
-            source: 'fresh-kho',
-            reason,
-            expectedBefore,
-            observedAfter,
-            checkpointCapturedAt: checkpoint.data?.capturedAt || null,
-            transitioned: sold?.transitioned === true,
-            amountReliable: sold?.amountReliable === true
+            actionIndex,
+            verifiedSoldQuantity: acknowledged ? B5_SELL_QUANTITY : 0,
+            exactRequested: acknowledged,
+            source: semanticAcknowledged ? 'sell-gui-contract-ack' : Number.isFinite(guiQuantity) ? 'sell-gui-amount-observed' : null,
+            reason: acknowledged ? null : 'sell-action-unacknowledged',
+            transitioned,
+            amountReliable: sold?.amountReliable === true,
+            observedGuiQuantity: Number.isFinite(guiQuantity) ? guiQuantity : null,
+            connectionGeneration: expectedGeneration
         };
     }
 
@@ -528,6 +525,7 @@ class B1StartupReserveTrimmer {
             baselineCapturedAt: episode.baselineCapturedAt,
             decisionEnvelope: episode.decisionEnvelope || null,
             reserveCoverage: episode.reserveCoverage,
+            baselineReserveShortages: episode.baselineReserveShortages || [],
             passBudget: episode.passBudget,
             sellQuantity: episode.sellQuantity,
             clickBudget: episode.clickBudget,
@@ -535,7 +533,9 @@ class B1StartupReserveTrimmer {
             sliceNumber: episode.sliceNumber,
             sliceClicks: episode.sliceClicks,
             nextActionIndex: episode.nextActionIndex,
-            actionsRemaining: Math.max(0, Number(episode.clickBudget || 0) - Number(episode.nextActionIndex || 0)),
+            nextPendingActionIndex: episode.pendingActionIndexes?.[0] ?? null,
+            actionsRemaining: episode.pendingActionIndexes?.length
+                ?? Math.max(0, Number(episode.clickBudget || 0) - Number(episode.nextActionIndex || 0)),
             retainedRemainderItems: episode.retainedRemainderItems,
             initialSellBudget: episode.initialSellBudget,
             soldAmount: episode.soldAmount,
@@ -547,7 +547,11 @@ class B1StartupReserveTrimmer {
             sellEvidence: episode.sellEvidence,
             sellEvidenceCount: episode.sellEvidenceCount,
             sellEvidenceHistoryLimit: B5_SELL_EVIDENCE_HISTORY_LIMIT,
+            acknowledgedActions: episode.acknowledgedActions,
+            pendingAction: episode.pendingAction,
+            secondaryCauses: episode.secondaryCauses,
             finalVerificationIssues: episode.finalVerificationIssues,
+            reserveShortages: episode.reserveShortages,
             reserveViolations: episode.reserveViolations,
             completeForEpisode: episode.completeForEpisode,
             continuationRequired: episode.continuationRequired,

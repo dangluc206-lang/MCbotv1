@@ -2,10 +2,13 @@
 
 const createApplication = require('./bootstrap/createApplication');
 const registerShutdown = require('./bootstrap/shutdown');
+const loadRuntimeEnvironment = require('./bootstrap/RuntimeEnvironment');
 
 async function main() {
+    const baseDir = process.cwd();
     const { application, configuration, shared, profiles } = await createApplication({
-        baseDir: process.cwd()
+        baseDir,
+        environment: loadRuntimeEnvironment({ baseDir })
     });
     const logger = shared.loggerFactory.create('Main');
     const appConfig = configuration.registry.require('app');

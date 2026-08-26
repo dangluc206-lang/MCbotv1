@@ -6,11 +6,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const renderer = fs.readFileSync(path.resolve(__dirname, '../../../src/desktop/renderer/app.js'), 'utf8');
+const apiClient = fs.readFileSync(path.resolve(__dirname, '../../../src/desktop/renderer/core/RendererApiClient.js'), 'utf8');
 
 test('Desktop renderer allows durable mode start while disconnected and surfaces nested core failures', () => {
     assert.doesNotMatch(renderer, /disabled:\s*!connected\s*\|\|\s*!entry\.readiness/);
     assert.match(renderer, /Bật mode và tự kết nối bot/);
-    assert.match(renderer, /data\.success === false/);
+    assert.match(renderer, /MCbotRendererApiClient\.call/);
+    assert.match(apiClient, /data\.success === false/);
     assert.match(renderer, /Đang kết nối để bật chế độ/);
 });
 

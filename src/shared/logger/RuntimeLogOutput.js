@@ -7,6 +7,7 @@ const CompactLogFormatter = require('./CompactLogFormatter');
 const VietnamTime = require('../time/VietnamTime');
 
 const LEVELS = Logger.LEVELS;
+const BOT_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{1,31}$/;
 
 const LOW_LEVEL_OPERATIONAL_MESSAGES = Object.freeze([
     /^Inventory metadata /,
@@ -71,6 +72,13 @@ function stablePrimitive(value) {
     if (typeof value === 'object' && typeof value.code === 'string') return String(value.code);
     if (typeof value === 'object' && typeof value.message === 'string') return String(value.message);
     return '';
+}
+
+function botIdFromRecord(record) {
+    const explicit = String(record?.meta?.botId || '').trim();
+    if (BOT_ID_PATTERN.test(explicit)) return explicit;
+    const match = /^BotRuntime:([a-z0-9][a-z0-9_-]{1,31})$/.exec(String(record?.scope || '').trim());
+    return match ? match[1] : null;
 }
 
 class RuntimeLogOutput {
@@ -152,31 +160,35 @@ class RuntimeLogOutput {
 
     write(record) {
         if (!record || typeof record !== 'object') return;
-        if (!this.verboseOperationalLogs && isLowLevelOperationalMessage(record.message)) return;
-        if (!this.#shouldCoalesce(record)) {
-            this.#writeDirect(record);
+        const botId = botIdFromRecord(record);
+        const normalized = botId && record?.meta?.botId !== botId
+            ? Object.freeze({ ...record, meta: Object.freeze({ ...(record.meta || {}), botId }) })
+            : record;
+        if (!this.verboseOperationalLogs && isLowLevelOperationalMessage(normalized.message)) return;
+        if (!this.#shouldCoalesce(normalized)) {
+            this.#writeDirect(normalized);
             return;
         }
 
         const now = Date.now();
-        const signature = this.#signature(record);
+        const signature = this.#signature(normalized);
         const existing = this.repeatBuckets.get(signature);
 
         if (existing && now - existing.lastAt <= this.coalesceWindowMs) {
             existing.count += 1;
             existing.lastAt = now;
-            existing.lastRecord = record;
+            existing.lastRecord = normalized;
             return;
         }
 
         if (existing) this.#flushRepeatBucket(signature, existing);
-        this.#writeDirect(record);
+        this.#writeDirect(normalized);
         this.repeatBuckets.set(signature, {
             count: 1,
             firstAt: now,
             lastAt: now,
-            firstRecord: record,
-            lastRecord: record
+            firstRecord: normalized,
+            lastRecord: normalized
         });
         this.#trimRepeatBuckets();
     }
@@ -274,11 +286,17 @@ class RuntimeLogOutput {
     }
 
     #queueFile(record) {
-        const file = path.join(this.fileDirectory, `${this.filePrefix}-${fileDate(record.timestamp)}.jsonl`);
+        const date = fileDate(record.timestamp);
+        const files = [path.join(this.fileDirectory, `${this.filePrefix}-${date}.jsonl`)];
+        const botId = botIdFromRecord(record);
+        if (botId) files.push(path.join(this.fileDirectory, 'bots', botId, `${this.filePrefix}-${botId}-${date}.jsonl`));
         const line = `${JSON.stringify(record)}\n`;
-        const previous = this.fileBuffers.get(file) || '';
-        this.fileBuffers.set(file, previous + line);
-        this.fileBufferBytes += Buffer.byteLength(line);
+        const bytes = Buffer.byteLength(line);
+        for (const file of files) {
+            const previous = this.fileBuffers.get(file) || '';
+            this.fileBuffers.set(file, previous + line);
+            this.fileBufferBytes += bytes;
+        }
 
         if (record.level === 'error' || this.fileBufferBytes >= this.fileBufferMaxBytes || this.fileBufferFlushMs === 0) {
             this.#flushFileBuffers();
@@ -297,20 +315,37 @@ class RuntimeLogOutput {
         try {
             if (!fs.existsSync(this.fileDirectory)) return;
             const now = Date.now();
-            const currentFile = path.join(this.fileDirectory, `${this.filePrefix}-${fileDate(VietnamTime.iso())}.jsonl`);
+            const date = fileDate(VietnamTime.iso());
+            const currentFiles = new Set([path.join(this.fileDirectory, `${this.filePrefix}-${date}.jsonl`)]);
             const files = fs.readdirSync(this.fileDirectory, { withFileTypes: true })
                 .filter(entry => entry.isFile() && entry.name.startsWith(`${this.filePrefix}-`) && entry.name.endsWith('.jsonl'))
                 .map(entry => {
                     const filePath = path.join(this.fileDirectory, entry.name);
                     const stat = fs.statSync(filePath);
                     return { filePath, name: entry.name, size: stat.size, mtimeMs: stat.mtimeMs };
-                })
-                .sort((a, b) => b.mtimeMs - a.mtimeMs);
+                });
+            const botsDirectory = path.join(this.fileDirectory, 'bots');
+            if (fs.existsSync(botsDirectory)) {
+                for (const entry of fs.readdirSync(botsDirectory, { withFileTypes: true })) {
+                    if (!entry.isDirectory() || !BOT_ID_PATTERN.test(entry.name)) continue;
+                    const directory = path.join(botsDirectory, entry.name);
+                    currentFiles.add(path.join(directory, `${this.filePrefix}-${entry.name}-${date}.jsonl`));
+                    for (const fileEntry of fs.readdirSync(directory, { withFileTypes: true })) {
+                        if (!fileEntry.isFile()
+                            || !fileEntry.name.startsWith(`${this.filePrefix}-${entry.name}-`)
+                            || !fileEntry.name.endsWith('.jsonl')) continue;
+                        const filePath = path.join(directory, fileEntry.name);
+                        const stat = fs.statSync(filePath);
+                        files.push({ filePath, name: path.join('bots', entry.name, fileEntry.name), size: stat.size, mtimeMs: stat.mtimeMs });
+                    }
+                }
+            }
+            files.sort((a, b) => b.mtimeMs - a.mtimeMs);
 
             const cutoff = this.fileRetentionDays > 0 ? now - this.fileRetentionDays * 24 * 60 * 60 * 1000 : 0;
             let total = files.reduce((sum, file) => sum + file.size, 0);
             for (const file of [...files].sort((a, b) => a.mtimeMs - b.mtimeMs)) {
-                if (file.filePath === currentFile) continue;
+                if (currentFiles.has(file.filePath)) continue;
                 const tooOld = cutoff > 0 && file.mtimeMs < cutoff;
                 const tooLarge = total > this.fileMaxTotalBytes;
                 if (!tooOld && !tooLarge) continue;
@@ -339,7 +374,10 @@ class RuntimeLogOutput {
         try {
             fs.mkdirSync(this.fileDirectory, { recursive: true });
             for (const [file, text] of buffers.entries()) {
-                if (text) fs.appendFileSync(file, text, 'utf8');
+                if (text) {
+                    fs.mkdirSync(path.dirname(file), { recursive: true });
+                    fs.appendFileSync(file, text, 'utf8');
+                }
             }
         } catch (error) {
             if (this.fileErrorReported) return;

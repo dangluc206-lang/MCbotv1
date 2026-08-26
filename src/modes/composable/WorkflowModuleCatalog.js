@@ -1,6 +1,8 @@
 'use strict';
 
 const { immutableClone } = require('../../shared/utils/object');
+const WorkflowModulePresentationCatalog = require('./WorkflowModulePresentationCatalog');
+const PRESENTATIONS = new WorkflowModulePresentationCatalog();
 
 const DESCRIPTORS = Object.freeze([
     ['command','Lệnh hệ thống đã đăng ký','commands','command-result',['server-command']],
@@ -22,7 +24,8 @@ const DESCRIPTORS = Object.freeze([
     ['repeat','Lặp N lần',null,'repeat-result',[]]
 ].map(([type,label,capability,outputType,transientResources]) => Object.freeze({
     type,label,description:label,capability,outputType,cancellable:true,
-    transientResources:Object.freeze(transientResources)
+    transientResources:Object.freeze(transientResources),
+    presentation:Object.freeze(PRESENTATIONS.require(type))
 })));
 
 const BY_TYPE = new Map(DESCRIPTORS.map(item => [item.type,item]));

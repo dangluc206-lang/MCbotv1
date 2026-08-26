@@ -1,0 +1,25 @@
+{
+  "contract": "mcbot-error-vocabulary-v1",
+  "generatedForVersion": "2.7.67",
+  "sourceContract": "src/shared/contracts/OperatorErrorContract.js",
+  "codePattern": "^[A-Z][A-Z0-9_]*$",
+  "categories": ["CONNECTION", "COMMAND", "GUI", "INVENTORY", "MOVEMENT", "CRAFTING", "STORAGE", "SERVER", "CONFIG", "TIMEOUT", "VERIFICATION", "PERSISTENCE", "DESKTOP", "MODE", "SECURITY", "UNKNOWN"],
+  "severities": ["info", "warning", "error", "critical"],
+  "retryClasses": ["NONE", "IMMEDIATE", "BACKOFF", "OPERATOR_GUARDED"],
+  "unknownPolicy": {
+    "severity": "error",
+    "retryClass": "NONE",
+    "safeToRetry": false,
+    "allowedActions": ["inspect-diagnostic", "export-support"]
+  },
+  "allowedActions": {
+    "inspect-diagnostic": { "permission": "READ", "generationGuard": false, "idempotencyRequired": false, "confirmation": "NONE" },
+    "export-support": { "permission": "READ", "generationGuard": false, "idempotencyRequired": false, "confirmation": "NONE" },
+    "retry-guarded": { "permission": "PATCH", "generationGuard": true, "idempotencyRequired": true, "confirmation": "NONE" },
+    "retry-storage-protection": { "permission": "PATCH", "generationGuard": true, "idempotencyRequired": true, "confirmation": "NONE" },
+    "reconnect-bot": { "permission": "PATCH", "generationGuard": true, "idempotencyRequired": true, "confirmation": "NONE" },
+    "edit-config": { "permission": "PATCH", "generationGuard": false, "idempotencyRequired": true, "confirmation": "NONE" },
+    "retry-emergency-stop": { "permission": "ADMIN", "generationGuard": true, "idempotencyRequired": true, "confirmation": "DESTRUCTIVE" },
+    "reset-secret-store": { "permission": "ADMIN", "generationGuard": false, "idempotencyRequired": true, "confirmation": "DESTRUCTIVE" }
+  }
+}

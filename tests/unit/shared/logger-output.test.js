@@ -54,6 +54,34 @@ test('RuntimeLogOutput filters console level and writes full JSONL file', () => 
     assert.equal(records[1].meta.token, '[REDACTED]');
 });
 
+test('RuntimeLogOutput keeps the fleet log and writes exact bot-scoped JSONL files', () => {
+    const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'mcbot-log-bots-'));
+    const output = new RuntimeLogOutput({
+        baseDir: temp,
+        env: {},
+        consoleRef: { log() {}, debug() {}, warn() {}, error() {} },
+        app: { logging: { file: { enabled: true, level: 'debug', directory: 'logs', prefix: 'test' }, coalesce: { enabled: false } } }
+    });
+    const timestamp = '2026-08-08T03:00:00.000Z';
+    output.write({ timestamp, level: 'info', scope: 'BotRuntime:bot-01', message: 'bot one', meta: { step: 'one' } });
+    output.write({ timestamp, level: 'info', scope: 'BotRuntime:bot-02', message: 'bot two', meta: { botId: 'bot-02', step: 'two' } });
+    output.write({ timestamp, level: 'info', scope: 'Application', message: 'global', meta: null });
+    output.flush();
+
+    const aggregate = fs.readFileSync(path.join(temp, 'logs', 'test-2026-08-08.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
+    const botOne = fs.readFileSync(path.join(temp, 'logs', 'bots', 'bot-01', 'test-bot-01-2026-08-08.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
+    const botTwo = fs.readFileSync(path.join(temp, 'logs', 'bots', 'bot-02', 'test-bot-02-2026-08-08.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
+    assert.equal(aggregate.length, 3);
+    assert.equal(botOne.length, 1);
+    assert.equal(botOne[0].meta.botId, 'bot-01');
+    assert.equal(botOne[0].message, 'bot one');
+    assert.equal(botTwo.length, 1);
+    assert.equal(botTwo[0].meta.botId, 'bot-02');
+    assert.equal(fs.existsSync(path.join(temp, 'logs', 'bots', 'Application')), false);
+    output.close();
+    fs.rmSync(temp, { recursive: true, force: true });
+});
+
 
 test('RuntimeLogOutput reports per-file retention deletion failures instead of hiding them', async () => {
     const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'mcbot-log-retention-'));

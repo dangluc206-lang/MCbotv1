@@ -111,24 +111,30 @@ function sanitize(value, seen = new WeakSet()) {
     if (typeof value === 'bigint') return String(value);
     if (typeof value === 'function' || typeof value === 'symbol') return String(value);
     if (value instanceof Error) {
-        return sanitize({
-            name: value.name,
-            message: value.message,
-            code: value.code || null,
-            stack: value.stack || null,
-            details: value.details ?? null,
-            cause: value.cause ?? null
-        }, seen);
+        if (seen.has(value)) return '[Circular]';
+        seen.add(value);
+        try {
+            return sanitize({
+                name: value.name,
+                message: value.message,
+                code: value.code || null,
+                stack: value.stack || null,
+                details: value.details ?? null,
+                cause: value.cause ?? null
+            }, seen);
+        } finally { seen.delete(value); }
     }
     if (typeof value !== 'object') return redactText(value);
     if (seen.has(value)) return '[Circular]';
     seen.add(value);
-    const output = Array.isArray(value) ? [] : {};
-    for (const [key, child] of Object.entries(value)) {
-        if (child === undefined) continue;
-        output[key] = SENSITIVE_KEY.test(key) ? REDACTED : sanitize(child, seen);
-    }
-    return output;
+    try {
+        const output = Array.isArray(value) ? [] : {};
+        for (const [key, child] of Object.entries(value)) {
+            if (child === undefined) continue;
+            output[key] = SENSITIVE_KEY.test(key) ? REDACTED : sanitize(child, seen);
+        }
+        return output;
+    } finally { seen.delete(value); }
 }
 
 module.exports = Object.freeze({ sanitize, redactText, SENSITIVE_KEY, REDACTED });

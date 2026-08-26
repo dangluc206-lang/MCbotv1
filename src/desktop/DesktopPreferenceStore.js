@@ -11,6 +11,9 @@ const DEFAULTS = Object.freeze({
     startBackendOnLaunch: true,
     preventSystemSleepWhileActive: true,
     launchAtLogin: false,
+    experienceLevel: 'standard',
+    colorTheme: 'dark',
+    firstRun: Object.freeze({ status: 'NOT_STARTED', step: 1, startedAt: null, completedAt: null, durationMs: null }),
     windowBounds: null,
     windowMaximized: false
 });
@@ -89,8 +92,26 @@ class DesktopPreferenceStore {
             startBackendOnLaunch: input.startBackendOnLaunch !== false,
             preventSystemSleepWhileActive: input.preventSystemSleepWhileActive !== false,
             launchAtLogin: input.launchAtLogin === true,
+            experienceLevel: input.experienceLevel === 'advanced' ? 'advanced' : 'standard',
+            colorTheme: input.colorTheme === 'high-contrast' ? 'high-contrast' : 'dark',
+            firstRun: this.#normalizeFirstRun(input.firstRun),
             windowBounds,
             windowMaximized: input.windowMaximized === true
+        };
+    }
+
+    #normalizeFirstRun(input) {
+        const value = input && typeof input === 'object' ? input : DEFAULTS.firstRun;
+        const status = ['NOT_STARTED', 'IN_PROGRESS', 'SKIPPED', 'COMPLETED'].includes(value.status) ? value.status : 'NOT_STARTED';
+        const step = Math.max(1, Math.min(6, Math.floor(Number(value.step) || 1)));
+        const safeIso = candidate => typeof candidate === 'string' && Number.isFinite(Date.parse(candidate)) ? new Date(candidate).toISOString() : null;
+        const duration = value.durationMs == null ? NaN : Number(value.durationMs);
+        return {
+            status,
+            step,
+            startedAt: safeIso(value.startedAt),
+            completedAt: safeIso(value.completedAt),
+            durationMs: Number.isFinite(duration) && duration >= 0 ? Math.round(duration) : null
         };
     }
 

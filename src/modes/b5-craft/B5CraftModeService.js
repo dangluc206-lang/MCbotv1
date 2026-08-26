@@ -6,9 +6,16 @@ const Status = require('../../shared/result/Status');
 const Result = require('../../shared/result/Result');
 const Operation = require('../../operations/Operation');
 const ReconciliationBarrier = require('../../shared/reconciliation/ReconciliationBarrier');
+const ModeFaultPolicy = require('../ModeFaultPolicy');
+const B5CampaignSession = require('./campaign/B5CampaignSession');
+const B5BatchCoordinator = require('./campaign/B5BatchCoordinator');
+const StorageProtectionEpisode = require('./storage/StorageProtectionEpisode');
+const B5FaultPolicyAdapter = require('./fault/B5FaultPolicyAdapter');
+const B5StatusProjection = require('./status/B5StatusProjection');
 
 const PROTECTION_SAME_BLOCKER_LIMIT = 3;
 const PROTECTION_TOTAL_AUTO_ATTEMPT_LIMIT = 6;
+const PROTECTION_RETRY_CACHE_TTL_MS = 5 * 60 * 1000;
 
 class B5CraftModeService extends ManagedMode {
     constructor({
@@ -22,6 +29,8 @@ class B5CraftModeService extends ManagedMode {
         b1Materials,
         b5Planning,
         b5Automation,
+        failurePublisher = null,
+        failurePolicy = null,
         config = {},
         logger = null
     } = {}) {
@@ -55,6 +64,8 @@ class B5CraftModeService extends ManagedMode {
         this.reconciliationRuns = 0;
         this.unresolvedReconciliations = 0;
         this.nextB5CycleAt = null;
+        this.campaignSession = new B5CampaignSession({ botId });
+        this.batchCoordinator = new B5BatchCoordinator({ botId });
         this.batchSequence = 0;
         this.batchId = null;
         this.batchTrigger = null;
@@ -63,6 +74,8 @@ class B5CraftModeService extends ManagedMode {
         this.protectionInFlight = null;
         this.protectionEpisode = null;
         this.reconciliationBarrier = new ReconciliationBarrier({ maxFreshReads: this.config.reconciliation.maxFreshReads, logger: this.logger });
+        this.faultPolicy = new B5FaultPolicyAdapter(new ModeFaultPolicy({ botId, modeId: 'b5-craft', policy: failurePolicy || undefined, publisher: failurePublisher, logger }));
+        this.protectionRetryRequests = new Map();
     }
 
     publicConfig() {
@@ -78,11 +91,14 @@ class B5CraftModeService extends ManagedMode {
 
     reconfigure(config) {
         this.config = this.#normalizeConfig(config);
+        this.faultPolicy.reset('reconfigure');
         this.#requestProtectionRetry('config-change');
         return this.publicConfig();
     }
 
     async onEnable() {
+        this.faultPolicy.reset('enable');
+        this.campaignSession.open({ generation: this.modeContext.generation(), trigger: 'explicit-enable' });
         this.skyblockReadiness?.requireTarget?.(this.skyTarget, { owner: this.modeId, trigger: 'b5-mode-enabled' });
         this.#armBatchProtection('explicit-enable');
         this.supervisor = this.createTaskSupervisor('loop', { historyLimit: 8 });
@@ -115,6 +131,9 @@ class B5CraftModeService extends ManagedMode {
         this.batchProtectionCompleted = false;
         this.protectionInFlight = null;
         this.protectionEpisode = null;
+        this.protectionRetryRequests.clear();
+        this.campaignSession.close();
+        this.faultPolicy.close(reason || 'disabled');
         this.skyblockReadiness?.releaseTarget?.(this.modeId);
         this.#resetNoProgress();
     }
@@ -129,7 +148,7 @@ class B5CraftModeService extends ManagedMode {
     }
 
     statusDetails() {
-        return {
+        return B5StatusProjection.create({
             policy: {
                 movement: false,
                 smelting: true,
@@ -157,12 +176,15 @@ class B5CraftModeService extends ManagedMode {
             reconciliationRuns: this.reconciliationRuns,
             unresolvedReconciliations: this.unresolvedReconciliations,
             nextB5CycleAt: this.nextB5CycleAt,
+            campaign: this.campaignSession.snapshot(),
             batchId: this.batchId,
             batchTrigger: this.batchTrigger,
             batchProtectionRequired: this.batchProtectionRequired,
             batchProtectionCompleted: this.batchProtectionCompleted,
             protectionInFlight: this.protectionInFlight ? { ...this.protectionInFlight } : null,
             protectionEpisode: this.#publicProtectionEpisode(),
+            fault: this.faultPolicy.snapshot(),
+            recovery: this.#recoverySurface(),
             pendingCraftReconciliation: this.#compactReconciliation(this.pendingCraftReconciliation),
             pendingB5CompletionProvenance: this.pendingB5CompletionProvenance ? { ...this.pendingB5CompletionProvenance } : null,
             reconciliationAction: this.#reconciliationAction(),
@@ -170,7 +192,7 @@ class B5CraftModeService extends ManagedMode {
             b5Automation: this.b5Automation.status?.() || null,
             storage: this.b1Materials.status?.() || null,
             tasks: this.supervisor?.snapshot?.() || null
-        };
+        });
     }
 
     #reconciliationAction() {
@@ -186,11 +208,27 @@ class B5CraftModeService extends ManagedMode {
 
     #startLoop() {
         if (!this.supervisor || this.supervisor.get('main-loop')) return;
-        const handle = this.supervisor.start('main-loop', task => this.#loop(task.cancellationToken), {
+        const restartPolicy = this.faultPolicy.restartPolicy();
+        const handle = this.supervisor.start('main-loop', async task => {
+            const attempt = this.faultPolicy.beforeAttempt();
+            if (!attempt.allowed) {
+                const error = Object.assign(new Error('B5 mode fault circuit is open.'), { code: 'MODE_CIRCUIT_OPEN', retryable: false });
+                throw error;
+            }
+            try {
+                return await this.#loop(task.cancellationToken);
+            } catch (error) {
+                this.faultPolicy.record(error, {
+                    operation: 'B5CraftMode', step: 'main-loop', phase: this.phase,
+                    cancelled: error?.code === 'CANCELLED'
+                });
+                throw error;
+            }
+        }, {
             restart: 'on-failure',
-            maxRestarts: 100000,
-            baseDelayMs: this.config.errorRetryMs,
-            maxDelayMs: Math.max(this.config.errorRetryMs, this.config.errorRetryMaxMs),
+            maxRestarts: restartPolicy.maxRestarts,
+            baseDelayMs: restartPolicy.baseDelayMs,
+            maxDelayMs: restartPolicy.maxDelayMs,
             metadata: { modeId: this.modeId, policy: 'craft-storage-smelting-no-movement' }
         });
         handle.promise.catch(error => {
@@ -360,29 +398,46 @@ class B5CraftModeService extends ManagedMode {
                 if (continuation) {
                     const progress = protectionData.trimmed || protectionData;
                     const delayMs = Math.max(1, Number(progress.nextDelayMs || 300));
+                    const waitingForReserveInput = progress.waitingForReserveInput === true;
+                    const verifiedCoverages = Object.values(progress.finalCoverage || {})
+                        .map(family => Number(family?.coverage))
+                        .filter(Number.isFinite);
                     if (episode) {
                         episode.state = 'WAITING_CONTINUE';
                         episode.blocker = null;
                         episode.nextEligibleAt = Date.now() + delayMs;
                         episode.continuationSlices += 1;
+                        if (progress.baselineDigest) episode.baselineDigest = progress.baselineDigest;
                         episode.lastProgress = {
+                            step: waitingForReserveInput ? 'reserve-input-checkpoint' : 'sell-slice-checkpoint',
+                            sellBaselineDigest: progress.baselineDigest || episode.baselineDigest || null,
                             sliceNumber: progress.sliceNumber ?? null,
                             sliceClicks: progress.sliceClicks ?? null,
                             soldClicks: progress.soldClicks ?? null,
                             clickBudget: progress.clickBudget ?? null,
                             actionsRemaining: progress.actionsRemaining ?? null,
-                            retainedRemainderItems: progress.retainedRemainderItems || null,
+                            remainingSellStacks: progress.actionsRemaining ?? null,
+                            retainedRemainderItems: progress.retainedRemainderItems && typeof progress.retainedRemainderItems === 'object'
+                                ? Object.values(progress.retainedRemainderItems).reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0)
+                                : null,
                             deferredNewInput: progress.deferredNewInput || null,
+                            waitingForReserveInput,
+                            reserveShortages: progress.reserveShortages || [],
+                            verifiedCoverage: verifiedCoverages.length > 0 ? Math.min(...verifiedCoverages) : null,
                             deadlineYielded: progress.deadlineYielded === true
                         };
                     }
-                    this.waitingReason = 'storage-protection-continuing';
+                    this.waitingReason = waitingForReserveInput
+                        ? 'storage-reserve-input'
+                        : 'storage-protection-continuing';
                     this.setPhase('STORAGE_PROTECTION_CONTINUE');
                     this.lastCycleDelayMs = delayMs;
                     const shouldSummarize = episode?.continuationSlices === 1
                         || Number(episode?.continuationSlices || 0) % 10 === 0;
                     const log = shouldSummarize ? this.logger?.info : this.logger?.debug;
-                    log?.call(this.logger, 'B5 PURE: verified 64-only storage sale will continue from the same immutable baseline.', {
+                    log?.call(this.logger, waitingForReserveInput
+                        ? 'B5 PURE: immutable sell baseline is complete; waiting for reserve input without repeating protection.'
+                        : 'B5 PURE: verified 64-only storage sale will continue from the same immutable baseline.', {
                         botId: this.botId,
                         operation: 'B5CraftMode',
                         step: 'storage-protection-continue',
@@ -404,6 +459,15 @@ class B5CraftModeService extends ManagedMode {
                     episode.nextEligibleAt = null;
                     episode.completedGeneration = generation;
                     episode.completedAt = Date.now();
+                    // A business blocker is outside the crash-loop budget. Its
+                    // recovery must close only that incident, never erase
+                    // unrelated transient failures already counted by the mode.
+                    this.faultPolicy.resolveEpisode(episode.episodeId, {
+                        reason: 'storage-protection-complete',
+                        batchId: protectionBatchId,
+                        connectionGeneration: generation,
+                        completedAt: episode.completedAt
+                    });
                 }
                 this.logger?.info?.('B5 PURE: storage protection completed before craft campaign.', {
                     botId: this.botId,
@@ -496,6 +560,47 @@ class B5CraftModeService extends ManagedMode {
                     completedB5Total: this.completedB5,
                     cycle: this.cycles
                 });
+
+                // Raw iron/gold received while crafting belongs to the next
+                // batch. Smelt it immediately after the completed B5 is
+                // verified and stored. Failure is non-destructive: the already
+                // armed next-batch protection boundary will retry smelting
+                // before any later craft.
+                if (typeof this.b1Materials.preprocessForCraft === 'function'
+                    && this.#generationCurrent(generation)) {
+                    this.setPhase('POST_B5_SMELTING');
+                    const postB5Smelting = new Operation({
+                        name: 'B5PostCraftSmelting',
+                        lockKeys: [],
+                        returnsResult: true,
+                        execute: operationContext => this.b1Materials.preprocessForCraft({
+                            cancellationToken: operationContext.cancellation.token,
+                            operationContext,
+                            expectedGeneration: operationContext.connectionGeneration
+                        })
+                    });
+                    const smeltResult = await this.modeContext.run(postB5Smelting, {
+                        timeoutMs: null,
+                        cancellationToken,
+                        connectionGeneration: generation,
+                        correlationId: this.batchId,
+                        metadata: {
+                            subsystem: 'b5-craft',
+                            step: 'post-b5-smelting',
+                            batchId: this.batchId
+                        }
+                    });
+                    if (this.#generationCurrent(generation) && smeltResult?.success === false) {
+                        this.logger?.warn?.('B5 PURE: post-craft iron/gold smelting did not complete; next batch protection will retry it.', {
+                            botId: this.botId,
+                            operation: 'B5CraftMode',
+                            step: 'post-b5-smelting',
+                            batchId: this.batchId,
+                            errorCode: smeltResult?.error?.code || null,
+                            reason: smeltResult?.message || null
+                        });
+                    }
+                }
             }
 
             const blocker = this.#primaryBlocker(data);
@@ -546,42 +651,96 @@ class B5CraftModeService extends ManagedMode {
     }
 
     #armBatchProtection(trigger) {
-        this.batchSequence += 1;
-        this.batchId = `${this.botId || 'bot'}:b5-batch:${this.batchSequence}`;
-        this.batchTrigger = trigger;
+        const batch = this.batchCoordinator.next(trigger);
+        this.batchSequence = batch.sequence;
+        this.batchId = batch.batchId;
+        this.batchTrigger = batch.trigger;
         this.batchProtectionRequired = true;
         this.batchProtectionCompleted = false;
         this.protectionInFlight = null;
-        this.protectionEpisode = {
+        this.protectionEpisode = StorageProtectionEpisode.create({
             batchId: this.batchId,
-            episodeId: `${this.batchId}:storage-protection`,
-            correlationId: `${this.batchId}:storage-protection`,
-            trigger,
-            state: 'PENDING',
-            attemptsStarted: 0,
-            totalAttempts: 0,
-            businessFailureAttempts: 0,
-            staleAborts: 0,
-            sameBlockerAttempts: 0,
-            continuationSlices: 0,
-            lastProgress: null,
-            blocker: null,
-            lastBlockerSignature: null,
-            lastAttemptGeneration: null,
-            lastAttemptAt: null,
-            nextEligibleAt: 0,
-            evidenceKey: this.#protectionEvidenceKey(null),
-            operatorRetryRequested: false,
-            generationRetryPending: false,
-            completedGeneration: null,
-            completedAt: null
-        };
+            trigger: batch.trigger,
+            evidenceKey: this.#protectionEvidenceKey(null)
+        });
     }
 
     #requestProtectionRetry(reason) {
         if (!this.batchProtectionRequired || !this.protectionEpisode) return;
         this.protectionEpisode.operatorRetryRequested = true;
         this.protectionEpisode.operatorRetryReason = reason || 'operator';
+    }
+
+    requestStorageProtectionRetry({
+        expectedBotId,
+        expectedGeneration,
+        episodeId,
+        incidentId,
+        idempotencyKey,
+        reason = 'operator'
+    } = {}) {
+        const key = String(idempotencyKey || '').trim();
+        if (!/^[a-z0-9][a-z0-9:._-]{0,127}$/i.test(key)) return this.#retryRejected(Status.INVALID_INPUT, 'B5_RETRY_IDEMPOTENCY_KEY_INVALID', 'Khóa idempotency không hợp lệ.');
+        const fingerprint = JSON.stringify({
+            expectedBotId: String(expectedBotId || ''),
+            expectedGeneration: Number(expectedGeneration),
+            episodeId: String(episodeId || ''),
+            incidentId: String(incidentId || '')
+        });
+        this.#trimRetryCache();
+        const cached = this.protectionRetryRequests.get(key);
+        if (cached) {
+            if (cached.fingerprint !== fingerprint) return this.#retryRejected(Status.INVALID_INPUT, 'B5_RETRY_IDEMPOTENCY_CONFLICT', 'Khóa idempotency đã được dùng cho một yêu cầu khác.');
+            return cached.result;
+        }
+        const episode = this.protectionEpisode;
+        if (String(expectedBotId || '') !== this.botId) return this.#cacheRetry(key, fingerprint, this.#retryRejected(Status.INVALID_INPUT, 'B5_RETRY_WRONG_BOT', 'Yêu cầu thử lại không thuộc bot hiện tại.'));
+        if (!this.enabled || this.paused || this.phase !== 'WAITING_BLOCKED' || !this.batchProtectionRequired || !episode || episode.state !== 'WAITING_BLOCKED') {
+            return this.#cacheRetry(key, fingerprint, this.#retryRejected(Status.NOT_READY, 'B5_RETRY_UNSAFE_PHASE', 'Bảo vệ kho hiện không ở trạng thái chờ bị chặn.'));
+        }
+        if (Number(expectedGeneration) !== Number(this.modeContext.generation())) return this.#cacheRetry(key, fingerprint, this.#retryRejected(Status.DISCONNECTED, 'B5_RETRY_STALE_GENERATION', 'Kết nối đã thay đổi; hãy tải trạng thái mới.'));
+        if (String(episodeId || '') !== episode.episodeId || String(incidentId || '') !== episode.correlationId) {
+            return this.#cacheRetry(key, fingerprint, this.#retryRejected(Status.INVALID_INPUT, 'B5_RETRY_STALE_EPISODE', 'Episode bảo vệ kho đã thay đổi; hãy tải trạng thái mới.'));
+        }
+        if (episode.operatorRetryRequested) return this.#cacheRetry(key, fingerprint, this.#retryRejected(Status.BUSY, 'B5_RETRY_ALREADY_REQUESTED', 'Một yêu cầu thử lại đang chờ xử lý.'));
+        this.#requestProtectionRetry(reason);
+        return this.#cacheRetry(key, fingerprint, Result.ok({
+            accepted: true,
+            botId: this.botId,
+            connectionGeneration: this.modeContext.generation(),
+            episodeId: episode.episodeId,
+            incidentId: episode.correlationId
+        }, { idempotencyKey: key }));
+    }
+
+    #retryRejected(status, code, message) {
+        const error = Object.assign(new Error(message), { code, retryable: false });
+        return Result.fail(status, message, error);
+    }
+
+    #cacheRetry(key, fingerprint, result) {
+        this.protectionRetryRequests.set(key, { fingerprint, result, expiresAt: Date.now() + PROTECTION_RETRY_CACHE_TTL_MS });
+        this.#trimRetryCache();
+        return result;
+    }
+
+    #trimRetryCache() {
+        const now = Date.now();
+        for (const [key, entry] of this.protectionRetryRequests) {
+            if (!entry || entry.expiresAt <= now) this.protectionRetryRequests.delete(key);
+        }
+        while (this.protectionRetryRequests.size > 64) this.protectionRetryRequests.delete(this.protectionRetryRequests.keys().next().value);
+    }
+
+    #recoverySurface() {
+        const episode = this.protectionEpisode;
+        const allowed = Boolean(this.enabled && !this.paused && this.phase === 'WAITING_BLOCKED'
+            && this.batchProtectionRequired && episode?.state === 'WAITING_BLOCKED' && !episode.operatorRetryRequested);
+        return {
+            summary: allowed ? 'Bảo vệ kho đã dừng an toàn và cần người vận hành quyết định.' : null,
+            safeState: this.batchProtectionCompleted ? 'PROTECTED' : this.batchProtectionRequired ? 'CRAFT_NOT_STARTED' : 'UNKNOWN',
+            allowedActions: allowed ? ['retry-storage-protection', 'inspect-diagnostic', 'export-support'] : ['inspect-diagnostic', 'export-support']
+        };
     }
 
     #protectionRetryEligibility(generation) {
@@ -633,10 +792,18 @@ class B5CraftModeService extends ManagedMode {
             return { eligible: true, waitingReason: null, delayMs: baseDelay, trigger: 'evidence-changed' };
         }
         if (episode.sameBlockerAttempts < PROTECTION_SAME_BLOCKER_LIMIT
-            && episode.businessFailureAttempts < PROTECTION_TOTAL_AUTO_ATTEMPT_LIMIT
-            && now >= Number(episode.nextEligibleAt || 0)) {
-            episode.state = 'PENDING';
-            return { eligible: true, waitingReason: null, delayMs: baseDelay, trigger: 'bounded-backoff-retry' };
+            && episode.businessFailureAttempts < PROTECTION_TOTAL_AUTO_ATTEMPT_LIMIT) {
+            if (now >= Number(episode.nextEligibleAt || 0)) {
+                episode.state = 'PENDING';
+                return { eligible: true, waitingReason: null, delayMs: baseDelay, trigger: 'bounded-backoff-retry' };
+            }
+            episode.state = 'WAITING_RETRY';
+            return {
+                eligible: false,
+                waitingReason: 'storage-protection-backoff',
+                delayMs: Math.max(1, Number(episode.nextEligibleAt || now) - now),
+                trigger: 'bounded-backoff-wait'
+            };
         }
 
         episode.state = 'WAITING_BLOCKED';
@@ -652,6 +819,29 @@ class B5CraftModeService extends ManagedMode {
         const episode = this.protectionEpisode;
         if (!episode) return;
         const blocker = this.#protectionBlocker(result);
+        const diagnostic = result?.error?.details || result?.meta?.details || {};
+        const retainedRemainders = diagnostic?.retainedRemainderItems;
+        const retainedRemainderItems = retainedRemainders && typeof retainedRemainders === 'object'
+            ? Object.values(retainedRemainders).reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0)
+            : null;
+        const remainingSellStacks = Number.isFinite(Number(diagnostic?.actionsRemaining))
+            ? Math.max(0, Number(diagnostic.actionsRemaining))
+            : null;
+        if (diagnostic?.baselineDigest) episode.baselineDigest = diagnostic.baselineDigest;
+        episode.lastProgress = {
+            step: blocker.step || 'storage-protection-boundary',
+            sellBaselineDigest: diagnostic?.baselineDigest || episode.baselineDigest || null,
+            sliceNumber: diagnostic?.sliceNumber ?? null,
+            sliceClicks: diagnostic?.sliceClicks ?? null,
+            soldClicks: diagnostic?.soldClicks ?? null,
+            clickBudget: diagnostic?.clickBudget ?? null,
+            actionsRemaining: remainingSellStacks,
+            remainingSellStacks,
+            retainedRemainderItems,
+            deferredNewInput: diagnostic?.deferredNewInput || null,
+            reserveViolations: diagnostic?.reserveViolations || null,
+            secondaryCauses: diagnostic?.secondaryCauses || null
+        };
         const same = blocker.signature === episode.lastBlockerSignature;
         episode.businessFailureAttempts += 1;
         episode.sameBlockerAttempts = same ? episode.sameBlockerAttempts + 1 : 1;
@@ -677,6 +867,20 @@ class B5CraftModeService extends ManagedMode {
             || episode.businessFailureAttempts >= PROTECTION_TOTAL_AUTO_ATTEMPT_LIMIT;
         episode.state = exhausted ? 'WAITING_BLOCKED' : 'WAITING_RETRY';
 
+        if (exhausted) {
+            const error = Object.assign(new Error(blocker.reason), { code: blocker.code, retryable: false });
+            this.faultPolicy.recordBlocker(error, {
+                episodeId: episode.episodeId,
+                correlationId: episode.correlationId,
+                operation: 'B5CraftMode',
+                step: blocker.step || 'storage-protection-boundary',
+                phase: 'WAITING_BLOCKED',
+                resource: blocker.resource,
+                operatorSummary: 'Bảo vệ kho đã dừng an toàn sau số lần thử giới hạn.',
+                details: { batchId: this.batchId, blocker: episode.blocker }
+            });
+        }
+
         const log = !same || exhausted ? this.logger?.warn : this.logger?.debug;
         log?.call(this.logger, 'B5 PURE: storage protection is blocked; retry is bounded across loop cycles.', {
             botId: this.botId, operation: 'B5CraftMode', step: 'storage-protection-blocked',
@@ -690,7 +894,9 @@ class B5CraftModeService extends ManagedMode {
         const nested = details?.blocker && typeof details.blocker === 'object' ? details.blocker : {};
         const code = result?.error?.code || result?.meta?.code || result?.status || 'STORAGE_PROTECTION_FAILED';
         const reason = nested.reason || details.reason || result?.message || code;
-        const resource = nested.material || nested.sellId || details.resource || details.recipeId || details.baseId || null;
+        const resource = nested.material || nested.sellId || result?.error?.resource
+            || details.resource || details.recipeId || details.baseId
+            || details.reserveViolations?.[0]?.baseId || null;
         const rawStep = result?.error?.step || details.step || null;
         const step = code === 'TIMEOUT' && !rawStep ? 'storage-protection-boundary' : rawStep;
         const retryable = result?.error?.retryable !== false
@@ -727,6 +933,7 @@ class B5CraftModeService extends ManagedMode {
             staleAborts: episode.staleAborts,
             sameBlockerAttempts: episode.sameBlockerAttempts,
             continuationSlices: episode.continuationSlices,
+            baselineDigest: episode.baselineDigest || null,
             lastProgress: episode.lastProgress ? { ...episode.lastProgress } : null,
             blocker: episode.blocker ? { ...episode.blocker } : null,
             lastAttemptGeneration: episode.lastAttemptGeneration,

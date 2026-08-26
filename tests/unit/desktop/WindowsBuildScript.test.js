@@ -14,7 +14,7 @@ test('Windows build helper validates Electron/direct installer manifest and form
     assert.equal(result.required['electron-winstaller'], '5.4.4');
     assert.deepEqual(build.parseArgs(['--skip-gates', '--verbose', '--clean-install']), { skipGates: true, keepOut: false, verbose: true, cleanInstall: true, diagnoseDeps: false });
     assert.deepEqual(build.parseArgs(['--diagnose-deps']), { skipGates: false, keepOut: false, verbose: false, cleanInstall: false, diagnoseDeps: true });
-    assert.equal(build.BUILDER_REVISION, '2.6.17-round2-audit-hardening');
+    assert.equal(build.BUILDER_REVISION, '2.7.0-roadmap-closure');
     assert.equal(build.formatDuration(65_000), '1m 5s');
 });
 
@@ -30,14 +30,16 @@ test('Windows build helper detects packaged MCbot executable and canonical insta
 
 test('Windows build packaging guard is valid for both source-only and installed trees', () => {
     const stats = build.packagingInputStats(root);
+    const contract = build.loadPackagingFootprintContract(root);
+    const verdict = build.evaluatePackagingFootprint(stats, contract);
     // Direct-extract/source archives intentionally omit node_modules, while an
     // installed build tree contains thousands of production dependency files.
     // The guard must be meaningful in both environments: require the real app
     // payload to be present, and enforce the upper packaging safety bound.
-    assert.ok(stats.files > 250, `packaging input unexpectedly small: ${stats.files} files`);
-    assert.ok(stats.megabytes > 1, `packaging input unexpectedly small: ${stats.megabytes} MB`);
-    assert.ok(stats.megabytes < 300, `packaging input unexpectedly large: ${stats.megabytes} MB`);
-    assert.ok(stats.ignoredDirectories >= 4);
+    assert.equal(verdict.valid, true, `${verdict.failures.join(', ')}: ${stats.megabytes} MB`);
+    assert.equal(contract.policy.environmentMayLowerMaximumOnly, true);
+    assert.ok(verdict.maximumMegabytes >= contract.baseline.measuredMegabytes);
+    assert.equal(build.evaluatePackagingFootprint(stats, contract, { requestedMaximum: 1 }).valid, false);
 });
 
 test('Windows build dependency report explains a missing Electron runtime instead of returning an opaque false', () => {

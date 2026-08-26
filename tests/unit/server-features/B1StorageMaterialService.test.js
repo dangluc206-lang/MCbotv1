@@ -290,7 +290,7 @@ test('protectForB5Batch runs fresh read -> iron/gold smelt -> compact -> reserve
         async sell(id, { quantity }) {
             events.push(`sell:${id}:${quantity}`);
             state[id] = Math.max(0, Number(state[id] || 0) - Number(quantity));
-            return { success: true, data: { skipped: false, sold: quantity } };
+            return { success: true, data: { skipped: false, sold: quantity, transitioned: true, semanticAcknowledged: true } };
         }
     };
     const smelting = {
@@ -359,7 +359,7 @@ test('protectForB5Batch enforces hard 1.5 B5 reserve and does not need pass/burs
             async read() { return { success: true, data: snap(state) }; },
             async sell(id, { quantity }) {
                 state[id] -= Number(quantity);
-                return { success: true, data: { skipped: false } };
+                return { success: true, data: { skipped: false, transitioned: true, semanticAcknowledged: true } };
             }
         },
         minerals: { async toBlocks() { return { success: true, data: { skipped: true } }; } },
@@ -466,7 +466,7 @@ test('bounded sell episode never expands click budget when independently proven 
     assert.equal(result.success, true);
     assert.equal(result.data.trimmed.clickBudget, 2, 'budget comes only from the 131-block baseline and 1.5 B5 reserve');
     assert.equal(sells, 2, 'new inflow must not add 64-clicks to the current episode');
-    assert.ok(result.data.trimmed.deferredNewInput.coal_block > 0);
+    assert.deepEqual(result.data.trimmed.deferredNewInput, {});
     assert.equal(result.data.trimmed.completeForEpisode, true);
 });
 
@@ -533,7 +533,7 @@ test('large 64-only budget resumes the same episode without repeating compact or
     assert.equal(quantities.length, 65);
     assert.ok(quantities.every(quantity => quantity === 64));
     assert.equal(state.coal_block, 67, '3-block reserve plus 64 new-inflow blocks must remain');
-    assert.equal(second.data.trimmed.deferredNewInput.coal_block, 64);
+    assert.deepEqual(second.data.trimmed.deferredNewInput, {});
     assert.equal(second.data.trimmed.sellEvidenceCount, 65);
     assert.equal(second.data.trimmed.sellEvidence.length, 32, 'large episodes keep bounded diagnostic evidence');
 });
@@ -622,7 +622,7 @@ test('sell slice yields before the operation deadline and resumes without timeou
 });
 
 test('800000-item worst-case storage budget is capped to one 64-click slice', async () => {
-    const state = hardReserveState({ cobblestone: 800000 });
+    const state = hardReserveState({ coal_block: 800000 });
     const quantities = [];
     const service = makeService({
         storage: {
@@ -648,7 +648,7 @@ test('800000-item worst-case storage budget is capped to one 64-click slice', as
     assert.equal(result.data.clickBudget, 12499);
     assert.equal(result.data.sliceClicks, 64);
     assert.equal(result.data.actionsRemaining, 12435);
-    assert.equal(result.data.retainedRemainderItems.cobblestone, 40);
+    assert.equal(result.data.retainedRemainderItems.coal_block, 61);
     assert.equal(quantities.length, 64);
     assert.ok(quantities.every(quantity => quantity === 64));
     service.discardProtectionEpisode('worst-capacity:episode');
@@ -675,7 +675,64 @@ test('episode-level unavailable sell candidate returns one finite blocker instea
     assert.equal(result.meta?.details?.completeForEpisode ?? result.error.details?.completeForEpisode, false);
 });
 
-test('transition-only sell with unchanged authoritative /kho never completes the episode', async () => {
+test('an unavailable material does not block later materials and retry never replays acknowledged sales', async () => {
+    const state = hardReserveState({ lapis_block: 80, iron_block: 80 });
+    const calls = [];
+    let lapisAttempts = 0;
+    const service = makeService({
+        conversion: conversionConfig({
+            resources: {
+                lapis_lazuli: { baseId: 'lapis_lazuli', blockId: 'lapis_block', ratio: 9, sellId: 'lapis_block' },
+                iron_ingot: { baseId: 'iron_ingot', blockId: 'iron_block', ratio: 9, sellId: 'iron_block' }
+            }
+        }),
+        recipes: {
+            super_alloy: {
+                outputAmount: 1,
+                inputs: { lapis_lazuli: 64, iron_ingot: 64 }
+            }
+        },
+        storage: {
+            config: { sell: { enabled: true, reserveCoverage: 1.5, allowSingle: false, allowAll: false, blockOnly: true } },
+            async closeSellGui() { return { success: true }; },
+            async read() { return okSnapshot(state); },
+            async sell(id, { quantity }) {
+                calls.push(id);
+                assert.equal(quantity, 64);
+                if (id === 'lapis_block' && lapisAttempts++ === 0) {
+                    return {
+                        success: true,
+                        data: {
+                            skipped: true,
+                            reason: 'material-not-visible-in-sell-gui',
+                            targetRefreshAttempted: true,
+                            availableLogicalIds: ['iron_block']
+                        }
+                    };
+                }
+                state[id] -= quantity;
+                return { success: true, data: { transitioned: true, semanticAcknowledged: true } };
+            }
+        }
+    });
+    const episodeId = 'cross-material:episode';
+    const first = await service.startupTrimToReserve({ initialSnapshot: snap(state), batchId: 'cross-material', episodeId });
+    assert.equal(first.success, false);
+    assert.equal(first.error.code, 'B1_B5_PROTECTION_SELL_BLOCKED');
+    assert.equal(first.error.resource, 'lapis_block');
+    assert.deepEqual(calls, ['lapis_block', 'iron_block']);
+    assert.equal(first.error.details.soldAmount.iron_block, 64);
+    assert.equal(first.error.details.soldAmount.lapis_block, undefined);
+
+    const resumed = await service.startupTrimToReserve({ batchId: 'cross-material', episodeId });
+    assert.equal(resumed.success, true);
+    assert.equal(resumed.data.completeForEpisode, true);
+    assert.deepEqual(calls, ['lapis_block', 'iron_block', 'lapis_block']);
+    assert.equal(resumed.data.soldAmount.iron_block, 64);
+    assert.equal(resumed.data.soldAmount.lapis_block, 64);
+});
+
+test('transition-only sell follows the immutable 64 contract and treats concurrent inflow as next-batch input', async () => {
     const state = hardReserveState({ coal_block: 70 });
     let sellCalls = 0;
     let readCalls = 0;
@@ -686,22 +743,40 @@ test('transition-only sell with unchanged authoritative /kho never completes the
             async read() { readCalls += 1; return okSnapshot(state); },
             async sell() {
                 sellCalls += 1;
-                return { success: true, data: { skipped: false, transitioned: true, amountReliable: false, verification: { verified: false, requiresFreshStorage: true } } };
+                return { success: true, data: { skipped: false, transitioned: true, semanticAcknowledged: true, amountReliable: false, verification: { verified: false, requiresFreshStorage: true } } };
             }
         }
     });
 
     const result = await service.startupTrimToReserve({ initialSnapshot: snap(state), batchId: 'sale-noop', episodeId: 'sale-noop:episode' });
-    assert.equal(result.success, false);
-    assert.equal(result.error.code, 'B1_B5_PROTECTION_SELL_UNVERIFIED');
-    assert.equal(result.status, 'VERIFICATION_FAILED');
-    assert.equal(result.error.details.completeForEpisode, false);
-    assert.equal(result.error.details.sellEvidence[0].reason, 'sale-noop-unverified');
+    assert.equal(result.success, true);
+    assert.equal(result.data.completeForEpisode, true);
+    assert.equal(result.data.soldAmount.coal_block, 64);
+    assert.deepEqual(result.data.deferredNewInput, {});
+    assert.equal(result.data.sellEvidence[0].source, 'sell-gui-contract-ack');
     assert.equal(sellCalls, 1);
-    assert.ok(readCalls >= 2, 'full /kho must verify the no-op and final state');
+    assert.equal(readCalls, 0, 'an acknowledged baseline sale must not trigger a final /kho read');
 });
 
-test('partial sale records only authoritative sold delta and never treats requested 64 as verified', async () => {
+test('a raw transition without semantic Sell acknowledgement never advances the immutable cursor', async () => {
+    const state = hardReserveState({ coal_block: 70 });
+    const service = makeService({
+        storage: {
+            config: { sell: { enabled: true, reserveCoverage: 1.5, allowSingle: false, allowAll: false, blockOnly: true } },
+            async closeSellGui() { return { success: true }; },
+            async read() { return okSnapshot(state); },
+            async sell() { return { success: true, data: { skipped: false, transitioned: true, amountReliable: false } }; }
+        }
+    });
+    const result = await service.startupTrimToReserve({ initialSnapshot: snap(state), batchId: 'raw-transition' });
+    assert.equal(result.success, false);
+    assert.equal(result.error.code, 'B1_B5_PROTECTION_SELL_UNVERIFIED');
+    assert.equal(result.error.details.nextActionIndex, 0);
+    assert.equal(result.error.details.soldAmount.coal_block, undefined);
+    assert.equal(result.error.details.sellEvidence[0].reason, 'sell-action-unacknowledged');
+});
+
+test('observed amount cannot interrupt an acknowledged immutable 64 action', async () => {
     const state = hardReserveState({ coal_block: 70 });
     let sellCalls = 0;
     const service = makeService({
@@ -719,40 +794,120 @@ test('partial sale records only authoritative sold delta and never treats reques
     });
 
     const result = await service.startupTrimToReserve({ initialSnapshot: snap(state), batchId: 'partial', episodeId: 'partial:episode' });
-    assert.equal(result.success, false);
-    assert.equal(result.error.code, 'B1_B5_PROTECTION_SELL_UNVERIFIED');
-    assert.equal(result.status, 'VERIFICATION_FAILED');
+    assert.equal(result.success, true);
     assert.equal(sellCalls, 1);
-    assert.equal(result.error.details.soldAmount.coal_block, 32);
-    assert.equal(result.error.details.remainingInitialBudget.coal_block, 32);
-    assert.equal(result.error.details.sellEvidence[0].requestedQuantity, 64);
-    assert.equal(result.error.details.sellEvidence[0].verifiedSoldQuantity, 32);
-    assert.equal(result.error.details.sellEvidence[0].reason, 'partial-sale');
+    assert.equal(result.data.soldAmount.coal_block, 64);
+    assert.equal(result.data.remainingInitialBudget.coal_block, 0);
+    assert.deepEqual(result.data.deferredNewInput, {});
+    assert.equal(result.data.sellEvidence[0].requestedQuantity, 64);
+    assert.equal(result.data.sellEvidence[0].verifiedSoldQuantity, 64);
+    assert.equal(result.data.sellEvidence[0].observedGuiQuantity, 32);
+    assert.equal(result.data.sellEvidence[0].reason, null);
 });
 
-test('final authoritative coverage below 1.5 B5 fails even when local 64-only baseline budget reached zero', async () => {
-    const state = hardReserveState({ cobblestone: 88 });
+test('same-material inflow during every sell click never expands or interrupts the immutable baseline', async () => {
+    const state = hardReserveState({ coal_block: 131 });
+    let reads = 0;
+    let sells = 0;
+    const service = makeService({
+        storage: {
+            config: { sell: { enabled: true, reserveCoverage: 1.5, allowSingle: false, allowAll: false, blockOnly: true } },
+            async closeSellGui() { return { success: true }; },
+            async read() { reads += 1; return okSnapshot(state); },
+            async sell(id, { quantity }) {
+                sells += 1;
+                assert.equal(quantity, 64);
+                state[id] -= quantity;
+                state[id] += 40;
+                return { success: true, data: { skipped: false, transitioned: true, semanticAcknowledged: true, amountReliable: false } };
+            }
+        }
+    });
+    const result = await service.startupTrimToReserve({
+        initialSnapshot: snap(state), batchId: 'continuous-inflow', episodeId: 'continuous-inflow:episode'
+    });
+    assert.equal(result.success, true);
+    assert.equal(result.data.clickBudget, 2);
+    assert.equal(result.data.soldClicks, 2);
+    assert.equal(result.data.acknowledgedActions, 2);
+    assert.deepEqual(result.data.deferredNewInput, {});
+    assert.equal(sells, 2);
+    assert.equal(reads, 0, 'continuous inflow is left for the next batch without a post-sell /kho read');
+});
+
+test('pre-existing reserve shortage does not block craft after other immutable baseline sales finish', async () => {
+    const state = hardReserveState({ iron_block: 10, coal_block: 131 });
+    let sells = 0;
+    const service = makeService({
+        storage: {
+            config: { sell: { enabled: true, reserveCoverage: 1.5, allowSingle: false, allowAll: false, blockOnly: true } },
+            async closeSellGui() { return { success: true }; },
+            async read() { return okSnapshot(state); },
+            async sell(id, { quantity }) {
+                sells += 1;
+                assert.equal(id, 'coal_block');
+                assert.equal(quantity, 64);
+                state[id] -= quantity;
+                return { success: true, data: { transitioned: true, semanticAcknowledged: true } };
+            }
+        }
+    });
+    const episodeId = 'reserve-preflight:episode';
+    const first = await service.startupTrimToReserve({ initialSnapshot: snap(state), batchId: 'reserve-preflight', episodeId });
+    assert.equal(first.success, true);
+    assert.equal(first.data.completeForEpisode, true);
+    assert.equal(first.data.continuationRequired, false);
+    assert.equal(first.data.waitingForReserveInput, undefined);
+    assert.equal(first.data.actionsRemaining, 0);
+    assert.deepEqual(first.data.reserveShortages, []);
+    assert.equal(first.data.nextDelayMs, undefined);
+    assert.equal(sells, 2);
+});
+
+test('post-sell storage amount cannot block craft after the immutable baseline is acknowledged', async () => {
+    const state = hardReserveState({ coal_block: 70 });
     const service = makeService({
         storage: {
             config: { sell: { enabled: true, reserveCoverage: 1.5, allowSingle: true, allowAll: false, blockOnly: true } },
             async closeSellGui() { return { success: true }; },
             async read() { return okSnapshot(state); },
             async sell(id, { quantity }) {
-                assert.equal(id, 'cobblestone');
+                assert.equal(id, 'coal_block');
                 assert.equal(quantity, 64);
                 // Server-side behavior depleted slightly more than the verified sale.
-                state.cobblestone = 23.84; // 23.84 / 16 = 1.49 B5
+                state.coal_block = 2.64; // 2.64 * 9 / 16 = 1.485 B5
                 return { success: true, data: { skipped: false, verifiedSoldQuantity: 64 } };
             }
         }
     });
 
     const result = await service.startupTrimToReserve({ initialSnapshot: snap(state), batchId: 'reserve-underrun', episodeId: 'reserve-underrun:episode' });
-    assert.equal(result.success, false);
-    assert.equal(result.status, 'VERIFICATION_FAILED');
-    assert.equal(result.error.code, 'B1_B5_PROTECTION_RESERVE_UNDERRUN');
-    assert.equal(result.error.details.remainingInitialBudget.cobblestone, 0);
-    assert.ok(result.error.details.reserveViolations.some(item => item.baseId === 'cobblestone' && item.coverage < 1.5));
+    assert.equal(result.success, true);
+    assert.equal(result.data.completeForEpisode, true);
+    assert.equal(result.data.remainingInitialBudget.coal_block, 0);
+    assert.deepEqual(result.data.reserveViolations, []);
+});
+
+test('external depletion after an acknowledged baseline click is left to the next B5 batch', async () => {
+    const state = hardReserveState({ coal_block: 70 });
+    let sells = 0;
+    const service = makeService({
+        storage: {
+            config: { sell: { enabled: true, reserveCoverage: 1.5, allowSingle: false, allowAll: false, blockOnly: true } },
+            async closeSellGui() { return { success: true }; },
+            async read() { return okSnapshot(state); },
+            async sell(id, { quantity }) {
+                sells += 1;
+                state[id] -= quantity + 1;
+                return { success: true, data: { transitioned: true, semanticAcknowledged: true } };
+            }
+        }
+    });
+    const result = await service.startupTrimToReserve({ initialSnapshot: snap(state), batchId: 'external-depletion' });
+    assert.equal(result.success, true);
+    assert.equal(result.data.completeForEpisode, true);
+    assert.deepEqual(result.data.finalVerificationIssues, []);
+    assert.equal(sells, 1);
 });
 
 test('sell disabled with a complete 64-block baseline surplus blocks mandatory B5 protection instead of skipping success', async () => {
@@ -773,7 +928,7 @@ test('sell disabled with a complete 64-block baseline surplus blocks mandatory B
     assert.equal(sells, 0);
 });
 
-test('sell disabled with no safe baseline surplus completes only after authoritative final /kho verification', async () => {
+test('sell disabled with no safe baseline surplus completes without a final /kho verification', async () => {
     const state = hardReserveState();
     let reads = 0;
     let sells = 0;
@@ -789,7 +944,7 @@ test('sell disabled with no safe baseline surplus completes only after authorita
     assert.equal(result.success, true);
     assert.equal(result.data.completeForEpisode, true);
     assert.equal(sells, 0);
-    assert.equal(reads, 1, 'final full /kho verification is mandatory even with zero sell actions');
+    assert.equal(reads, 0, 'no post-sell /kho verification is performed');
     for (const family of Object.values(result.data.finalCoverage)) assert.ok(family.coverage >= 1.5);
 });
 
@@ -836,7 +991,7 @@ test('B5 smelting runtime canonicalizes reversed/extended config to iron then go
     assert.deepEqual(smelts, ['raw_iron_to_iron', 'raw_gold_to_gold']);
 });
 
-test('real KhoSellOperation transition-only result with null verified quantity forces fresh /kho reconciliation in trimmer', async () => {
+test('real KhoSellOperation transition-only result advances from semantic acknowledgement and checkpoints once', async () => {
     const state = hardReserveState({ coal_block: 70 });
     let current = null;
     let fullKhoReads = 0;
@@ -902,12 +1057,12 @@ test('real KhoSellOperation transition-only result with null verified quantity f
         initialSnapshot: snap(state), batchId: 'real-sell-result', episodeId: 'real-sell-result:episode'
     });
     assert.equal(result.success, true);
-    assert.ok(fullKhoReads >= 2, 'transition-only real result must use fresh /kho checkpoints plus final verification');
-    assert.ok(result.data.sellEvidence.every(entry => entry.source === 'fresh-kho'));
+    assert.equal(fullKhoReads, 0, 'transition-only result must not force a final /kho read');
+    assert.ok(result.data.sellEvidence.every(entry => entry.source === 'sell-gui-contract-ack'));
     assert.ok(result.data.sellEvidence.every(entry => entry.exactRequested === true));
 });
 
-test('non-number compatibility sale quantities are never accepted as verified numeric evidence', async () => {
+test('non-number compatibility amounts remain diagnostics and never interrupt a transitioned 64 action', async () => {
     for (const value of [null, undefined, '', '64', false]) {
         const state = hardReserveState({ coal_block: 70 });
         let reads = 0;
@@ -922,6 +1077,7 @@ test('non-number compatibility sale quantities are never accepted as verified nu
                         data: {
                             skipped: false,
                             transitioned: true,
+                            semanticAcknowledged: true,
                             verifiedSoldQuantity: value,
                             verification: { verified: false, verifiedSoldQuantity: value, requiresFreshStorage: true }
                         }
@@ -930,9 +1086,10 @@ test('non-number compatibility sale quantities are never accepted as verified nu
             }
         });
         const result = await service.startupTrimToReserve({ initialSnapshot: snap(state), batchId: `strict-${String(value)}` });
-        assert.equal(result.success, false);
-        assert.equal(result.error.code, 'B1_B5_PROTECTION_SELL_UNVERIFIED');
-        assert.ok(reads >= 2, `fresh /kho is required for non-number evidence ${String(value)}`);
+        assert.equal(result.success, true);
+        assert.equal(result.data.soldAmount.coal_block, 64);
+        assert.equal(result.data.sellEvidence[0].source, 'sell-gui-contract-ack');
+        assert.equal(reads, 0, `no final /kho checkpoint is allowed for non-number evidence ${String(value)}`);
     }
 });
 

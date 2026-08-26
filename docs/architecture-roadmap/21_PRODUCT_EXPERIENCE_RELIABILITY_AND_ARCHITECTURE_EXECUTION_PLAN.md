@@ -631,6 +631,7 @@ Không work package nào được bắt đầu ở size `XL`. Phải tách thàn
 | Thuộc tính | Giá trị |
 | --- | --- |
 | Priority | P0-program |
+| Status | `DONE` |
 | Size | S |
 | Owner role | Product owner + maintainer |
 | Depends on | Không |
@@ -658,6 +659,7 @@ Không work package nào được bắt đầu ở size `XL`. Phải tách thàn
 | Thuộc tính | Giá trị |
 | --- | --- |
 | Priority | P0-enabler |
+| Status | `DONE` |
 | Size | M |
 | Owner role | QA + Desktop maintainer |
 | Depends on | XP-000 |
@@ -680,11 +682,14 @@ Không work package nào được bắt đầu ở size `XL`. Phải tách thàn
 - Có artifact khi fail: screenshot, console, main log, fixture version.
 - Test chứng minh snapshot stale banner và backend failure banner render được.
 
+Evidence thực thi: `tests/e2e/desktop/desktop-critical-flow.test.js`; Electron E2E thực tế đã PASS 1/1 trên Windows operator workspace.
+
 ### XP-002 — Canonical error, incident và action vocabulary
 
 | Thuộc tính | Giá trị |
 | --- | --- |
 | Priority | P0-enabler |
+| Status | `DONE` |
 | Size | M |
 | Owner role | Runtime maintainer + product |
 | Depends on | XP-000 |
@@ -707,11 +712,14 @@ Không work package nào được bắt đầu ở size `XL`. Phải tách thàn
 - Unknown error vẫn fail-safe và có correlation ID.
 - Không action nào chứa raw slash command/callback tùy ý.
 
+Evidence: `docs/architecture-roadmap/evidence/XP-002_ERROR_INCIDENT_VOCABULARY.md` và `architecture/error-vocabulary/current.json`.
+
 ### XP-003 — SLO và privacy measurement contract
 
 | Thuộc tính | Giá trị |
 | --- | --- |
 | Priority | P1-program |
+| Status | `DONE` |
 | Size | S |
 | Owner role | Product + observability maintainer |
 | Depends on | XP-000, XP-002 |
@@ -739,6 +747,7 @@ Không work package nào được bắt đầu ở size `XL`. Phải tách thàn
 | Thuộc tính | Giá trị |
 | --- | --- |
 | Priority | P0 |
+| Status | `DONE` |
 | Size | M |
 | Owner role | Diagnostics maintainer |
 | Depends on | XP-001, XP-002 |
@@ -776,6 +785,7 @@ Không work package nào được bắt đầu ở size `XL`. Phải tách thàn
 | Thuộc tính | Giá trị |
 | --- | --- |
 | Priority | P1 |
+| Status | `DONE` |
 | Size | M |
 | Owner role | Diagnostics + Desktop maintainer |
 | Depends on | XP-010, XP-003 |
@@ -804,6 +814,7 @@ Không work package nào được bắt đầu ở size `XL`. Phải tách thàn
 | Thuộc tính | Giá trị |
 | --- | --- |
 | Priority | P0 |
+| Status | `DONE` |
 | Size | M |
 | Owner role | Fleet/runtime maintainer |
 | Depends on | XP-002 |
@@ -833,6 +844,7 @@ Không work package nào được bắt đầu ở size `XL`. Phải tách thàn
 | Thuộc tính | Giá trị |
 | --- | --- |
 | Priority | P0-enabler |
+| Status | `DONE` |
 | Size | L, phải merge theo slice |
 | Owner role | Mode platform maintainer |
 | Depends on | XP-002 |
@@ -869,6 +881,7 @@ Không work package nào được bắt đầu ở size `XL`. Phải tách thàn
 | Thuộc tính | Giá trị |
 | --- | --- |
 | Priority | P0 |
+| Status | `DONE` |
 | Size | L, phải chia slice |
 | Owner role | B5 maintainer |
 | Depends on | XP-010, XP-013 |
@@ -911,6 +924,7 @@ Không work package nào được bắt đầu ở size `XL`. Phải tách thàn
 | Thuộc tính | Giá trị |
 | --- | --- |
 | Priority | P1 |
+| Status | `DONE` |
 | Size | M |
 | Owner role | Bootstrap + Desktop maintainer |
 | Depends on | XP-002, XP-001 |
@@ -936,6 +950,7 @@ Không work package nào được bắt đầu ở size `XL`. Phải tách thàn
 | Thuộc tính | Giá trị |
 | --- | --- |
 | Priority | P1 |
+| Status | `DONE` |
 | Size | S |
 | Owner role | Security/Desktop maintainer |
 | Depends on | XP-001, XP-002 |
@@ -955,6 +970,7 @@ Không work package nào được bắt đầu ở size `XL`. Phải tách thàn
 | Thuộc tính | Giá trị |
 | --- | --- |
 | Priority | P1 |
+| Status | `DONE` |
 | Size | M |
 | Owner role | Maintainer + product writer |
 | Depends on | XP-014 |
@@ -978,6 +994,8 @@ Không work package nào được bắt đầu ở size `XL`. Phải tách thàn
 ---
 
 ## R2 — Operator experience
+
+> **Trạng thái triển khai 2026-08-25:** `ENGINEERING_CLOSED`; bằng chứng ở [R2_OPERATOR_EXPERIENCE_CLOSURE_2026-08-25.md](evidence/R2_OPERATOR_EXPERIENCE_CLOSURE_2026-08-25.md). Card sorting với người dùng mới, assistive-technology audit độc lập và số liệu field vẫn là bằng chứng ngoài repository, không được giả lập bằng unit test.
 
 ### XP-100 — Information architecture và progressive disclosure
 
@@ -1215,6 +1233,8 @@ Không work package nào được bắt đầu ở size `XL`. Phải tách thàn
 
 ## R3 — Architecture decomposition
 
+> **Trạng thái triển khai 2026-08-25:** `STRANGLER_BOUNDARIES_CLOSED`; bằng chứng ở [R3_ARCHITECTURE_DECOMPOSITION_CLOSURE_2026-08-25.md](evidence/R3_ARCHITECTURE_DECOMPOSITION_CLOSURE_2026-08-25.md). Follow-up first-start đã tách vật lý Desktop runtime bootstrap, environment/provenance, profile CRUD, mode config và fleet control; ceiling `DesktopController` giảm 1128 → 986. Các façade tương thích còn lại chưa bị xóa; static gate khóa không cho debt tăng và ghi rõ owner/điều kiện hết hạn.
+
 ### XP-200 — Renderer decomposition theo page và state boundary
 
 | Thuộc tính | Giá trị |
@@ -1447,6 +1467,8 @@ renderer/
 
 ## R4 — Extensibility và product breadth
 
+> **Trạng thái triển khai 2026-08-25:** `ENGINEERING_CLOSED`; XP-305 được đóng `NOT_OPENED_NO_FIELD_DEMAND`, không có tuyên bố multi-server hoặc workflow production thứ ba. Xem [R4_EXTENSIBILITY_CLOSURE_2026-08-25.md](evidence/R4_EXTENSIBILITY_CLOSURE_2026-08-25.md).
+
 ### XP-300 — Module presentation schema
 
 | Thuộc tính | Giá trị |
@@ -1613,6 +1635,8 @@ renderer/
 
 ## R5 — Quality, evidence và release hardening
 
+> **Trạng thái triển khai 2026-08-25:** `OFFLINE_ENGINEERING_ACCEPTANCE`; field SLO vẫn `NOT_MEASURABLE_NO_OPT_IN_EPISODES`. Không dùng trạng thái này để tuyên bố production-stable. Xem [R5_QUALITY_RELEASE_ACCEPTANCE_2026-08-25.md](evidence/R5_QUALITY_RELEASE_ACCEPTANCE_2026-08-25.md).
+
 ### XP-400 — Static quality gates
 
 | Thuộc tính | Giá trị |
@@ -1684,6 +1708,7 @@ renderer/
 | Thuộc tính | Giá trị |
 | --- | --- |
 | Priority | P0-reliability |
+| Status | `OFFLINE_MATRIX_COMPLETE`; live-server and field episodes remain external evidence |
 | Size | L |
 | Owner role | Runtime/QA maintainer |
 | Depends on | XP-012, XP-013, XP-014, XP-015, XP-205 |
@@ -1749,6 +1774,7 @@ renderer/
 | Thuộc tính | Giá trị |
 | --- | --- |
 | Priority | P1-product maturity |
+| Status | `NOT_MEASURABLE_NO_OPT_IN_EPISODES`; contract and local aggregation are ready, no field history is fabricated |
 | Size | M |
 | Owner role | Product + operations |
 | Depends on | XP-003, XP-102, XP-404 |
@@ -1767,6 +1793,7 @@ renderer/
 | Thuộc tính | Giá trị |
 | --- | --- |
 | Priority | Release gate |
+| Status | `OFFLINE_ENGINEERING_ACCEPTED_WITH_DECLARED_LIMITS`; production promotion still requires XP-406 field evidence and independent operator review |
 | Size | S review, không phải implementation |
 | Owner role | Reviewer độc lập + product owner |
 | Depends on | Tất cả work package của release đang xét |
@@ -1787,6 +1814,8 @@ renderer/
 ---
 
 ## R6 — Fleet scale chỉ khi có bằng chứng
+
+> **Trạng thái quyết định 2026-08-25:** `NO_GO_MONOLITH_SUFFICIENT`. Synthetic OperatorSnapshot benchmark đạt p99 dưới 3 ms và payload dưới 28 KiB ở 64 fake bots trên máy audit; chưa có incident driver hoặc field SLO buộc process isolation. Không mở XP-501. Xem [R6_WORKER_BOUNDARY_NO_GO_2026-08-25.md](evidence/R6_WORKER_BOUNDARY_NO_GO_2026-08-25.md).
 
 ### XP-500 — Worker boundary feasibility gate
 

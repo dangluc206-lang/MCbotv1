@@ -1,49 +1,58 @@
 # MCbot V1
 
-## 2.6.16: B5 batch storage protection + mode-driven Sky gateway
+## CURRENT 2.7.67
+
+`b5-craft` là mode B5 thuần được khuyến nghị. Trước **mỗi đợt B5**, boundary bắt buộc là: fresh `/kho` → chỉ nung raw iron/raw gold → nén mọi B1 family có block form → chốt immutable sell baseline → bán surplus bằng đúng quantity `64` → giữ phần dư dưới `64` → verify còn tối thiểu `1.5 B5` → mới craft. Episode bán lớn tiếp tục theo bounded slice trên cùng baseline; inflow mới để đợt sau. Mode không dùng movement/pathfinder và không có đường bán quantity `1`.
+
+## Lịch sử phát hành 2.5–2.6 (không phải contract CURRENT)
+
+Các đoạn dưới ghi lại behavior theo từng bản cũ. Khi có mâu thuẫn, mục CURRENT phía trên, `SERVER_BEHAVIOR.md`, `RULES.md`, source/config/test hiện tại là authority.
+<!-- HISTORICAL_BEHAVIOR_START -->
+
+### 2.6.16: B5 batch storage protection + mode-driven Sky gateway
 
 Mỗi campaign B5 bắt đầu bằng một boundary cố định: đọc fresh `/kho` → nung raw iron/raw gold (không nung stone) → nén toàn bộ B1 → bán đúng phần vượt reserve 1.5 B5 → verify, rồi mới chế. Trong campaign không còn pressure/burst/forecast/click-limit hay bán chen giữa các tier; pure B5 bung B1 không giới hạn, còn Collector+B5 giữ headroom riêng qua `b1Decompression`.
 
 Sky không còn `autoJoin.enabled/maxAttempts`. Mode B5/Collector/Fishing tự demand `skyTarget` của bot (`sky1`, `sky2`, `skyOP` hoặc profile khác), gateway retry đúng target khi bị trả về HUB và release demand khi mode dừng. Desktop/config đã bỏ các toggle/tuning legacy tương ứng; migration 2.6.16 tự dọn cấu hình cũ.
 
-## 2.6.15: reconciliation + capacity parser hardening
+### 2.6.15: reconciliation + capacity parser hardening
 
 `/kho` không còn hiểu nhầm percentage-only telemetry như `Đã sử dụng: 100.0%` thành `used=1000`. Capacity tuyệt đối được cross-check với tổng item cùng snapshot; dữ liệu mâu thuẫn bị loại và fallback về tổng item với limit cấu hình.
 
 Reconciliation vẫn fail-closed sau quantity click, nhưng một fresh-read storage giảm tạm thời không còn biến thành side-effect sticky vô hạn. Fresh side-effect phải được xác nhận qua nhiều read liên tiếp; nếu click ban đầu không có strong side-effect evidence và trạng thái material mới giữ toàn bộ input ở baseline hoặc cao hơn qua nhiều fresh-read, stale baseline được coi là superseded và planner được re-plan từ state mới.
 
-## 2.6.14: hạ tầng runtime + Discord remote-only
+### 2.6.14: hạ tầng runtime + Discord remote-only
 
 Discord hiện là remote control thuần: chọn bot, kết nối/ngắt riêng bot, Vào Sky/Về HUB, `/is`, điều khiển mọi mode trong ModeCatalog và gọi lệnh Sky đã đăng ký. Cấu hình/chẩn đoán sâu thuộc Desktop. `Về HUB` tạo manual HUB hold theo connection generation để auto-join không kéo bot quay lại Sky; `Vào Sky` đi qua `SkyblockAutoJoinService` để readiness luôn nhất quán.
 
 `GuiManager` có post-close command gate dùng chung cho `/kho` và `/pv 2`, giảm trường hợp server bỏ command đầu ngay sau khi GUI vừa đóng. GUI `/nung` có strong identity riêng cho title MinerUA. Test runner tách `npm test` source-only khỏi `npm run test:installed` để thiếu dependency không bị báo lẫn thành regression logic.
 
-## 2.6.9: reconciliation theo nguồn + B2 ALL transaction boundary
+### 2.6.9: reconciliation theo nguồn + B2 ALL transaction boundary
 
 Reconciliation giờ giữ `source` cho từng baseline input: B1 storage chỉ so với `/kho`, inventory chỉ so inventory, PV chỉ so `/pv 2`; thiếu baseline thật thì fail-closed. Mỗi `B1 -> B2 ALL` là một transaction boundary: sau đúng một ALL phải fresh re-plan/compact/promote trước khi có mutation tiếp theo. Strong MMOItems identity cố định từ `items.json` được dùng ngay bởi verifier; policy `learn` như tungsten vẫn chỉ khóa identity sau quan sát thật.
 
-## 2.6.8: reconciliation sau side-effect + strong identity contract
+### 2.6.8: reconciliation sau side-effect + strong identity contract
 
 B5 thuần không còn retry mù sau khi đã click nút số lượng. Nếu server outcome chưa xác minh được, craft được đánh dấu `CRAFTING_OUTCOME_UNCERTAIN`, đặt vào reconciliation barrier và chỉ đọc lại trạng thái; cùng mutation bị khóa cho tới khi thấy output thật hoặc chứng minh được các input quan sát được vẫn nguyên vẹn qua nhiều fresh-read. Input lấy trực tiếp từ `/kho` mà không có baseline đủ mạnh sẽ fail-closed, không tự click `ALL` lần hai.
 
 Error taxonomy được tập trung về `Operation.statusForError`; B2–B5 được validator bắt buộc strong MMOItems identity cho inventory/PV hoặc policy `learn`. `tungsten` dùng learn-once thay vì đoán ID: strong identity chỉ được khóa sau quan sát thật và không thể bị chuyển chủ. Desktop cho chỉnh tham số reconciliation nhưng không thể tắt barrier; migration 2.6.7→2.6.8 giữ nguyên tùy chỉnh và fixed tungsten identity của người dùng.
 
-## 2.6.3: nung + nén trước bảo vệ kho
+### 2.6.3: nung + nén trước bảo vệ kho
 
 Khi `/kho` chạm ngưỡng cần bảo vệ, B5 thuần đổi thứ tự thành **chỉ nung raw iron/raw gold → nén base/phôi thành block → đọc lại áp lực → bán/bảo vệ kho → B5 planner**. Nếu bước nén đã đủ hạ áp lực thì không bán. `allowSmelting` mặc định bật và có checkbox trong Desktop; không dùng movement/pathfinder. Runtime 2.6.2 được migration giá trị `allowSmelting:false` bắt buộc lịch sử sang `true` sau khi backup config.
 
-## 2.6.2: sửa migration GUI Identity runtime
+### 2.6.2: sửa migration GUI Identity runtime
 
 2.6.2 sửa trường hợp runtime được tạo từ 2.5.x vẫn giữ regex GUI cũ sau khi nâng lên 2.6.0. Migration mới backup config rồi chỉ nâng đúng các giá trị mặc định cũ của `/kho` và `/pv 2`, giữ nguyên cấu hình người dùng khác. Điều này ngăn `/pv 2` mở đúng nhưng bị Identity V2 chấm confidence thấp, tự đóng rồi retry đến timeout.
 
 
-## 2.6.0: GUI Identity V2 + B5 Planner/Trace/Replay
+### 2.6.0: GUI Identity V2 + B5 Planner/Trace/Replay
 
 Từ 2.6.0, GUI không còn được nhận diện theo kiểu "regex nào khớp trước thì thắng". `GuiIdentityEngine` chấm confidence từ title, layout, fingerprint, command context, session trước và semantic evidence. `/kho`, `/pv 2`, root `/ks`, menu chế tạo và menu số lượng đều được khóa identity trước khi thao tác; GUI mâu thuẫn/không đủ confidence sẽ bị từ chối thay vì click nhầm.
 
 B5 có `B5ExecutionPlanner` thuần (không click/send/wait) tạo decision, blocker, snapshot digest và replay input cho mỗi inspection. `B5TraceRecorder` giữ trace chu kỳ gọn trong RAM; gói hỗ trợ tự kèm fixture replay B5 mới nhất của từng bot. Có replay offline bằng `npm run replay:b5`, cùng fixture GUI MinerUA để khóa regression `/kho` ↔ `/pv 2`.
 
-## 2.5.0: cập nhật ZIP + session mode + log gọn
+### 2.5.0: cập nhật ZIP + session mode + log gọn
 
 Từ 2.5.0, `Cài đặt -> Cập nhật phần mềm` có thể chọn gói `MCbot_x.y.z_update.zip`. MCbot kiểm tra manifest, version/base version, dependency, đường dẫn và vùng dữ liệu được bảo vệ; sau đó backup, dừng backend, giao việc thay file cho updater riêng và khởi động lại. Cấu hình người dùng không còn nằm trong cây code khi chạy Desktop: bản DEV dùng `AppData/.../runtime-dev`, bản cài dùng `AppData/.../runtime`.
 
@@ -51,6 +60,7 @@ Một lần mở MCbot mới chỉ tự kết nối các bot profile đang bật
 
 B5 thuần có generation guard và no-progress backoff: kết quả sinh ra từ connection generation cũ bị loại, còn cùng một blocker lặp lại sẽ tăng thời gian chờ có giới hạn thay vì spam GUI. Nhật ký Desktop chỉ hiển thị hoạt động chính; trace chi tiết vẫn nằm trong `data/logs`.
 
+<!-- HISTORICAL_BEHAVIOR_END -->
 
 Framework Minecraft bot đa năng viết bằng Node.js/Mineflayer, được tổ chức theo hướng **multi-bot**, **config-driven**, có workflow/mode, service theo capability, Discord control plane, reconnect/recovery và verification cho các thao tác stateful.
 
@@ -64,7 +74,7 @@ Repository hiện chạy chủ yếu với server MinerUA/Skyblock và đã có 
 
 | Mode | Trạng thái | Ghi chú |
 |---|---|---|
-| `b5-craft` | CURRENT / RECOMMENDED | Chế B5 thuần: `/is` → đọc kho → nếu cần bảo vệ: nung raw → nén phôi thành khối → bảo vệ kho → B1→B5; **không di chuyển** |
+| `b5-craft` | CURRENT / RECOMMENDED | Chế B5 thuần: `/is` → boundary bắt buộc fresh kho, nung raw iron/gold, nén, baseline, bán 64-only, giữ reserve 1.5 B5 → B1→B5; **không di chuyển** |
 | `collector-b5` | LEGACY / COMPAT | Collector + B5 cũ, có movement/preprocessing |
 | `fishing` | CURRENT | Fishing + movement/position guard/recovery |
 | Custom Mode Builder | CURRENT | Ghép mô-đun lệnh `/`, GUI, movement, wait, condition, repeat... |
@@ -93,7 +103,7 @@ Kiến trúc được định hướng để có thể thêm server/profile mớ
 - Movement/navigation, arrival/stuck/safety handling.
 - Server features cho Skyblock, island, `/kho`, `/kho sell`, `/pv 2`, `/ks`, smelting, mineral conversion, dungeon, fishing và resource pack.
 - Planner/executor cho crafting B1 → B5.
-- `b5-craft` mode khuyến nghị, cho phép chỉ nung raw iron/raw gold trước bảo vệ kho (`allowSmelting=true` mặc định) và không có movement dependency.
+- `b5-craft` mode khuyến nghị, bắt buộc chỉ nung raw iron/raw gold trong boundary bảo vệ kho và không có movement dependency.
 - `collector-b5` mode cũ để tương thích.
 - `fishing` mode.
 - Mode Platform + Mode Builder an toàn cho custom workflow.
@@ -189,21 +199,22 @@ Chạy Desktop ở chế độ development:
 scripts\RUN_DESKTOP_WINDOWS.cmd
 ```
 
-hoặc sau khi Electron đã được cài:
+hoặc sau khi Electron đã được cài, lệnh mặc định cũng mở Desktop:
 
-```bash
-npm run desktop:start
+```powershell
+npm.cmd start
+# alias tương đương
+npm.cmd run desktop:start
 ```
 
-CLI/core cũ vẫn được giữ để debug hoặc chạy headless:
+Core/headless vẫn được giữ riêng để debug hoặc vận hành không có giao diện:
 
-```bash
-npm start
-# hoặc
-npm run core:start
+```powershell
+npm.cmd run core:start
 ```
 
 Desktop entry point là `src/desktop/main.js`; CLI entry point là `src/index.js`.
+Desktop development dùng cấu hình đã migrate trong `AppData/.../runtime-dev`, không dùng trực tiếp `config/` của project. Readiness hiển thị nguồn runtime và chỉ báo tên file khác biệt so với default, không hiển thị nội dung hay secret.
 
 ## Yêu cầu cho source/development
 
@@ -251,24 +262,24 @@ Không commit `.env`, token Discord, password hoặc credential thật.
 
 ## Kiểm tra nhanh trước khi chạy
 
-```bash
-npm run validate
-npm test
-npm start
+```powershell
+npm.cmd run validate
+npm.cmd test
+npm.cmd start
 ```
 
 Khi thay đổi code lớn hoặc chuẩn bị merge/release, chạy thêm:
 
-```bash
-npm run test:coverage
+```powershell
+npm.cmd run test:coverage
 ```
 
 Validation và test phải được coi là gate của thay đổi code. Không sửa validator hoặc test chỉ để làm xanh kết quả nếu contract/architecture thực tế chưa đúng.
 
 ## Chạy core/headless
 
-```bash
-npm start
+```powershell
+npm.cmd run core:start
 ```
 
 Luồng khởi động chính:
@@ -364,13 +375,13 @@ Không chia sẻ mutable Mineflayer state giữa các bot. Event/callback cũ ph
 Auto Join Skyblock (service nền)
 → /is
 → đọc /kho (snapshot authoritative; reuse ngắn hạn chỉ khi chưa có side-effect)
-→ nếu áp lực kho cao: đổi/nén B1 + bán phần dư theo policy bảo vệ kho
+→ boundary bắt buộc: nung raw iron/raw gold + nén B1 + chốt baseline + bán surplus 64-only + verify reserve 1.5 B5
 → đọc trạng thái B5/PV2/inventory
 → chế B2 → B3 → B4 → B5
 → lặp
 ```
 
-**Không dùng MovementManager/pathfinder.** Khi `/kho` cần bảo vệ, mode chỉ nung raw iron/raw gold trước, sau đó nén base/phôi thành block rồi mới bắt đầu bán/bảo vệ áp lực kho. `storageProtection.allowSmelting` mặc định bật và có thể chỉnh trong Desktop. B2–B5 vẫn sử dụng GUI/PV2/crafting capability hiện có để bảo toàn item và xác minh output.
+**Không dùng MovementManager/pathfinder.** Trước mỗi đợt, mode chỉ nung raw iron/raw gold, sau đó nén base/phôi thành block, chốt immutable baseline, bán đúng quantity `64`, giữ surplus dưới `64`, verify reserve `1.5 B5`, rồi mới craft. Nung/bảo vệ kho là invariant, không phải toggle Desktop. B2–B5 vẫn sử dụng GUI/PV2/crafting capability hiện có để bảo toàn item và xác minh output.
 
 Implementation chính:
 
@@ -857,7 +868,7 @@ Mục tiêu là có thể thêm bot, server, capability và workflow mà không 
 
 ### B5 thuần và bảo vệ kho
 
-Từ 2.4.1, một lượt bảo vệ kho còn HIGH không chặn vô hạn engine chế B5. Mode tiếp tục vào B5Automation; mọi block -> base vẫn phải qua kiểm tra headroom và không bao giờ gọi /nung.
+Contract CURRENT: protection còn blocker sau retry hữu hạn phải ở `WAITING_BLOCKED`; mode không được đi vào B5Automation. Operator chỉ có thể cấp một retry có guard cho đúng bot/generation/episode. Mọi block → base vẫn phải qua kiểm tra headroom; `/nung` chỉ dành cho raw iron/raw gold trong boundary.
 
 Từ 2.4.2, `/pv 2` không thể bị nhận nhầm thành `/kho` chỉ vì fallback capacity 800.000. B5 cũng tái sử dụng GUI `/pv 2` đang mở thay vì gửi lại command và chờ timeout.
 
@@ -867,7 +878,7 @@ Từ 2.6.12, trang **Công cụ → Lệnh riêng theo Sky** cho phép thêm/xó
 
 ### B5 campaign scheduler (2.6.13+)
 
-`b1NormalizeIntervalMs` là chu kỳ kiểm lại B1 **khi mode đang thật sự chờ vật liệu**. Nó không còn cắt ngang một chuỗi B2/B3/B4 đang tạo tiến triển. Khi một `B5AutomationNext` trả `productive=true`, mode fresh re-plan ngay và tiếp tục campaign; chỉ một cycle không tạo thêm tài nguyên mới được đưa vào backoff/idle-normalization. Normalization vẫn bắt buộc khi bắt đầu generation mới và sau khi một B5 hoàn tất rồi hết cooldown.
+Sau một B5 hoàn tất, mode kết thúc đợt hiện tại và arm một storage-protection episode mới trước bất kỳ craft nào của đợt tiếp theo. Pause/resume không tự tạo episode mới; reconnect giữ batch/episode và loại kết quả generation cũ. Backoff/cooldown không được bỏ qua boundary bắt buộc.
 
 
 ## Local AI Agent trong Desktop (2.7.0)

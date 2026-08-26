@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'">
   <title>MCbot Desktop</title>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -15,15 +15,20 @@
         <div class="brand-copy"><strong>MCbot</strong><span>Trung tâm điều khiển</span></div>
       </div>
       <nav id="nav" aria-label="Điều hướng chính">
+        <div class="nav-group-label">Vận hành</div>
         <button class="nav-item active" data-page="dashboard"><span>01</span>Tổng quan</button>
         <button class="nav-item" data-page="bots"><span>02</span>Bot</button>
         <button class="nav-item" data-page="modes"><span>03</span>Chế độ</button>
+        <div class="nav-group-label">Xây dựng</div>
         <button class="nav-item" data-page="builder"><span>04</span>Tạo chế độ</button>
-        <button class="nav-item" data-page="tools"><span>05</span>Công cụ</button>
+        <div class="nav-group-label">Bảo trì</div>
+        <button class="nav-item" data-page="incidents"><span>05</span>Sự cố <b id="incidentBadge" class="nav-badge hidden">0</b></button>
         <button class="nav-item" data-page="logs"><span>06</span>Nhật ký <b id="logUnreadBadge" class="nav-badge hidden">0</b></button>
-        <button class="nav-item" data-page="diagnostics"><span>07</span>Chẩn đoán</button>
-        <button class="nav-item" data-page="ai"><span>08</span>AI Local</button>
-        <button class="nav-item" data-page="settings"><span>09</span>Cài đặt</button>
+        <button class="nav-item" data-page="settings"><span>07</span>Cài đặt</button>
+        <div class="nav-group-label" data-experience="advanced">Nâng cao</div>
+        <button class="nav-item" data-page="tools" data-experience="advanced"><span>08</span>Công cụ</button>
+        <button class="nav-item" data-page="diagnostics" data-experience="advanced"><span>09</span>Chẩn đoán</button>
+        <button class="nav-item" data-page="ai" data-experience="advanced"><span>10</span>AI Local</button>
       </nav>
       <div class="sidebar-bottom">
         <div class="backend-state"><span id="backendDot" class="dot"></span><div><small>Hệ thống nền</small><strong id="backendState">...</strong></div></div>
@@ -36,6 +41,7 @@
       <header class="topbar">
         <div class="title-block"><h1 id="pageTitle">Tổng quan</h1><p id="pageSubtitle">Theo dõi và điều khiển toàn bộ bot</p></div>
         <div class="top-actions">
+          <button class="button ghost" id="openCommandPalette" aria-keyshortcuts="Control+K">Tìm kiếm… <kbd>Ctrl K</kbd></button>
           <div id="liveState" class="live-state"><span class="pulse"></span><div><strong>Đang đồng bộ</strong><small id="updatedAt">—</small></div></div>
           <button class="button ghost" id="refreshBtn">Làm mới</button>
         </div>
@@ -43,6 +49,8 @@
 
       <section class="page active" id="page-dashboard">
         <div id="setupBanner" class="setup-banner hidden"></div>
+        <div id="firstRunPanel" class="panel first-run-panel hidden" aria-live="polite"></div>
+        <div id="healthSummary" class="panel health-summary" aria-live="polite"><span>Đang lấy health…</span></div>
         <div class="metric-grid" id="metrics"></div>
         <div class="panel fleet-bar">
           <div><strong>Điều khiển toàn bộ</strong><span>Thao tác nhanh cho toàn bộ bot đã bật</span></div>
@@ -57,6 +65,14 @@
         </div>
         <div class="section-head"><div><h2>Bot đang quản lý</h2><p>Trạng thái, chế độ và tác vụ theo thời gian thực</p></div></div>
         <div class="bot-grid" id="dashboardBots"></div>
+      </section>
+
+      <section class="page" id="page-incidents">
+        <div class="section-head"><div><h2>Trung tâm sự cố</h2><p>Sự cố quan trọng tồn tại tới khi được xác minh hoặc xác nhận; retry lặp không tạo hàng chục dòng.</p></div><button class="button ghost" id="refreshIncidents">Làm mới</button></div>
+        <div class="incident-layout">
+          <div class="panel"><div class="incident-filters"><label>Trạng thái<select id="incidentStateFilter"><option value="ACTIVE">Đang cần theo dõi</option><option value="ALL">Tất cả</option><option value="NEEDS_ACTION">Cần xử lý</option><option value="RECOVERING">Đang phục hồi</option><option value="RESOLVED">Đã xử lý</option></select></label><label>Bot<select id="incidentBotFilter"><option value="">Tất cả bot</option></select></label></div><div id="incidentList" class="incident-list"><div class="empty">Đang tải sự cố…</div></div></div>
+          <div class="panel incident-detail" id="incidentDetail"><div class="empty">Chọn một sự cố để xem chuyện gì đã xảy ra, mức an toàn và bước tiếp theo.</div></div>
+        </div>
       </section>
 
       <section class="page" id="page-bots">
@@ -80,6 +96,8 @@
       <section class="page" id="page-modes">
         <div class="section-head"><div><h2>Điều khiển chế độ</h2><p>Mỗi bot chỉ có một chế độ chính tại một thời điểm</p></div></div>
         <div id="modeCards" class="bot-grid"></div>
+        <div class="section-head"><div><h2>Hành trình B5</h2><p>Hiển thị postcondition đã xác minh, baseline bất biến và chỉ bán theo 64.</p></div><button class="button ghost" id="refreshB5Journey">Làm mới</button></div>
+        <div id="b5Journey" class="b5-journey-grid"><div class="empty panel">Chưa có trạng thái B5.</div></div>
         <div class="section-head config-head"><div><h2>Cấu hình chế độ</h2><p>Kiểm tra hợp lệ + sao lưu + nạp lại</p></div></div>
         <div class="two-column">
           <div class="panel form-panel accent-panel">
@@ -162,15 +180,17 @@
           </div>
           <div class="panel">
             <div class="panel-title"><h2>Kho mô-đun</h2><span id="moduleCount" class="tag">0</span></div>
-            <div class="actions compact"><button class="button ghost small" id="presetCommandWait">Mẫu lệnh + đợi</button><button class="button ghost small" id="presetB5Safe">Mẫu /is + B5</button><button class="button ghost small" id="presetMoveClick">Mẫu di chuyển + nhấp</button></div>
+            <label>Tìm mô-đun<input id="moduleSearch" placeholder="B5, GUI, lệnh, chờ…"></label>
+            <div class="actions compact"><select id="customModeTemplate"><option value="">— Thư viện mẫu —</option></select><button class="button ghost small" id="applyCustomTemplate">Dùng mẫu</button></div>
             <div id="modulePalette" class="module-palette"></div>
           </div>
         </div>
         <div class="panel section-gap">
-          <div class="panel-title"><div><h2>Luồng chạy</h2><p class="helper">Thêm mô-đun rồi chỉnh tham số trực tiếp. Nhóm “Khi bắt đầu” chạy một lần; nhóm “Vòng lặp chính” chạy lặp tới khi dừng chế độ.</p></div><div class="actions compact"><button class="button ghost" id="clearCustomSteps">Xóa bước</button><button class="button primary" id="saveCustomMode">Lưu chế độ</button></div></div>
-          <div class="workflow-columns"><div><h3>Khi bắt đầu</h3><div id="customStartSteps" class="workflow-list"></div></div><div><h3>Vòng lặp chính</h3><div id="customLoopSteps" class="workflow-list"></div></div></div>
+          <div class="panel-title"><div><h2>Luồng chạy</h2><p class="helper">Thêm mô-đun rồi chỉnh tham số có kiểu. JSON chỉ hiện ở chế độ Nâng cao.</p></div><div class="actions compact"><button class="button ghost" id="dryRunCustomMode">Chạy mô phỏng</button><button class="button ghost advanced-builder" id="packageCustomMode">Kiểm tra package</button><button class="button ghost" id="clearCustomSteps">Xóa bước</button><button class="button primary" id="saveCustomMode">Lưu chế độ</button></div></div>
+          <div class="workflow-columns"><div><h3>Khi bắt đầu</h3><div id="customStartSteps" class="workflow-list"></div></div><div><h3>Vòng lặp chính</h3><div id="customLoopSteps" class="workflow-list"></div></div><div><h3>Khi dừng</h3><div id="customStopSteps" class="workflow-list"></div></div></div>
         </div>
-        <details class="panel section-gap"><summary>Cấu hình JSON nâng cao của chế độ</summary><textarea id="customModeJson" class="code-editor" rows="18" spellcheck="false"></textarea><div class="actions"><button class="button ghost" id="applyCustomJson">Áp dụng JSON vào trình dựng</button></div></details>
+        <pre id="customModeSimulation" class="panel section-gap">Chưa chạy mô phỏng.</pre>
+        <details class="panel section-gap advanced-builder"><summary>Cấu hình JSON nâng cao của chế độ</summary><textarea id="customModeJson" aria-label="Cấu hình JSON nâng cao của chế độ" class="code-editor" rows="18" spellcheck="false"></textarea><div class="actions"><button class="button ghost" id="applyCustomJson">Áp dụng JSON vào trình dựng</button></div></details>
       </section>
 
       <section class="page" id="page-tools">
@@ -214,9 +234,9 @@
       <section class="page" id="page-logs">
         <div class="page-heading"><div><h1>Nhật ký</h1><p>Chỉ hiển thị hoạt động chính và cảnh báo. Khi có lỗi cần phân tích sâu, mở file nhật ký chi tiết.</p></div></div>
         <div class="toolbar panel">
-          <select id="logLevel"><option value="all">Mọi mức</option><option value="info">Thông tin</option><option value="warn">Cảnh báo</option><option value="error">Lỗi</option></select>
-          <select id="logBot"><option value="all">Mọi bot</option></select>
-          <input id="logSearch" placeholder="Tìm nội dung, phạm vi, tác vụ...">
+          <select id="logLevel" aria-label="Lọc mức nhật ký"><option value="all">Mọi mức</option><option value="info">Thông tin</option><option value="warn">Cảnh báo</option><option value="error">Lỗi</option></select>
+          <select id="logBot" aria-label="Lọc bot trong nhật ký"><option value="all">Mọi bot</option></select>
+          <input id="logSearch" aria-label="Tìm nhật ký" placeholder="Tìm nội dung, phạm vi, tác vụ...">
           <label class="check toolbar-check"><input id="logPause" type="checkbox"> Tạm dừng hiển thị</label>
           <label class="check toolbar-check"><input id="logAutoScroll" type="checkbox" checked> Tự cuộn</label>
           <button class="button ghost" id="clearLogView">Xóa màn hình</button><button class="button ghost" id="openDetailedLogs">Mở log chi tiết</button>
@@ -261,7 +281,7 @@
             <div id="aiMessages" class="ai-messages"><div class="ai-empty">Chọn project + model rồi nhập yêu cầu. Ví dụ: “tìm nguyên nhân B5 bị timeout và sửa, sau đó chạy test liên quan”.</div></div>
             <div id="aiTrace" class="ai-trace hidden"></div>
             <div class="ai-composer">
-              <textarea id="aiPrompt" rows="4" placeholder="Ra lệnh cho Local AI Agent..." spellcheck="false"></textarea>
+              <textarea id="aiPrompt" aria-label="Yêu cầu cho Local AI Agent" rows="4" placeholder="Ra lệnh cho Local AI Agent..." spellcheck="false"></textarea>
               <div class="ai-composer-actions"><span id="aiBusyText" class="helper">Sẵn sàng.</span><button class="button primary" id="aiSend">Gửi</button></div>
             </div>
           </div>
@@ -272,6 +292,8 @@
         <div class="settings-grid">
           <div class="panel form-panel">
             <h2>Trải nghiệm phần mềm</h2>
+            <label>Mức trải nghiệm<select id="prefExperienceLevel"><option value="standard">Tiêu chuẩn · ẩn công cụ kỹ thuật</option><option value="advanced">Nâng cao · hiện toàn bộ công cụ</option></select></label>
+            <label>Tương phản<select id="prefColorTheme"><option value="dark">Tối</option><option value="high-contrast">Tương phản cao</option></select></label>
             <label class="check setting-check"><input id="prefCloseToTray" type="checkbox"> Đóng cửa sổ thì thu xuống khay hệ thống</label>
             <label class="check setting-check"><input id="prefNotifyErrors" type="checkbox"> Hiện thông báo khi có lỗi</label>
             <label class="check setting-check"><input id="prefAutoStart" type="checkbox"> Tự khởi động hệ thống nền khi mở phần mềm</label>
@@ -297,6 +319,7 @@
             <div class="setting-row"><div><strong>Nhật ký</strong><span>data/logs</span></div><button class="button ghost" id="openLogs">Mở</button></div>
             <div class="setting-row"><div><strong>Sao lưu cấu hình</strong><span>Tạo bản sao theo thời điểm của toàn bộ cấu hình</span></div><button class="button primary" id="backupConfig">Sao lưu</button></div>
             <div class="setting-row"><div><strong>Thư mục sao lưu</strong><span>data/backups</span></div><button class="button ghost" id="openBackups">Mở</button></div>
+            <div class="section-gap"><div class="panel-title"><h3>Danh mục backup có kiểm chứng</h3><button class="button ghost small" id="refreshBackups">Làm mới</button></div><div id="backupCatalog" class="backup-catalog"><div class="empty">Chưa tải backup.</div></div></div>
           </div>
           <div class="panel"><h2>Hệ thống nền</h2>
             <div class="backend-overview"><div><span>Trạng thái</span><strong id="settingsBackendState">—</strong></div><div><span>Thời gian chạy</span><strong id="settingsUptime">—</strong></div><div><span>Bộ nhớ</span><strong id="settingsMemory">—</strong></div></div>
@@ -309,13 +332,13 @@
             <label>ID người dùng Discord được phép<input id="secretDiscordAllowed" autocomplete="off" placeholder="123...,456..."></label>
             <label>Bot<select id="secretBotSelect"></select></label>
             <label>Mật khẩu bot<input id="secretBotPassword" type="password" autocomplete="off" placeholder="Để trống nếu không thay đổi"></label>
-            <div class="actions"><button class="button primary" id="saveSecrets">Lưu dữ liệu bí mật</button><button class="button ghost" id="secretStatusBtn">Kiểm tra</button><button class="button ghost" id="clearBotPassword">Xóa mật khẩu bot</button><button class="button danger" id="clearDiscordSecrets">Xóa dữ liệu bí mật Discord</button></div><p id="secretStatusText" class="helper"></p>
+            <div class="actions"><button class="button primary" id="saveSecrets">Lưu dữ liệu bí mật</button><button class="button ghost" id="secretStatusBtn">Kiểm tra</button><button class="button ghost" id="clearBotPassword">Xóa mật khẩu bot</button><button class="button danger" id="clearDiscordSecrets">Xóa dữ liệu bí mật Discord</button><button class="button danger" id="resetSecretStore">Reset kho bí mật bị lỗi</button></div><p id="secretStatusText" class="helper"></p>
           </div>
 
           <div class="panel form-panel"><h2>Cấu hình nâng cao</h2><p>Chỉnh mọi nhóm JSON theo cấu trúc kiểm tra. Trước khi ghi file, phần mềm kiểm tra cấu trúc + liên kết chéo và tự sao lưu.</p>
             <label>Nhóm cấu hình<select id="advancedConfigGroup"></select></label>
-            <textarea id="advancedConfigJson" class="code-editor" rows="16" spellcheck="false"></textarea>
-            <div class="actions"><button class="button ghost" id="loadAdvancedConfig">Tải</button><button class="button primary" id="saveAdvancedConfig">Kiểm tra + lưu</button></div><p id="advancedConfigHint" class="helper"></p>
+            <textarea id="advancedConfigJson" aria-label="JSON cấu hình nâng cao" class="code-editor" rows="16" spellcheck="false"></textarea>
+            <div class="actions"><button class="button ghost" id="loadAdvancedConfig">Tải workspace</button><button class="button ghost" id="previewAdvancedConfig">Xem diff</button><button class="button primary" id="saveAdvancedConfig">Kiểm tra + lưu</button><button class="button ghost" id="undoAdvancedConfig">Hoàn tác bản vừa lưu</button></div><p id="advancedConfigHint" class="helper"></p><div id="advancedConfigDiff" class="config-diff" aria-live="polite"></div>
           </div>
           <div class="panel danger-zone"><h2>Khẩn cấp</h2><p>Dừng toàn bộ chế độ rồi ngắt kết nối tất cả bot. Dùng khi cần ngắt tự động hóa ngay.</p><button class="button danger strong" id="emergencyStop">DỪNG KHẨN CẤP</button></div>
         </div>
@@ -324,6 +347,35 @@
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <dialog id="confirmDialog" class="confirm-dialog" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogMessage">
+    <form method="dialog">
+      <h2 id="confirmDialogTitle">Xác nhận thao tác</h2>
+      <p id="confirmDialogMessage"></p>
+      <div class="actions"><button class="button ghost" value="cancel">Hủy</button><button class="button danger strong" id="confirmDialogAccept" value="confirm">Xác nhận</button></div>
+    </form>
+  </dialog>
+  <dialog id="promptDialog" class="confirm-dialog" aria-labelledby="promptDialogTitle" aria-describedby="promptDialogMessage">
+    <form method="dialog">
+      <h2 id="promptDialogTitle">Nhập thông tin</h2><p id="promptDialogMessage"></p>
+      <label for="promptDialogInput">Giá trị</label><input id="promptDialogInput" autocomplete="off">
+      <div class="actions"><button class="button ghost" value="cancel">Hủy</button><button class="button primary" value="confirm">Tiếp tục</button></div>
+    </form>
+  </dialog>
+  <dialog id="commandPaletteDialog" class="command-palette" aria-labelledby="commandPaletteTitle">
+    <form method="dialog"><div class="panel-title"><h2 id="commandPaletteTitle">Tìm chức năng</h2><button class="button ghost small" value="cancel" aria-label="Đóng">Esc</button></div><label for="commandPaletteInput" class="sr-only">Từ khóa</label><input id="commandPaletteInput" placeholder="Thêm bot, chạy B5, xử lý lỗi…" autocomplete="off"><div id="commandPaletteResults" class="command-palette-results" role="listbox"></div></form>
+  </dialog>
+  <script src="core/RendererApiClient.js"></script>
+  <script src="core/Html.js"></script>
+  <script src="core/RendererRouter.js"></script>
+  <script src="core/KeyedDom.js"></script>
+  <script src="components/AccessibleDialog.js"></script>
+  <script src="pages/PageCatalog.js"></script>
+  <script src="features/b5/B5ViewModel.js"></script>
+  <script src="features/b5/B5JourneyPresenter.js"></script>
+  <script src="features/incidents/IncidentViewModel.js"></script>
+  <script src="features/incidents/IncidentPresenter.js"></script>
+  <script src="features/builder/TypedModuleEditor.js"></script>
+  <script src="features/modes/ModeViewModel.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

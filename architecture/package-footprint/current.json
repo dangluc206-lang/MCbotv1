@@ -1,0 +1,20 @@
+{
+  "contractVersion": 1,
+  "baseline": {
+    "builderRevision": "2.7.0-roadmap-closure",
+    "measuredMegabytes": 456.7,
+    "measuredAt": "2026-08-25",
+    "measurement": "uncompressed direct-package input after ForgePackagingPolicy exclusions"
+  },
+  "limits": {
+    "maximumMegabytes": 480,
+    "minimumFiles": 250,
+    "minimumMegabytes": 1,
+    "minimumIgnoredDirectories": 4
+  },
+  "policy": {
+    "environmentMayLowerMaximumOnly": true,
+    "reviewRequiredWhenBaselineOrMaximumChanges": true,
+    "releaseArtifactIntegrityIsVerifiedSeparately": true
+  }
+}

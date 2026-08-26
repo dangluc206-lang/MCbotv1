@@ -1,0 +1,121 @@
+{
+  "contract": "mcbot-incremental-static-quality/v1",
+  "version": 1,
+  "managedRoots": [
+    "src/bootstrap/installers",
+    "src/desktop/backup",
+    "src/desktop/b5",
+    "src/desktop/contracts",
+    "src/desktop/health",
+    "src/desktop/incidents",
+    "src/desktop/presentation",
+    "src/desktop/projection",
+    "src/desktop/readiness",
+    "src/desktop/renderer/components",
+    "src/desktop/renderer/core",
+    "src/desktop/renderer/features",
+    "src/desktop/renderer/pages",
+    "src/desktop/use-cases",
+    "src/diagnostics/metrics",
+    "src/modes/b5-craft/campaign",
+    "src/modes/b5-craft/fault",
+    "src/modes/b5-craft/status",
+    "src/modes/b5-craft/storage",
+    "src/modes/composable",
+    "src/shared/contracts"
+  ],
+  "managedFiles": [
+    "scripts/build-windows.js",
+    "scripts/build/PackagingFootprintContract.js",
+    "scripts/check-error-vocabulary.js",
+    "scripts/check-product-docs.js",
+    "scripts/check-release-canary-policy.js",
+    "scripts/check-slo-contract.js",
+    "scripts/check-static-quality.js",
+    "scripts/inspect-architecture-baseline.js",
+    "scripts/measure-operator-performance.js",
+    "scripts/run-quality-gates.js",
+    "scripts/validate-support-bundle.js",
+    "src/ai/knowledge/ProjectWorkspace.js",
+    "src/bootstrap/RuntimeEnvironment.js",
+    "src/bootstrap/registerBotServices.js",
+    "src/desktop/BootFailureContract.js",
+    "src/desktop/DesktopEnvironmentResolver.js",
+    "src/desktop/DesktopFatalRecovery.js",
+    "src/desktop/DesktopPreferenceStore.js",
+    "src/desktop/DesktopSecretStore.js",
+    "src/desktop/main.js",
+    "src/desktop/preload.js",
+    "src/desktop/update/ReleaseCanaryPolicy.js",
+    "src/desktop/update/RuntimeConfigMigrations.js",
+    "src/desktop/update/RuntimeConfigTreeVerifier.js",
+    "src/desktop/update/RuntimeConfigVersionReader.js",
+    "src/desktop/update/RuntimeFilesystemApplier.js",
+    "src/desktop/update/RuntimeMigrationPlanner.js",
+    "src/desktop/update/RuntimeRecoveryCoordinator.js",
+    "src/desktop/update/RuntimeTransactionJournal.js",
+    "src/diagnostics/runtime/RuntimeFailureArtifactLayout.js",
+    "src/diagnostics/runtime/RuntimeFailureArtifactRepository.js",
+    "src/diagnostics/runtime/RuntimeFailureRecorder.js",
+    "src/diagnostics/support/SupportBundleBuilder.js",
+    "src/discord/DiscordInteractionRouter.js",
+    "src/discord/DiscordService.js",
+    "src/modes/ModeFaultPolicy.js",
+    "src/modes/ModePresentationService.js",
+    "src/shared/security/Redactor.js"
+  ],
+  "legacyBudgets": {
+    "src/desktop/DesktopController.js": {
+      "maxFileLines": 986,
+      "maxFunctionDecisionPoints": 40,
+      "owner": "Desktop maintainer",
+      "reason": "Facade retained during use-case strangler migration; growth is prohibited.",
+      "expiresAfter": "XP-201 facade decomposition"
+    },
+    "src/desktop/main.js": {
+      "maxFileLines": 587,
+      "maxFunctionDecisionPoints": 40,
+      "owner": "Desktop maintainer",
+      "reason": "Electron composition root retains compatibility handlers while use cases migrate; growth is prohibited.",
+      "expiresAfter": "XP-201 main-process dispatch split"
+    },
+    "src/desktop/renderer/app.js": {
+      "maxFileLines": 1588,
+      "maxFunctionDecisionPoints": 199,
+      "owner": "Desktop maintainer",
+      "reason": "Legacy renderer facade retained while page presenters migrate; growth is prohibited.",
+      "expiresAfter": "XP-200 page parity closure"
+    },
+    "src/desktop/update/RuntimeConfigMigrator.js": {
+      "maxFileLines": 2301,
+      "maxFunctionDecisionPoints": 108,
+      "owner": "Update maintainer",
+      "reason": "Compatibility facade remains after planner/applier/verifier extraction; growth is prohibited.",
+      "expiresAfter": "XP-205 caller migration"
+    },
+    "src/desktop/update/RuntimeConfigMigrations.js": {
+      "maxFileLines": 851,
+      "maxFunctionDecisionPoints": 50,
+      "owner": "Update maintainer",
+      "reason": "Ordered historical migration registry is append-oriented; current complexity and size may not increase without a new migration component.",
+      "expiresAfter": "migration registry version split"
+    },
+    "src/modes/b5-craft/B5CraftModeService.js": {
+      "maxFileLines": 1578,
+      "maxFunctionDecisionPoints": 98,
+      "owner": "B5 maintainer",
+      "reason": "Behavior-preserving facade remains after state/policy extraction; growth is prohibited.",
+      "expiresAfter": "XP-203 replay parity closure"
+    },
+    "src/recovery/FleetControlService.js": {
+      "maxFileLines": 585,
+      "maxFunctionDecisionPoints": 40,
+      "owner": "Recovery maintainer",
+      "reason": "Existing fleet recovery facade is frozen pending a dedicated decomposition package.",
+      "expiresAfter": "next recovery architecture review"
+    }
+  },
+  "maxFileLines": 500,
+  "maxFunctionDecisionPoints": 40,
+  "forbiddenPatterns": ["eval-call", "function-constructor", "raw-side-effect", "todo-marker"]
+}
