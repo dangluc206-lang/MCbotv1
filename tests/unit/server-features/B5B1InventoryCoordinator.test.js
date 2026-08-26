@@ -4,16 +4,35 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const B5B1InventoryCoordinator = require('../../../src/server-features/crafting/b5/B5B1InventoryCoordinator');
 
-function createHarness({ source = 'inventory', configuredSource = 'inventory', count = 0, emptySlots = 6 } = {}) {
+function createHarness({
+    source = 'inventory',
+    configuredSource = 'inventory',
+    count = 0,
+    emptySlots = 6,
+    prepareBase = null,
+    finalizeBase = null
+} = {}) {
     let inventoryCount = count;
     let slots = emptySlots;
     let acquired = null;
     let returned = 0;
+    const prepareCalls = [];
+    const finalizeCalls = [];
     const inventoryState = {
         count(id) { return id === 'coal' ? inventoryCount : 0; },
         spaceSnapshot() { return { emptySlotCount: slots }; }
     };
     const storageFlow = {
+        async prepareBase(id, requiredAmount, options) {
+            prepareCalls.push({ id, requiredAmount, options });
+            if (!prepareBase) return { success: true, data: { ready: true, available: requiredAmount } };
+            return { success: true, data: { ready: true, ...prepareBase(id, requiredAmount, options) } };
+        },
+        async finalizeBase(id, options) {
+            finalizeCalls.push({ id, options });
+            if (!finalizeBase) return { success: true, data: { ready: true, converted: true } };
+            return { success: true, data: { ready: true, ...finalizeBase(id, options) } };
+        },
         async returnBaseInventory(id) {
             returned += inventoryCount;
             inventoryCount = 0;
@@ -41,7 +60,16 @@ function createHarness({ source = 'inventory', configuredSource = 'inventory', c
     });
     const chain = { baseId: 'coal', b2Id: 'refined_coal', b2RecipeId: 'refined_coal', b3InputPerCraft: 4 };
     const context = { trace: { id: 'test' } };
-    return { coordinator, chain, context, acquired: () => acquired, returned: () => returned, setCount: value => { inventoryCount = value; } };
+    return {
+        coordinator,
+        chain,
+        context,
+        acquired: () => acquired,
+        returned: () => returned,
+        prepareCalls: () => prepareCalls,
+        finalizeCalls: () => finalizeCalls,
+        setCount: value => { inventoryCount = value; }
+    };
 }
 
 test('V5 rejects storage-backed B2 acquisition contract', async () => {
@@ -63,6 +91,32 @@ test('V5 acquires only the useful B1 amount while reserving output slots', async
     assert.equal(acquired().options.minimumFreeSlots, 2);
 });
 
+test('storage B2 acquisition refreshes the current B1 type and uses actual prepared stock, not planned stock', async () => {
+    const { coordinator, chain, context, prepareCalls, acquired } = createHarness({
+        source: 'storage',
+        configuredSource: 'storage',
+        prepareBase: () => ({ available: 32 })
+    });
+    const result = await coordinator.acquire(chain, context, { b2Remaining: 20, minFreeForB3All: 1 });
+    assert.equal(result.ready, true);
+    assert.equal(result.source, 'storage');
+    assert.equal(result.available, 32);
+    assert.equal(result.craftable, 2);
+    assert.equal(prepareCalls().length, 1);
+    assert.equal(prepareCalls()[0].id, 'coal');
+    assert.equal(prepareCalls()[0].requiredAmount, 16);
+    assert.equal(acquired(), null);
+});
+
+test('storage B3 boundary compacts only the currently active B1 type', async () => {
+    const { coordinator, chain, context, finalizeCalls } = createHarness({ source: 'storage', configuredSource: 'storage' });
+    const result = await coordinator.compactAfterB3(chain, context);
+    assert.equal(result.baseId, 'coal');
+    assert.equal(result.skipped, false);
+    assert.equal(finalizeCalls().length, 1);
+    assert.equal(finalizeCalls()[0].id, 'coal');
+});
+
 test('V5 returns all stale B1 through verified storage flow', async () => {
     const { coordinator, chain, context, returned } = createHarness({ count: 32, emptySlots: 6 });
     const result = await coordinator.returnToStorage(chain, context);
@@ -79,9 +133,8 @@ test('V5 return is a no-op when no B1 remains in inventory', async () => {
     assert.equal(returned(), 0);
 });
 
-
 test('legacy storage-backed acquisition remains compatible when V5 inventory mode is not configured', async () => {
-    const { coordinator, chain, context, acquired } = createHarness({ source: 'storage', configuredSource: 'storage' });
+    const { coordinator, chain, context, acquired } = createHarness({ source: 'storage', configuredSource: 'storage', prepareBase: null });
     const result = await coordinator.acquire(chain, context, { b2Remaining: 3 });
     assert.equal(result.ready, true);
     assert.equal(result.source, 'storage');
