@@ -43,6 +43,12 @@ class B5StorageFlow {
     async finalizeBase(baseId, options = {}) {
         await this.#resetGenerationIfNeeded(options);
         if (!this.activeBaseId) {
+            if (options.requireActive === true) {
+                return Result.ok({
+                    baseId, ready: true, converted: false,
+                    skipped: true, reason: 'no-active-material-transaction'
+                });
+            }
             if (this.#wasFinalizedInOperation(baseId, options)) {
                 return Result.ok({
                     baseId, ready: true, converted: false,
