@@ -28,12 +28,66 @@ class B5B1InventoryCoordinator {
         this.#assertContract(chain, context);
         const request = this.#request(chain, options);
         if (this.b2Input.source === 'storage') {
+            if (typeof this.storageFlow?.prepareBase !== 'function') {
+                return {
+                    ready: request.plannedCrafts > 0, reason: null, source: 'storage',
+                    baseId: chain.baseId, b2Id: chain.b2Id, basePerB2: request.basePerB2,
+                    plannedCrafts: request.plannedCrafts, available: request.usefulTotal,
+                    craftable: request.plannedCrafts, transfer: null, reserveSlots: request.reserveSlots,
+                    maxAmount: 0
+                };
+            }
+
+            const prepared = await this.runStep(context, {
+                subsystem: 'b5', step: 'prepare-b1-for-b2',
+                action: 'refresh /kho and prepare only the B1 type currently being crafted', resource: chain.baseId,
+                details: {
+                    b2Id: chain.b2Id,
+                    b2RecipeId: chain.b2RecipeId,
+                    requiredBase: request.basePerB2,
+                    b2Remaining: request.plannedCrafts,
+                    source: 'storage'
+                }
+            }, () => this.storageFlow.prepareBase(chain.baseId, request.basePerB2, this.childOptions(context, {
+                outputId: chain.b2Id,
+                minimumFreeSlots: request.reserveSlots
+            })), { acceptFailedResult: true });
+
+            if (prepared?.success === false) {
+                return {
+                    ready: false,
+                    reason: prepared.message || 'b1-prepare-failed',
+                    source: 'storage',
+                    baseId: chain.baseId,
+                    b2Id: chain.b2Id,
+                    basePerB2: request.basePerB2,
+                    plannedCrafts: request.plannedCrafts,
+                    available: 0,
+                    craftable: 0,
+                    transfer: null,
+                    reserveSlots: request.reserveSlots,
+                    maxAmount: 0,
+                    preparation: prepared.meta || null
+                };
+            }
+
+            const data = prepared?.data || {};
+            const available = Math.max(0, Number(data.available || 0));
+            const ready = data.ready !== false && available >= request.basePerB2;
             return {
-                ready: request.plannedCrafts > 0, reason: null, source: 'storage',
-                baseId: chain.baseId, b2Id: chain.b2Id, basePerB2: request.basePerB2,
-                plannedCrafts: request.plannedCrafts, available: request.usefulTotal,
-                craftable: request.plannedCrafts, transfer: null, reserveSlots: request.reserveSlots,
-                maxAmount: 0
+                ready,
+                reason: ready ? null : (data.reason || 'b1-storage-not-ready'),
+                source: 'storage',
+                baseId: chain.baseId,
+                b2Id: chain.b2Id,
+                basePerB2: request.basePerB2,
+                plannedCrafts: request.plannedCrafts,
+                available,
+                craftable: Math.floor(available / request.basePerB2),
+                transfer: null,
+                reserveSlots: request.reserveSlots,
+                maxAmount: 0,
+                preparation: data
             };
         }
         let state = this.#state(chain, request.reserveSlots);
@@ -91,6 +145,31 @@ class B5B1InventoryCoordinator {
             });
         }
         return { baseId: chain.baseId, before, returned, remaining, skipped: false };
+    }
+
+    async compactAfterB3(chain, context) {
+        if (this.b2Input?.source !== 'storage') {
+            return { baseId: chain.baseId, skipped: true, source: this.b2Input?.source || null };
+        }
+        if (typeof this.storageFlow?.finalizeBase !== 'function') {
+            return { baseId: chain.baseId, skipped: true, reason: 'storage-finalize-unavailable' };
+        }
+        const result = await this.runStep(context, {
+            subsystem: 'b5', step: 'compact-b1-after-b3',
+            action: 'after enough B2 for B3, close the current B1 transaction and compact only that B1 type', resource: chain.baseId,
+            details: { b2Id: chain.b2Id, b3Id: chain.b3Id }
+        }, () => this.storageFlow.finalizeBase(chain.baseId, this.childOptions(context)), { acceptFailedResult: true });
+        if (result?.success === false) return result;
+        const data = result?.data || {};
+        if (data.ready === false) {
+            return {
+                success: false,
+                status: 'NOT_READY',
+                message: data.reason || 'b1-compaction-after-b3-not-ready',
+                data
+            };
+        }
+        return { baseId: chain.baseId, skipped: data.skipped === true, ...data };
     }
 
     #assertContract(chain, context) {
