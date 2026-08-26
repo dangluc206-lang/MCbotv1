@@ -1,0 +1,23 @@
+name: temporary-b5-fix-qa
+
+on:
+  push:
+    branches:
+      - fix/b5-b1-expand-compact-cycle
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node --check src/server-features/crafting/b5/B5B1InventoryCoordinator.js
+      - run: node --check src/server-features/crafting/b5/B5ReserveChainCoordinator.js
+      - run: node --check src/server-features/crafting/b5/flows/B5StorageFlow.js
+      - run: node --test tests/unit/server-features/B5B1InventoryCoordinator.test.js tests/unit/server-features/B5ReserveChainCoordinator.test.js tests/unit/server-features/B5StorageFlow.test.js
+      - run: npm test
+      - run: npm run check:static
