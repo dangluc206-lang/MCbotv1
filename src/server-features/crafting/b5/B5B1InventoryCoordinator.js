@@ -158,7 +158,7 @@ class B5B1InventoryCoordinator {
             subsystem: 'b5', step: 'compact-b1-after-b3',
             action: 'after enough B2 for B3, close the current B1 transaction and compact only that B1 type', resource: chain.baseId,
             details: { b2Id: chain.b2Id, b3Id: chain.b3Id }
-        }, () => this.storageFlow.finalizeBase(chain.baseId, this.childOptions(context)), { acceptFailedResult: true });
+        }, () => this.storageFlow.finalizeBase(chain.baseId, this.childOptions(context, { requireActive: true })), { acceptFailedResult: true });
         if (result?.success === false) return result;
         const data = result?.data || {};
         if (data.ready === false) {
