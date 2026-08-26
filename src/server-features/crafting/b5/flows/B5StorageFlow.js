@@ -14,6 +14,8 @@ class B5StorageFlow {
         this.activeGeneration = null;
         this.pendingSwitchBaseId = null;
         this.switchBarrierOperationId = null;
+        this.lastFinalizedBaseId = null;
+        this.lastFinalizedOperationId = null;
     }
 
     async compact(baseId, options = {}) {
@@ -40,7 +42,15 @@ class B5StorageFlow {
     // current B1 is returned and compacted before the next material begins.
     async finalizeBase(baseId, options = {}) {
         await this.#resetGenerationIfNeeded(options);
-        if (!this.activeBaseId) return this.b1Materials.compact(baseId, options);
+        if (!this.activeBaseId) {
+            if (this.#wasFinalizedInOperation(baseId, options)) {
+                return Result.ok({
+                    baseId, ready: true, converted: false,
+                    skipped: true, reason: 'already-finalized-in-current-operation'
+                });
+            }
+            return this.b1Materials.compact(baseId, options);
+        }
         if (this.activeBaseId !== baseId) {
             return Result.ok({
                 baseId, ready: false, converted: false,
@@ -107,17 +117,12 @@ class B5StorageFlow {
                 preflight, transactionOwner: this.activeBaseId
             });
         }
-        // V5 owns B1 -> B2 acquisition in B2InputAcquisitionFlow so the
-        // CraftingOperation verifier always observes B1 from player inventory.
-        // StorageFlow only prepares the canonical base form and owns the
-        // material transaction/finalization boundary.
         return Result.ok({
             ...(prepared.data || {}), baseId, required, ready: true,
             transfer: null, preflight, transactionOwner: this.activeBaseId,
             acquisitionOwner: 'B2InputAcquisitionFlow'
         });
     }
-
 
     async returnBaseInventory(baseId, options = {}) {
         await this.#resetGenerationIfNeeded(options);
@@ -241,6 +246,7 @@ class B5StorageFlow {
             if (compacted?.success === false) {
                 return { ready: false, reason: 'compact-active-material-failed', baseId, nextBaseId };
             }
+            this.#rememberFinalized(baseId, options);
             this.#clearTransaction();
             return { ready: true, baseId, nextBaseId, transfer: null, compacted: compacted?.data || null };
         }
@@ -265,8 +271,22 @@ class B5StorageFlow {
             resource: baseId, nextResource: nextBaseId,
             returnedToKho: Number(transfer?.moved || 0), compacted: compacted?.data || null
         });
+        this.#rememberFinalized(baseId, options);
         this.#clearTransaction();
         return { ready: true, baseId, nextBaseId, transfer, compacted: compacted?.data || null };
+    }
+
+    #wasFinalizedInOperation(baseId, options) {
+        const operationId = this.#operationId(options);
+        return Boolean(operationId
+            && this.lastFinalizedOperationId === operationId
+            && this.lastFinalizedBaseId === baseId);
+    }
+
+    #rememberFinalized(baseId, options) {
+        const operationId = this.#operationId(options);
+        this.lastFinalizedBaseId = operationId ? baseId : null;
+        this.lastFinalizedOperationId = operationId;
     }
 
     async #resetGenerationIfNeeded(options) {
@@ -274,6 +294,8 @@ class B5StorageFlow {
         if (this.activeGeneration === null || generation === null) return;
         if (Number(this.activeGeneration) === Number(generation)) return;
         this.#clearTransaction();
+        this.lastFinalizedBaseId = null;
+        this.lastFinalizedOperationId = null;
     }
 
     #clearTransaction() {
