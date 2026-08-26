@@ -1,25 +1,295 @@
 'use strict';
 
+const Result = require('../../../../shared/result/Result');
+const KhoMaterialTransfer = require('../../../storage/KhoMaterialTransfer');
+
 class B5StorageFlow {
     constructor({ b1Materials }) {
         if (!b1Materials) throw new TypeError('B5StorageFlow b1Materials is required.');
         this.b1Materials = b1Materials;
+        this.storage = b1Materials.storage || null;
+        this.logger = b1Materials.logger || null;
+        this.transfer = this.storage ? new KhoMaterialTransfer({ storage: this.storage, logger: this.logger }) : null;
+        this.activeBaseId = null;
+        this.activeGeneration = null;
+        this.pendingSwitchBaseId = null;
+        this.switchBarrierOperationId = null;
     }
 
-    compact(baseId, options = {}) {
+    async compact(baseId, options = {}) {
+        await this.#resetGenerationIfNeeded(options);
+        if (this.activeBaseId === baseId) {
+            const finalized = await this.#finalizeActive(null, options);
+            if (finalized?.ready === false) {
+                return Result.ok({
+                    baseId, converted: false, ready: false,
+                    reason: 'active-material-finalize-blocked', blocker: finalized
+                });
+            }
+            return Result.ok({
+                baseId, converted: true, finalized: true,
+                transfer: finalized.transfer || null,
+                compacted: finalized.compacted || null
+            });
+        }
         return this.b1Materials.compact(baseId, options);
     }
 
-    compactAll(options = {}) {
+    async compactAll(options = {}) {
+        await this.#resetGenerationIfNeeded(options);
+        const finalized = await this.#finalizeActive(null, options);
+        if (finalized?.ready === false) {
+            return Result.ok({
+                converted: false,
+                ready: false,
+                reason: 'active-material-finalize-blocked',
+                activeBaseId: this.activeBaseId,
+                blocker: finalized
+            });
+        }
         return this.b1Materials.compactAll(options);
     }
 
-    prepareBase(baseId, required, options = {}) {
-        // Storage Protection is owned by the mode at the B5 batch boundary.
-        // During crafting we only switch the selected B1 family between block
-        // and loose form. Pure B5 expands freely; Collector+B5 may pass its
-        // own headroom limit through options.
-        return this.b1Materials.ensureBaseAvailable(baseId, required, options);
+    async prepareBase(baseId, required, options = {}) {
+        await this.#resetGenerationIfNeeded(options);
+
+        const switchGate = await this.#handleMaterialSwitch(baseId, options);
+        if (switchGate) return Result.ok(switchGate);
+
+        if (this.activeBaseId === baseId) {
+            this.pendingSwitchBaseId = null;
+            this.switchBarrierOperationId = null;
+        }
+        this.activeBaseId = baseId;
+        this.activeGeneration = this.#generation(options);
+
+        const preflight = await this.#preflightDecompression(baseId, required, options);
+        if (preflight.safe === false) {
+            this.logger?.info?.('B5 B1 PREP WAIT', {
+                operation: 'B5StorageFlow', step: 'preflight-decompression', phase: 'WAIT',
+                resource: baseId, reason: preflight.reason, required, preflight
+            });
+            return Result.ok({
+                baseId, required, ready: false, reason: preflight.reason,
+                available: preflight.loose ?? null, blocks: preflight.blocks ?? null,
+                preflight, transactionOwner: this.activeBaseId
+            });
+        }
+
+        const prepared = await this.b1Materials.ensureBaseAvailable(baseId, required, options);
+        if (prepared?.success === false) return prepared;
+        if (prepared?.data?.ready === false) {
+            this.activeBaseId = null;
+            this.activeGeneration = null;
+            this.pendingSwitchBaseId = null;
+            this.switchBarrierOperationId = null;
+            return Result.ok({
+                ...(prepared.data || {}), baseId, required, ready: false,
+                reason: prepared.data?.reason || 'base-form-unavailable',
+                preflight, transactionOwner: this.activeBaseId
+            });
+        }
+        if (!this.transfer) {
+            // B2InputAcquisitionFlow remains the withdrawal owner. Tests and
+            // alternate storage capabilities may intentionally omit the
+            // optimized material-detail transfer; preparation must still
+            // hand off to the canonical acquisition capability.
+            return Result.ok({
+                ...(prepared.data || {}), baseId, required, ready: true,
+                transfer: null, preflight, transactionOwner: this.activeBaseId
+            });
+        }
+
+        const minRequired = this.#minimumRecipeInput(baseId, required);
+        const transfer = await this.transfer.withdrawUpTo(baseId, {
+            minRequired,
+            reserveEmptySlots: 0,
+            cancellationToken: options.cancellationToken || options.operationContext?.cancellation?.token || null,
+            operationContext: options.operationContext || null,
+            expectedGeneration: options.expectedGeneration ?? options.operationContext?.connectionGeneration ?? null
+        });
+        if (transfer?.ready === false) {
+            return Result.ok({
+                ...(prepared.data || {}), baseId, required, ready: false,
+                reason: transfer.reason || 'b1-transfer-not-ready',
+                available: Number(prepared.data?.available || 0),
+                blocks: Number(prepared.data?.blocks || 0),
+                preflight, transfer, transactionOwner: this.activeBaseId
+            });
+        }
+
+        const availableInventory = Math.max(0, Number(transfer.afterInventory ?? transfer.beforeInventory ?? 0));
+        if (availableInventory < minRequired) {
+            return Result.ok({
+                ...(prepared.data || {}), baseId, required, ready: false,
+                reason: 'b1-inventory-below-one-b2', minRequired, availableInventory,
+                transfer, preflight, transactionOwner: this.activeBaseId
+            });
+        }
+
+        this.logger?.info?.('B5 B1 MATERIAL READY IN INVENTORY', {
+            operation: 'B5StorageFlow', step: 'prepare-base-inventory', phase: 'OK',
+            resource: baseId, required, minRequired, availableInventory, moved: Number(transfer.moved || 0), preflight
+        });
+
+        return Result.ok({
+            ...(prepared.data || {}), ready: true, baseId, required,
+            availableInventory, transfer, preflight, transactionOwner: this.activeBaseId
+        });
+    }
+
+    async #handleMaterialSwitch(requestedBaseId, options) {
+        const active = this.activeBaseId;
+        if (!active || active === requestedBaseId) return null;
+        const operationId = this.#operationId(options);
+
+        if (!this.pendingSwitchBaseId) {
+            this.pendingSwitchBaseId = requestedBaseId;
+            this.switchBarrierOperationId = operationId;
+            return {
+                baseId: requestedBaseId, required: 0, ready: false,
+                reason: 'material-switch-replan', transactionOwner: active,
+                pendingSwitchBaseId: requestedBaseId, switchBarrierOperationId: operationId
+            };
+        }
+
+        if (operationId && this.switchBarrierOperationId) {
+            if (operationId === this.switchBarrierOperationId) {
+                return {
+                    baseId: requestedBaseId, required: 0, ready: false,
+                    reason: 'material-switch-locked', transactionOwner: active,
+                    pendingSwitchBaseId: this.pendingSwitchBaseId,
+                    switchBarrierOperationId: this.switchBarrierOperationId
+                };
+            }
+        } else if (this.pendingSwitchBaseId !== requestedBaseId) {
+            return {
+                baseId: requestedBaseId, required: 0, ready: false,
+                reason: 'material-switch-locked-no-operation-id', transactionOwner: active,
+                pendingSwitchBaseId: this.pendingSwitchBaseId
+            };
+        }
+
+        const finalized = await this.#finalizeActive(requestedBaseId, options);
+        if (finalized?.ready === false) {
+            return {
+                baseId: requestedBaseId, required: 0, ready: false,
+                reason: 'material-finalize-blocked', transactionOwner: active,
+                pendingSwitchBaseId: requestedBaseId, blocker: finalized
+            };
+        }
+        return null;
+    }
+
+    async #preflightDecompression(baseId, required, options) {
+        if (!this.storage?.read) {
+            return { safe: true, reason: 'decompression-preflight-delegated', baseId, delegated: true };
+        }
+        const read = await this.storage.read({
+            refresh: true,
+            cancellationToken: options.cancellationToken || options.operationContext?.cancellation?.token || null,
+            operationContext: options.operationContext || null,
+            expectedGeneration: options.expectedGeneration ?? options.operationContext?.connectionGeneration ?? null
+        });
+        if (read?.success === false) {
+            return { safe: false, reason: 'storage-read-failed', baseId, message: read.message || read.error?.message || null };
+        }
+
+        const snapshot = read.data;
+        const resource = this.b1Materials.resources?.[baseId] || null;
+        const loose = Math.max(0, Number(snapshot?.items?.[baseId] || 0));
+        const blockId = resource?.blockId || null;
+        const blocks = blockId ? Math.max(0, Number(snapshot?.items?.[blockId] || 0)) : 0;
+        const ratio = Math.max(1, Number(resource?.ratio || 1));
+        const need = Math.max(0, Number(required) || 0);
+
+        if (loose >= need || blocks <= 0 || ratio <= 1) {
+            return { safe: true, reason: 'no-decompression-needed', baseId, loose, blocks, ratio, required: need, decompressionNeeded: false };
+        }
+
+        const capacity = snapshot?.capacity || null;
+        const used = Number(capacity?.used);
+        const limit = Number(capacity?.limit ?? capacity?.total);
+        const projectedIncrease = blocks * (ratio - 1);
+        const projectedUsed = Number.isFinite(used) ? used + projectedIncrease : null;
+
+        if (!Number.isFinite(used) || !Number.isFinite(limit) || limit <= 0) {
+            return { safe: false, reason: 'storage-capacity-unknown', baseId, loose, blocks, ratio, required: need, used: Number.isFinite(used) ? used : null, limit: Number.isFinite(limit) ? limit : null, projectedIncrease };
+        }
+        if (projectedUsed > limit) {
+            return { safe: false, reason: 'storage-hard-capacity', baseId, loose, blocks, ratio, required: need, used, limit, free: Math.max(0, limit - used), projectedIncrease, projectedUsed };
+        }
+        return { safe: true, reason: 'full-decompression-fits-capacity', baseId, loose, blocks, ratio, required: need, decompressionNeeded: true, used, limit, projectedIncrease, projectedUsed };
+    }
+
+    async #finalizeActive(nextBaseId, options) {
+        const baseId = this.activeBaseId;
+        if (!baseId) return { ready: true, skipped: true };
+        if (!this.transfer) {
+            const compacted = await this.b1Materials.compact(baseId, options);
+            if (compacted?.success === false) return { ready: false, reason: 'compact-active-material-failed', baseId, nextBaseId };
+            this.activeBaseId = null;
+            this.activeGeneration = null;
+            this.pendingSwitchBaseId = null;
+            this.switchBarrierOperationId = null;
+            return { ready: true, baseId, nextBaseId, transfer: null, compacted: compacted?.data || null };
+        }
+
+        const transfer = await this.transfer.depositAll(baseId, {
+            cancellationToken: options.cancellationToken || options.operationContext?.cancellation?.token || null,
+            operationContext: options.operationContext || null,
+            expectedGeneration: options.expectedGeneration ?? options.operationContext?.connectionGeneration ?? null
+        });
+        if (transfer?.ready === false) return { ready: false, reason: transfer.reason || 'b1-return-to-kho-not-ready', baseId, nextBaseId, transfer };
+
+        const compacted = await this.b1Materials.compact(baseId, options);
+        if (compacted?.success === false) {
+            return { ready: false, reason: 'compact-active-material-failed', baseId, nextBaseId, transfer, compactStatus: compacted.status || null, compactMessage: compacted.message || compacted.error?.message || null };
+        }
+
+        this.logger?.info?.('B5 B1 MATERIAL TRANSACTION CLOSED', {
+            operation: 'B5StorageFlow', step: 'finalize-material', phase: 'OK',
+            resource: baseId, nextResource: nextBaseId, returnedToKho: Number(transfer?.moved || 0), compacted: compacted?.data || null
+        });
+        this.activeBaseId = null;
+        this.activeGeneration = null;
+        this.pendingSwitchBaseId = null;
+        this.switchBarrierOperationId = null;
+        return { ready: true, baseId, nextBaseId, transfer, compacted: compacted?.data || null };
+    }
+
+    async #resetGenerationIfNeeded(options) {
+        const generation = this.#generation(options);
+        if (this.activeGeneration === null || generation === null) return;
+        if (Number(this.activeGeneration) === Number(generation)) return;
+        this.activeBaseId = null;
+        this.activeGeneration = null;
+        this.pendingSwitchBaseId = null;
+        this.switchBarrierOperationId = null;
+    }
+
+    #operationId(options = {}) {
+        const value = options.operationContext?.operationId ?? options.operationId ?? null;
+        const normalized = String(value || '').trim();
+        return normalized || null;
+    }
+
+    #generation(options = {}) {
+        const candidate = options.expectedGeneration ?? options.operationContext?.connectionGeneration ?? null;
+        const value = Number(candidate);
+        return Number.isInteger(value) && value > 0 ? value : null;
+    }
+
+    #minimumRecipeInput(baseId, fallback = 1) {
+        const recipes = this.b1Materials.recipeConfig || {};
+        let best = null;
+        for (const recipe of Object.values(recipes)) {
+            const amount = Number(recipe?.inputs?.[baseId]);
+            if (!Number.isFinite(amount) || amount <= 0) continue;
+            best = best === null ? amount : Math.min(best, amount);
+        }
+        if (best !== null) return Math.max(1, Math.floor(best));
+        return Math.max(1, Math.floor(Number(fallback) || 1));
     }
 }
 

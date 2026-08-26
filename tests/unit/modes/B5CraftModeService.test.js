@@ -24,7 +24,7 @@ async function waitUntil(predicate, timeoutMs = 500) {
 }
 
 function harness({ enabled = true, generationRef = { value: 7 }, craftImplementation = null, planningImplementation = null, protectionImplementation = null, protectionEvidenceKeyImplementation = null, stability = null, reconciliation = null, logger = null, failurePolicy = null, failurePublisher = null } = {}) {
-    const calls = { home: 0, protect: 0, protectOptions: [], postSmelt: 0, operationRuns: [], inspect: 0, craft: 0, craftOptions: [], skyDemand: [], skyRelease: [], sequence: [] };
+    const calls = { home: 0, protect: 0, protectOptions: [], postSmelt: 0, operationRuns: [], inspect: 0, craft: 0, craftOptions: [], planningConfigs: [], automationConfigs: [], skyDemand: [], skyRelease: [], sequence: [] };
     const catalog = new ModeCatalog([{ id: 'b5-craft', serviceName: 'b5CraftMode', label: 'Chế B5 thuần' }]).seal();
     const caps = new CapabilityRegistry({ botId: 'bot-01' }).seal();
     const eventBus = new EventBus();
@@ -72,7 +72,10 @@ function harness({ enabled = true, generationRef = { value: 7 }, craftImplementa
         },
         status() { return {}; }
     };
-    const b5Planning = { async inspectAdditionalFresh(...args) { calls.inspect += 1; return planningImplementation ? planningImplementation(...args) : { success: true, data: {} }; } };
+    const b5Planning = {
+        async inspectAdditionalFresh(...args) { calls.inspect += 1; return planningImplementation ? planningImplementation(...args) : { success: true, data: {} }; },
+        reconfigure(config) { calls.planningConfigs.push(config); }
+    };
     const b5Automation = {
         async runNext(options) {
             calls.craft += 1;
@@ -81,7 +84,8 @@ function harness({ enabled = true, generationRef = { value: 7 }, craftImplementa
             if (craftImplementation) return craftImplementation(options, calls);
             return { success: true, data: { complete: false, waitingForMaterials: true, productive: false, blockingReasons: [{ status: 'waiting', reason: 'waiting-for-complete-b2-batch', baseId: 'diamond' }] } };
         },
-        status() { return {}; }
+        status() { return {}; },
+        reconfigure(config) { calls.automationConfigs.push(config); }
     };
     const mode = new B5CraftModeService({
         botId: 'bot-01', modeContext, modeCoordinator: coordinator, catalog,
@@ -98,6 +102,24 @@ function harness({ enabled = true, generationRef = { value: 7 }, craftImplementa
     });
     return { mode, coordinator, calls };
 }
+
+test('B5 rules apply immediately while idle and only at the next cycle boundary while running', async () => {
+    const { mode, coordinator, calls } = harness();
+    const idle = mode.queueRulesConfig({ b2InputSource: 'inventory' });
+    assert.equal(idle.status, 'APPLIED_SAFE_BOUNDARY');
+    assert.equal(calls.planningConfigs.length, 1);
+    assert.equal(calls.automationConfigs.length, 1);
+
+    await coordinator.initialize(); await coordinator.start();
+    assert.equal((await mode.enable()).success, true);
+    const queued = mode.queueRulesConfig({ b2InputSource: 'storage' });
+    assert.equal(queued.status, 'QUEUED_CYCLE_BOUNDARY');
+    assert.equal(calls.planningConfigs.length, 1, 'running config must not mutate an in-flight cycle');
+    await waitUntil(() => calls.planningConfigs.length === 2, 300);
+    assert.equal(calls.planningConfigs[1].b2InputSource, 'storage');
+    assert.equal(mode.status().details.configApply.pending, false);
+    await mode.disable('test complete');
+});
 
 test('B5 craft mode demands its configured Sky target, protects storage first, then crafts with unbounded B1 decompression', async () => {
     const { mode, coordinator, calls } = harness();

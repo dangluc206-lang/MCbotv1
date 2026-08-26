@@ -1,81 +1,39 @@
 'use strict';
 
 const GuiSession = require('./GuiSession');
+const GuiWindowSessionBinding = require('./GuiWindowSessionBinding');
 const TimeoutError = require('../shared/errors/TimeoutError');
 const OperationCancelledError = require('../shared/errors/OperationCancelledError');
 const FlowError = require('../shared/errors/FlowError');
 const { normalizeConnectionGeneration } = require('../core/events/EventEnvelope');
 
 class GuiManager {
-    constructor({ botId, context, state, detector, clickQueue, clickGuard, clickExecutor, clickVerifier, eventBus = null, logger = null }) {
-        Object.assign(this, { botId, context, state, detector, clickQueue, clickGuard, clickExecutor, clickVerifier, eventBus, logger });
+    constructor({ botId, context, state, detector, clickQueue, clickGuard, clickExecutor, clickVerifier, eventBus = null, logger = null, workloadMetrics = null }) {
+        Object.assign(this, { botId, context, state, detector, clickQueue, clickGuard, clickExecutor, clickVerifier, eventBus, logger, workloadMetrics });
         this.session = null;
-        this.cleanup = [];
-        this.windowCleanup = null;
-        this.boundClient = null;
-        this.boundGeneration = null;
-        this.boundCleanup = null;
         this.lastWindowClosedAt = 0;
+        this.windowBinding = new GuiWindowSessionBinding({
+            botId, context, eventBus,
+            currentSession: () => this.session,
+            onOpen: (window, options) => this.open(window, options),
+            onClose: () => this.close(),
+            onUpdate: sessionId => this.update(sessionId)
+        });
     }
 
     async initialize() {
-        const bot = this.context.get();
-        if (bot) this.bind(bot, this.context.getGeneration());
-        if (this.eventBus) {
-            this.cleanup.push(
-                this.eventBus.on('connection:spawned', event => {
-                    if (event.botId !== this.botId) return;
-                    const generation = normalizeConnectionGeneration(event);
-                    const current = this.context.get();
-                    if (!current || generation === null || generation !== Number(this.context.getGeneration())) return;
-                    this.bind(current, generation);
-                }),
-                this.eventBus.on('connection:ended', event => {
-                    if (event.botId !== this.botId) return;
-                    const generation = normalizeConnectionGeneration(event);
-                    if (generation === null || generation !== Number(this.boundGeneration)) return;
-                    this.#unbindBoundClient();
-                    if (Number(this.session?.connectionGeneration) === generation) this.close();
-                })
-            );
-        }
+        this.windowBinding.initialize();
     }
 
     bind(bot, generation = this.context.getGeneration()) {
-        const canonicalGeneration = Number(generation);
-        if (!bot || !Number.isInteger(canonicalGeneration) || canonicalGeneration <= 0) return;
-        if (this.boundClient === bot && Number(this.boundGeneration) === canonicalGeneration) return;
-        this.#unbindBoundClient();
-        let cleaned = false;
-        const isCurrent = () => this.context.get?.() === bot && Number(this.context.getGeneration?.()) === canonicalGeneration;
-        const open = window => { if (isCurrent()) this.open(window, { client: bot, connectionGeneration: canonicalGeneration }); };
-        const close = () => { if (isCurrent() && Number(this.session?.connectionGeneration) === canonicalGeneration) this.close(); };
-        const onEnd = () => {
-            if (this.boundClient !== bot || Number(this.boundGeneration) !== canonicalGeneration) return;
-            cleanup();
-            if (Number(this.session?.connectionGeneration) === canonicalGeneration) this.close();
-        };
-        const cleanup = () => {
-            if (cleaned) return;
-            cleaned = true;
-            bot.off?.('windowOpen', open);
-            bot.off?.('windowClose', close);
-            bot.off?.('end', onEnd);
-        };
-
-        bot.on?.('windowOpen', open);
-        bot.on?.('windowClose', close);
-        bot.on?.('end', onEnd);
-        this.boundClient = bot;
-        this.boundGeneration = canonicalGeneration;
-        this.boundCleanup = cleanup;
+        this.windowBinding.bind(bot, generation);
     }
 
     open(window, { client = this.context.get?.(), connectionGeneration = this.context.getGeneration?.() } = {}) {
         const generation = Number(connectionGeneration);
         const currentClient = this.context.get?.() || null;
         if ((currentClient && client && client !== currentClient) || generation !== Number(this.context.getGeneration?.())) return this.session;
-        this.#unbindWindowUpdates();
+        this.windowBinding.unbindWindow();
         this.session?.invalidate();
 
         const detected = this.detector.detect(window, { previousId: this.session?.definitionId || null });
@@ -88,7 +46,7 @@ class GuiManager {
             identity: detected || null
         });
 
-        this.#bindWindowUpdates(window, this.session.id);
+        this.windowBinding.bindWindow(window, this.session.id);
         this.state.patch({
             window: {
                 title: window.title,
@@ -141,7 +99,7 @@ class GuiManager {
     }
 
     close() {
-        this.#unbindWindowUpdates();
+        this.windowBinding.unbindWindow();
         if (!this.session) return;
         const id = this.session.id;
         const generation = this.session.connectionGeneration;
@@ -691,7 +649,7 @@ class GuiManager {
         const cancellationToken = options.cancellationToken || null;
         const capturedClient = session.client || this.context.get?.();
         const capturedWindow = session.window;
-        return this.clickQueue.enqueue(async () => {
+        return this.#measureClick(() => this.clickQueue.enqueue(async () => {
             cancellationToken?.throwIfCancelled?.();
             this.clickGuard.assert({ session, slot, expectedGeneration, capturedClient });
             const clickedItem = session.window?.slots?.[slot] || null;
@@ -769,7 +727,7 @@ class GuiManager {
             id: `click:${session.id}:${slot}:${Date.now()}`,
             cancellationToken,
             queueWaitTimeoutMs: Number.isFinite(options.queueWaitTimeoutMs) ? options.queueWaitTimeoutMs : null
-        });
+        }));
     }
 
     #createNextOpenWaiter({ afterSessionId, beforeWindow = null, timeoutMs, cancellationToken, expectedGeneration = this.#currentGeneration(), label }) {
@@ -966,16 +924,8 @@ class GuiManager {
         });
     }
 
-    #bindWindowUpdates(window, sessionId) {
-        if (!window?.on) return;
-        const onUpdateSlot = () => this.update(sessionId);
-        window.on('updateSlot', onUpdateSlot);
-        this.windowCleanup = () => window.off?.('updateSlot', onUpdateSlot);
-    }
-
-    #unbindWindowUpdates() {
-        this.windowCleanup?.();
-        this.windowCleanup = null;
+    #measureClick(action) {
+        return this.workloadMetrics ? this.workloadMetrics.measure('gui.click', action) : action();
     }
 
     #isSessionCurrent(session) {
@@ -997,17 +947,8 @@ class GuiManager {
         return !capturedClient || client === capturedClient;
     }
 
-    #unbindBoundClient() {
-        this.boundCleanup?.();
-        this.boundCleanup = null;
-        this.boundClient = null;
-        this.boundGeneration = null;
-    }
-
     async stop() {
-        this.#unbindWindowUpdates();
-        this.#unbindBoundClient();
-        for (const fn of this.cleanup.splice(0)) fn();
+        this.windowBinding.stop();
         this.close();
         await this.clickQueue.destroy();
     }

@@ -7,7 +7,7 @@
       "cobblestone": 16
     },
     "menuSlot": 10,
-    "inputSource": "storage"
+    "inputSource": "inventory"
   },
   "refined_coal": {
     "output": "refined_coal",
@@ -17,7 +17,7 @@
       "coal": 16
     },
     "menuSlot": 11,
-    "inputSource": "storage"
+    "inputSource": "inventory"
   },
   "refined_redstone": {
     "output": "refined_redstone",
@@ -27,7 +27,7 @@
       "redstone": 64
     },
     "menuSlot": 12,
-    "inputSource": "storage"
+    "inputSource": "inventory"
   },
   "refined_lapis": {
     "output": "refined_lapis",
@@ -37,7 +37,7 @@
       "lapis_lazuli": 64
     },
     "menuSlot": 13,
-    "inputSource": "storage"
+    "inputSource": "inventory"
   },
   "refined_iron": {
     "output": "refined_iron",
@@ -47,7 +47,7 @@
       "iron_ingot": 64
     },
     "menuSlot": 14,
-    "inputSource": "storage"
+    "inputSource": "inventory"
   },
   "refined_gold": {
     "output": "refined_gold",
@@ -57,7 +57,7 @@
       "gold_ingot": 64
     },
     "menuSlot": 15,
-    "inputSource": "storage"
+    "inputSource": "inventory"
   },
   "refined_diamond": {
     "output": "refined_diamond",
@@ -67,7 +67,7 @@
       "diamond": 32
     },
     "menuSlot": 16,
-    "inputSource": "storage"
+    "inputSource": "inventory"
   },
   "refined_emerald": {
     "output": "refined_emerald",
@@ -77,7 +77,7 @@
       "emerald": 32
     },
     "menuSlot": 19,
-    "inputSource": "storage"
+    "inputSource": "inventory"
   },
   "super_cobblestone_block": {
     "output": "super_cobblestone_block",

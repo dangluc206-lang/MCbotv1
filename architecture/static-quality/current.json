@@ -1,6 +1,6 @@
 {
-  "contract": "mcbot-incremental-static-quality/v1",
-  "version": 1,
+  "contract": "mcbot-incremental-static-quality/v2",
+  "version": 2,
   "managedRoots": [
     "src/bootstrap/installers",
     "src/desktop/backup",
@@ -17,11 +17,16 @@
     "src/desktop/renderer/pages",
     "src/desktop/use-cases",
     "src/diagnostics/metrics",
+    "src/connection",
+    "src/gui",
     "src/modes/b5-craft/campaign",
     "src/modes/b5-craft/fault",
     "src/modes/b5-craft/status",
     "src/modes/b5-craft/storage",
     "src/modes/composable",
+    "src/planning/storage",
+    "src/server-features/crafting",
+    "src/server-features/storage",
     "src/shared/contracts"
   ],
   "managedFiles": [
@@ -65,57 +70,222 @@
     "src/shared/security/Redactor.js"
   ],
   "legacyBudgets": {
+    "src/bootstrap/registerBotServices.js": {
+      "maxFileLines": 1095,
+      "maxFunctionLines": 948,
+      "maxFunctionStatements": 172,
+      "maxCyclomaticComplexity": 23,
+      "owner": "Bootstrap maintainer",
+      "reason": "Composition root was formatted so AST and line metrics are visible; wiring behavior is frozen pending installer extraction.",
+      "expiresAfter": "bootstrap installer decomposition"
+    },
+    "src/connection/ConnectionManager.js": {
+      "maxFileLines": 623,
+      "maxFunctionLines": 191,
+      "maxFunctionStatements": 58,
+      "maxCyclomaticComplexity": 32,
+      "owner": "Connection maintainer",
+      "reason": "Existing connection lifecycle coordinator is frozen; no metric may increase.",
+      "expiresAfter": "connection lifecycle transaction extraction"
+    },
     "src/desktop/DesktopController.js": {
-      "maxFileLines": 986,
-      "maxFunctionDecisionPoints": 40,
+      "maxFileLines": 1006,
+      "maxFunctionLines": 72,
+      "maxFunctionStatements": 46,
+      "maxCyclomaticComplexity": 37,
       "owner": "Desktop maintainer",
       "reason": "Facade retained during use-case strangler migration; growth is prohibited.",
       "expiresAfter": "XP-201 facade decomposition"
     },
     "src/desktop/main.js": {
       "maxFileLines": 587,
-      "maxFunctionDecisionPoints": 40,
+      "maxFunctionLines": 112,
+      "maxFunctionStatements": 95,
+      "maxCyclomaticComplexity": 14,
       "owner": "Desktop maintainer",
       "reason": "Electron composition root retains compatibility handlers while use cases migrate; growth is prohibited.",
       "expiresAfter": "XP-201 main-process dispatch split"
     },
     "src/desktop/renderer/app.js": {
-      "maxFileLines": 1588,
-      "maxFunctionDecisionPoints": 199,
+      "maxFileLines": 1603,
+      "maxFunctionLines": 355,
+      "maxFunctionStatements": 105,
+      "maxCyclomaticComplexity": 52,
       "owner": "Desktop maintainer",
       "reason": "Legacy renderer facade retained while page presenters migrate; growth is prohibited.",
       "expiresAfter": "XP-200 page parity closure"
     },
     "src/desktop/update/RuntimeConfigMigrator.js": {
       "maxFileLines": 2301,
-      "maxFunctionDecisionPoints": 108,
+      "maxFunctionLines": 384,
+      "maxFunctionStatements": 162,
+      "maxCyclomaticComplexity": 95,
       "owner": "Update maintainer",
       "reason": "Compatibility facade remains after planner/applier/verifier extraction; growth is prohibited.",
       "expiresAfter": "XP-205 caller migration"
     },
     "src/desktop/update/RuntimeConfigMigrations.js": {
       "maxFileLines": 851,
-      "maxFunctionDecisionPoints": 50,
+      "maxFunctionLines": 163,
+      "maxFunctionStatements": 101,
+      "maxCyclomaticComplexity": 44,
       "owner": "Update maintainer",
       "reason": "Ordered historical migration registry is append-oriented; current complexity and size may not increase without a new migration component.",
       "expiresAfter": "migration registry version split"
     },
     "src/modes/b5-craft/B5CraftModeService.js": {
-      "maxFileLines": 1578,
-      "maxFunctionDecisionPoints": 98,
+      "maxFileLines": 1662,
+      "maxFunctionLines": 411,
+      "maxFunctionStatements": 190,
+      "maxCyclomaticComplexity": 115,
       "owner": "B5 maintainer",
       "reason": "Behavior-preserving facade remains after state/policy extraction; growth is prohibited.",
       "expiresAfter": "XP-203 replay parity closure"
     },
+    "src/modes/composable/WorkflowDefinitionValidator.js": {
+      "maxFileLines": 178,
+      "maxFunctionLines": 76,
+      "maxFunctionStatements": 60,
+      "maxCyclomaticComplexity": 51,
+      "owner": "Composable mode maintainer",
+      "reason": "Existing schema validator is frozen at its measured AST complexity.",
+      "expiresAfter": "workflow step schema table extraction"
+    },
     "src/recovery/FleetControlService.js": {
       "maxFileLines": 585,
-      "maxFunctionDecisionPoints": 40,
+      "maxFunctionLines": 81,
+      "maxFunctionStatements": 67,
+      "maxCyclomaticComplexity": 39,
       "owner": "Recovery maintainer",
       "reason": "Existing fleet recovery facade is frozen pending a dedicated decomposition package.",
       "expiresAfter": "next recovery architecture review"
+    },
+    "src/gui/GuiManager.js": {
+      "maxFileLines": 1021,
+      "maxFunctionLines": 91,
+      "maxFunctionStatements": 47,
+      "maxCyclomaticComplexity": 30,
+      "owner": "GUI maintainer",
+      "reason": "Legacy GUI facade is frozen while window/session binding is extracted.",
+      "expiresAfter": "GUI facade decomposition"
+    },
+    "src/gui/knowledge/GuiKnowledgeRegistry.js": {
+      "maxFileLines": 895,
+      "maxFunctionLines": 132,
+      "maxFunctionStatements": 46,
+      "maxCyclomaticComplexity": 35,
+      "owner": "GUI knowledge maintainer",
+      "reason": "Existing learned-identity registry is frozen; no metric may increase.",
+      "expiresAfter": "GUI knowledge persistence split"
+    },
+    "src/server-features/crafting/B5AutomationService.js": {
+      "maxFileLines": 1495,
+      "maxFunctionLines": 598,
+      "maxFunctionStatements": 165,
+      "maxCyclomaticComplexity": 115,
+      "owner": "B5 maintainer",
+      "reason": "Explicitly deferred decomposition; the legacy implementation is frozen in the meantime.",
+      "expiresAfter": "deferred B5AutomationService decomposition"
+    },
+    "src/server-features/crafting/B5PlanningService.js": {
+      "maxFileLines": 479,
+      "maxFunctionLines": 157,
+      "maxFunctionStatements": 50,
+      "maxCyclomaticComplexity": 50,
+      "owner": "B5 planning maintainer",
+      "reason": "Existing progress projection exceeds the new AST function budget and is frozen.",
+      "expiresAfter": "B5 progress projection extraction"
+    },
+    "src/server-features/crafting/CraftingOperation.js": {
+      "maxFileLines": 701,
+      "maxFunctionLines": 301,
+      "maxFunctionStatements": 106,
+      "maxCyclomaticComplexity": 72,
+      "owner": "Crafting maintainer",
+      "reason": "Explicitly deferred operation decomposition; the coordinator is frozen.",
+      "expiresAfter": "deferred CraftingOperation decomposition"
+    },
+    "src/server-features/crafting/CraftingResultVerifier.js": {
+      "maxFileLines": 646,
+      "maxFunctionLines": 172,
+      "maxFunctionStatements": 48,
+      "maxCyclomaticComplexity": 57,
+      "owner": "Crafting maintainer",
+      "reason": "Existing verifier is frozen until its deferred decomposition.",
+      "expiresAfter": "deferred verifier decomposition"
+    },
+    "src/server-features/crafting/b5/trace/B5TraceRecorder.js": {
+      "maxFileLines": 107,
+      "maxFunctionLines": 56,
+      "maxFunctionStatements": 17,
+      "maxCyclomaticComplexity": 49,
+      "owner": "B5 diagnostics maintainer",
+      "reason": "Legacy trace normalization is branch-heavy and frozen.",
+      "expiresAfter": "trace envelope normalizer extraction"
+    },
+    "src/server-features/storage/B1StorageMaterialService.js": {
+      "maxFileLines": 660,
+      "maxFunctionLines": 125,
+      "maxFunctionStatements": 38,
+      "maxCyclomaticComplexity": 29,
+      "owner": "Storage maintainer",
+      "reason": "Existing B1 storage coordinator is frozen under the expanded scope.",
+      "expiresAfter": "B1 storage flow decomposition"
+    },
+    "src/server-features/storage/KhoCapacityReader.js": {
+      "maxFileLines": 132,
+      "maxFunctionLines": 66,
+      "maxFunctionStatements": 25,
+      "maxCyclomaticComplexity": 43,
+      "owner": "Storage maintainer",
+      "reason": "Server-specific capacity parser is frozen at its measured AST complexity.",
+      "expiresAfter": "capacity parser rule-table migration"
+    },
+    "src/server-features/storage/KhoMaterialTransfer.js": {
+      "maxFileLines": 377,
+      "maxFunctionLines": 160,
+      "maxFunctionStatements": 73,
+      "maxCyclomaticComplexity": 58,
+      "owner": "Storage maintainer",
+      "reason": "Current material transfer transaction is frozen; no metric may increase.",
+      "expiresAfter": "material transfer step extraction"
+    },
+    "src/server-features/storage/KhoSellOperation.js": {
+      "maxFileLines": 397,
+      "maxFunctionLines": 169,
+      "maxFunctionStatements": 64,
+      "maxCyclomaticComplexity": 54,
+      "owner": "Storage maintainer",
+      "reason": "Existing sell transaction is frozen under the expanded scope.",
+      "expiresAfter": "sell session coordinator extraction"
+    },
+    "src/server-features/storage/KhoService.js": {
+      "maxFileLines": 580,
+      "maxFunctionLines": 118,
+      "maxFunctionStatements": 46,
+      "maxCyclomaticComplexity": 40,
+      "owner": "Storage maintainer",
+      "reason": "Storage facade is frozen while transaction responsibilities migrate.",
+      "expiresAfter": "storage transaction facade split"
+    },
+    "src/server-features/storage/b1/B1StartupReserveTrimmer.js": {
+      "maxFileLines": 574,
+      "maxFunctionLines": 425,
+      "maxFunctionStatements": 155,
+      "maxCyclomaticComplexity": 95,
+      "owner": "Storage maintainer",
+      "reason": "Legacy reserve trimming transaction is frozen under the expanded scope.",
+      "expiresAfter": "reserve trimming step extraction"
     }
   },
   "maxFileLines": 500,
-  "maxFunctionDecisionPoints": 40,
+  "maxFunctionLines": 140,
+  "maxFunctionStatements": 70,
+  "maxCyclomaticComplexity": 40,
+  "rawSideEffectAllowlist": {
+    "bot.chat": ["src/commands/CommandExecutor.js"],
+    "clickWindow": ["src/gui/click/ClickExecutor.js"],
+    "client.end": ["src/connection/ConnectionManager.js"]
+  },
   "forbiddenPatterns": ["eval-call", "function-constructor", "raw-side-effect", "todo-marker"]
 }

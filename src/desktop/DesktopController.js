@@ -5,6 +5,7 @@ const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const Redactor = require('../shared/security/Redactor');
+const LiveConfigApplier = require('./use-cases/LiveConfigApplier');
 const ConfigSpecs = require('../configuration/ConfigSpecs');
 const DesktopLogPolicy = require('./DesktopLogPolicy');
 const VietnamTime = require('../shared/time/VietnamTime');
@@ -588,23 +589,7 @@ class DesktopController {
         const backup = await this.#writeConfigAtomic(spec.file, value, key);
         const result = await this.bundle.configuration.service.reload(key, spec.file, spec.schema, { botProfiles: profiles });
         if (!result.success) throw result.error || new Error(result.message || `Không thể reload cấu hình ${key}.`);
-        let applied = false;
-        if (key === 'skyblock') {
-            for (const runtime of this.bundle.application.listRuntimes()) { const gateway = runtime.getService('skyblockAutoJoin'); gateway?.reconfigure?.({ ...(value.modeJoin || {}), selection: gateway?.status?.().defaultTarget || value.defaultSelection }); }
-            applied = true;
-        } else if (key === 'skyCommands') {
-            for (const runtime of this.bundle.application.listRuntimes()) runtime.getService('skyCommandService')?.reconfigure?.(value);
-            applied = true;
-        } else if (key === 'b5CraftMode') {
-            for (const runtime of this.bundle.application.listRuntimes()) {
-                const mode = runtime.getService('b5CraftMode');
-                mode?.reconfigure?.(value);
-                if (value.enabled === false && mode?.status?.().enabled) {
-                    await mode.disable('Chế B5 thuần đã bị tắt trong cấu hình.');
-                }
-            }
-            applied = true;
-        }
+        const applied = await LiveConfigApplier.apply({ key, value, runtimes: this.bundle.application.listRuntimes() });
         return Redactor.sanitize({ key, file: spec.file, backup, appliedLive: applied, restartRequired: !applied, value });
     }
 

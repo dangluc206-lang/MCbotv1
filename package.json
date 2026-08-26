@@ -51,7 +51,10 @@
     "support:validate:file": "node scripts/validate-support-bundle.js",
     "check:product-docs": "node scripts/check-product-docs.js",
     "check:static": "node scripts/check-static-quality.js",
+    "check:critical-coverage": "node scripts/check-critical-coverage.js",
+    "check:version": "node scripts/check-version-contract.js",
     "perf:operator": "node scripts/measure-operator-performance.js --check",
+    "perf:live:check": "node scripts/measure-live-workload.js",
     "test:fault-matrix:r1": "node --test tests/unit/simulation/R1RecoveryFaultMatrix.test.js tests/unit/simulation/FaultMatrixContract.test.js tests/unit/gui/Gui.test.js tests/unit/modes/ModeFaultPolicy.test.js tests/unit/recovery/FleetControlService.test.js tests/unit/desktop/DesktopSecretStore.test.js tests/unit/desktop/DesktopFatalRecovery.test.js tests/unit/diagnostics/TraceSupportBundle.test.js",
     "test:fault-matrix:r5": "node --test tests/unit/simulation/R5FaultMatrixContract.test.js tests/unit/simulation/FaultMatrixContract.test.js tests/unit/modes/B5CraftModeService.test.js tests/unit/desktop/RuntimeConfigMigrator.test.js tests/unit/recovery/FleetControlService.test.js tests/unit/desktop/DesktopApiContract.test.js tests/unit/desktop/ReleaseCanaryPolicy.test.js",
     "check:release-canary": "node scripts/check-release-canary-policy.js"
@@ -65,10 +68,12 @@
     "yauzl": "2.10.0"
   },
   "devDependencies": {
+    "acorn": "8.18.0",
     "electron": "43.4.0",
     "@electron-forge/cli": "7.11.2",
     "@electron-forge/maker-squirrel": "7.11.2",
-    "electron-winstaller": "5.4.4"
+    "electron-winstaller": "5.4.4",
+    "prettier": "3.9.6"
   },
   "productName": "MCbot Desktop",
   "author": "MCbot"

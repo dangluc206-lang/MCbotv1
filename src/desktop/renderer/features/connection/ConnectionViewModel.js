@@ -21,5 +21,17 @@
     });
   }
 
-  return Object.freeze({ controlState });
+  function modeIntentState(bot = {}) {
+    const control = controlState(bot);
+    return Object.freeze({
+      ...control,
+      status: control.online
+        ? 'READY_TO_ENABLE'
+        : control.connecting || control.wantsConnected
+          ? 'WAITING_CONNECTION'
+          : 'NEEDS_CONNECTION'
+    });
+  }
+
+  return Object.freeze({ controlState, modeIntentState });
 });

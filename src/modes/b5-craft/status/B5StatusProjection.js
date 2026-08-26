@@ -25,6 +25,8 @@ class B5StatusProjection {
             pendingB5CompletionProvenance: source.pendingB5CompletionProvenance || null,
             reconciliationAction: source.reconciliationAction || null,
             lastResult: source.lastResult || null, b5Automation: source.b5Automation || null,
+            configApply: source.configApply || { pending: false, revision: 0 },
+            sharedStorageLease: source.sharedStorageLease || null,
             storage: source.storage || null, tasks: source.tasks || null
         };
     }

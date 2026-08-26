@@ -248,7 +248,7 @@ function audit() {
         failures,
         warnings,
         catalog: {
-            version: catalog.version,
+            schemaVersion: catalog.schemaVersion,
             sourceFiles: sourceFiles.length,
             testFiles: jsFiles.filter(file => relative(file).startsWith('tests/')).length,
             scriptFiles: jsFiles.filter(file => relative(file).startsWith('scripts/')).length,

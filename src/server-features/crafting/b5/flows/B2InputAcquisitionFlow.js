@@ -9,6 +9,10 @@ class B2InputAcquisitionFlow {
         this.source = source === 'inventory' ? 'inventory' : 'storage';
     }
 
+    reconfigure({ source = 'storage' } = {}) {
+        this.source = source === 'inventory' ? 'inventory' : 'storage';
+    }
+
     acquire(baseId, requiredAmount, options = {}) {
         if (this.source === 'storage') {
             return Promise.resolve(Result.ok({

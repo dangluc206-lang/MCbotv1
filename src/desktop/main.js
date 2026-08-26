@@ -436,7 +436,7 @@ function updateTray() {
     if (!tray || tray.isDestroyed()) return;
     const snapshot = lastSnapshot || controller?.snapshot?.() || { lifecycle: 'STOPPED', bots: [] };
     const bots = snapshot.bots || [];
-    const connected = bots.filter(bot => bot.state?.connectionState === 'CONNECTED').length;
+    const connected = bots.filter(bot => bot.connectionOnline === true).length;
     const modes = bots.filter(bot => bot.modeOwner).length;
     tray.setToolTip(`MCbot Desktop · ${snapshot.lifecycle} · ${connected}/${bots.length} connected · ${modes} mode`);
     tray.setContextMenu(Menu.buildFromTemplate([
@@ -453,7 +453,7 @@ function updateTray() {
 function updatePowerBlocker(snapshot = lastSnapshot) {
     const shouldBlock = preferenceStore?.get('preventSystemSleepWhileActive') !== false
         && snapshot?.lifecycle === 'RUNNING'
-        && (snapshot?.bots || []).some(bot => bot.state?.connectionState === 'CONNECTED' || bot.modeOwner);
+        && (snapshot?.bots || []).some(bot => bot.connectionOnline === true || bot.modeOwner);
     if (shouldBlock && powerBlockerId === null) {
         powerBlockerId = powerSaveBlocker.start('prevent-app-suspension');
     } else if (!shouldBlock && powerBlockerId !== null) {

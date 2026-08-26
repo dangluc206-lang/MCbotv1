@@ -7,6 +7,10 @@ class B5PlanningFlow {
         this.config = config;
     }
 
+    reconfigure(config = {}) {
+        this.config = config || {};
+    }
+
     planChain(chain = {}) {
         const plannedB2Exact = Math.max(0, Number(chain.b2Crafts || 0));
         const plannedB3 = Math.max(0, Number(chain.b3Crafts || 0));

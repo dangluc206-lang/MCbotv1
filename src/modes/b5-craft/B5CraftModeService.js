@@ -12,6 +12,9 @@ const B5BatchCoordinator = require('./campaign/B5BatchCoordinator');
 const StorageProtectionEpisode = require('./storage/StorageProtectionEpisode');
 const B5FaultPolicyAdapter = require('./fault/B5FaultPolicyAdapter');
 const B5StatusProjection = require('./status/B5StatusProjection');
+const B5CycleConfigBoundary = require('./B5CycleConfigBoundary');
+const B5SharedStorageLease = require('./storage/B5SharedStorageLease');
+const B5GenerationPreparer = require('./B5GenerationPreparer');
 
 const PROTECTION_SAME_BLOCKER_LIMIT = 3;
 const PROTECTION_TOTAL_AUTO_ATTEMPT_LIMIT = 6;
@@ -29,6 +32,8 @@ class B5CraftModeService extends ManagedMode {
         b1Materials,
         b5Planning,
         b5Automation,
+        sharedStorageLeases = null,
+        storageLeaseKey = null,
         failurePublisher = null,
         failurePolicy = null,
         config = {},
@@ -76,6 +81,9 @@ class B5CraftModeService extends ManagedMode {
         this.reconciliationBarrier = new ReconciliationBarrier({ maxFreshReads: this.config.reconciliation.maxFreshReads, logger: this.logger });
         this.faultPolicy = new B5FaultPolicyAdapter(new ModeFaultPolicy({ botId, modeId: 'b5-craft', policy: failurePolicy || undefined, publisher: failurePublisher, logger }));
         this.protectionRetryRequests = new Map();
+        this.configBoundary = new B5CycleConfigBoundary({ planning: b5Planning, automation: b5Automation });
+        this.sharedStorageLease = new B5SharedStorageLease({ registry: sharedStorageLeases, resourceKey: storageLeaseKey, botId });
+        this.generationPreparer = new B5GenerationPreparer({ modeId: this.modeId, modeContext, island, skyblockReadiness, skyTarget, sharedStorageLease: this.sharedStorageLease });
     }
 
     publicConfig() {
@@ -95,6 +103,8 @@ class B5CraftModeService extends ManagedMode {
         this.#requestProtectionRetry('config-change');
         return this.publicConfig();
     }
+
+    queueRulesConfig(config) { return this.configBoundary.queue(config, { immediate: !this.enabled || this.paused }); }
 
     async onEnable() {
         this.faultPolicy.reset('enable');
@@ -132,6 +142,7 @@ class B5CraftModeService extends ManagedMode {
         this.protectionInFlight = null;
         this.protectionEpisode = null;
         this.protectionRetryRequests.clear();
+        this.sharedStorageLease.release('mode-disabled');
         this.campaignSession.close();
         this.faultPolicy.close(reason || 'disabled');
         this.skyblockReadiness?.releaseTarget?.(this.modeId);
@@ -190,6 +201,8 @@ class B5CraftModeService extends ManagedMode {
             reconciliationAction: this.#reconciliationAction(),
             lastResult: this.lastResult,
             b5Automation: this.b5Automation.status?.() || null,
+            configApply: this.configBoundary.status(),
+            sharedStorageLease: this.sharedStorageLease.status(),
             storage: this.b1Materials.status?.() || null,
             tasks: this.supervisor?.snapshot?.() || null
         });
@@ -237,16 +250,15 @@ class B5CraftModeService extends ManagedMode {
             this.setPhase('ERROR');
         });
     }
-
     async #loop(cancellationToken) {
         while (!cancellationToken.isCancelled && this.enabled && !this.paused) {
+            this.configBoundary.applyPending();
             if (!this.modeContext.connected()) {
                 this.setPhase('WAITING_CONNECTION');
                 this.waitingReason = 'connection';
                 await Timeout.delay(this.config.disconnectedPollMs, { cancellationToken });
                 continue;
             }
-
             const generation = this.modeContext.generation();
             if (this.preparedGeneration !== null
                 && this.preparedGeneration !== generation
@@ -293,9 +305,7 @@ class B5CraftModeService extends ManagedMode {
             }
             if (Number.isFinite(this.nextB5CycleAt) && Date.now() >= this.nextB5CycleAt) this.nextB5CycleAt = null;
 
-            this.cycles += 1;
-            this.lastCycleAt = new Date().toISOString();
-            this.waitingReason = null;
+            this.#beginCycle();
 
             if (this.batchProtectionRequired) {
                 const protectionBatchId = this.batchId;
@@ -308,6 +318,8 @@ class B5CraftModeService extends ManagedMode {
                     await Timeout.delay(eligibility.delayMs, { cancellationToken });
                     continue;
                 }
+
+                await this.sharedStorageLease.acquire({ batchId: this.batchId, generation, cancellationToken });
 
                 const episode = this.protectionEpisode;
                 this.setPhase('STORAGE_PROTECTION');
@@ -651,6 +663,7 @@ class B5CraftModeService extends ManagedMode {
     }
 
     #armBatchProtection(trigger) {
+        this.sharedStorageLease.release('next-batch-armed');
         const batch = this.batchCoordinator.next(trigger);
         this.batchSequence = batch.sequence;
         this.batchId = batch.batchId;
@@ -944,31 +957,18 @@ class B5CraftModeService extends ManagedMode {
     }
 
     async #prepareGeneration(generation, cancellationToken) {
-        this.setPhase('WAITING_SKYBLOCK');
-        this.waitingReason = 'skyblock';
-        this.skyblockReadiness?.requireTarget?.(this.skyTarget, { owner: this.modeId, trigger: 'b5-prepare-generation' });
+        await this.generationPreparer.prepare(generation, cancellationToken, {
+            teleportHome: this.config.teleportHomeOnEnable,
+            preparedGeneration: this.preparedGeneration,
+            setPhase: (phase, waitingReason) => { this.setPhase(phase); this.waitingReason = waitingReason; },
+            onPrepared: value => { this.preparedGeneration = value; this.waitingReason = null; this.setPhase('RUNNING'); }
+        });
+    }
 
-        if (this.skyblockReadiness?.isGenerationReady) {
-            while (!this.skyblockReadiness.isGenerationReady(generation, this.skyTarget)) {
-                cancellationToken.throwIfCancelled();
-                if (!this.modeContext.connected() || this.modeContext.generation() !== generation) return;
-                await Timeout.delay(250, { cancellationToken });
-            }
-        }
-
-        if (this.config.teleportHomeOnEnable) {
-            this.setPhase('GOING_HOME');
-            const home = await this.island.goHome({ cancellationToken, expectedGeneration: generation });
-            if (home?.success === false) {
-                const error = home.error || new Error(home.message || 'Không thể /is trước khi chế B5.');
-                error.code ||= 'B5_CRAFT_HOME_FAILED';
-                throw error;
-            }
-        }
-
-        this.preparedGeneration = generation;
+    #beginCycle() {
+        this.cycles += 1;
+        this.lastCycleAt = new Date().toISOString();
         this.waitingReason = null;
-        this.setPhase('RUNNING');
     }
 
     async #handleSoftFailure(result, cancellationToken, generation) {

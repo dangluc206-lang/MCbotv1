@@ -1,0 +1,11 @@
+{
+  "contract": "mcbot-version-authority/v1",
+  "productVersion": {
+    "source": "package.json#/version",
+    "meaning": "MCbot Desktop release and update compatibility version"
+  },
+  "architectureSchemaVersion": {
+    "source": "architecture/catalog.json#/schemaVersion",
+    "meaning": "Architecture governance catalog schema version; not a product release"
+  }
+}

@@ -1533,6 +1533,19 @@ test('B2 input acquisition defaults to storage and performs no withdrawal', asyn
     assert.equal(withdrawals, 0);
 });
 
+test('B2 input acquisition source can change at a B5 cycle boundary', async () => {
+    let withdrawals = 0;
+    const flow = new B2InputAcquisitionFlow({
+        storage: { async withdrawB1() { withdrawals += 1; return Result.ok({ source: 'inventory' }); } }
+    });
+    flow.reconfigure({ source: 'inventory' });
+    const result = await flow.acquire('coal', 64);
+    assert.equal(result.success, true);
+    assert.equal(withdrawals, 1);
+    flow.reconfigure({ source: 'storage' });
+    assert.equal((await flow.acquire('coal', 64)).data.source, 'storage');
+});
+
 test('legacy B5 config defaults B2 input to storage while inventory source disables B2 ALL', () => {
     const recipeRegistry = { require: () => ({ inputs: { coal: 16 } }) };
     const chain = { baseId: 'coal', b2RecipeId: 'b2', b2Crafts: 64, b3Crafts: 0, storedEffective: 4096 };

@@ -141,8 +141,8 @@ function modeInfo(bot) {
   const owner = bot.modeOwner;
   if (!owner && resolved.id) {
     const definition = resolved.definition;
-    const connection = String(bot.state?.connectionState || '').toUpperCase();
-    const phase = ['CONNECTED'].includes(connection) ? 'Đang chuẩn bị bật chế độ' : 'Đang kết nối để bật chế độ';
+    const connection = window.MCbotConnectionViewModel.modeIntentState(bot);
+    const phase = connection.status === 'READY_TO_ENABLE' ? 'Đang chuẩn bị bật chế độ' : 'Đang kết nối để bật chế độ';
     return { id: resolved.id, desiredOnly: true, name: definition?.label || resolved.id, phase, paused: bot.intent?.modeState === 'PAUSED', className: 'pending' };
   }
   if (!owner) return { id: null, name: 'Đang rảnh', phase: 'Không có chế độ chính', paused: false, className: '' };

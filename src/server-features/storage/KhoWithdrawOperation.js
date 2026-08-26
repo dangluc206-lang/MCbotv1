@@ -20,12 +20,13 @@ class KhoWithdrawOperation {
         textParser = new StorageTextParser(),
         quantityResolver = null,
         capacityPlanner = new B1InventoryWithdrawalPlanner(),
-        logger = null
+        logger = null,
+        workloadMetrics = null
     } = {}) {
         if (!storage?.read) throw new TypeError('KhoWithdrawOperation storage is required.');
         if (!guiManager?.clickAndWaitForTransition || !guiManager?.click) throw new TypeError('KhoWithdrawOperation GuiManager is required.');
         if (!inventoryReader || !inventoryCounter) throw new TypeError('KhoWithdrawOperation inventory capability is required.');
-        Object.assign(this, { storage, guiManager, context, itemResolver, inventoryReader, inventoryCounter, textParser, capacityPlanner, logger });
+        Object.assign(this, { storage, guiManager, context, itemResolver, inventoryReader, inventoryCounter, textParser, capacityPlanner, logger, workloadMetrics });
         this.config = config || {};
         this.withdrawConfig = this.config.withdraw || {};
         this.quantityResolver = quantityResolver || new B1WithdrawQuantityResolver({
@@ -49,6 +50,20 @@ class KhoWithdrawOperation {
         expectedGeneration = null,
         operationContext = null
     } = {}) {
+        const options = { requiredAmount, outputId, expectedOutputAmount, minimumFreeSlots, cancellationToken, expectedGeneration, operationContext };
+        if (!this.workloadMetrics) return this.#execute(logicalId, options, null);
+        return this.workloadMetrics.measure('storage.withdraw', tracker => this.#execute(logicalId, options, tracker));
+    }
+
+    async #execute(logicalId, {
+        requiredAmount,
+        outputId = null,
+        expectedOutputAmount = 1,
+        minimumFreeSlots = null,
+        cancellationToken = null,
+        expectedGeneration = null,
+        operationContext = null
+    } = {}, metrics = null) {
         const requested = Number(requiredAmount);
         if (!Number.isInteger(requested) || requested < 0) {
             return Result.fail(Status.INVALID_INPUT, 'B1 withdrawal requires a non-negative integer amount.');
@@ -110,7 +125,8 @@ class KhoWithdrawOperation {
                 cancellationToken,
                 expectedGeneration: generation,
                 operationContext,
-                requiredRemaining: remaining
+                requiredRemaining: remaining,
+                metrics
             });
             if (!prepared.success) return prepared;
 
@@ -126,7 +142,8 @@ class KhoWithdrawOperation {
             const quantity = plan[0];
             const attemptResult = await this.#clickAndReconcile(logicalId, quantity, prepared.data.quantitySlots[String(quantity)], {
                 cancellationToken,
-                expectedGeneration: generation
+                expectedGeneration: generation,
+                metrics
             });
             if (!attemptResult.success) return attemptResult;
             actions.push(attemptResult.data);
@@ -159,6 +176,7 @@ class KhoWithdrawOperation {
     }
 
     async #prepareQuantityGui(logicalId, options) {
+        options.metrics?.increment('overviewOpenCount');
         const overview = await this.storage.read({ ...options, refresh: true, forceReopen: true });
         if (!overview.success) return overview;
         const stored = Math.max(0, Number(overview.data?.items?.[logicalId] || 0));
@@ -187,6 +205,7 @@ class KhoWithdrawOperation {
         const detailSource = this.#source(logicalId, ['material-detail']);
         let detail;
         try {
+            options.metrics?.increment('detailOpenCount');
             detail = await this.guiManager.clickAndWaitForTransition(materialSlot, {
                 timeoutMs: this.#timeout(), cancellationToken: options.cancellationToken,
                 expectedGeneration: options.expectedGeneration,
@@ -208,6 +227,7 @@ class KhoWithdrawOperation {
 
         let quantitySession;
         try {
+            options.metrics?.increment('quantityOpenCount');
             quantitySession = await this.guiManager.clickAndWaitForTransition(withdrawSlot, {
                 timeoutMs: this.#timeout(), cancellationToken: options.cancellationToken,
                 expectedGeneration: options.expectedGeneration,
@@ -223,19 +243,21 @@ class KhoWithdrawOperation {
         return Result.ok({ overview: overview.data, materialSlot, withdrawSlot, quantitySlots });
     }
 
-    async #clickAndReconcile(logicalId, quantity, slot, { cancellationToken, expectedGeneration }) {
+    async #clickAndReconcile(logicalId, quantity, slot, { cancellationToken, expectedGeneration, metrics = null }) {
         const before = this.#count(this.#inventorySnapshot(), logicalId);
         let clickError = null;
         try {
+            metrics?.increment('clickCount');
             await this.guiManager.click(slot, { cancellationToken, expectedGeneration });
         } catch (error) {
             clickError = error;
         }
-        const after = await this.#waitForCount(logicalId, before, { cancellationToken, expectedGeneration });
+        const after = await this.#waitForCount(logicalId, before, { cancellationToken, expectedGeneration, metrics });
         const actualDelta = Math.max(0, after - before);
         if (actualDelta > 0) {
             return Result.ok({ quantity, slot, inventoryBefore: before, inventoryAfter: after, actualDelta, reconciledAfterClickError: Boolean(clickError) });
         }
+        metrics?.increment('noDeltaCount');
         if (clickError) return this.#failure(clickError, 'KHO_WITHDRAW_CLICK_FAILED', 'click-withdraw', logicalId, { quantity, slot, before, after });
         return Result.fail(Status.NOT_READY, 'Withdrawal click was not reflected in inventory.', null, {
             code: 'KHO_WITHDRAW_NOT_VERIFIED', operation: 'KhoWithdrawOperation', step: 'verify-inventory', resource: logicalId,
@@ -243,13 +265,14 @@ class KhoWithdrawOperation {
         });
     }
 
-    async #waitForCount(logicalId, before, { cancellationToken, expectedGeneration }) {
+    async #waitForCount(logicalId, before, { cancellationToken, expectedGeneration, metrics = null }) {
         const attempts = Math.max(1, Number(this.withdrawConfig.verifyAttempts || 12));
         const retryMs = Math.max(1, Number(this.withdrawConfig.verifyRetryMs || 100));
         const unchangedRequired = Math.max(1, Number(this.withdrawConfig.unchangedConfirmationReads || 2));
         let best = before;
         let unchanged = 0;
         for (let attempt = 1; attempt <= attempts; attempt += 1) {
+            metrics?.increment('reconcileReadCount');
             cancellationToken?.throwIfCancelled?.();
             this.#assertGeneration(expectedGeneration);
             const current = this.#count(this.#inventorySnapshot(), logicalId);

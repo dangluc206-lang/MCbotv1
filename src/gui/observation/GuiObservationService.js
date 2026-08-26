@@ -3,9 +3,29 @@
 const { normalizeConnectionGeneration } = require('../../core/events/EventEnvelope');
 
 class GuiObservationService {
-    constructor({ botId, eventBus, guiManager, normalizer = null, store = null, knowledgeRegistry = null, debounceMs = 350, logger = null }) {
-        if (!Number.isFinite(debounceMs) || debounceMs < 0) throw new TypeError('debounceMs must be non-negative.');
-        Object.assign(this, { botId, eventBus, guiManager, normalizer, store, knowledgeRegistry, debounceMs, logger });
+    constructor({
+        botId,
+        eventBus,
+        guiManager,
+        normalizer = null,
+        store = null,
+        knowledgeRegistry = null,
+        debounceMs = 350,
+        logger = null
+    }) {
+        if (!Number.isFinite(debounceMs) || debounceMs < 0) {
+            throw new TypeError('debounceMs must be non-negative.');
+        }
+        Object.assign(this, {
+            botId,
+            eventBus,
+            guiManager,
+            normalizer,
+            store,
+            knowledgeRegistry,
+            debounceMs,
+            logger
+        });
         this.timer = null;
         this.unsubscribers = [];
         this.pendingSource = null;
@@ -15,17 +35,43 @@ class GuiObservationService {
 
     async initialize() {
         this.stopped = false;
-        const schedule = event => {
-            if (event.botId !== this.botId) return;
+
+        const resolveSession = event => {
+            if (event.botId !== this.botId) return null;
             const generation = normalizeConnectionGeneration(event);
-            if (!Number.isInteger(generation) || generation <= 0) return;
+            if (!Number.isInteger(generation) || generation <= 0) return null;
             const session = this.guiManager.current();
-            if (!session?.active || Number(session.connectionGeneration) !== generation) return;
-            if (event.sessionId && session.id !== event.sessionId) return;
-            this.#schedule({ generation, sessionId: session.id });
+            if (!session?.active || Number(session.connectionGeneration) !== generation) return null;
+            if (event.sessionId && session.id !== event.sessionId) return null;
+            return { session, generation };
         };
-        this.unsubscribers.push(this.eventBus.on('gui:opened', schedule));
-        this.unsubscribers.push(this.eventBus.on('gui:updated', schedule));
+
+        // Persist a GUI immediately on open. Child GUIs such as
+        // /kho -> Gold Ingot can exist for less than the normal 350 ms debounce,
+        // so delaying the first snapshot can lose the entire GUI.
+        this.unsubscribers.push(this.eventBus.on('gui:opened', event => {
+            const resolved = resolveSession(event);
+            if (!resolved) return;
+
+            this.observeSession(resolved.session).catch(error => {
+                this.logger?.error?.('GUI observation failed on immediate open capture.', {
+                    botId: this.botId,
+                    sessionId: resolved.session.id,
+                    error
+                });
+            });
+        }));
+
+        // Updates remain debounced so slot animation/quantity refreshes do not
+        // create excessive disk writes.
+        this.unsubscribers.push(this.eventBus.on('gui:updated', event => {
+            const resolved = resolveSession(event);
+            if (!resolved) return;
+            this.#schedule({
+                generation: resolved.generation,
+                sessionId: resolved.session.id
+            });
+        }));
     }
 
     setSource(source) {
@@ -68,9 +114,14 @@ class GuiObservationService {
             this.pendingEvent = null;
             const session = this.guiManager.current();
             if (!pending || !session?.active) return;
-            if (Number(session.connectionGeneration) !== Number(pending.generation) || session.id !== pending.sessionId) return;
+            if (Number(session.connectionGeneration) !== Number(pending.generation)
+                || session.id !== pending.sessionId) return;
+
             this.observeSession(session).catch(error => {
-                this.logger?.error?.('GUI observation failed.', { botId: this.botId, error });
+                this.logger?.error?.('GUI observation failed.', {
+                    botId: this.botId,
+                    error
+                });
             });
         }, this.debounceMs);
     }
@@ -89,7 +140,10 @@ class GuiObservationService {
                 try {
                     await this.observeSession(session);
                 } catch (error) {
-                    this.logger?.debug?.('GUI observation flush failed during stop.', { botId: this.botId, error });
+                    this.logger?.debug?.('GUI observation flush failed during stop.', {
+                        botId: this.botId,
+                        error
+                    });
                 }
             }
         }

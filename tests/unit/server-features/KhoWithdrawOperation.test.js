@@ -23,7 +23,7 @@ function harness({
     logicalId = 'lapis_lazuli', initial = 0, stored = 10000,
     clickThrowsAfterApply = false, quantities = [128, 256],
     generationRef = { value: 3 }, emptySlots = 20,
-    transitionDelayMs = 0, extraQuantityItems = []
+    transitionDelayMs = 0, extraQuantityItems = [], workloadMetrics = null
 } = {}) {
     let count = initial;
     let transition = 0;
@@ -72,10 +72,30 @@ function harness({
         storage, guiManager,
         context: { getGeneration: () => generationRef.value },
         itemResolver: { resolve(item) { return { id: item.logicalId }; } },
-        inventoryReader, inventoryCounter, config: config()
+        inventoryReader, inventoryCounter, config: config(), workloadMetrics
     });
     return { operation, count: () => count, transitions: () => transition };
 }
+
+test('withdrawal emits one aggregated metric instead of one diagnostic record per reconcile read', async () => {
+    const records = [];
+    const workloadMetrics = {
+        measure: async (operation, action) => {
+            const counters = {};
+            const tracker = { increment(key, amount = 1) { counters[key] = Number(counters[key] || 0) + amount; } };
+            const result = await action(tracker);
+            records.push({ operation, counters, success: result.success });
+            return result;
+        }
+    };
+    const { operation } = harness({ quantities: [128], workloadMetrics });
+    const result = await operation.execute('lapis_lazuli', { requiredAmount: 128, expectedGeneration: 3 });
+    assert.equal(result.success, true);
+    assert.deepEqual(records, [{
+        operation: 'storage.withdraw', success: true,
+        counters: { overviewOpenCount: 1, detailOpenCount: 1, quantityOpenCount: 1, clickCount: 1, reconcileReadCount: 1 }
+    }]);
+});
 
 for (const logicalId of ['lapis_lazuli', 'gold_ingot']) {
     test(`withdraws and verifies generic B1 material ${logicalId}`, async () => {
