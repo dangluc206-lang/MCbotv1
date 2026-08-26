@@ -23,11 +23,6 @@ function createHarness({
         spaceSnapshot() { return { emptySlotCount: slots }; }
     };
     const storageFlow = {
-        async prepareBase(id, requiredAmount, options) {
-            prepareCalls.push({ id, requiredAmount, options });
-            if (!prepareBase) return { success: true, data: { ready: true, available: requiredAmount } };
-            return { success: true, data: { ready: true, ...prepareBase(id, requiredAmount, options) } };
-        },
         async finalizeBase(id, options) {
             finalizeCalls.push({ id, options });
             if (!finalizeBase) return { success: true, data: { ready: true, converted: true } };
@@ -40,6 +35,12 @@ function createHarness({
             return { success: true, data: { ready: true, moved: returned, resource: id } };
         }
     };
+    if (prepareBase !== null) {
+        storageFlow.prepareBase = async (id, requiredAmount, options) => {
+            prepareCalls.push({ id, requiredAmount, options });
+            return { success: true, data: { ready: true, ...prepareBase(id, requiredAmount, options) } };
+        };
+    }
     const b2Input = {
         source,
         async acquire(id, requiredAmount, options) {
