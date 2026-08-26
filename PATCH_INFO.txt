@@ -1,0 +1,43 @@
+MCbot 1.0.14 - V5 + full optimization + deterministic startup ordering
+=====================================================================
+
+BASE
+- Repository: dangluc206-lang/MCbotv1
+- Base commit: 7cac594afe4849824a78275462462940617f465d
+- Base label/message: 1.0.3
+- Product package version remains 2.7.67.
+
+SCOPE
+- Includes all 1.0.13 V5/full-optimization overlay work.
+- Adds deterministic startup ordering:
+  1) backend core starts and emits "MCbot Desktop backend started."
+  2) Discord starts and must reach ClientReady/panel-ready barrier
+  3) only then Minecraft runtimes are started
+- Discord is removed from the backend-core LifecycleCoordinator and registered as a pre-runtime service barrier.
+- Shutdown order is the reverse dependency chain: Minecraft runtimes -> Discord -> backend core.
+- No fixed sleeps/delays were added.
+- Existing DesktopController end-of-start duplicate backend log is naturally suppressed by DesktopLogPolicy because the early and late records use the same Desktop scope/message inside the repeat window.
+
+QA FOR STARTUP ORDERING
+- New ApplicationStartupOrder tests: PASS 2/2.
+- Relevant lifecycle/Discord/log-policy regression: PASS 12/12.
+- New/changed startup files syntax: PASS.
+- Exact Acorn metrics for changed startup files stay under default static budgets:
+  * Application.js largest function: 22 lines / 12 statements / complexity 3.
+  * createApplication.js: 130 lines / 41 statements / complexity 13.
+- Full createApplication integration test on the available older QA scaffold is environment-BLOCKED because that scaffold lacks dependency `vec3`; this is not recorded as a functional failure.
+
+PREVIOUS 1.0.13 QA RETAINED
+- Targeted B5/crafting/storage/withdraw regression: 90/90 PASS.
+- Critical coverage: PASS 6/6.
+- Config validation: PASS 32/32 + cross-reference.
+- Static-quality for managed files touched/added by the optimization overlay: PASS, 0 failures.
+- Broader source-only suite on the available Aug-23 scaffold: 951/953; the two failures are stale architecture baseline/reachability metadata from the pre-1.0.3 scaffold.
+
+LIVE / EXACT-TREE ITEMS NOT CLAIMED AS PASS
+- Exact full 1.0.3 release/baseline recapture is not executed because the full private repository tree is not materialized locally.
+- MinerUA live E2E/workload/multi-bot checks remain live-only.
+
+INSTALL
+Extract this ZIP directly over the project currently at 1.0.3.
+No apply script is required. The archive contains no .git, .env, data or node_modules.

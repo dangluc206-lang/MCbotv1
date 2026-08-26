@@ -27,6 +27,7 @@ class B1InventoryWithdrawalPlanner {
         const usableEmptySlots = Math.max(0, free - reservedEmptySlots);
         const safeAdditionalCapacity = inputMerge + usableEmptySlots * inputStack;
         const safe = needed <= safeAdditionalCapacity;
+        const fillInventoryAmount = safe && needed === safeAdditionalCapacity ? needed : 0;
         return Object.freeze({
             requestedAmount: requested,
             inventoryCount: current,
@@ -39,6 +40,8 @@ class B1InventoryWithdrawalPlanner {
             reservedEmptySlots,
             usableEmptySlots,
             safeAdditionalCapacity,
+            fillInventoryAmount,
+            stackSize: inputStack,
             safe,
             reason: safe ? null : 'inventory-capacity-reserved-for-b2-output'
         });

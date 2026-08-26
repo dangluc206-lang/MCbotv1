@@ -53,15 +53,34 @@
   },
   "withdraw": {
     "enabled": true,
-    "numericQuantities": [1, 8, 16, 64, 128, 256, 512],
-    "withdrawPatterns": ["(?:^|\\s)(?:rut|withdraw)(?:\\s|$)"],
-    "stackPatterns": ["(?:1\\s*(?:stack|stacks)|mot\\s*stack)"],
-    "fullInventoryPatterns": ["(?:day\\s*(?:tui|inventory)|full\\s*inventory)"],
+    "numericQuantities": [
+      1,
+      8,
+      16,
+      64,
+      128,
+      256,
+      512
+    ],
+    "withdrawPatterns": [
+      "(?:^|\\s)(?:rut|withdraw)(?:\\s|$)"
+    ],
+    "stackPatterns": [
+      "(?:1\\s*(?:stack|stacks)|mot\\s*stack)"
+    ],
+    "fullInventoryPatterns": [
+      "(?:day\\s*(?:tui|inventory)|full\\s*inventory)"
+    ],
     "detailTimeoutMs": 5000,
     "verifyAttempts": 12,
     "verifyRetryMs": 100,
     "unchangedConfirmationReads": 2,
-    "minimumOutputSlots": 2
+    "minimumOutputSlots": 2,
+    "allowStack": true,
+    "allowFillInventory": true,
+    "reuseQuantityGui": true,
+    "maxWithdrawalActions": 64,
+    "maxBatchClicks": 16
   },
   "guiId": "storage",
   "guiTimeoutMs": 5000,

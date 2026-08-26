@@ -59,8 +59,8 @@ async function createApplication({
         logger: shared.loggerFactory.create('FleetControl')
     });
 
-    // Build the application and all Minecraft runtimes first. Discord is added to
-    // the lifecycle afterwards so its admin panel can create/reload runtimes live.
+    // Build the backend core and all Minecraft runtimes first. Discord is kept
+    // outside the core lifecycle and acts as a startup barrier before runtimes.
     const lifecycle = new LifecycleCoordinator([shared.runtimeLogOutput, fleetControl].filter(Boolean), {
         name: 'ApplicationLifecycle',
         logger
@@ -70,7 +70,8 @@ async function createApplication({
         loggerFactory: shared.loggerFactory,
         lifecycleCoordinator: lifecycle,
         controlPlane: fleetControl,
-        logger
+        logger,
+        backendReadyLogger: shared.loggerFactory.create('Desktop')
     });
 
     const profiles = await loadBotProfiles({
@@ -129,7 +130,7 @@ async function createApplication({
         botProfileAdmin,
         fleetControl
     });
-    lifecycle.add(discordService);
+    application.addPreRuntimeService(discordService);
 
     return {
         application,

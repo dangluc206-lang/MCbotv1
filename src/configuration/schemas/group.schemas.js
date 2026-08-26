@@ -388,7 +388,7 @@ const b5 = validator('b5', (value, errors) => {
     numberField(value.pvInventorySettleTimeoutMs, 'b5.pvInventorySettleTimeoutMs', errors, { integerOnly: true, nonNegativeOnly: true });
     numberField(value.pvInventorySettlePollMs, 'b5.pvInventorySettlePollMs', errors, { integerOnly: true, positiveOnly: true });
     if (value.b1SupplyMode !== 'continuous') errors.push('b5.b1SupplyMode must be continuous; finite supply is not implemented');
-    if (value.b2InputSource !== undefined && !['storage','inventory'].includes(value.b2InputSource)) errors.push('b5.b2InputSource must be storage or inventory');
+    if (!['inventory','storage'].includes(value.b2InputSource)) errors.push('b5.b2InputSource must be inventory or storage');
     const quantity = value.quantityOptimization;
     if (requiredObject(quantity, 'b5.quantityOptimization', errors)) {
         const quantityKeys = ['enabled','useAllForB2','useAllForB3','useAllForB4WhenExact','useAllForB5','keepSurplusInPv2','b2BatchSize'];
@@ -433,6 +433,7 @@ const dungeon = value => {
 };
 
 const storage = validator('storage', (value, errors) => {
+    // STORAGE_MATERIAL_TRANSFER_SCHEMA_PATCH_V1
     const keys = ['commandKey','resourceAmountPatterns','allowStackCountFallback','capacityIndicator','sell','withdraw','guiId','guiTimeoutMs','openSettleMs','refreshSettleMs','openAttempts','retryDelayMs','retryCloseSettleMs','openAfterCloseSettleMs','closeConfirmTimeoutMs'];
     unknown(value, keys, 'storage', errors);
     for (const key of ['commandKey','guiId']) requiredString(value[key], `storage.${key}`, errors);
@@ -440,6 +441,25 @@ const storage = validator('storage', (value, errors) => {
     requiredBoolean(value.allowStackCountFallback, 'storage.allowStackCountFallback', errors);
     for (const key of ['guiTimeoutMs','openAttempts','retryDelayMs','retryCloseSettleMs','openAfterCloseSettleMs','closeConfirmTimeoutMs']) numberField(value[key], `storage.${key}`, errors, { positiveOnly: true });
     for (const key of ['openSettleMs','refreshSettleMs']) numberField(value[key], `storage.${key}`, errors, { nonNegativeOnly: true });
+    const withdraw = value.withdraw;
+    if (withdraw !== undefined && requiredObject(withdraw, 'storage.withdraw', errors)) {
+        const withdrawKeys = ['enabled','numericQuantities','withdrawPatterns','stackPatterns','fullInventoryPatterns','detailTimeoutMs','verifyAttempts','verifyRetryMs','unchangedConfirmationReads','minimumOutputSlots','allowStack','allowFillInventory','reuseQuantityGui','maxWithdrawalActions','maxBatchClicks'];
+        unknown(withdraw, withdrawKeys, 'storage.withdraw', errors);
+        requiredBoolean(withdraw.enabled, 'storage.withdraw.enabled', errors);
+        if (!Array.isArray(withdraw.numericQuantities) || withdraw.numericQuantities.length === 0
+            || withdraw.numericQuantities.some(value => !Number.isInteger(Number(value)) || Number(value) <= 0)) {
+            errors.push('storage.withdraw.numericQuantities must be a non-empty positive integer array');
+        }
+        for (const key of ['withdrawPatterns','stackPatterns','fullInventoryPatterns']) stringArray(withdraw[key], `storage.withdraw.${key}`, errors, { allowEmpty: false });
+        for (const key of ['detailTimeoutMs','verifyAttempts','verifyRetryMs','unchangedConfirmationReads','minimumOutputSlots','maxWithdrawalActions','maxBatchClicks']) {
+            numberField(withdraw[key], `storage.withdraw.${key}`, errors, { integerOnly: true, positiveOnly: true });
+        }
+        for (const key of ['allowStack','allowFillInventory','reuseQuantityGui']) requiredBoolean(withdraw[key], `storage.withdraw.${key}`, errors);
+        if (Number.isInteger(withdraw.maxBatchClicks) && Number.isInteger(withdraw.maxWithdrawalActions)
+            && withdraw.maxBatchClicks > withdraw.maxWithdrawalActions) {
+            errors.push('storage.withdraw.maxBatchClicks must be <= maxWithdrawalActions');
+        }
+    }
     const indicator = value.capacityIndicator;
     if (requiredObject(indicator, 'storage.capacityIndicator', errors)) {
         unknown(indicator, ['itemId','scanAllSlots','usedPatterns','freePatterns','limitPatterns','regex','slot','fallbackLimit'], 'storage.capacityIndicator', errors);
@@ -464,20 +484,6 @@ const storage = validator('storage', (value, errors) => {
         for (const key of ['resultDelayMs','openSettleMs','closeSettleMs','updateTimeoutMs','openAfterCloseSettleMs']) numberField(sell[key], `storage.sell.${key}`, errors, { nonNegativeOnly: true });
         numberField(sell.reserveCoverage, 'storage.sell.reserveCoverage', errors, { positiveOnly: true });
         if (Number(sell.reserveCoverage) !== 1.5) errors.push('storage.sell.reserveCoverage must be exactly 1.5 for the B5 hard reserve contract');
-    }
-    const withdraw = value.withdraw;
-    if (withdraw !== undefined && requiredObject(withdraw, 'storage.withdraw', errors)) {
-        const withdrawKeys = ['enabled','numericQuantities','withdrawPatterns','stackPatterns','fullInventoryPatterns','detailTimeoutMs','verifyAttempts','verifyRetryMs','unchangedConfirmationReads','minimumOutputSlots'];
-        unknown(withdraw, withdrawKeys, 'storage.withdraw', errors);
-        requiredBoolean(withdraw.enabled, 'storage.withdraw.enabled', errors);
-        if (!Array.isArray(withdraw.numericQuantities) || withdraw.numericQuantities.length === 0
-            || withdraw.numericQuantities.some(value => !Number.isInteger(Number(value)) || Number(value) <= 0)) {
-            errors.push('storage.withdraw.numericQuantities must be a non-empty positive integer array');
-        }
-        for (const key of ['withdrawPatterns','stackPatterns','fullInventoryPatterns']) stringArray(withdraw[key], `storage.withdraw.${key}`, errors, { allowEmpty: false });
-        for (const key of ['detailTimeoutMs','verifyAttempts','verifyRetryMs','unchangedConfirmationReads','minimumOutputSlots']) {
-            numberField(withdraw[key], `storage.withdraw.${key}`, errors, { integerOnly: true, positiveOnly: true });
-        }
     }
 });
 

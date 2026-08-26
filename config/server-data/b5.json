@@ -15,7 +15,7 @@
   },
   "b3AllMinEmptySlots": 1,
   "b1SupplyMode": "continuous",
-  "b2InputSource": "storage",
+  "b2InputSource": "inventory",
   "personalVaultBackpressure": {
     "minEmptySlots": 3,
     "hardMinEmptySlots": 1

@@ -14,6 +14,7 @@ class B5AutomationRuntimeDecorator {
 
     reconfigure(config = {}) {
         const next = config || {};
+        if (typeof this.service.reconfigure === 'function') return this.service.reconfigure(next);
         this.service.config = next;
         this.service.inventoryState.config = next;
         this.service.recipeResolver.config = next;

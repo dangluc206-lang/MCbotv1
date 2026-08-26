@@ -35,6 +35,28 @@ class B5StorageFlow {
         return this.b1Materials.compact(baseId, options);
     }
 
+    // Explicit transaction-boundary API used by the B5 inventory contract.
+    // It keeps the Codex optimized transfer path while guaranteeing that the
+    // current B1 is returned and compacted before the next material begins.
+    async finalizeBase(baseId, options = {}) {
+        await this.#resetGenerationIfNeeded(options);
+        if (!this.activeBaseId) return this.b1Materials.compact(baseId, options);
+        if (this.activeBaseId !== baseId) {
+            return Result.ok({
+                baseId, ready: false, converted: false,
+                reason: 'different-active-material', activeBaseId: this.activeBaseId
+            });
+        }
+        const finalized = await this.#finalizeActive(null, options);
+        if (finalized?.ready === false) {
+            return Result.ok({
+                baseId, ready: false, converted: false,
+                reason: 'active-material-finalize-blocked', blocker: finalized
+            });
+        }
+        return Result.ok({ baseId, ready: true, converted: true, finalized });
+    }
+
     async compactAll(options = {}) {
         await this.#resetGenerationIfNeeded(options);
         const finalized = await this.#finalizeActive(null, options);
@@ -52,7 +74,6 @@ class B5StorageFlow {
 
     async prepareBase(baseId, required, options = {}) {
         await this.#resetGenerationIfNeeded(options);
-
         const switchGate = await this.#handleMaterialSwitch(baseId, options);
         if (switchGate) return Result.ok(switchGate);
 
@@ -79,62 +100,46 @@ class B5StorageFlow {
         const prepared = await this.b1Materials.ensureBaseAvailable(baseId, required, options);
         if (prepared?.success === false) return prepared;
         if (prepared?.data?.ready === false) {
-            this.activeBaseId = null;
-            this.activeGeneration = null;
-            this.pendingSwitchBaseId = null;
-            this.switchBarrierOperationId = null;
+            this.#clearTransaction();
             return Result.ok({
                 ...(prepared.data || {}), baseId, required, ready: false,
                 reason: prepared.data?.reason || 'base-form-unavailable',
                 preflight, transactionOwner: this.activeBaseId
             });
         }
+        // V5 owns B1 -> B2 acquisition in B2InputAcquisitionFlow so the
+        // CraftingOperation verifier always observes B1 from player inventory.
+        // StorageFlow only prepares the canonical base form and owns the
+        // material transaction/finalization boundary.
+        return Result.ok({
+            ...(prepared.data || {}), baseId, required, ready: true,
+            transfer: null, preflight, transactionOwner: this.activeBaseId,
+            acquisitionOwner: 'B2InputAcquisitionFlow'
+        });
+    }
+
+
+    async returnBaseInventory(baseId, options = {}) {
+        await this.#resetGenerationIfNeeded(options);
         if (!this.transfer) {
-            // B2InputAcquisitionFlow remains the withdrawal owner. Tests and
-            // alternate storage capabilities may intentionally omit the
-            // optimized material-detail transfer; preparation must still
-            // hand off to the canonical acquisition capability.
             return Result.ok({
-                ...(prepared.data || {}), baseId, required, ready: true,
-                transfer: null, preflight, transactionOwner: this.activeBaseId
+                baseId, ready: false, reason: 'b1-return-transfer-unavailable', moved: 0
             });
         }
-
-        const minRequired = this.#minimumRecipeInput(baseId, required);
-        const transfer = await this.transfer.withdrawUpTo(baseId, {
-            minRequired,
-            reserveEmptySlots: 0,
+        const transfer = await this.transfer.depositAll(baseId, {
             cancellationToken: options.cancellationToken || options.operationContext?.cancellation?.token || null,
             operationContext: options.operationContext || null,
             expectedGeneration: options.expectedGeneration ?? options.operationContext?.connectionGeneration ?? null
         });
         if (transfer?.ready === false) {
             return Result.ok({
-                ...(prepared.data || {}), baseId, required, ready: false,
-                reason: transfer.reason || 'b1-transfer-not-ready',
-                available: Number(prepared.data?.available || 0),
-                blocks: Number(prepared.data?.blocks || 0),
-                preflight, transfer, transactionOwner: this.activeBaseId
+                baseId, ready: false,
+                reason: transfer.reason || 'b1-return-to-kho-not-ready',
+                moved: Number(transfer?.moved || 0), transfer
             });
         }
-
-        const availableInventory = Math.max(0, Number(transfer.afterInventory ?? transfer.beforeInventory ?? 0));
-        if (availableInventory < minRequired) {
-            return Result.ok({
-                ...(prepared.data || {}), baseId, required, ready: false,
-                reason: 'b1-inventory-below-one-b2', minRequired, availableInventory,
-                transfer, preflight, transactionOwner: this.activeBaseId
-            });
-        }
-
-        this.logger?.info?.('B5 B1 MATERIAL READY IN INVENTORY', {
-            operation: 'B5StorageFlow', step: 'prepare-base-inventory', phase: 'OK',
-            resource: baseId, required, minRequired, availableInventory, moved: Number(transfer.moved || 0), preflight
-        });
-
         return Result.ok({
-            ...(prepared.data || {}), ready: true, baseId, required,
-            availableInventory, transfer, preflight, transactionOwner: this.activeBaseId
+            baseId, ready: true, moved: Number(transfer?.moved || 0), transfer
         });
     }
 
@@ -142,7 +147,6 @@ class B5StorageFlow {
         const active = this.activeBaseId;
         if (!active || active === requestedBaseId) return null;
         const operationId = this.#operationId(options);
-
         if (!this.pendingSwitchBaseId) {
             this.pendingSwitchBaseId = requestedBaseId;
             this.switchBarrierOperationId = operationId;
@@ -152,7 +156,6 @@ class B5StorageFlow {
                 pendingSwitchBaseId: requestedBaseId, switchBarrierOperationId: operationId
             };
         }
-
         if (operationId && this.switchBarrierOperationId) {
             if (operationId === this.switchBarrierOperationId) {
                 return {
@@ -169,7 +172,6 @@ class B5StorageFlow {
                 pendingSwitchBaseId: this.pendingSwitchBaseId
             };
         }
-
         const finalized = await this.#finalizeActive(requestedBaseId, options);
         if (finalized?.ready === false) {
             return {
@@ -202,7 +204,6 @@ class B5StorageFlow {
         const blocks = blockId ? Math.max(0, Number(snapshot?.items?.[blockId] || 0)) : 0;
         const ratio = Math.max(1, Number(resource?.ratio || 1));
         const need = Math.max(0, Number(required) || 0);
-
         if (loose >= need || blocks <= 0 || ratio <= 1) {
             return { safe: true, reason: 'no-decompression-needed', baseId, loose, blocks, ratio, required: need, decompressionNeeded: false };
         }
@@ -212,14 +213,24 @@ class B5StorageFlow {
         const limit = Number(capacity?.limit ?? capacity?.total);
         const projectedIncrease = blocks * (ratio - 1);
         const projectedUsed = Number.isFinite(used) ? used + projectedIncrease : null;
-
         if (!Number.isFinite(used) || !Number.isFinite(limit) || limit <= 0) {
-            return { safe: false, reason: 'storage-capacity-unknown', baseId, loose, blocks, ratio, required: need, used: Number.isFinite(used) ? used : null, limit: Number.isFinite(limit) ? limit : null, projectedIncrease };
+            return {
+                safe: false, reason: 'storage-capacity-unknown', baseId, loose, blocks, ratio, required: need,
+                used: Number.isFinite(used) ? used : null,
+                limit: Number.isFinite(limit) ? limit : null,
+                projectedIncrease
+            };
         }
         if (projectedUsed > limit) {
-            return { safe: false, reason: 'storage-hard-capacity', baseId, loose, blocks, ratio, required: need, used, limit, free: Math.max(0, limit - used), projectedIncrease, projectedUsed };
+            return {
+                safe: false, reason: 'storage-hard-capacity', baseId, loose, blocks, ratio, required: need,
+                used, limit, free: Math.max(0, limit - used), projectedIncrease, projectedUsed
+            };
         }
-        return { safe: true, reason: 'full-decompression-fits-capacity', baseId, loose, blocks, ratio, required: need, decompressionNeeded: true, used, limit, projectedIncrease, projectedUsed };
+        return {
+            safe: true, reason: 'full-decompression-fits-capacity', baseId, loose, blocks, ratio,
+            required: need, decompressionNeeded: true, used, limit, projectedIncrease, projectedUsed
+        };
     }
 
     async #finalizeActive(nextBaseId, options) {
@@ -227,34 +238,34 @@ class B5StorageFlow {
         if (!baseId) return { ready: true, skipped: true };
         if (!this.transfer) {
             const compacted = await this.b1Materials.compact(baseId, options);
-            if (compacted?.success === false) return { ready: false, reason: 'compact-active-material-failed', baseId, nextBaseId };
-            this.activeBaseId = null;
-            this.activeGeneration = null;
-            this.pendingSwitchBaseId = null;
-            this.switchBarrierOperationId = null;
+            if (compacted?.success === false) {
+                return { ready: false, reason: 'compact-active-material-failed', baseId, nextBaseId };
+            }
+            this.#clearTransaction();
             return { ready: true, baseId, nextBaseId, transfer: null, compacted: compacted?.data || null };
         }
-
         const transfer = await this.transfer.depositAll(baseId, {
             cancellationToken: options.cancellationToken || options.operationContext?.cancellation?.token || null,
             operationContext: options.operationContext || null,
             expectedGeneration: options.expectedGeneration ?? options.operationContext?.connectionGeneration ?? null
         });
-        if (transfer?.ready === false) return { ready: false, reason: transfer.reason || 'b1-return-to-kho-not-ready', baseId, nextBaseId, transfer };
-
+        if (transfer?.ready === false) {
+            return { ready: false, reason: transfer.reason || 'b1-return-to-kho-not-ready', baseId, nextBaseId, transfer };
+        }
         const compacted = await this.b1Materials.compact(baseId, options);
         if (compacted?.success === false) {
-            return { ready: false, reason: 'compact-active-material-failed', baseId, nextBaseId, transfer, compactStatus: compacted.status || null, compactMessage: compacted.message || compacted.error?.message || null };
+            return {
+                ready: false, reason: 'compact-active-material-failed', baseId, nextBaseId, transfer,
+                compactStatus: compacted.status || null,
+                compactMessage: compacted.message || compacted.error?.message || null
+            };
         }
-
         this.logger?.info?.('B5 B1 MATERIAL TRANSACTION CLOSED', {
             operation: 'B5StorageFlow', step: 'finalize-material', phase: 'OK',
-            resource: baseId, nextResource: nextBaseId, returnedToKho: Number(transfer?.moved || 0), compacted: compacted?.data || null
+            resource: baseId, nextResource: nextBaseId,
+            returnedToKho: Number(transfer?.moved || 0), compacted: compacted?.data || null
         });
-        this.activeBaseId = null;
-        this.activeGeneration = null;
-        this.pendingSwitchBaseId = null;
-        this.switchBarrierOperationId = null;
+        this.#clearTransaction();
         return { ready: true, baseId, nextBaseId, transfer, compacted: compacted?.data || null };
     }
 
@@ -262,6 +273,10 @@ class B5StorageFlow {
         const generation = this.#generation(options);
         if (this.activeGeneration === null || generation === null) return;
         if (Number(this.activeGeneration) === Number(generation)) return;
+        this.#clearTransaction();
+    }
+
+    #clearTransaction() {
         this.activeBaseId = null;
         this.activeGeneration = null;
         this.pendingSwitchBaseId = null;
@@ -280,17 +295,7 @@ class B5StorageFlow {
         return Number.isInteger(value) && value > 0 ? value : null;
     }
 
-    #minimumRecipeInput(baseId, fallback = 1) {
-        const recipes = this.b1Materials.recipeConfig || {};
-        let best = null;
-        for (const recipe of Object.values(recipes)) {
-            const amount = Number(recipe?.inputs?.[baseId]);
-            if (!Number.isFinite(amount) || amount <= 0) continue;
-            best = best === null ? amount : Math.min(best, amount);
-        }
-        if (best !== null) return Math.max(1, Math.floor(best));
-        return Math.max(1, Math.floor(Number(fallback) || 1));
-    }
+
 }
 
 module.exports = B5StorageFlow;

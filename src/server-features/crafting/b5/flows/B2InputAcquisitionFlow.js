@@ -16,8 +16,7 @@ class B2InputAcquisitionFlow {
     acquire(baseId, requiredAmount, options = {}) {
         if (this.source === 'storage') {
             return Promise.resolve(Result.ok({
-                source: 'storage',
-                resource: baseId,
+                source: 'storage', resource: baseId,
                 requestedAmount: Math.max(0, Number(requiredAmount || 0)),
                 withdrawalRequired: false
             }));

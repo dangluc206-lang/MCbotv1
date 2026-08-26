@@ -178,15 +178,6 @@
       "reason": "Existing learned-identity registry is frozen; no metric may increase.",
       "expiresAfter": "GUI knowledge persistence split"
     },
-    "src/server-features/crafting/B5AutomationService.js": {
-      "maxFileLines": 1495,
-      "maxFunctionLines": 598,
-      "maxFunctionStatements": 165,
-      "maxCyclomaticComplexity": 115,
-      "owner": "B5 maintainer",
-      "reason": "Explicitly deferred decomposition; the legacy implementation is frozen in the meantime.",
-      "expiresAfter": "deferred B5AutomationService decomposition"
-    },
     "src/server-features/crafting/B5PlanningService.js": {
       "maxFileLines": 479,
       "maxFunctionLines": 157,
@@ -195,24 +186,6 @@
       "owner": "B5 planning maintainer",
       "reason": "Existing progress projection exceeds the new AST function budget and is frozen.",
       "expiresAfter": "B5 progress projection extraction"
-    },
-    "src/server-features/crafting/CraftingOperation.js": {
-      "maxFileLines": 701,
-      "maxFunctionLines": 301,
-      "maxFunctionStatements": 106,
-      "maxCyclomaticComplexity": 72,
-      "owner": "Crafting maintainer",
-      "reason": "Explicitly deferred operation decomposition; the coordinator is frozen.",
-      "expiresAfter": "deferred CraftingOperation decomposition"
-    },
-    "src/server-features/crafting/CraftingResultVerifier.js": {
-      "maxFileLines": 646,
-      "maxFunctionLines": 172,
-      "maxFunctionStatements": 48,
-      "maxCyclomaticComplexity": 57,
-      "owner": "Crafting maintainer",
-      "reason": "Existing verifier is frozen until its deferred decomposition.",
-      "expiresAfter": "deferred verifier decomposition"
     },
     "src/server-features/crafting/b5/trace/B5TraceRecorder.js": {
       "maxFileLines": 107,
@@ -223,15 +196,6 @@
       "reason": "Legacy trace normalization is branch-heavy and frozen.",
       "expiresAfter": "trace envelope normalizer extraction"
     },
-    "src/server-features/storage/B1StorageMaterialService.js": {
-      "maxFileLines": 660,
-      "maxFunctionLines": 125,
-      "maxFunctionStatements": 38,
-      "maxCyclomaticComplexity": 29,
-      "owner": "Storage maintainer",
-      "reason": "Existing B1 storage coordinator is frozen under the expanded scope.",
-      "expiresAfter": "B1 storage flow decomposition"
-    },
     "src/server-features/storage/KhoCapacityReader.js": {
       "maxFileLines": 132,
       "maxFunctionLines": 66,
@@ -241,15 +205,6 @@
       "reason": "Server-specific capacity parser is frozen at its measured AST complexity.",
       "expiresAfter": "capacity parser rule-table migration"
     },
-    "src/server-features/storage/KhoMaterialTransfer.js": {
-      "maxFileLines": 377,
-      "maxFunctionLines": 160,
-      "maxFunctionStatements": 73,
-      "maxCyclomaticComplexity": 58,
-      "owner": "Storage maintainer",
-      "reason": "Current material transfer transaction is frozen; no metric may increase.",
-      "expiresAfter": "material transfer step extraction"
-    },
     "src/server-features/storage/KhoSellOperation.js": {
       "maxFileLines": 397,
       "maxFunctionLines": 169,
@@ -258,15 +213,6 @@
       "owner": "Storage maintainer",
       "reason": "Existing sell transaction is frozen under the expanded scope.",
       "expiresAfter": "sell session coordinator extraction"
-    },
-    "src/server-features/storage/KhoService.js": {
-      "maxFileLines": 580,
-      "maxFunctionLines": 118,
-      "maxFunctionStatements": 46,
-      "maxCyclomaticComplexity": 40,
-      "owner": "Storage maintainer",
-      "reason": "Storage facade is frozen while transaction responsibilities migrate.",
-      "expiresAfter": "storage transaction facade split"
     },
     "src/server-features/storage/b1/B1StartupReserveTrimmer.js": {
       "maxFileLines": 574,
@@ -283,9 +229,20 @@
   "maxFunctionStatements": 70,
   "maxCyclomaticComplexity": 40,
   "rawSideEffectAllowlist": {
-    "bot.chat": ["src/commands/CommandExecutor.js"],
-    "clickWindow": ["src/gui/click/ClickExecutor.js"],
-    "client.end": ["src/connection/ConnectionManager.js"]
+    "bot.chat": [
+      "src/commands/CommandExecutor.js"
+    ],
+    "clickWindow": [
+      "src/gui/click/ClickExecutor.js"
+    ],
+    "client.end": [
+      "src/connection/ConnectionManager.js"
+    ]
   },
-  "forbiddenPatterns": ["eval-call", "function-constructor", "raw-side-effect", "todo-marker"]
+  "forbiddenPatterns": [
+    "eval-call",
+    "function-constructor",
+    "raw-side-effect",
+    "todo-marker"
+  ]
 }

@@ -7,6 +7,7 @@ const Status = require('../../shared/result/Status');
 const StorageTextParser = require('./StorageTextParser');
 const B1WithdrawQuantityResolver = require('../../planning/storage/B1WithdrawQuantityResolver');
 const B1InventoryWithdrawalPlanner = require('../../planning/storage/B1InventoryWithdrawalPlanner');
+const KhoWithdrawGuiSession = require('./KhoWithdrawGuiSession');
 
 class KhoWithdrawOperation {
     constructor({
@@ -20,24 +21,32 @@ class KhoWithdrawOperation {
         textParser = new StorageTextParser(),
         quantityResolver = null,
         capacityPlanner = new B1InventoryWithdrawalPlanner(),
+        guiSession = null,
         logger = null,
         workloadMetrics = null
     } = {}) {
         if (!storage?.read) throw new TypeError('KhoWithdrawOperation storage is required.');
         if (!guiManager?.clickAndWaitForTransition || !guiManager?.click) throw new TypeError('KhoWithdrawOperation GuiManager is required.');
         if (!inventoryReader || !inventoryCounter) throw new TypeError('KhoWithdrawOperation inventory capability is required.');
-        Object.assign(this, { storage, guiManager, context, itemResolver, inventoryReader, inventoryCounter, textParser, capacityPlanner, logger, workloadMetrics });
+        Object.assign(this, {
+            storage, guiManager, context, itemResolver, inventoryReader, inventoryCounter,
+            textParser, capacityPlanner, logger, workloadMetrics
+        });
         this.config = config || {};
         this.withdrawConfig = this.config.withdraw || {};
-        this.quantityResolver = quantityResolver || new B1WithdrawQuantityResolver({
-            numericQuantities: this.withdrawConfig.numericQuantities
+        this.quantityResolver = quantityResolver || this.#newResolver();
+        this.guiSession = guiSession || new KhoWithdrawGuiSession({
+            storage, guiManager, textParser, config: this.config,
+            quantityResolver: this.quantityResolver, logger
         });
     }
 
     reconfigure(config) {
         this.config = config || {};
         this.withdrawConfig = this.config.withdraw || {};
-        this.quantityResolver = new B1WithdrawQuantityResolver({ numericQuantities: this.withdrawConfig.numericQuantities });
+        this.quantityResolver = this.#newResolver();
+        this.guiSession.quantityResolver = this.quantityResolver;
+        this.guiSession.reconfigure(this.config);
         return this;
     }
 
@@ -50,200 +59,245 @@ class KhoWithdrawOperation {
         expectedGeneration = null,
         operationContext = null
     } = {}) {
-        const options = { requiredAmount, outputId, expectedOutputAmount, minimumFreeSlots, cancellationToken, expectedGeneration, operationContext };
+        const options = {
+            requiredAmount, outputId, expectedOutputAmount, minimumFreeSlots,
+            cancellationToken, expectedGeneration, operationContext
+        };
         if (!this.workloadMetrics) return this.#execute(logicalId, options, null);
         return this.workloadMetrics.measure('storage.withdraw', tracker => this.#execute(logicalId, options, tracker));
     }
 
-    async #execute(logicalId, {
-        requiredAmount,
-        outputId = null,
-        expectedOutputAmount = 1,
-        minimumFreeSlots = null,
-        cancellationToken = null,
-        expectedGeneration = null,
-        operationContext = null
-    } = {}, metrics = null) {
-        const requested = Number(requiredAmount);
-        if (!Number.isInteger(requested) || requested < 0) {
-            return Result.fail(Status.INVALID_INPUT, 'B1 withdrawal requires a non-negative integer amount.');
-        }
-        if (this.withdrawConfig.enabled === false) {
-            return Result.fail(Status.NOT_READY, 'B1 inventory withdrawal is disabled.', null, {
-                code: 'KHO_WITHDRAW_DISABLED', step: 'b1-withdraw', resource: logicalId
-            });
-        }
-        const generation = expectedGeneration ?? operationContext?.connectionGeneration ?? this.context?.getGeneration?.() ?? null;
-        cancellationToken = operationContext?.cancellation?.token || cancellationToken;
+    async #execute(logicalId, options, metrics) {
+        const requested = Number(options.requiredAmount);
+        const invalid = this.#validateRequest(logicalId, requested);
+        if (invalid) return invalid;
+
+        const generation = options.expectedGeneration
+            ?? options.operationContext?.connectionGeneration
+            ?? this.context?.getGeneration?.()
+            ?? null;
+        const cancellationToken = options.operationContext?.cancellation?.token || options.cancellationToken;
         cancellationToken?.throwIfCancelled?.();
         this.#assertGeneration(generation);
 
-        const beforeSnapshot = this.#inventorySnapshot();
-        const inventoryBefore = this.#count(beforeSnapshot, logicalId);
-        const needed = Math.max(0, requested - inventoryBefore);
-        if (needed === 0) return Result.ok({
+        const inventoryBefore = this.#count(this.#inventorySnapshot(), logicalId);
+        if (inventoryBefore >= requested) return this.#alreadySatisfied(logicalId, requested, inventoryBefore);
+
+        const state = {
+            executed: [],
+            prepared: null,
+            actionCount: 0,
+            maxActions: this.#positiveInteger(this.withdrawConfig.maxWithdrawalActions, 64),
+            maxBatchClicks: this.#positiveInteger(this.withdrawConfig.maxBatchClicks, 16)
+        };
+        while (this.#count(this.#inventorySnapshot(), logicalId) < requested) {
+            const next = await this.#prepareNextBatch(logicalId, requested, options, state, {
+                cancellationToken, generation, metrics
+            });
+            if (next.result) return next.result;
+            const result = await this.#executeBatch(logicalId, requested, options, state, next, {
+                cancellationToken, generation, metrics
+            });
+            if (result) return result;
+        }
+        return this.#withdrawSuccess(logicalId, requested, inventoryBefore, state);
+    }
+
+    #validateRequest(logicalId, requested) {
+        if (!Number.isInteger(requested) || requested < 0) {
+            return Result.fail(Status.INVALID_INPUT, 'B1 withdrawal requires a non-negative integer amount.');
+        }
+        if (this.withdrawConfig.enabled !== false) return null;
+        return Result.fail(Status.NOT_READY, 'B1 inventory withdrawal is disabled.', null, {
+            code: 'KHO_WITHDRAW_DISABLED', step: 'b1-withdraw', resource: logicalId
+        });
+    }
+
+    #alreadySatisfied(logicalId, requested, inventoryBefore) {
+        return Result.ok({
             source: 'inventory', resource: logicalId, requestedAmount: requested,
             inventoryBefore, inventoryAfter: inventoryBefore, actualDelta: 0,
-            actions: [], withdrawalRequired: false
+            actions: [], selectedActions: [], actionBatches: [], withdrawalRequired: false
         });
+    }
 
-        let safety = this.#inventorySafety(beforeSnapshot, {
+    async #prepareNextBatch(logicalId, requested, options, state, runtime) {
+        runtime.cancellationToken?.throwIfCancelled?.();
+        this.#assertGeneration(runtime.generation);
+        const snapshot = this.#inventorySnapshot();
+        const current = this.#count(snapshot, logicalId);
+        const remaining = Math.max(0, requested - current);
+        const safety = this.#inventorySafety(snapshot, {
             logicalId,
-            needed,
-            requested,
-            outputId,
-            expectedOutputAmount,
-            minimumFreeSlots
+            needed: remaining,
+            outputId: options.outputId,
+            expectedOutputAmount: options.expectedOutputAmount,
+            minimumFreeSlots: options.minimumFreeSlots
         });
         if (!safety.safe) {
-            return Result.fail(Status.NOT_READY, 'Inventory capacity is reserved for B2 output.', null, {
-                code: 'KHO_WITHDRAW_INVENTORY_CAPACITY', operation: 'KhoWithdrawOperation',
-                step: 'plan-inventory-capacity', resource: logicalId, details: safety
-            });
+            return { result: this.#capacityFailure(logicalId, safety, state.executed.length ? 'recheck-inventory-capacity' : 'plan-inventory-capacity') };
         }
 
-        const actions = [];
-        let remaining = needed;
-        while (remaining > 0) {
-            cancellationToken?.throwIfCancelled?.();
-            this.#assertGeneration(generation);
-            safety = this.#inventorySafety(this.#inventorySnapshot(), {
-                logicalId,
-                needed: remaining,
-                requested,
-                outputId,
-                expectedOutputAmount,
-                minimumFreeSlots
-            });
-            if (!safety.safe) {
-                return Result.fail(Status.NOT_READY, 'Inventory capacity changed while reserving B2 output.', null, {
-                    code: 'KHO_WITHDRAW_INVENTORY_CAPACITY', operation: 'KhoWithdrawOperation',
-                    step: 'recheck-inventory-capacity', resource: logicalId, details: safety
-                });
-            }
-            const prepared = await this.#prepareQuantityGui(logicalId, {
-                cancellationToken,
-                expectedGeneration: generation,
-                operationContext,
-                requiredRemaining: remaining,
-                metrics
-            });
-            if (!prepared.success) return prepared;
+        const fillInventoryAmount = this.withdrawConfig.allowFillInventory === false ? 0 : safety.fillInventoryAmount;
+        const preparedResult = await this.guiSession.prepare(logicalId, {
+            cancellationToken: runtime.cancellationToken,
+            expectedGeneration: runtime.generation,
+            operationContext: options.operationContext,
+            requiredRemaining: remaining,
+            metrics: runtime.metrics,
+            previous: state.prepared,
+            actionAmounts: { stackSize: safety.stackSize, fillInventoryAmount }
+        });
+        this.#assertGeneration(runtime.generation);
+        if (!preparedResult.success) return { result: preparedResult };
+        state.prepared = preparedResult.data;
 
-            const available = Object.keys(prepared.data.quantitySlots || {}).map(Number);
-            const plan = this.quantityResolver.resolve(remaining, available);
-            if (!plan || plan.length === 0) {
-                return Result.fail(Status.NOT_READY, 'No exact withdrawal quantity combination is available.', null, {
-                    code: 'KHO_WITHDRAW_QUANTITY_UNAVAILABLE', operation: 'KhoWithdrawOperation',
-                    step: 'resolve-withdraw-action', resource: logicalId,
-                    details: { requestedAmount: requested, remaining, availableQuantities: available }
-                });
-            }
-            const quantity = plan[0];
-            const attemptResult = await this.#clickAndReconcile(logicalId, quantity, prepared.data.quantitySlots[String(quantity)], {
-                cancellationToken,
-                expectedGeneration: generation,
-                metrics
-            });
-            if (!attemptResult.success) return attemptResult;
-            actions.push(attemptResult.data);
-            if (attemptResult.data.actualDelta <= 0) {
-                return Result.fail(Status.NOT_READY, 'Withdrawal produced no inventory delta.', null, {
-                    code: 'KHO_WITHDRAW_NO_EFFECT', operation: 'KhoWithdrawOperation',
-                    step: 'verify-inventory', resource: logicalId,
-                    details: { requestedAmount: requested, remaining, quantity, actions }
-                });
-            }
-            remaining = Math.max(0, requested - attemptResult.data.inventoryAfter);
+        const available = this.#availableActions(state.prepared.actionSlots, {
+            stackSize: safety.stackSize,
+            fillInventoryAmount
+        });
+        const plan = this.quantityResolver.resolvePlan(remaining, available, {
+            stackSize: safety.stackSize,
+            fillInventoryAmount,
+            maxWithdrawalActions: Math.max(1, state.maxActions - state.actionCount)
+        });
+        if (!plan || plan.actionCount === 0) {
+            return { result: this.#quantityUnavailable(logicalId, requested, remaining, available, fillInventoryAmount, state.maxActions) };
         }
+        return { batch: plan.batches[0], remaining };
+    }
 
+    async #executeBatch(logicalId, requested, options, state, next, runtime) {
+        const batch = next.batch;
+        const clicks = Math.min(batch.count, state.maxBatchClicks, state.maxActions - state.actionCount);
+        if (clicks <= 0) return this.#actionLimitFailure(logicalId, requested, next.remaining, state.maxActions, state.executed);
+        runtime.metrics?.increment('batchCount');
+
+        for (let index = 0; index < clicks; index += 1) {
+            runtime.cancellationToken?.throwIfCancelled?.();
+            this.#assertGeneration(runtime.generation);
+            const now = this.#count(this.#inventorySnapshot(), logicalId);
+            if (now >= requested) break;
+            const ready = await this.#refreshBatchSession(logicalId, requested, options, state, index, runtime);
+            if (ready.result) return ready.result;
+            const slot = this.#slotFor(batch, state.prepared.actionSlots);
+            if (!Number.isInteger(slot) || slot < 0) break;
+
+            const attempt = await this.#clickAndReconcile(logicalId, batch, slot, {
+                cancellationToken: runtime.cancellationToken,
+                expectedGeneration: runtime.generation,
+                metrics: runtime.metrics
+            });
+            if (!attempt.success) return attempt;
+            state.executed.push(attempt.data);
+            state.actionCount += 1;
+            if (attempt.data.actualDelta <= 0) return this.#noEffect(logicalId, requested, batch, state.executed);
+            if (attempt.data.actualDelta !== batch.amount) break;
+            if (state.actionCount >= state.maxActions && this.#count(this.#inventorySnapshot(), logicalId) < requested) {
+                const remaining = requested - this.#count(this.#inventorySnapshot(), logicalId);
+                return this.#actionLimitFailure(logicalId, requested, remaining, state.maxActions, state.executed);
+            }
+        }
+        return null;
+    }
+
+    async #refreshBatchSession(logicalId, requested, options, state, index, runtime) {
+        const snapshot = this.#inventorySnapshot();
+        const now = this.#count(snapshot, logicalId);
+        const safety = this.#inventorySafety(snapshot, {
+            logicalId,
+            needed: requested - now,
+            outputId: options.outputId,
+            expectedOutputAmount: options.expectedOutputAmount,
+            minimumFreeSlots: options.minimumFreeSlots
+        });
+        if (!safety.safe) return { result: this.#capacityFailure(logicalId, safety, 'recheck-inventory-capacity') };
+        if (index <= 0) return { result: null };
+
+        const fillInventoryAmount = this.withdrawConfig.allowFillInventory === false ? 0 : safety.fillInventoryAmount;
+        const session = await this.guiSession.prepare(logicalId, {
+            cancellationToken: runtime.cancellationToken,
+            expectedGeneration: runtime.generation,
+            operationContext: options.operationContext,
+            requiredRemaining: requested - now,
+            metrics: runtime.metrics,
+            previous: state.prepared,
+            actionAmounts: { stackSize: safety.stackSize, fillInventoryAmount }
+        });
+        this.#assertGeneration(runtime.generation);
+        if (!session.success) return { result: session };
+        state.prepared = session.data;
+        return { result: null };
+    }
+
+    #quantityUnavailable(logicalId, requested, remaining, available, fillInventoryAmount, maxActions) {
+        return Result.fail(Status.NOT_READY, 'No exact withdrawal quantity combination is available.', null, {
+            code: 'KHO_WITHDRAW_QUANTITY_UNAVAILABLE', operation: 'KhoWithdrawOperation',
+            step: 'resolve-withdraw-action', resource: logicalId,
+            details: {
+                requestedAmount: requested,
+                remaining,
+                availableQuantities: Object.keys(available.numericSlots || {}).map(Number),
+                stackAvailable: available.stackSlot !== null,
+                fillInventoryAvailable: available.fillInventorySlot !== null,
+                fillInventoryAmount,
+                maxWithdrawalActions: maxActions
+            }
+        });
+    }
+
+    #noEffect(logicalId, requested, batch, actions) {
+        return Result.fail(Status.NOT_READY, 'Withdrawal produced no inventory delta.', null, {
+            code: 'KHO_WITHDRAW_NO_EFFECT', operation: 'KhoWithdrawOperation',
+            step: 'verify-inventory', resource: logicalId,
+            details: { requestedAmount: requested, batch, actions }
+        });
+    }
+
+    #withdrawSuccess(logicalId, requested, inventoryBefore, state) {
         const inventoryAfter = this.#count(this.#inventorySnapshot(), logicalId);
         const actualDelta = Math.max(0, inventoryAfter - inventoryBefore);
+        const selectedActions = state.executed.map(action => action.displayAction);
+        const actionBatches = this.#aggregateBatches(state.executed);
         this.logger?.info?.('B5 B1 withdrawal complete.', {
             operation: 'KhoWithdrawOperation', step: 'b1-withdraw', resource: logicalId,
-            requested: requested, actions: actions.map(action => action.quantity),
-            inventoryBefore, inventoryAfter, actualDelta,
-            freeSlotsBefore: safety.emptySlots,
-            freeSlotsAfter: this.#inventorySnapshot().emptySlotCount ?? null,
+            requested, selectedActions, inventoryBefore, inventoryAfter, actualDelta,
+            actionCount: state.actionCount, actionBatches,
             result: inventoryAfter >= requested ? 'success' : 'partial'
         });
         return Result.ok({
             source: 'inventory', resource: logicalId, requestedAmount: requested,
-            selectedActions: actions.map(action => action.quantity), actions,
+            selectedActions, actions: state.executed, actionBatches,
             inventoryBefore, inventoryAfter, actualDelta,
-            withdrawalRequired: true, safety
+            withdrawalRequired: true,
+            maxWithdrawalActions: state.maxActions
         });
     }
 
-    async #prepareQuantityGui(logicalId, options) {
-        options.metrics?.increment('overviewOpenCount');
-        const overview = await this.storage.read({ ...options, refresh: true, forceReopen: true });
-        if (!overview.success) return overview;
-        const stored = Math.max(0, Number(overview.data?.items?.[logicalId] || 0));
-        const materialSlot = Number(overview.data?.sources?.[logicalId]?.slot);
-        if (!Number.isInteger(materialSlot) || materialSlot < 0) {
-            return Result.fail(Status.NOT_FOUND, 'B1 material is not visible in /kho.', null, {
-                code: 'KHO_WITHDRAW_MATERIAL_NOT_FOUND', operation: 'KhoWithdrawOperation',
-                step: 'select-material', resource: logicalId,
-                details: { stored, available: Object.keys(overview.data?.sources || {}) }
-            });
-        }
-        if (stored <= 0) {
-            return Result.fail(Status.NOT_READY, 'B1 material is not available in /kho.', null, {
-                code: 'KHO_WITHDRAW_MATERIAL_NOT_READY', operation: 'KhoWithdrawOperation',
-                step: 'select-material', resource: logicalId, details: { stored }
-            });
-        }
-        if (stored < Number(options.requiredRemaining || 0)) {
-            return Result.fail(Status.NOT_READY, 'B1 material in /kho is below the remaining withdrawal amount.', null, {
-                code: 'KHO_WITHDRAW_MATERIAL_NOT_READY', operation: 'KhoWithdrawOperation',
-                step: 'select-material', resource: logicalId,
-                details: { stored, requiredRemaining: Number(options.requiredRemaining || 0) }
-            });
-        }
-
-        const detailSource = this.#source(logicalId, ['material-detail']);
-        let detail;
-        try {
-            options.metrics?.increment('detailOpenCount');
-            detail = await this.guiManager.clickAndWaitForTransition(materialSlot, {
-                timeoutMs: this.#timeout(), cancellationToken: options.cancellationToken,
-                expectedGeneration: options.expectedGeneration,
-                label: `open storage detail ${logicalId}`, requireNewWindow: true,
-                settleMs: Number(this.config.openSettleMs || 0), source: detailSource
-            });
-        } catch (error) {
-            return this.#failure(error, 'KHO_WITHDRAW_DETAIL_NOT_OPENED', 'open-detail', logicalId, { materialSlot });
-        }
-        this.#assertGeneration(options.expectedGeneration);
-        const withdrawSlot = this.#findPatternSlot(detail?.window, this.withdrawConfig.withdrawPatterns);
-        if (withdrawSlot < 0) {
-            return Result.fail(Status.NOT_FOUND, 'Withdraw action is not visible in material detail GUI.', null, {
-                code: 'KHO_WITHDRAW_ACTION_NOT_FOUND', operation: 'KhoWithdrawOperation',
-                step: 'resolve-withdraw-action', resource: logicalId,
-                details: { materialSlot, gui: this.guiManager.describeCurrent?.() || null }
-            });
-        }
-
-        let quantitySession;
-        try {
-            options.metrics?.increment('quantityOpenCount');
-            quantitySession = await this.guiManager.clickAndWaitForTransition(withdrawSlot, {
-                timeoutMs: this.#timeout(), cancellationToken: options.cancellationToken,
-                expectedGeneration: options.expectedGeneration,
-                label: `open withdraw quantities ${logicalId}`, requireNewWindow: true,
-                settleMs: Number(this.config.openSettleMs || 0),
-                source: this.#source(logicalId, ['material-detail', 'withdraw'])
-            });
-        } catch (error) {
-            return this.#failure(error, 'KHO_WITHDRAW_QUANTITY_GUI_NOT_OPENED', 'open-withdraw-quantity', logicalId, { materialSlot, withdrawSlot });
-        }
-        this.#assertGeneration(options.expectedGeneration);
-        const quantitySlots = Object.fromEntries(this.#quantitySlots(quantitySession?.window));
-        return Result.ok({ overview: overview.data, materialSlot, withdrawSlot, quantitySlots });
+    #availableActions(actionSlots, { stackSize, fillInventoryAmount }) {
+        return {
+            numericSlots: actionSlots?.numericSlots || {},
+            stackSlot: this.withdrawConfig.allowStack === false ? null : actionSlots?.stackSlot ?? null,
+            stackSize,
+            fillInventorySlot: fillInventoryAmount > 0 ? actionSlots?.fillInventorySlot ?? null : null,
+            fillInventoryAmount
+        };
     }
 
-    async #clickAndReconcile(logicalId, quantity, slot, { cancellationToken, expectedGeneration, metrics = null }) {
+    #slotFor(batch, actionSlots) {
+        const action = B1WithdrawQuantityResolver.ACTION;
+        if (batch.kind === action.NUMERIC) {
+            const numericSlots = actionSlots?.numericSlots || {};
+            return numericSlots instanceof Map
+                ? numericSlots.get(Number(batch.amount)) ?? null
+                : numericSlots[Number(batch.amount)] ?? numericSlots[String(batch.amount)] ?? null;
+        }
+        if (batch.kind === action.STACK) return actionSlots?.stackSlot ?? null;
+        if (batch.kind === action.FILL_INVENTORY) return actionSlots?.fillInventorySlot ?? null;
+        return null;
+    }
+
+    async #clickAndReconcile(logicalId, batch, slot, { cancellationToken, expectedGeneration, metrics }) {
         const before = this.#count(this.#inventorySnapshot(), logicalId);
         let clickError = null;
         try {
@@ -255,20 +309,31 @@ class KhoWithdrawOperation {
         const after = await this.#waitForCount(logicalId, before, { cancellationToken, expectedGeneration, metrics });
         const actualDelta = Math.max(0, after - before);
         if (actualDelta > 0) {
-            return Result.ok({ quantity, slot, inventoryBefore: before, inventoryAfter: after, actualDelta, reconciledAfterClickError: Boolean(clickError) });
+            return Result.ok({
+                kind: batch.kind,
+                quantity: batch.kind === B1WithdrawQuantityResolver.ACTION.NUMERIC ? Number(batch.amount) : null,
+                requestedDelta: Number(batch.amount),
+                displayAction: B1WithdrawQuantityResolver.displayAction(batch),
+                slot,
+                inventoryBefore: before,
+                inventoryAfter: after,
+                actualDelta,
+                reconciledAfterClickError: Boolean(clickError)
+            });
         }
         metrics?.increment('noDeltaCount');
-        if (clickError) return this.#failure(clickError, 'KHO_WITHDRAW_CLICK_FAILED', 'click-withdraw', logicalId, { quantity, slot, before, after });
+        if (clickError) return this.#failure(clickError, 'KHO_WITHDRAW_CLICK_FAILED', 'click-withdraw', logicalId, { batch, slot, before, after });
         return Result.fail(Status.NOT_READY, 'Withdrawal click was not reflected in inventory.', null, {
-            code: 'KHO_WITHDRAW_NOT_VERIFIED', operation: 'KhoWithdrawOperation', step: 'verify-inventory', resource: logicalId,
-            details: { quantity, slot, before, after, unchangedConfirmationReads: this.withdrawConfig.unchangedConfirmationReads }
+            code: 'KHO_WITHDRAW_NOT_VERIFIED', operation: 'KhoWithdrawOperation',
+            step: 'verify-inventory', resource: logicalId,
+            details: { batch, slot, before, after, unchangedConfirmationReads: this.withdrawConfig.unchangedConfirmationReads }
         });
     }
 
-    async #waitForCount(logicalId, before, { cancellationToken, expectedGeneration, metrics = null }) {
-        const attempts = Math.max(1, Number(this.withdrawConfig.verifyAttempts || 12));
+    async #waitForCount(logicalId, before, { cancellationToken, expectedGeneration, metrics }) {
+        const attempts = this.#positiveInteger(this.withdrawConfig.verifyAttempts, 12);
         const retryMs = Math.max(1, Number(this.withdrawConfig.verifyRetryMs || 100));
-        const unchangedRequired = Math.max(1, Number(this.withdrawConfig.unchangedConfirmationReads || 2));
+        const unchangedRequired = this.#positiveInteger(this.withdrawConfig.unchangedConfirmationReads, 2);
         let best = before;
         let unchanged = 0;
         for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -285,7 +350,7 @@ class KhoWithdrawOperation {
         return best;
     }
 
-    #inventorySafety(snapshot, { logicalId, needed, requested, outputId, expectedOutputAmount, minimumFreeSlots }) {
+    #inventorySafety(snapshot, { logicalId, needed, outputId, expectedOutputAmount, minimumFreeSlots }) {
         const input = this.#itemCapacity(snapshot, logicalId);
         const output = outputId ? this.#itemCapacity(snapshot, outputId) : { mergeCapacity: 0, stackSize: 64 };
         return this.capacityPlanner.compile({
@@ -297,8 +362,7 @@ class KhoWithdrawOperation {
             outputMergeCapacity: output.mergeCapacity,
             inputStackSize: input.stackSize,
             outputStackSize: output.stackSize,
-            minimumFreeSlots: minimumFreeSlots ?? this.withdrawConfig.minimumOutputSlots ?? 2,
-            requestedTotal: requested
+            minimumFreeSlots: minimumFreeSlots ?? this.withdrawConfig.minimumOutputSlots ?? 2
         });
     }
 
@@ -315,45 +379,39 @@ class KhoWithdrawOperation {
         return { mergeCapacity, stackSize };
     }
 
-    #quantitySlots(window) {
-        const found = new Map();
-        const end = Number.isInteger(window?.inventoryStart) ? window.inventoryStart : (window?.slots?.length || 0);
-        for (let slot = 0; slot < end; slot += 1) {
-            const item = window?.slots?.[slot];
-            if (!item) continue;
-            const text = this.#itemText(item);
-            if (this.#matches(text, this.withdrawConfig.stackPatterns)
-                || this.#matches(text, this.withdrawConfig.fullInventoryPatterns)) continue;
-            const lines = this.textParser.itemLines(item)
-                .map(line => this.textParser.normalizeText(line));
-            const primary = this.textParser.normalizeText(item.displayName || item.customName || '');
-            const matched = this.quantityResolver.numericQuantities.filter(quantity => {
-                const exact = new RegExp(`^(?:(?:rut|withdraw|amount|quantity|so luong)\\s*[:x-]?\\s*)?${quantity}$`, 'i');
-                const action = new RegExp(`^(?:rut|withdraw)\\s+(?:x\\s*)?${quantity}(?:\\s+(?:item|items|vat\\s+pham))?$`, 'i');
-                return exact.test(primary) || lines.some(line => exact.test(line) || action.test(line));
+    #aggregateBatches(actions) {
+        const output = [];
+        for (const action of actions) {
+            const previous = output[output.length - 1];
+            if (previous && previous.kind === action.kind && previous.requestedDelta === action.requestedDelta) {
+                previous.count += 1;
+                previous.actualDelta += action.actualDelta;
+                continue;
+            }
+            output.push({
+                kind: action.kind,
+                requestedDelta: action.requestedDelta,
+                displayAction: action.displayAction,
+                count: 1,
+                actualDelta: action.actualDelta
             });
-            if (matched.length === 1 && !found.has(matched[0])) found.set(matched[0], slot);
         }
-        return found;
+        return output;
     }
 
-    #findPatternSlot(window, patterns) {
-        const end = Number.isInteger(window?.inventoryStart) ? window.inventoryStart : (window?.slots?.length || 0);
-        for (let slot = 0; slot < end; slot += 1) {
-            const item = window?.slots?.[slot];
-            if (item && this.#matches(this.#itemText(item), patterns)) return slot;
-        }
-        return -1;
-    }
-
-    #matches(text, patterns) {
-        return (patterns || []).some(pattern => {
-            try { return new RegExp(pattern, 'i').test(text); } catch { return false; }
+    #capacityFailure(resource, safety, step) {
+        return Result.fail(Status.NOT_READY, 'Inventory capacity is reserved for B2 output.', null, {
+            code: 'KHO_WITHDRAW_INVENTORY_CAPACITY', operation: 'KhoWithdrawOperation',
+            step, resource, details: safety
         });
     }
 
-    #itemText(item) {
-        return this.textParser.normalizeText(this.textParser.itemLines(item).join('\n'));
+    #actionLimitFailure(resource, requested, remaining, maxWithdrawalActions, actions) {
+        return Result.fail(Status.NOT_READY, 'B1 withdrawal exceeded the configured action budget.', null, {
+            code: 'KHO_WITHDRAW_ACTION_LIMIT', operation: 'KhoWithdrawOperation',
+            step: 'resolve-withdraw-action', resource,
+            details: { requestedAmount: requested, remaining, maxWithdrawalActions, executedActions: actions.length }
+        });
     }
 
     #inventorySnapshot() {
@@ -365,12 +423,6 @@ class KhoWithdrawOperation {
     #count(snapshot, logicalId) {
         return Math.max(0, Number(this.inventoryCounter.count(snapshot, logicalId) || 0));
     }
-
-    #source(logicalId, actions) {
-        return { commandKey: this.config.commandKey, command: '/kho', clicks: [], actions: [`material:${logicalId}`, ...actions], source: 'operation' };
-    }
-
-    #timeout() { return Math.max(250, Number(this.withdrawConfig.detailTimeoutMs || this.config.guiTimeoutMs || 5000)); }
 
     #assertGeneration(expectedGeneration) {
         if (expectedGeneration === null || expectedGeneration === undefined) return;
@@ -390,6 +442,18 @@ class KhoWithdrawOperation {
             step, action: 'withdraw B1 from /kho to inventory', resource, retryable: true, details
         });
         return Result.fail(code.includes('NOT_OPENED') ? Status.NOT_READY : Status.FAILED, wrapped.message, wrapped, wrapped.toDiagnostic());
+    }
+
+    #newResolver() {
+        return new B1WithdrawQuantityResolver({
+            numericQuantities: this.withdrawConfig.numericQuantities,
+            maxWithdrawalActions: this.withdrawConfig.maxWithdrawalActions
+        });
+    }
+
+    #positiveInteger(value, fallback) {
+        const number = Number(value);
+        return Number.isInteger(number) && number > 0 ? number : fallback;
     }
 }
 

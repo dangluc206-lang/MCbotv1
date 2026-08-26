@@ -1,0 +1,261 @@
+{
+  "contract": "mcbot-extract-only-patch-manifest/v1",
+  "patchLabel": "1.0.14",
+  "baseCommit": "7cac594afe4849824a78275462462940617f465d",
+  "baseMessage": "1.0.3",
+  "productVersion": "2.7.67",
+  "createdAtUtc": "2026-08-26T17:17:07+00:00",
+  "extractOnly": true,
+  "excluded": [
+    ".git",
+    ".env",
+    "data",
+    "node_modules"
+  ],
+  "startupOrdering": {
+    "order": [
+      "backend-core-ready",
+      "discord-client-ready",
+      "minecraft-runtimes-start"
+    ],
+    "shutdownOrder": [
+      "minecraft-runtimes-stop",
+      "discord-stop",
+      "backend-core-stop"
+    ],
+    "fixedDelayUsed": false
+  },
+  "qa": {
+    "startupOrder": "PASS 2/2",
+    "startupRelevantRegression": "PASS 12/12",
+    "startupSyntax": "PASS",
+    "startupStaticMetrics": "PASS under default budgets",
+    "createApplicationIntegrationOldScaffold": "BLOCKED - missing vec3 dependency in old scaffold",
+    "targetedRegressionPrevious": "90/90 PASS",
+    "criticalCoveragePrevious": "PASS 6/6",
+    "exactBaseFullRelease": "NOT EXECUTED - exact full 1.0.3 tree not materialized",
+    "liveE2E": "NOT EXECUTED"
+  },
+  "files": [
+    {
+      "path": "PATCH_INFO.txt",
+      "size": 2488,
+      "sha256": "d7532911de64393db41a1ef25869bef30a42c3238ff8cfd0785086449f6ccbc0"
+    },
+    {
+      "path": "architecture/coverage/critical-files.json",
+      "size": 2100,
+      "sha256": "732bdc2ef587e1403e59472acfabf8c173332845215a44704eca333fba5d4a5d"
+    },
+    {
+      "path": "architecture/static-quality/current.json",
+      "size": 9685,
+      "sha256": "25880efd32778d4d4b7bad910d9fe5bb2ef5a02456b6d812312c17e78c87690c"
+    },
+    {
+      "path": "config/server-data/b5.json",
+      "size": 556,
+      "sha256": "40dccde3348b13ff4b7eced7fa3337368f764f5150bfc915ae789ccbc27afad4"
+    },
+    {
+      "path": "config/server-data/recipes.json",
+      "size": 4381,
+      "sha256": "2a47193eabfb442610e6234eef52ab5bff6d07884603d638e0a6bfabe3196e81"
+    },
+    {
+      "path": "config/storage/kho.json",
+      "size": 2475,
+      "sha256": "1eff1ffb1ab326fdd74f9f60891899b7fef0965e9fde82db8e46c3da720cd70d"
+    },
+    {
+      "path": "package.json",
+      "size": 4998,
+      "sha256": "e0e238fd98d7f7807799e3fe91c7f0038ca82c72fae7e8990118b308300bdb5c"
+    },
+    {
+      "path": "scripts/check-critical-coverage.js",
+      "size": 2255,
+      "sha256": "77b8b4ffd69e1645fe97e27ff334651cd27b76f37419b1ced01e0e114d59d035"
+    },
+    {
+      "path": "src/bootstrap/createApplication.js",
+      "size": 5997,
+      "sha256": "4cd05c0e144c71fe35695309caec4457b312242bcb1a1f60083f8b32d2c3289a"
+    },
+    {
+      "path": "src/configuration/schemas/group.schemas.js",
+      "size": 43652,
+      "sha256": "6261fcebad432f7bf84e6e076a55f65bfb430b512968bf153b12e380c06e8bfa"
+    },
+    {
+      "path": "src/core/Application.js",
+      "size": 4034,
+      "sha256": "0d044d8a07fa754b76bbf14ceef6d4998ddc137751e3586ccd1d7a31510ffcf1"
+    },
+    {
+      "path": "src/gui/observation/GuiObservationService.js",
+      "size": 5590,
+      "sha256": "7da6a884d27d6913a7a3241a4787023dda113d214a04e21ab054fe1f27e0484a"
+    },
+    {
+      "path": "src/operations/Operation.js",
+      "size": 6093,
+      "sha256": "456ddb1b882ada015163a2816100c3f45f5cdedb467b59bd3d02e12b2440fd20"
+    },
+    {
+      "path": "src/planning/storage/B1InventoryWithdrawalPlanner.js",
+      "size": 2202,
+      "sha256": "f684a0e0179eb72d9ad3dd4fcccc06926136bb2ed54816f9c72275b29921f919"
+    },
+    {
+      "path": "src/planning/storage/B1WithdrawQuantityResolver.js",
+      "size": 9113,
+      "sha256": "5aa606e5a5c48a8b4162fd7042cf2381e1999fbafd01bef370c8557d8bd1b460"
+    },
+    {
+      "path": "src/server-features/crafting/B5AutomationRuntimeDecorator.js",
+      "size": 1291,
+      "sha256": "e0c70de95a000d26e8e137a189a0b0a47dbc58a221c1c7dbd7250c95c9c9ed4f"
+    },
+    {
+      "path": "src/server-features/crafting/B5AutomationService.js",
+      "size": 12319,
+      "sha256": "4767e47792e20d8e2b79169ae27a88209463e0ba4787248b93f6feac6e38c6db"
+    },
+    {
+      "path": "src/server-features/crafting/CraftingExecutionSupport.js",
+      "size": 5046,
+      "sha256": "25e819e20f249d5eb98e262355ae1018e3ee0a7a1bc7c9c1d4011bbd716bc44d"
+    },
+    {
+      "path": "src/server-features/crafting/CraftingGuiNavigator.js",
+      "size": 8433,
+      "sha256": "8953e96a4f5e4cb6252cd62b5bc1e36b75c799109c86992a446c7b028372656a"
+    },
+    {
+      "path": "src/server-features/crafting/CraftingOperation.js",
+      "size": 20686,
+      "sha256": "0ab770fa5a68528a89d40e60c0d47d9a1162d491b5350ded003c61ee4c870259"
+    },
+    {
+      "path": "src/server-features/crafting/CraftingResultVerifier.js",
+      "size": 4351,
+      "sha256": "cc8e7d2ed09a90c8300f5098def48ea33656f1ef5490f5fb3f44ad0c8ffd1a08"
+    },
+    {
+      "path": "src/server-features/crafting/CraftingVerificationCoordinator.js",
+      "size": 5868,
+      "sha256": "e4ffd0cecb926143de5e2eb4e8d5a8a0f8c8561102f5463af7c00ebc2bb82548"
+    },
+    {
+      "path": "src/server-features/crafting/b5/B5B1InventoryCoordinator.js",
+      "size": 10003,
+      "sha256": "eabd59b0fdb066fecd4afa2f11a6a421e2f30bbd8a0a536781e5376855ee4628"
+    },
+    {
+      "path": "src/server-features/crafting/b5/B5CycleCoordinator.js",
+      "size": 25999,
+      "sha256": "cfe5efa942ec7ce3d9cf5930e1ee60bdf14972007fb7950149cbd05f26a2f59d"
+    },
+    {
+      "path": "src/server-features/crafting/b5/B5FinalCraftCoordinator.js",
+      "size": 6330,
+      "sha256": "39be3f9973dc61dde2be5554f4f2ab2546f21bdcaa7bb3b08b7d242dc1c403ef"
+    },
+    {
+      "path": "src/server-features/crafting/b5/B5IntermediateCoordinator.js",
+      "size": 15293,
+      "sha256": "6e29635f22cf25f5701b2e57cc7bdec3b63945a47c47a407fb9caab80772e743"
+    },
+    {
+      "path": "src/server-features/crafting/b5/B5ReserveChainCoordinator.js",
+      "size": 14763,
+      "sha256": "36473a23e299fa094163ecf962e42af71d5f82ea39b5380998148de81b42bdd3"
+    },
+    {
+      "path": "src/server-features/crafting/b5/flows/B2InputAcquisitionFlow.js",
+      "size": 1031,
+      "sha256": "4b2e423775b8663aa7902ce56f68f448cbf013f5b55629b870ccdf086b51e5e3"
+    },
+    {
+      "path": "src/server-features/crafting/b5/flows/B5StorageFlow.js",
+      "size": 13811,
+      "sha256": "066a85ccc336e52f3dd77ba6e97d8e603b8e1d5928646a758d21815a1e89a0ca"
+    },
+    {
+      "path": "src/server-features/crafting/verification/CraftingVerificationAttempt.js",
+      "size": 5732,
+      "sha256": "c533bada6e5aa221be1d0d0ee63affd5c858d0ec57f0b3c282b9555a9af424df"
+    },
+    {
+      "path": "src/server-features/crafting/verification/CraftingVerificationEvidence.js",
+      "size": 19621,
+      "sha256": "9a050d7a9df4dd6a978281fb9192e5523d15e026e37245ba12b85e00d0d11121"
+    },
+    {
+      "path": "src/server-features/storage/B1StorageMaterialService.js",
+      "size": 16149,
+      "sha256": "2469da4a9901e33074fc75557d3b23ce5834a406303edf6c07113b42ffc22987"
+    },
+    {
+      "path": "src/server-features/storage/KhoMaterialTransfer.js",
+      "size": 21090,
+      "sha256": "79fa1d32352e97a67f47160fac1d83b30e8bb032107a369a8964d9b0e18dfc10"
+    },
+    {
+      "path": "src/server-features/storage/KhoService.js",
+      "size": 20846,
+      "sha256": "45134dfbea81de760a09218f8d3a4e444024150bbe2020d78c2ec973b029be5f"
+    },
+    {
+      "path": "src/server-features/storage/KhoSessionCoordinator.js",
+      "size": 8920,
+      "sha256": "099173c85a641cfa5df574bfa2505382cb89c72508d8a07147ed367272b90cb5"
+    },
+    {
+      "path": "src/server-features/storage/KhoWithdrawGuiSession.js",
+      "size": 10222,
+      "sha256": "f8babc5d52e0911243a304ca9880eef8717286b67b0eebe578abb6ff82264cbf"
+    },
+    {
+      "path": "src/server-features/storage/KhoWithdrawOperation.js",
+      "size": 21933,
+      "sha256": "799d7de44c64169e7aa6cc3ec2ec95721db1f62adb94a453eaab3acbc56cec6a"
+    },
+    {
+      "path": "src/server-features/storage/b1/B1BatchProtectionCoordinator.js",
+      "size": 13561,
+      "sha256": "91726fd8e82da5a074b90f8f978032fe3d95179bb330ae2121fdb0fddcf978f7"
+    },
+    {
+      "path": "tests/unit/core/ApplicationStartupOrder.test.js",
+      "size": 4149,
+      "sha256": "1a399a1db575e9e58d476b11214a59cacdf67e4f25ae251308ddbb8390a3b250"
+    },
+    {
+      "path": "tests/unit/planning/B1WithdrawQuantityResolverV2.test.js",
+      "size": 3109,
+      "sha256": "785c42bd1ebbeb4fd85e10b35d8796542a8e4e9c405aff4d25d9798bacb296d0"
+    },
+    {
+      "path": "tests/unit/server-features/B5B1InventoryCoordinator.test.js",
+      "size": 4740,
+      "sha256": "6b978fd900d86b41c477d72c8f4153b2454f62c1a2a582dcd497bd3e056243f9"
+    },
+    {
+      "path": "tests/unit/server-features/B5ConfigPropagation.test.js",
+      "size": 2489,
+      "sha256": "51612021ea91971671209786f874740839ee7e6fd80aceee00379e3027ea7af2"
+    },
+    {
+      "path": "tests/unit/server-features/B5InventoryWithdrawContractV5.test.js",
+      "size": 4325,
+      "sha256": "34410445db338555355923f8cb340a878564361daa2a9121de30747b5211589b"
+    },
+    {
+      "path": "tests/unit/server-features/KhoWithdrawActionModel.test.js",
+      "size": 7928,
+      "sha256": "bb94d54493eaf28302537db5ab15948b9d5fa64df457987ffdecea7ce16bc2ea"
+    }
+  ]
+}

@@ -38,7 +38,7 @@
     "support:bundle": "node scripts/build-support-bundle.js",
     "replay:fault": "node scripts/replay-scenario.js tests/fixtures/replay/click-response-lost.json",
     "quality:fast": "node scripts/run-quality-gates.js --lane fast",
-    "quality:release": "node scripts/run-quality-gates.js --lane release",
+    "quality:release": "node scripts/run-quality-gates.js --lane release && node scripts/check-critical-coverage.js",
     "artifact:integrity": "node scripts/release-artifact-integrity.js",
     "artifact:verify": "node scripts/verify-release-zip.js",
     "scale:measure": "node --expose-gc scripts/measure-scale-baseline.js",

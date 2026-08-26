@@ -5,6 +5,7 @@ const Status = require('../../shared/result/Status');
 const KhoSnapshot = require('./KhoSnapshot');
 const FlowError = require('../../shared/errors/FlowError');
 const Operation = require('../../operations/Operation');
+const KhoSessionCoordinator = require('./KhoSessionCoordinator');
 
 class KhoService {
     constructor({ commandService, guiManager, reader, sellOperation = null, withdrawOperation = null, config, guiKnowledge = null, operationManager = null, context = null, logger = null }) {
@@ -20,6 +21,17 @@ class KhoService {
         this.config = this.#validateConfig(config);
         this.lastKhoSessionId = null;
         this.source = Object.freeze({ commandKey: this.config.commandKey, command: '/kho', guiId: this.config.guiId, clicks: [], actions: [], source: 'operation' });
+        this.sessionCoordinator = new KhoSessionCoordinator({
+            commandService: this.commandService,
+            guiManager: this.guiManager,
+            reader: this.reader,
+            context: this.context,
+            logger: this.logger,
+            config: this.config,
+            source: this.source,
+            verifySession: (...args) => this.#isVerifiedKhoSession(...args),
+            hasCapacity: capacity => this.#hasCapacity(capacity)
+        });
     }
 
     reconfigure(config) {
@@ -29,6 +41,7 @@ class KhoService {
         this.sellOperation?.reconfigure?.(next);
         this.withdrawOperation?.reconfigure?.(next);
         this.source = Object.freeze({ commandKey: next.commandKey, command: '/kho', guiId: next.guiId, clicks: [], actions: [], source: 'operation' });
+        this.sessionCoordinator.reconfigure(next, this.source);
         this.lastKhoSessionId = null;
         return this;
     }
@@ -52,7 +65,7 @@ class KhoService {
                 this.lastKhoSessionId = null;
                 await this.guiKnowledge?.invalidateSemantic?.(this.source, 'storage');
                 if (this.guiManager.current()) {
-                    await this.#closeAndSettleBeforeKho(cancellationToken);
+                    await this.sessionCoordinator.closeAndSettle(cancellationToken);
                 }
                 refresh = true;
                 this.logger?.info?.('KHO FORCE REOPEN', {
@@ -92,7 +105,7 @@ class KhoService {
                 this.lastKhoSessionId = null;
             }
 
-            const session = await this.#openOrRefreshKho({ refresh, cancellationToken, expectedGeneration, operationContext });
+            const session = await this.sessionCoordinator.openOrRefresh({ refresh, cancellationToken, expectedGeneration, operationContext });
             this.#assertGeneration(expectedGeneration);
             this.lastKhoSessionId = session.id;
             await this.guiKnowledge?.observe(session, { source: this.source });
@@ -161,8 +174,7 @@ class KhoService {
         if (this.operationManager && !operationContext) {
             return this.#runManaged('KhoService.withdrawB1', ['gui', 'storage', 'inventory'], options,
                 context => this.withdrawB1(logicalId, {
-                    ...options,
-                    operationContext: context,
+                    ...options, operationContext: context,
                     cancellationToken: context.cancellation.token,
                     expectedGeneration: context.connectionGeneration
                 }),
@@ -212,8 +224,8 @@ class KhoService {
         }
     }
 
-    // Compatibility shim for old callers. Production keeps allowAll=false;
-    // when explicitly enabled, the executor applies it as a global Sell policy.
+    // Compatibility shim for old callers. SELL ALL remains denied globally and
+    // is accepted only for an explicitly configured fast-disposable sell ID.
     async sellAll(logicalId, options = {}) {
         return this.sell(logicalId, { ...options, quantity: 'ALL' });
     }
@@ -234,196 +246,6 @@ class KhoService {
             sources: snapshot.sources,
             capturedAt: snapshot.capturedAt
         });
-    }
-
-    async #openOrRefreshKho({ refresh, cancellationToken, expectedGeneration = null, operationContext = null }) {
-        const errors = [];
-
-        for (let attempt = 1; attempt <= this.config.openAttempts; attempt += 1) {
-            try {
-                this.logger?.info?.('KHO OPEN ATTEMPT', {
-                    operation: 'KhoService', step: 'open-or-refresh', phase: 'START',
-                    action: '/kho', resource: 'storage', attempt, maxAttempts: this.config.openAttempts
-                });
-                return await this.#attemptKhoCommand({ refresh, cancellationToken, expectedGeneration, operationContext });
-            } catch (error) {
-                errors.push(error);
-                if (attempt >= this.config.openAttempts) break;
-
-                this.logger?.debug?.('A /kho command did not expose readable storage data; retrying.', {
-                    attempt,
-                    maxAttempts: this.config.openAttempts,
-                    error: error.message
-                });
-
-                // First attempt is deliberately command-only. Only fall back
-                // to a close when the current GUI cannot be parsed as /kho.
-                if (this.guiManager.current()) {
-                    await this.#closeAndSettleBeforeKho(cancellationToken);
-                } else {
-                    await this.#delay(this.config.retryDelayMs, cancellationToken);
-                }
-            }
-        }
-
-        const first = errors[0]?.message || 'unknown';
-        const last = errors.at(-1)?.message || 'unknown';
-        throw new FlowError(
-            `/kho did not expose readable storage data after ${this.config.openAttempts} attempts. First: ${first}; Last: ${last}`,
-            {
-                code: 'KHO_GUI_NOT_READABLE', subsystem: 'storage', operation: 'KhoService',
-                step: 'open-or-refresh', action: '/kho', resource: 'storage', attempt: this.config.openAttempts,
-                details: { attempts: errors.map((error, index) => ({ attempt: index + 1, message: error.message })), gui: this.guiManager.describeCurrent?.() || null },
-                cause: errors.at(-1) || null
-            }
-        );
-    }
-
-    /**
-     * /kho is command-driven: if the command succeeds, the resulting/current
-     * container is the /kho candidate. We do not require a new window id or an
-     * updateSlot event. Instead we poll Mineflayer's currentWindow and accept
-     * the candidate once the real storage payload is readable (slot 49
-     * capacity and/or parsed storage values).
-     */
-    async #attemptKhoCommand({ refresh, cancellationToken, expectedGeneration = null, operationContext = null }) {
-        cancellationToken?.throwIfCancelled?.();
-        this.#assertGeneration(expectedGeneration);
-
-        let beforeSession = this.guiManager.syncCurrentWindow?.() || this.guiManager.current();
-        let beforeWindow = beforeSession?.window || null;
-        let beforeSnapshot = beforeWindow ? this.reader.read(beforeWindow) : null;
-        let beforeWasReadableKho = this.#isVerifiedKhoSession(beforeSession, beforeSnapshot, { commandContext: false });
-
-        // Commands on this server can be ignored while an unrelated inventory
-        // GUI is still open. Close /ks, /nung, crafting, etc. before /kho
-        // instead of wasting the first full GUI timeout on a command that the
-        // server never processes. A readable /kho may still be refreshed in-place.
-        const beforeWasSellGui = beforeSession?.source?.commandKey === this.config?.sell?.commandKey
-            || beforeSession?.source?.command === '/kho sell';
-        if (beforeSession?.active && (beforeWasSellGui || !beforeWasReadableKho)) {
-            this.logger?.debug?.(beforeWasSellGui
-                ? 'Closing /kho sell GUI before /kho command.'
-                : 'Closing unrelated GUI before /kho command.', {
-                operation: 'KhoService', step: 'prepare-open', action: 'close current GUI before /kho',
-                gui: this.guiManager.describeCurrent?.() || null
-            });
-            await this.#closeAndSettleBeforeKho(cancellationToken);
-            beforeSession = this.guiManager.syncCurrentWindow?.() || this.guiManager.current();
-            beforeWindow = beforeSession?.window || null;
-            beforeSnapshot = beforeWindow ? this.reader.read(beforeWindow) : null;
-            beforeWasReadableKho = this.#isVerifiedKhoSession(beforeSession, beforeSnapshot, { commandContext: false });
-        }
-
-        if (!beforeSession?.active && typeof this.guiManager.waitForPostCloseSettle === 'function') {
-            const waitedMs = await this.guiManager.waitForPostCloseSettle(this.config.openAfterCloseSettleMs, { cancellationToken });
-            if (waitedMs > 0) this.logger?.debug?.('KHO POST-CLOSE COMMAND GATE', {
-                operation: 'KhoService', step: 'prepare-open', action: 'wait after GUI close before /kho', resource: 'storage', waitedMs
-            });
-        }
-
-        this.logger?.info?.('KHO COMMAND SEND', {
-            operation: 'KhoService', step: refresh ? 'refresh-command' : 'open-command', phase: 'START',
-            action: '/kho', resource: 'storage'
-        });
-        const actionResult = await this.commandService.send(this.config.commandKey, {
-            confirm: false,
-            cancellationToken,
-            expectedGeneration,
-            operationId: operationContext?.operationId || null,
-            correlationId: operationContext?.correlationId || null
-        });
-        if (actionResult?.success === false) {
-            throw actionResult.error || new Error(actionResult.message || '/kho command failed.');
-        }
-
-        this.logger?.info?.('KHO COMMAND SENT', {
-            operation: 'KhoService', step: refresh ? 'refresh-command' : 'open-command', phase: 'OK',
-            action: '/kho', resource: 'storage'
-        });
-        const settleMs = refresh ? this.config.refreshSettleMs : this.config.openSettleMs;
-        if (settleMs > 0) await this.#delay(settleMs, cancellationToken);
-        this.#assertGeneration(expectedGeneration);
-
-        const deadline = Date.now() + this.config.guiTimeoutMs;
-        let lastState = {
-            hasSession: false,
-            itemCount: 0,
-            hasCapacity: false,
-            changedWindow: false,
-            beforeWasReadableKho
-        };
-
-        while (Date.now() <= deadline) {
-            cancellationToken?.throwIfCancelled?.();
-            this.#assertGeneration(expectedGeneration);
-
-            // Reconcile against Mineflayer directly so a missed windowOpen or
-            // in-place server refresh cannot make /kho look like it failed.
-            const session = this.guiManager.syncCurrentWindow?.() || this.guiManager.current();
-            if (session?.active && session.window) {
-                const snapshot = this.reader.read(session.window);
-                const itemCount = Object.keys(snapshot?.items || {}).length;
-                const hasCapacity = this.#hasCapacity(snapshot?.capacity);
-                const changedWindow = !beforeWindow
-                    || session.window !== beforeWindow
-                    || (beforeSession && session.id !== beforeSession.id);
-                const readable = this.#isVerifiedKhoSession(session, snapshot, { commandContext: true });
-
-                lastState = {
-                    hasSession: true,
-                    itemCount,
-                    hasCapacity,
-                    changedWindow,
-                    beforeWasReadableKho
-                };
-
-                // Command context identifies the GUI. A readable storage
-                // payload is enough when either a new window appeared or the
-                // previous window was already a readable /kho and was merely
-                // refreshed in-place. If the previous GUI was unrelated, do
-                // not accept that exact unchanged window just because it has
-                // coincidental item data.
-                if (readable && (changedWindow || beforeWasReadableKho || !beforeSession)) {
-                    session.setSource?.(this.source);
-                    this.logger?.info?.('KHO GUI VERIFIED', {
-                        operation: 'KhoService', step: refresh ? 'refresh-wait' : 'open-wait', phase: 'OK',
-                        action: '/kho', resource: 'storage',
-                        count: itemCount, hasCapacity, changedWindow
-                    });
-                    return session;
-                }
-            }
-
-            await this.#delay(this.config.commandPollMs, cancellationToken);
-        }
-
-        throw new FlowError('/kho command was sent but current GUI did not contain readable storage data.', {
-            code: 'KHO_SEMANTIC_VERIFY_TIMEOUT', subsystem: 'storage', operation: 'KhoService',
-            step: refresh ? 'refresh-wait' : 'open-wait', action: '/kho', resource: 'storage',
-            details: { ...lastState, timeoutMs: this.config.guiTimeoutMs, gui: this.guiManager.describeCurrent?.() || null }
-        });
-    }
-
-
-    async #closeAndSettleBeforeKho(cancellationToken = null) {
-        if (this.guiManager.current()) await this.guiManager.closeCurrentWindow();
-
-        // Mineflayer local state can clear before the server accepts another
-        // inventory command. Confirm that no window remains, then give the
-        // server a dedicated post-close settle interval before sending /kho.
-        const deadline = Date.now() + this.config.closeConfirmTimeoutMs;
-        while (Date.now() <= deadline) {
-            cancellationToken?.throwIfCancelled?.();
-            const current = this.guiManager.syncCurrentWindow?.() || this.guiManager.current();
-            if (!current?.active) break;
-            await this.#delay(this.config.commandPollMs, cancellationToken);
-        }
-        const remaining = this.guiManager.syncCurrentWindow?.() || this.guiManager.current();
-        if (remaining?.active) {
-            throw new Error('Current GUI did not close before /kho command.');
-        }
-        await this.#delay(this.config.openAfterCloseSettleMs, cancellationToken);
     }
 
     #isReadableKhoSnapshot(snapshot, { trustedSource = false } = {}) {

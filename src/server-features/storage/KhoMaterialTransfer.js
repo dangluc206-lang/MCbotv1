@@ -35,165 +35,123 @@ class KhoMaterialTransfer {
         });
     }
 
-    async #transfer(direction, logicalId, { minRequired, reserveEmptySlots, cancellationToken, operationContext, expectedGeneration }) {
-        cancellationToken?.throwIfCancelled?.();
+    async #transfer(direction, logicalId, options) {
+        options.cancellationToken?.throwIfCancelled?.();
+        const prepared = await this.#prepareTransfer(direction, logicalId, options);
+        if (prepared?.ready !== undefined) return prepared;
+        const clickResult = await this.#executeTransferClicks(direction, logicalId, prepared, options);
+        if (clickResult?.ready !== undefined) return clickResult;
+        return this.#verifyTransfer(direction, logicalId, prepared, options);
+    }
 
+    async #prepareTransfer(direction, logicalId, { minRequired, reserveEmptySlots, cancellationToken, operationContext, expectedGeneration }) {
         const rootRead = await this.storage.read({ refresh: true, cancellationToken, operationContext, expectedGeneration });
         if (rootRead?.success === false) throw rootRead.error || new Error(rootRead.message || 'Cannot read /kho before material transfer.');
-
         const rootSession = this.guiManager.syncCurrentWindow?.() || this.guiManager.current();
         if (!rootSession?.active || !rootSession.window) return this.#wait(direction, logicalId, 'kho-root-not-open');
-
         const beforeStored = Math.max(0, Number(rootRead.data?.items?.[logicalId] || 0));
         const beforeInventory = this.#countPlayer(rootSession.window, logicalId);
         const inventoryCapacity = this.#safeInventoryCapacity(rootSession.window, logicalId, direction === 'withdraw' ? reserveEmptySlots : 0);
-
-        if (direction === 'withdraw') {
-            if (beforeStored <= 0 || inventoryCapacity <= 0) {
-                if (beforeInventory >= minRequired) {
-                    return this.#success(direction, logicalId, {
-                        moved: 0, beforeStored, afterStored: beforeStored,
-                        beforeInventory, afterInventory: beforeInventory,
-                        storageDelta: 0, inventoryDelta: 0, skipped: true,
-                        reason: beforeStored <= 0 ? 'storage-empty-but-inventory-fundable' : 'inventory-full-but-fundable'
-                    });
-                }
-                return this.#wait(direction, logicalId, 'b1-transfer-not-ready', { beforeStored, beforeInventory, inventoryCapacity, minRequired, reserveEmptySlots });
-            }
-        } else if (beforeInventory <= 0) {
-            return this.#success(direction, logicalId, {
-                moved: 0, beforeStored, afterStored: beforeStored,
-                beforeInventory, afterInventory: beforeInventory,
-                storageDelta: 0, inventoryDelta: 0, skipped: true, reason: 'inventory-empty'
-            });
-        }
-
+        const readiness = this.#readiness(direction, logicalId, { beforeStored, beforeInventory, inventoryCapacity, minRequired, reserveEmptySlots });
+        if (readiness) return readiness;
         const materialSlot = Number(rootRead.data?.sources?.[logicalId]?.slot);
         if (!Number.isInteger(materialSlot) || materialSlot < 0 || materialSlot >= containerEnd(rootSession.window)) {
             return this.#wait(direction, logicalId, 'kho-material-not-found', { materialSlot, beforeStored, beforeInventory });
         }
-
-        const childSource = {
-            commandKey: this.storage.config?.commandKey || 'storage',
-            command: '/kho',
-            clicks: [materialSlot],
-            actions: [`material:${logicalId}`],
-            source: 'operation'
-        };
-        const child = await this.guiManager.clickAndWaitForTransition(materialSlot, {
-            timeoutMs: Math.max(1000, Number(this.storage.config?.guiTimeoutMs || 5000)),
-            cancellationToken,
-            expectedGeneration,
-            label: `/kho material ${logicalId}`,
-            source: childSource,
-            settleMs: 160,
-            // /kho emits an in-place refresh on the root window before the
-            // material detail window opens. Accepting any transition races that
-            // refresh and returns the root session, so control detection then
-            // inspects /kho instead of the material GUI. The server behavior
-            // observed in production is a real replacement window (e.g.
-            // title "Than" for coal), therefore wait for that new window.
-            requireNewWindow: true
-        });
-
-        // Capture before interpreting controls so an unknown child layout still
-        // becomes learnable data instead of disappearing before debounce fires.
+        const childSource = { commandKey: this.storage.config?.commandKey || 'storage', command: '/kho', clicks: [materialSlot], actions: [`material:${logicalId}`], source: 'operation' };
+        const child = await this.#openMaterialChild(logicalId, materialSlot, childSource, cancellationToken, expectedGeneration);
         const observed = await this.guiKnowledge?.observe?.(child, { source: childSource }) || null;
         const controls = this.#detectControls(child.window, direction);
         await this.#rememberControls(child, childSource, direction, controls);
+        const planResult = await this.#resolveTransferPlan(direction, logicalId, { controls, observed, child, childSource, beforeStored, beforeInventory, inventoryCapacity, minRequired, cancellationToken });
+        if (planResult?.ready !== undefined) return planResult;
+        this.logger?.info?.('KHO MATERIAL TRANSFER START', { operation: 'KhoMaterialTransfer', step: 'material-transfer', phase: 'START', action: direction,
+            resource: logicalId, route: observed?.key || null, materialSlot, target: planResult.target, planned: planResult.plan.total,
+            controls: controls.map(({ slot, amount, name }) => ({ slot, amount, name })) });
+        return { beforeStored, beforeInventory, materialSlot, childSource, observed, ...planResult };
+    }
 
+    #readiness(direction, logicalId, { beforeStored, beforeInventory, inventoryCapacity, minRequired, reserveEmptySlots }) {
+        if (direction === 'withdraw' && (beforeStored <= 0 || inventoryCapacity <= 0)) {
+            if (beforeInventory >= minRequired) return this.#success(direction, logicalId, { moved: 0, beforeStored, afterStored: beforeStored, beforeInventory,
+                afterInventory: beforeInventory, storageDelta: 0, inventoryDelta: 0, skipped: true,
+                reason: beforeStored <= 0 ? 'storage-empty-but-inventory-fundable' : 'inventory-full-but-fundable' });
+            return this.#wait(direction, logicalId, 'b1-transfer-not-ready', { beforeStored, beforeInventory, inventoryCapacity, minRequired, reserveEmptySlots });
+        }
+        if (direction === 'deposit' && beforeInventory <= 0) return this.#success(direction, logicalId, { moved: 0, beforeStored, afterStored: beforeStored,
+            beforeInventory, afterInventory: beforeInventory, storageDelta: 0, inventoryDelta: 0, skipped: true, reason: 'inventory-empty' });
+        return null;
+    }
+
+    #openMaterialChild(logicalId, materialSlot, childSource, cancellationToken, expectedGeneration) {
+        return this.guiManager.clickAndWaitForTransition(materialSlot, { timeoutMs: Math.max(1000, Number(this.storage.config?.guiTimeoutMs || 5000)),
+            cancellationToken, expectedGeneration, label: `/kho material ${logicalId}`, source: childSource, settleMs: 160, requireNewWindow: true });
+    }
+
+    async #resolveTransferPlan(direction, logicalId, { controls, observed, child, childSource, beforeStored, beforeInventory, inventoryCapacity, minRequired, cancellationToken }) {
         if (controls.length === 0) {
             await this.#closeObservedChild(childSource, cancellationToken);
-            return this.#wait(direction, logicalId, 'kho-child-controls-not-learned', {
-                route: observed?.key || null, title: child.window?.title ?? null, occupied: this.#occupied(child.window)
-            });
+            return this.#wait(direction, logicalId, 'kho-child-controls-not-learned', { route: observed?.key || null, title: child.window?.title ?? null, occupied: this.#occupied(child.window) });
         }
-
         const target = direction === 'withdraw' ? Math.min(beforeStored, inventoryCapacity) : beforeInventory;
         const plan = this.#planSafeClicks(controls, target);
-        if (plan.total <= 0) {
-            await this.#closeObservedChild(childSource, cancellationToken);
-            return this.#wait(direction, logicalId, 'kho-child-quantity-not-safe', { route: observed?.key || null, target, remaining: plan.remaining });
-        }
-        if (direction === 'deposit' && plan.remaining > 0) {
-            await this.#closeObservedChild(childSource, cancellationToken);
-            return this.#wait(direction, logicalId, 'kho-child-quantity-not-safe', {
-                route: observed?.key || null, target, planned: plan.total, remaining: plan.remaining, exactDepositRequired: true
-            });
-        }
+        const unsafe = plan.total <= 0 || (direction === 'deposit' && plan.remaining > 0) || (direction === 'withdraw' && beforeInventory + plan.total < minRequired);
+        if (!unsafe) return { target, plan };
+        await this.#closeObservedChild(childSource, cancellationToken);
         if (direction === 'withdraw' && beforeInventory + plan.total < minRequired) {
-            await this.#closeObservedChild(childSource, cancellationToken);
             return this.#wait(direction, logicalId, 'b1-inventory-below-one-b2', { minRequired, beforeInventory, plannedMove: plan.total });
         }
+        return this.#wait(direction, logicalId, 'kho-child-quantity-not-safe', { route: observed?.key || null, target, planned: plan.total, remaining: plan.remaining,
+            ...(direction === 'deposit' ? { exactDepositRequired: true } : {}) });
+    }
 
-        this.logger?.info?.('KHO MATERIAL TRANSFER START', {
-            operation: 'KhoMaterialTransfer', step: 'material-transfer', phase: 'START',
-            action: direction, resource: logicalId, route: observed?.key || null,
-            materialSlot, target, planned: plan.total,
-            controls: controls.map(({ slot, amount, name }) => ({ slot, amount, name }))
-        });
-
+    async #executeTransferClicks(direction, logicalId, prepared, { cancellationToken, expectedGeneration }) {
         let completedClicks = 0;
         try {
-            for (const click of plan.clicks) {
+            for (const click of prepared.plan.clicks) {
                 cancellationToken?.throwIfCancelled?.();
                 const current = this.guiManager.syncCurrentWindow?.() || this.guiManager.current();
                 if (!current?.active || !current.window) {
                     if (completedClicks === 0) return this.#wait(direction, logicalId, 'kho-child-not-stable');
                     throw this.#verificationError(`/kho child GUI closed after ${completedClicks} transfer click(s).`, {
-                        direction, logicalId, completedClicks, plannedClicks: plan.clicks.length, plannedAmount: plan.total
-                    });
+                        direction, logicalId, completedClicks, plannedClicks: prepared.plan.clicks.length, plannedAmount: prepared.plan.total });
                 }
                 await this.guiManager.click(click.slot, { cancellationToken, expectedGeneration });
                 completedClicks += 1;
                 await this.#delay(110, cancellationToken);
             }
+            return null;
         } catch (error) {
             if (completedClicks === 0 || error?.code === 'GUI_CLICK_VERIFY_FAILED') throw error;
             throw this.#verificationError(`/kho ${direction} became uncertain after ${completedClicks} transfer click(s).`, {
-                direction, logicalId, completedClicks, plannedClicks: plan.clicks.length,
-                plannedAmount: plan.total, causeCode: error?.code || null, causeMessage: error?.message || String(error || '')
-            }, error);
+                direction, logicalId, completedClicks, plannedClicks: prepared.plan.clicks.length, plannedAmount: prepared.plan.total,
+                causeCode: error?.code || null, causeMessage: error?.message || String(error || '') }, error);
         }
+    }
 
+    async #verifyTransfer(direction, logicalId, prepared, { cancellationToken, operationContext, expectedGeneration }) {
+        const { beforeInventory, beforeStored, childSource, observed, plan, materialSlot } = prepared;
         const liveAfterInventory = await this.#waitForPlayerDelta({ logicalId, direction, beforeInventory, expected: plan.total, cancellationToken });
         const currentChild = this.guiManager.syncCurrentWindow?.() || this.guiManager.current();
         if (currentChild?.active) {
             await this.guiKnowledge?.observe?.(currentChild, { source: childSource });
-            await this.guiManager.closeCurrentWindow();
-            await this.#delay(180, cancellationToken);
+            await this.guiManager.closeCurrentWindow(); await this.#delay(180, cancellationToken);
         }
-
         this.storage.invalidateSnapshot?.();
         const afterRead = await this.storage.read({ refresh: true, cancellationToken, operationContext, expectedGeneration });
         const afterSession = this.guiManager.syncCurrentWindow?.() || this.guiManager.current();
         const rootAfterInventory = afterSession?.window ? this.#countPlayer(afterSession.window, logicalId) : liveAfterInventory.count;
-        const inventoryDelta = direction === 'withdraw'
-            ? Math.max(0, Math.max(liveAfterInventory.count, rootAfterInventory) - beforeInventory)
+        const inventoryDelta = direction === 'withdraw' ? Math.max(0, Math.max(liveAfterInventory.count, rootAfterInventory) - beforeInventory)
             : Math.max(0, beforeInventory - Math.min(liveAfterInventory.count, rootAfterInventory));
         const afterStored = afterRead?.success === false ? null : Math.max(0, Number(afterRead.data?.items?.[logicalId] || 0));
-
-        if (inventoryDelta < plan.total) {
-            throw this.#verificationError(`/kho ${direction} transport completed but player inventory delta was not verified.`, {
-                direction, logicalId, expected: plan.total, inventoryDelta, beforeInventory,
-                liveAfterInventory: liveAfterInventory.count, rootAfterInventory, beforeStored, afterStored,
-                afterReadStatus: afterRead?.status || null
-            }, afterRead?.success === false ? afterRead.error : null);
-        }
-
-        const storageDelta = afterStored === null ? null : (direction === 'withdraw'
-            ? Math.max(0, beforeStored - afterStored)
-            : Math.max(0, afterStored - beforeStored));
-
-        this.logger?.info?.('KHO MATERIAL TRANSFER OK', {
-            operation: 'KhoMaterialTransfer', step: 'verify-transfer', phase: 'OK', action: direction,
-            resource: logicalId, route: observed?.key || null, moved: plan.total,
-            inventoryDelta, storageDelta, beforeInventory, afterInventory: rootAfterInventory, beforeStored, afterStored
-        });
-        return this.#success(direction, logicalId, {
-            route: observed?.key || null, moved: plan.total, inventoryDelta, storageDelta,
-            beforeInventory, afterInventory: rootAfterInventory, beforeStored, afterStored, materialSlot, verified: true
-        });
+        if (inventoryDelta < plan.total) throw this.#verificationError(`/kho ${direction} transport completed but player inventory delta was not verified.`, {
+            direction, logicalId, expected: plan.total, inventoryDelta, beforeInventory, liveAfterInventory: liveAfterInventory.count, rootAfterInventory,
+            beforeStored, afterStored, afterReadStatus: afterRead?.status || null }, afterRead?.success === false ? afterRead.error : null);
+        const storageDelta = afterStored === null ? null : (direction === 'withdraw' ? Math.max(0, beforeStored - afterStored) : Math.max(0, afterStored - beforeStored));
+        this.logger?.info?.('KHO MATERIAL TRANSFER OK', { operation: 'KhoMaterialTransfer', step: 'verify-transfer', phase: 'OK', action: direction, resource: logicalId,
+            route: observed?.key || null, moved: plan.total, inventoryDelta, storageDelta, beforeInventory, afterInventory: rootAfterInventory, beforeStored, afterStored });
+        return this.#success(direction, logicalId, { route: observed?.key || null, moved: plan.total, inventoryDelta, storageDelta, beforeInventory,
+            afterInventory: rootAfterInventory, beforeStored, afterStored, materialSlot, verified: true });
     }
 
     async #closeObservedChild(source, cancellationToken) {

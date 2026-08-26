@@ -3,7 +3,14 @@
 const LifecycleCoordinator = require('./LifecycleCoordinator');
 
 class Application {
-    constructor({ botRegistry, loggerFactory, lifecycleCoordinator = null, controlPlane = null, logger = null }) {
+    constructor({
+        botRegistry,
+        loggerFactory,
+        lifecycleCoordinator = null,
+        controlPlane = null,
+        logger = null,
+        backendReadyLogger = null
+    }) {
         this.botRegistry = botRegistry;
         this.loggerFactory = loggerFactory;
         this.lifecycle = lifecycleCoordinator || new LifecycleCoordinator([], {
@@ -12,6 +19,8 @@ class Application {
         });
         this.controlPlane = controlPlane;
         this.logger = logger || loggerFactory?.create?.('Application');
+        this.backendReadyLogger = backendReadyLogger;
+        this.preRuntimeServices = [];
     }
 
     registerRuntime(runtime) {
@@ -30,8 +39,15 @@ class Application {
         return this.lifecycle.getState();
     }
 
+    addPreRuntimeService(service) {
+        if (!service) return this;
+        this.preRuntimeServices.push(service);
+        return this;
+    }
+
     async initialize() {
         await this.lifecycle.initialize();
+        await this.#callPreRuntimeServices('initialize');
         const runtimes = this.botRegistry.list();
         const results = await Promise.allSettled(runtimes.map(runtime => runtime.initialize()));
         this.#logFailures('initialize', runtimes, results);
@@ -41,6 +57,8 @@ class Application {
     async start() {
         await this.lifecycle.start();
         const runtimes = this.botRegistry.list();
+        this.backendReadyLogger?.info?.('MCbot Desktop backend started.', { runtimes: runtimes.length });
+        await this.#callPreRuntimeServices('start');
         const results = await Promise.allSettled(runtimes.map(runtime => runtime.start()));
         this.#logFailures('start', runtimes, results);
         if (this.controlPlane) {
@@ -63,6 +81,7 @@ class Application {
         const runtimes = this.botRegistry.list();
         const results = await Promise.allSettled(runtimes.map(runtime => runtime.stop()));
         this.#logFailures('stop', runtimes, results);
+        await this.#callPreRuntimeServices('stop', { reverse: true });
         await this.lifecycle.stop();
         return results;
     }
@@ -71,8 +90,16 @@ class Application {
         const runtimes = this.botRegistry.list();
         const results = await Promise.allSettled(runtimes.map(runtime => runtime.destroy()));
         this.#logFailures('destroy', runtimes, results);
+        await this.#callPreRuntimeServices('destroy', { reverse: true });
         await this.lifecycle.destroy();
         return results;
+    }
+
+    async #callPreRuntimeServices(method, { reverse = false } = {}) {
+        const services = reverse ? [...this.preRuntimeServices].reverse() : this.preRuntimeServices;
+        for (const service of services) {
+            if (typeof service?.[method] === 'function') await service[method]();
+        }
     }
 
     #logFailures(step, runtimes, results) {
