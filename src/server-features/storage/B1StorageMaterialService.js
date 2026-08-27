@@ -158,7 +158,8 @@ class B1StorageMaterialService {
         expectedGeneration = null,
         decompressionPolicy = 'unbounded',
         decompressionMaxRatioOverride = null,
-        requireKnownCapacityOverride = false
+        requireKnownCapacityOverride = false,
+        forceDecompress = false
     } = {}) {
         const childOptions = { cancellationToken, operationContext, expectedGeneration };
         try {
@@ -170,7 +171,7 @@ class B1StorageMaterialService {
             const beforeResult = await this.storage.read(childOptions);
             if (!beforeResult.success) return beforeResult;
             const beforeLoose = Number(beforeResult.data?.items?.[baseId] || 0);
-            if (beforeLoose >= amount) {
+            if (beforeLoose >= amount && forceDecompress !== true) {
                 return Result.ok({ baseId, required: amount, converted: false, ready: true, available: beforeLoose });
             }
             if (!resource.blockId) {

@@ -1,0 +1,711 @@
+{
+  "version": 1,
+  "guis": {
+    "ks": {
+      "identity": {
+        "definitionId": "minerals",
+        "titleText": "ᴋʜᴏáɴɢ ѕảɴ",
+        "type": "minecraft:generic_9x3",
+        "slotCount": 63,
+        "inventoryStart": 27,
+        "containerSlotCount": 27
+      },
+      "route": {
+        "commandKey": "minerals",
+        "command": "/ks",
+        "clicks": [],
+        "actions": [],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-07T20:54:08.931Z",
+      "lastSeenAt": "2026-08-25T12:10:41.198Z",
+      "seenCount": 8776,
+      "revision": 656
+    },
+    "kho": {
+      "identity": {
+        "definitionId": "storage",
+        "titleText": "ᴋʜᴏ ᴄʜứᴀ ▮▮▮▯▯▯▯▯",
+        "type": "minecraft:generic_9x6",
+        "slotCount": 90,
+        "inventoryStart": 54,
+        "containerSlotCount": 54
+      },
+      "route": {
+        "commandKey": "storage",
+        "command": "/kho",
+        "clicks": [],
+        "actions": [],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-07T20:54:22.330Z",
+      "lastSeenAt": "2026-08-25T12:11:19.713Z",
+      "seenCount": 36619,
+      "revision": 1701
+    },
+    "nung": {
+      "identity": {
+        "definitionId": "smelting",
+        "titleText": "ɴᴜɴɢ ᴋʜᴏáɴɢ ѕảɴ",
+        "type": "minecraft:generic_9x1",
+        "slotCount": 45,
+        "inventoryStart": 9,
+        "containerSlotCount": 9
+      },
+      "route": {
+        "commandKey": "smelting",
+        "command": "/nung",
+        "clicks": [],
+        "actions": [],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-07T20:54:46.550Z",
+      "lastSeenAt": "2026-08-25T12:09:41.702Z",
+      "seenCount": 2839,
+      "revision": 110
+    },
+    "d": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴅᴜɴɢᴇᴏɴ",
+        "type": "minecraft:generic_9x6",
+        "slotCount": 90
+      },
+      "route": {
+        "commandKey": "dungeon",
+        "command": "/d",
+        "clicks": [],
+        "source": "discord-gui"
+      },
+      "firstSeenAt": "2026-08-07T20:54:56.083Z",
+      "lastSeenAt": "2026-08-07T20:54:56.083Z",
+      "seenCount": 1,
+      "revision": 1
+    },
+    "pv-2": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴋʜᴏ đồ #2",
+        "type": "minecraft:generic_9x6",
+        "slotCount": 90
+      },
+      "route": {
+        "commandKey": "personalVault2",
+        "command": "/pv 2",
+        "clicks": [],
+        "actions": [],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-08T00:31:32.705Z",
+      "lastSeenAt": "2026-08-19T12:59:45.859Z",
+      "seenCount": 7353,
+      "revision": 230
+    },
+    "sky": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ᴍáʏ ᴄʜủ",
+        "type": "minecraft:generic_9x3",
+        "slotCount": 63
+      },
+      "route": {
+        "commandKey": "skyblock",
+        "command": "/sky",
+        "clicks": [],
+        "actions": [],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-08T06:21:34.761Z",
+      "lastSeenAt": "2026-08-09T18:12:03.429Z",
+      "seenCount": 78,
+      "revision": 3
+    },
+    "sky__selection-primary": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ᴍáʏ ᴄʜủ [SKYBLOCK]",
+        "type": "minecraft:generic_9x6",
+        "slotCount": 90
+      },
+      "route": {
+        "commandKey": "skyblock",
+        "command": "/sky",
+        "clicks": [
+          11
+        ],
+        "actions": [
+          "selection:primary"
+        ],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-07T20:52:55.775Z",
+      "lastSeenAt": "2026-08-09T18:12:04.804Z",
+      "seenCount": 177,
+      "revision": 2
+    },
+    "ks__menu_crafting": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜế ᴛạᴏ",
+        "type": "minecraft:generic_9x6",
+        "slotCount": 90
+      },
+      "route": {
+        "commandKey": "minerals",
+        "command": "/ks",
+        "clicks": [
+          16
+        ],
+        "actions": [
+          "menu_crafting"
+        ],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-08T06:36:15.815Z",
+      "lastSeenAt": "2026-08-19T11:17:41.339Z",
+      "seenCount": 21253,
+      "revision": 587
+    },
+    "ks__menu_crafting__recipe-refined_diamond": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ѕố ʟượɴɢ ᴍᴜốɴ đổɪ",
+        "type": "minecraft:generic_9x5",
+        "slotCount": 81
+      },
+      "route": {
+        "commandKey": "minerals",
+        "command": "/ks",
+        "clicks": [
+          16,
+          16
+        ],
+        "actions": [
+          "menu_crafting",
+          "recipe:refined_diamond"
+        ],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-08T07:00:50.689Z",
+      "lastSeenAt": "2026-08-19T11:02:16.725Z",
+      "seenCount": 293,
+      "revision": 48
+    },
+    "ks__menu_crafting__recipe-refined_diamond_block": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ѕố ʟượɴɢ ᴍᴜốɴ đổɪ",
+        "type": "minecraft:generic_9x5",
+        "slotCount": 81
+      },
+      "route": {
+        "commandKey": "minerals",
+        "command": "/ks",
+        "clicks": [
+          16,
+          28
+        ],
+        "actions": [
+          "menu_crafting",
+          "recipe:refined_diamond_block"
+        ],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-08T08:04:32.750Z",
+      "lastSeenAt": "2026-08-19T11:02:24.789Z",
+      "seenCount": 105,
+      "revision": 23
+    },
+    "ks__menu_crafting__recipe-refined_emerald_block": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ѕố ʟượɴɢ ᴍᴜốɴ đổɪ",
+        "type": "minecraft:generic_9x5",
+        "slotCount": 81
+      },
+      "route": {
+        "commandKey": "minerals",
+        "command": "/ks",
+        "clicks": [
+          16,
+          29
+        ],
+        "actions": [
+          "menu_crafting",
+          "recipe:refined_emerald_block"
+        ],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-08T18:01:43.077Z",
+      "lastSeenAt": "2026-08-19T11:05:18.540Z",
+      "seenCount": 99,
+      "revision": 28
+    },
+    "ks__menu_crafting__recipe-refined_emerald": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ѕố ʟượɴɢ ᴍᴜốɴ đổɪ",
+        "type": "minecraft:generic_9x5",
+        "slotCount": 81
+      },
+      "route": {
+        "commandKey": "minerals",
+        "command": "/ks",
+        "clicks": [
+          16,
+          19
+        ],
+        "actions": [
+          "menu_crafting",
+          "recipe:refined_emerald"
+        ],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-08T18:01:59.377Z",
+      "lastSeenAt": "2026-08-19T11:05:10.462Z",
+      "seenCount": 353,
+      "revision": 44
+    },
+    "ks__menu_convert_blocks": {
+      "identity": {
+        "definitionId": "mineralConversion",
+        "titleText": "éᴘ ᴘʜôɪ ᴛʜàɴʜ ᴋʜốɪ",
+        "type": "minecraft:generic_9x2",
+        "slotCount": 54,
+        "inventoryStart": 18,
+        "containerSlotCount": 18
+      },
+      "route": {
+        "commandKey": "minerals",
+        "command": "/ks",
+        "clicks": [
+          10
+        ],
+        "actions": [
+          "menu_convert_blocks"
+        ],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-08T22:05:54.921Z",
+      "lastSeenAt": "2026-08-25T12:10:41.417Z",
+      "seenCount": 7756,
+      "revision": 3201
+    },
+    "o-a-u-skyblock__minecraft-generic_9x6__90": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ᴍáʏ ᴄʜủ [SKYBLOCK]",
+        "type": "minecraft:generic_9x6",
+        "slotCount": 90,
+        "inventoryStart": 54,
+        "containerSlotCount": 54
+      },
+      "route": null,
+      "firstSeenAt": "2026-08-09T18:27:59.000Z",
+      "lastSeenAt": "2026-08-25T12:09:30.484Z",
+      "seenCount": 177,
+      "revision": 2
+    },
+    "ks__menu_crafting__recipe-refined_coal": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ѕố ʟượɴɢ ᴍᴜốɴ đổɪ",
+        "type": "minecraft:generic_9x5",
+        "slotCount": 81
+      },
+      "route": {
+        "commandKey": "minerals",
+        "command": "/ks",
+        "clicks": [
+          16,
+          11
+        ],
+        "actions": [
+          "menu_crafting",
+          "recipe:refined_coal"
+        ],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-11T13:49:09.771Z",
+      "lastSeenAt": "2026-08-19T10:52:05.082Z",
+      "seenCount": 819,
+      "revision": 296
+    },
+    "ks__menu_crafting__recipe-refined_coal_block": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ѕố ʟượɴɢ ᴍᴜốɴ đổɪ",
+        "type": "minecraft:generic_9x5",
+        "slotCount": 81
+      },
+      "route": {
+        "commandKey": "minerals",
+        "command": "/ks",
+        "clicks": [
+          16,
+          21
+        ],
+        "actions": [
+          "menu_crafting",
+          "recipe:refined_coal_block"
+        ],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-11T13:54:05.656Z",
+      "lastSeenAt": "2026-08-19T10:52:13.397Z",
+      "seenCount": 26,
+      "revision": 13
+    },
+    "ks__menu_crafting__recipe-tungsten": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ѕố ʟượɴɢ ᴍᴜốɴ đổɪ",
+        "type": "minecraft:generic_9x5",
+        "slotCount": 81
+      },
+      "route": {
+        "commandKey": "minerals",
+        "command": "/ks",
+        "clicks": [
+          16,
+          32
+        ],
+        "actions": [
+          "menu_crafting",
+          "recipe:tungsten"
+        ],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-11T16:53:29.399Z",
+      "lastSeenAt": "2026-08-11T17:50:50.218Z",
+      "seenCount": 4,
+      "revision": 2
+    },
+    "ks__menu_crafting__recipe-titanium": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ѕố ʟượɴɢ ᴍᴜốɴ đổɪ",
+        "type": "minecraft:generic_9x5",
+        "slotCount": 81
+      },
+      "route": {
+        "commandKey": "minerals",
+        "command": "/ks",
+        "clicks": [
+          16,
+          31
+        ],
+        "actions": [
+          "menu_crafting",
+          "recipe:titanium"
+        ],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-11T16:53:58.024Z",
+      "lastSeenAt": "2026-08-12T12:13:06.495Z",
+      "seenCount": 6,
+      "revision": 3
+    },
+    "ks__menu_crafting__recipe-carbon": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ѕố ʟượɴɢ ᴍᴜốɴ đổɪ",
+        "type": "minecraft:generic_9x5",
+        "slotCount": 81
+      },
+      "route": {
+        "commandKey": "minerals",
+        "command": "/ks",
+        "clicks": [
+          16,
+          30
+        ],
+        "actions": [
+          "menu_crafting",
+          "recipe:carbon"
+        ],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-11T16:54:26.480Z",
+      "lastSeenAt": "2026-08-19T10:52:32.448Z",
+      "seenCount": 12,
+      "revision": 6
+    },
+    "ks__menu_crafting__recipe-super_alloy": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ѕố ʟượɴɢ ᴍᴜốɴ đổɪ",
+        "type": "minecraft:generic_9x5",
+        "slotCount": 81
+      },
+      "route": {
+        "commandKey": "minerals",
+        "command": "/ks",
+        "clicks": [
+          16,
+          33
+        ],
+        "actions": [
+          "menu_crafting",
+          "recipe:super_alloy"
+        ],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-11T16:54:54.420Z",
+      "lastSeenAt": "2026-08-13T08:29:25.492Z",
+      "seenCount": 4,
+      "revision": 2
+    },
+    "ks__menu_crafting__recipe-refined_lapis_block": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ѕố ʟượɴɢ ᴍᴜốɴ đổɪ",
+        "type": "minecraft:generic_9x5",
+        "slotCount": 81
+      },
+      "route": {
+        "commandKey": "minerals",
+        "command": "/ks",
+        "clicks": [
+          16,
+          23
+        ],
+        "actions": [
+          "menu_crafting",
+          "recipe:refined_lapis_block"
+        ],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-11T16:55:37.368Z",
+      "lastSeenAt": "2026-08-11T16:55:37.570Z",
+      "seenCount": 2,
+      "revision": 1
+    },
+    "ks__menu_crafting__recipe-refined_iron_block": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ѕố ʟượɴɢ ᴍᴜốɴ đổɪ",
+        "type": "minecraft:generic_9x5",
+        "slotCount": 81
+      },
+      "route": {
+        "commandKey": "minerals",
+        "command": "/ks",
+        "clicks": [
+          16,
+          24
+        ],
+        "actions": [
+          "menu_crafting",
+          "recipe:refined_iron_block"
+        ],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-11T16:56:07.631Z",
+      "lastSeenAt": "2026-08-12T11:35:36.640Z",
+      "seenCount": 6,
+      "revision": 3
+    },
+    "ks__menu_crafting__recipe-refined_gold_block": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ѕố ʟượɴɢ ᴍᴜốɴ đổɪ",
+        "type": "minecraft:generic_9x5",
+        "slotCount": 81
+      },
+      "route": {
+        "commandKey": "minerals",
+        "command": "/ks",
+        "clicks": [
+          16,
+          25
+        ],
+        "actions": [
+          "menu_crafting",
+          "recipe:refined_gold_block"
+        ],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-11T16:56:38.012Z",
+      "lastSeenAt": "2026-08-19T11:17:41.820Z",
+      "seenCount": 6,
+      "revision": 3
+    },
+    "ks__menu_crafting__recipe-refined_redstone": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ѕố ʟượɴɢ ᴍᴜốɴ đổɪ",
+        "type": "minecraft:generic_9x5",
+        "slotCount": 81
+      },
+      "route": {
+        "commandKey": "minerals",
+        "command": "/ks",
+        "clicks": [
+          16,
+          12
+        ],
+        "actions": [
+          "menu_crafting",
+          "recipe:refined_redstone"
+        ],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-11T16:56:47.859Z",
+      "lastSeenAt": "2026-08-11T16:59:55.731Z",
+      "seenCount": 65,
+      "revision": 7
+    },
+    "ks__menu_crafting__recipe-refined_redstone_block": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ѕố ʟượɴɢ ᴍᴜốɴ đổɪ",
+        "type": "minecraft:generic_9x5",
+        "slotCount": 81
+      },
+      "route": {
+        "commandKey": "minerals",
+        "command": "/ks",
+        "clicks": [
+          16,
+          22
+        ],
+        "actions": [
+          "menu_crafting",
+          "recipe:refined_redstone_block"
+        ],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-11T17:00:03.870Z",
+      "lastSeenAt": "2026-08-11T17:00:04.059Z",
+      "seenCount": 2,
+      "revision": 1
+    },
+    "o-a-u__minecraft-generic_9x3__63": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ᴍáʏ ᴄʜủ",
+        "type": "minecraft:generic_9x3",
+        "slotCount": 63
+      },
+      "route": null,
+      "firstSeenAt": "2026-08-11T21:07:57.801Z",
+      "lastSeenAt": "2026-08-11T21:07:57.801Z",
+      "seenCount": 1,
+      "revision": 1
+    },
+    "ks__menu_crafting__recipe-refined_iron": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ѕố ʟượɴɢ ᴍᴜốɴ đổɪ",
+        "type": "minecraft:generic_9x5",
+        "slotCount": 81
+      },
+      "route": {
+        "commandKey": "minerals",
+        "command": "/ks",
+        "clicks": [
+          16,
+          14
+        ],
+        "actions": [
+          "menu_crafting",
+          "recipe:refined_iron"
+        ],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-12T11:23:43.770Z",
+      "lastSeenAt": "2026-08-12T11:35:28.251Z",
+      "seenCount": 206,
+      "revision": 56
+    },
+    "ks__menu_crafting__recipe-super_cobblestone": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ѕố ʟượɴɢ ᴍᴜốɴ đổɪ",
+        "type": "minecraft:generic_9x5",
+        "slotCount": 81
+      },
+      "route": {
+        "commandKey": "minerals",
+        "command": "/ks",
+        "clicks": [
+          16,
+          10
+        ],
+        "actions": [
+          "menu_crafting",
+          "recipe:super_cobblestone"
+        ],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-13T08:31:12.187Z",
+      "lastSeenAt": "2026-08-13T08:32:38.435Z",
+      "seenCount": 32,
+      "revision": 11
+    },
+    "ks__menu_crafting__recipe-super_cobblestone_block": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ѕố ʟượɴɢ ᴍᴜốɴ đổɪ",
+        "type": "minecraft:generic_9x5",
+        "slotCount": 81
+      },
+      "route": {
+        "commandKey": "minerals",
+        "command": "/ks",
+        "clicks": [
+          16,
+          10
+        ],
+        "actions": [
+          "menu_crafting",
+          "recipe:super_cobblestone_block"
+        ],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-13T08:32:46.902Z",
+      "lastSeenAt": "2026-08-13T11:44:09.047Z",
+      "seenCount": 437,
+      "revision": 30
+    },
+    "ks__menu_crafting__recipe-refined_gold": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ѕố ʟượɴɢ ᴍᴜốɴ đổɪ",
+        "type": "minecraft:generic_9x5",
+        "slotCount": 81
+      },
+      "route": {
+        "commandKey": "minerals",
+        "command": "/ks",
+        "clicks": [
+          16,
+          15
+        ],
+        "actions": [
+          "menu_crafting",
+          "recipe:refined_gold"
+        ],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-19T11:09:21.670Z",
+      "lastSeenAt": "2026-08-19T11:17:33.051Z",
+      "seenCount": 33,
+      "revision": 11
+    },
+    "giftcode__minecraft-generic_9x3__63": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "GIFTCODE",
+        "type": "minecraft:generic_9x3",
+        "slotCount": 63
+      },
+      "route": null,
+      "firstSeenAt": "2026-08-19T12:42:32.928Z",
+      "lastSeenAt": "2026-08-19T12:42:32.928Z",
+      "seenCount": 1,
+      "revision": 1
+    }
+  }
+}

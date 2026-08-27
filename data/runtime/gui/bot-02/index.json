@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "guis": {
+    "sky": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ᴍáʏ ᴄʜủ",
+        "type": "minecraft:generic_9x3",
+        "slotCount": 63
+      },
+      "route": {
+        "commandKey": "skyblock",
+        "command": "/sky",
+        "clicks": [],
+        "actions": [],
+        "source": "operation"
+      },
+      "firstSeenAt": "2026-08-09T18:12:00.088Z",
+      "lastSeenAt": "2026-08-09T18:12:14.645Z",
+      "seenCount": 6,
+      "revision": 1
+    },
+    "o-a-u-skyblock__minecraft-generic_9x6__90": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ᴍáʏ ᴄʜủ [SKYBLOCK]",
+        "type": "minecraft:generic_9x6",
+        "slotCount": 90,
+        "inventoryStart": 54,
+        "containerSlotCount": 54
+      },
+      "route": null,
+      "firstSeenAt": "2026-08-09T18:27:55.787Z",
+      "lastSeenAt": "2026-08-25T12:16:46.058Z",
+      "seenCount": 157,
+      "revision": 4
+    },
+    "o-a-u__minecraft-generic_9x3__63": {
+      "identity": {
+        "definitionId": null,
+        "titleText": "ᴄʜọɴ ᴍáʏ ᴄʜủ",
+        "type": "minecraft:generic_9x3",
+        "slotCount": 63
+      },
+      "route": null,
+      "firstSeenAt": "2026-08-12T11:23:35.033Z",
+      "lastSeenAt": "2026-08-12T11:23:35.033Z",
+      "seenCount": 1,
+      "revision": 1
+    }
+  }
+}

@@ -1,0 +1,706 @@
+{
+  "id": "ks",
+  "identity": {
+    "definitionId": "minerals",
+    "titleText": "ᴋʜᴏáɴɢ ѕảɴ",
+    "type": "minecraft:generic_9x3",
+    "slotCount": 63,
+    "inventoryStart": 27,
+    "containerSlotCount": 27
+  },
+  "route": {
+    "commandKey": "minerals",
+    "command": "/ks",
+    "clicks": [],
+    "actions": [],
+    "source": "operation"
+  },
+  "firstSeenAt": "2026-08-07T20:54:08.931Z",
+  "lastSeenAt": "2026-08-25T12:10:41.198Z",
+  "seenCount": 8776,
+  "revision": 656,
+  "structure": {
+    "items": [
+      {
+        "slot": 0,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 1,
+        "name": "cyan_stained_glass_pane",
+        "displayName": "Cyan Stained Glass Pane",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 2,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 3,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 4,
+        "name": "amethyst_cluster",
+        "displayName": "Amethyst Cluster",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 5,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 6,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 7,
+        "name": "orange_stained_glass_pane",
+        "displayName": "Orange Stained Glass Pane",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 8,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 9,
+        "name": "cyan_stained_glass_pane",
+        "displayName": "Cyan Stained Glass Pane",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 10,
+        "name": "raw_iron_block",
+        "displayName": "Block of Raw Iron",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 12,
+        "name": "blast_furnace",
+        "displayName": "Blast Furnace",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 14,
+        "name": "chest_minecart",
+        "displayName": "Minecart with Chest",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 16,
+        "name": "smithing_table",
+        "displayName": "Smithing Table",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 17,
+        "name": "orange_stained_glass_pane",
+        "displayName": "Orange Stained Glass Pane",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 18,
+        "name": "cyan_stained_glass_pane",
+        "displayName": "Cyan Stained Glass Pane",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 19,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 20,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 21,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 22,
+        "name": "barrier",
+        "displayName": "Barrier",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 23,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 24,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 25,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 26,
+        "name": "orange_stained_glass_pane",
+        "displayName": "Orange Stained Glass Pane",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      }
+    ]
+  },
+  "latest": {
+    "titleText": "ᴋʜᴏáɴɢ ѕảɴ",
+    "type": "minecraft:generic_9x3",
+    "slotCount": 63,
+    "inventoryStart": 27,
+    "containerSlotCount": 27,
+    "items": [
+      {
+        "slot": 0,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 1,
+        "name": "cyan_stained_glass_pane",
+        "displayName": "Cyan Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 2,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 3,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 4,
+        "name": "amethyst_cluster",
+        "displayName": "Amethyst Cluster",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 5,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 6,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 7,
+        "name": "orange_stained_glass_pane",
+        "displayName": "Orange Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 8,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 9,
+        "name": "cyan_stained_glass_pane",
+        "displayName": "Cyan Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 10,
+        "name": "raw_iron_block",
+        "displayName": "Block of Raw Iron",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 12,
+        "name": "blast_furnace",
+        "displayName": "Blast Furnace",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 14,
+        "name": "chest_minecart",
+        "displayName": "Minecart with Chest",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 16,
+        "name": "smithing_table",
+        "displayName": "Smithing Table",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 17,
+        "name": "orange_stained_glass_pane",
+        "displayName": "Orange Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 18,
+        "name": "cyan_stained_glass_pane",
+        "displayName": "Cyan Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 19,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 20,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 21,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 22,
+        "name": "barrier",
+        "displayName": "Barrier",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 23,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 24,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 25,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 26,
+        "name": "orange_stained_glass_pane",
+        "displayName": "Orange Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      }
+    ]
+  },
+  "learned": {
+    "menu_crafting": {
+      "roleId": "menu_crafting",
+      "logicalItemId": "menu_crafting",
+      "context": "minerals-menu",
+      "bootstrapSlot": 16,
+      "currentSlot": 16,
+      "fingerprint": {
+        "name": "smithing_table",
+        "displayName": "Smithing Table",
+        "lore": [],
+        "customModelData": null
+      },
+      "learnedAt": "2026-08-08T06:36:15.637Z",
+      "lastMatchedAt": "2026-08-08T06:36:15.637Z",
+      "relearnCount": 0
+    },
+    "menu_convert_blocks": {
+      "roleId": "menu_convert_blocks",
+      "logicalItemId": "menu_convert_blocks",
+      "context": "minerals-menu",
+      "bootstrapSlot": 10,
+      "currentSlot": 10,
+      "fingerprint": {
+        "name": "raw_iron_block",
+        "displayName": "Block of Raw Iron",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      "learnedAt": "2026-08-08T22:05:54.578Z",
+      "lastMatchedAt": "2026-08-16T05:31:55.439Z",
+      "relearnCount": 0
+    }
+  },
+  "semantic": {},
+  "lastSource": {
+    "commandKey": "minerals",
+    "command": "/ks",
+    "clicks": [],
+    "actions": [],
+    "source": "operation"
+  }
+}

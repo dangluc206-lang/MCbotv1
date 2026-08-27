@@ -1,0 +1,16 @@
+{
+  "id": "bot-01",
+  "enabled": true,
+  "username": "dangluc206",
+  "auth": "offline",
+  "version": "1.21.1",
+  "serverProfile": "default",
+  "role": "worker",
+  "readyTimeoutMs": 30000,
+  "reconnect": {
+    "enabled": true,
+    "maxAttempts": 20,
+    "baseDelayMs": 5000,
+    "maxDelayMs": 60000
+  }
+}

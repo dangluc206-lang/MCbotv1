@@ -1,0 +1,590 @@
+{
+  "id": "ks__menu_convert_blocks",
+  "identity": {
+    "definitionId": "mineralConversion",
+    "titleText": "éᴘ ᴘʜôɪ ᴛʜàɴʜ ᴋʜốɪ",
+    "type": "minecraft:generic_9x2",
+    "slotCount": 54,
+    "inventoryStart": 18,
+    "containerSlotCount": 18
+  },
+  "route": {
+    "commandKey": "minerals",
+    "command": "/ks",
+    "clicks": [
+      10
+    ],
+    "actions": [
+      "menu_convert_blocks"
+    ],
+    "source": "operation"
+  },
+  "firstSeenAt": "2026-08-08T22:05:54.921Z",
+  "lastSeenAt": "2026-08-25T12:10:41.417Z",
+  "seenCount": 7756,
+  "revision": 3201,
+  "structure": {
+    "items": [
+      {
+        "slot": 0,
+        "name": "diamond",
+        "displayName": "Diamond",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      {
+        "slot": 1,
+        "name": "emerald_block",
+        "displayName": "Block of Emerald",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      {
+        "slot": 2,
+        "name": "lapis_block",
+        "displayName": "Block of Lapis Lazuli",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      {
+        "slot": 3,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      {
+        "slot": 4,
+        "name": "diamond_block",
+        "displayName": "Block of Diamond",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      {
+        "slot": 5,
+        "name": "coal_block",
+        "displayName": "Block of Coal",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      {
+        "slot": 6,
+        "name": "raw_gold_block",
+        "displayName": "Block of Raw Gold",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      {
+        "slot": 7,
+        "name": "gold_ingot",
+        "displayName": "Gold Ingot",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      {
+        "slot": 8,
+        "name": "redstone",
+        "displayName": "Redstone Dust",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      {
+        "slot": 9,
+        "name": "iron_ingot",
+        "displayName": "Iron Ingot",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      {
+        "slot": 10,
+        "name": "raw_iron_block",
+        "displayName": "Block of Raw Iron",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      {
+        "slot": 11,
+        "name": "lapis_lazuli",
+        "displayName": "Lapis Lazuli",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      {
+        "slot": 12,
+        "name": "coal",
+        "displayName": "Coal",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      {
+        "slot": 13,
+        "name": "emerald",
+        "displayName": "Emerald",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      }
+    ]
+  },
+  "latest": {
+    "titleText": "éᴘ ᴘʜôɪ ᴛʜàɴʜ ᴋʜốɪ",
+    "type": "minecraft:generic_9x2",
+    "slotCount": 54,
+    "inventoryStart": 18,
+    "containerSlotCount": 18,
+    "items": [
+      {
+        "slot": 0,
+        "name": "diamond",
+        "displayName": "Diamond",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customMetadataPresent": false,
+        "customModelData": null
+      },
+      {
+        "slot": 1,
+        "name": "emerald_block",
+        "displayName": "Block of Emerald",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customMetadataPresent": false,
+        "customModelData": null
+      },
+      {
+        "slot": 2,
+        "name": "lapis_block",
+        "displayName": "Block of Lapis Lazuli",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customMetadataPresent": false,
+        "customModelData": null
+      },
+      {
+        "slot": 3,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customMetadataPresent": false,
+        "customModelData": null
+      },
+      {
+        "slot": 4,
+        "name": "diamond_block",
+        "displayName": "Block of Diamond",
+        "count": 12,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customMetadataPresent": false,
+        "customModelData": null
+      },
+      {
+        "slot": 5,
+        "name": "coal_block",
+        "displayName": "Block of Coal",
+        "count": 14,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customMetadataPresent": false,
+        "customModelData": null
+      },
+      {
+        "slot": 6,
+        "name": "raw_gold_block",
+        "displayName": "Block of Raw Gold",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customMetadataPresent": false,
+        "customModelData": null
+      },
+      {
+        "slot": 7,
+        "name": "gold_ingot",
+        "displayName": "Gold Ingot",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customMetadataPresent": false,
+        "customModelData": null
+      },
+      {
+        "slot": 8,
+        "name": "redstone",
+        "displayName": "Redstone Dust",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customMetadataPresent": false,
+        "customModelData": null
+      },
+      {
+        "slot": 9,
+        "name": "iron_ingot",
+        "displayName": "Iron Ingot",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customMetadataPresent": false,
+        "customModelData": null
+      },
+      {
+        "slot": 10,
+        "name": "raw_iron_block",
+        "displayName": "Block of Raw Iron",
+        "count": 52,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customMetadataPresent": false,
+        "customModelData": null
+      },
+      {
+        "slot": 11,
+        "name": "lapis_lazuli",
+        "displayName": "Lapis Lazuli",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customMetadataPresent": false,
+        "customModelData": null
+      },
+      {
+        "slot": 12,
+        "name": "coal",
+        "displayName": "Coal",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customMetadataPresent": false,
+        "customModelData": null
+      },
+      {
+        "slot": 13,
+        "name": "emerald",
+        "displayName": "Emerald",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customMetadataPresent": false,
+        "customModelData": null
+      }
+    ]
+  },
+  "learned": {
+    "conversion:redstone:toBlock": {
+      "roleId": "conversion:redstone:toBlock",
+      "logicalItemId": "redstone_block",
+      "context": "minerals-conversion",
+      "bootstrapSlot": null,
+      "currentSlot": 3,
+      "fingerprint": {
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "learnedAt": "2026-08-08T22:05:54.953Z",
+      "lastMatchedAt": "2026-08-10T17:25:13.737Z",
+      "relearnCount": 0
+    },
+    "conversion:lapis_lazuli:toBlock": {
+      "roleId": "conversion:lapis_lazuli:toBlock",
+      "logicalItemId": "lapis_block",
+      "context": "minerals-conversion",
+      "bootstrapSlot": null,
+      "currentSlot": 2,
+      "fingerprint": {
+        "name": "lapis_block",
+        "displayName": "Block of Lapis Lazuli",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "learnedAt": "2026-08-08T22:06:02.266Z",
+      "lastMatchedAt": "2026-08-08T22:26:31.958Z",
+      "relearnCount": 0
+    },
+    "conversion:iron_ingot:toBlock": {
+      "roleId": "conversion:iron_ingot:toBlock",
+      "logicalItemId": "iron_block",
+      "context": "minerals-conversion",
+      "bootstrapSlot": null,
+      "currentSlot": 9,
+      "fingerprint": {
+        "name": "iron_block",
+        "displayName": "Block of Iron",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "learnedAt": "2026-08-08T22:06:09.473Z",
+      "lastMatchedAt": "2026-08-14T17:00:30.185Z",
+      "relearnCount": 0
+    },
+    "conversion:gold_ingot:toBlock": {
+      "roleId": "conversion:gold_ingot:toBlock",
+      "logicalItemId": "gold_block",
+      "context": "minerals-conversion",
+      "bootstrapSlot": null,
+      "currentSlot": 6,
+      "fingerprint": {
+        "name": "gold_block",
+        "displayName": "Block of Gold",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "learnedAt": "2026-08-08T22:06:16.672Z",
+      "lastMatchedAt": "2026-08-14T09:23:13.738Z",
+      "relearnCount": 0
+    },
+    "conversion:diamond:toBlock": {
+      "roleId": "conversion:diamond:toBlock",
+      "logicalItemId": "diamond_block",
+      "context": "minerals-conversion",
+      "bootstrapSlot": null,
+      "currentSlot": 4,
+      "fingerprint": {
+        "name": "diamond_block",
+        "displayName": "Block of Diamond",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "learnedAt": "2026-08-08T22:06:23.916Z",
+      "lastMatchedAt": "2026-08-14T09:23:21.399Z",
+      "relearnCount": 0
+    },
+    "conversion:emerald:toBlock": {
+      "roleId": "conversion:emerald:toBlock",
+      "logicalItemId": "emerald_block",
+      "context": "minerals-conversion",
+      "bootstrapSlot": null,
+      "currentSlot": 1,
+      "fingerprint": {
+        "name": "emerald_block",
+        "displayName": "Block of Emerald",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "learnedAt": "2026-08-08T22:06:31.251Z",
+      "lastMatchedAt": "2026-08-08T22:06:31.251Z",
+      "relearnCount": 0
+    },
+    "conversion:emerald:toBase": {
+      "roleId": "conversion:emerald:toBase",
+      "logicalItemId": "emerald",
+      "context": "minerals-conversion",
+      "bootstrapSlot": null,
+      "currentSlot": 13,
+      "fingerprint": {
+        "name": "emerald",
+        "displayName": "Emerald",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "learnedAt": "2026-08-11T18:26:30.768Z",
+      "lastMatchedAt": "2026-08-11T18:26:30.768Z",
+      "relearnCount": 0
+    },
+    "conversion:iron_ingot:toBase": {
+      "roleId": "conversion:iron_ingot:toBase",
+      "logicalItemId": "iron_ingot",
+      "context": "minerals-conversion",
+      "bootstrapSlot": null,
+      "currentSlot": 11,
+      "fingerprint": {
+        "name": "iron_ingot",
+        "displayName": "Iron Ingot",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "learnedAt": "2026-08-12T11:23:35.748Z",
+      "lastMatchedAt": "2026-08-12T11:23:35.748Z",
+      "relearnCount": 0
+    },
+    "conversion:coal:toBlock": {
+      "roleId": "conversion:coal:toBlock",
+      "logicalItemId": "coal_block",
+      "context": "minerals-conversion",
+      "bootstrapSlot": null,
+      "currentSlot": 5,
+      "fingerprint": {
+        "name": "coal_block",
+        "displayName": "Block of Coal",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "learnedAt": "2026-08-12T11:35:45.054Z",
+      "lastMatchedAt": "2026-08-16T02:42:19.986Z",
+      "relearnCount": 0
+    },
+    "conversion:coal:toBase": {
+      "roleId": "conversion:coal:toBase",
+      "logicalItemId": "coal",
+      "context": "minerals-conversion",
+      "bootstrapSlot": null,
+      "currentSlot": 12,
+      "fingerprint": {
+        "name": "coal",
+        "displayName": "Coal",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "learnedAt": "2026-08-12T12:13:16.349Z",
+      "lastMatchedAt": "2026-08-19T10:30:02.147Z",
+      "relearnCount": 0
+    },
+    "conversion:diamond:toBase": {
+      "roleId": "conversion:diamond:toBase",
+      "logicalItemId": "diamond",
+      "context": "minerals-conversion",
+      "bootstrapSlot": null,
+      "currentSlot": 0,
+      "fingerprint": {
+        "name": "diamond",
+        "displayName": "Diamond",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "learnedAt": "2026-08-19T10:57:11.525Z",
+      "lastMatchedAt": "2026-08-19T10:57:11.525Z",
+      "relearnCount": 0
+    },
+    "conversion:gold_ingot:toBase": {
+      "roleId": "conversion:gold_ingot:toBase",
+      "logicalItemId": "gold_ingot",
+      "context": "minerals-conversion",
+      "bootstrapSlot": null,
+      "currentSlot": 7,
+      "fingerprint": {
+        "name": "gold_ingot",
+        "displayName": "Gold Ingot",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "learnedAt": "2026-08-19T11:09:12.585Z",
+      "lastMatchedAt": "2026-08-19T11:09:12.585Z",
+      "relearnCount": 0
+    }
+  },
+  "semantic": {},
+  "lastSource": {
+    "commandKey": "minerals",
+    "command": "/ks",
+    "clicks": [
+      10
+    ],
+    "actions": [
+      "menu_convert_blocks"
+    ],
+    "guiId": "mineralConversion",
+    "source": "operation"
+  }
+}

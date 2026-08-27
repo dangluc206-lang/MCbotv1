@@ -1,0 +1,1530 @@
+{
+  "id": "pv-2",
+  "identity": {
+    "definitionId": null,
+    "titleText": "ᴋʜᴏ đồ #2",
+    "type": "minecraft:generic_9x6",
+    "slotCount": 90
+  },
+  "route": {
+    "commandKey": "personalVault2",
+    "command": "/pv 2",
+    "clicks": [],
+    "actions": [],
+    "source": "operation"
+  },
+  "firstSeenAt": "2026-08-08T00:31:32.705Z",
+  "lastSeenAt": "2026-08-19T12:59:45.859Z",
+  "seenCount": 7353,
+  "revision": 230,
+  "structure": {
+    "items": [
+      {
+        "slot": 0,
+        "name": "charcoal",
+        "displayName": "Charcoal",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:CACBON",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 1,
+        "name": "redstone",
+        "displayName": "Redstone Dust",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:DADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 2,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 3,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 4,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 5,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 6,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 7,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 8,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 9,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 10,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 11,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 12,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 13,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 14,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 15,
+        "name": "diamond_block",
+        "displayName": "Block of Diamond",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIKIMCUONGTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 16,
+        "name": "diamond_block",
+        "displayName": "Block of Diamond",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIKIMCUONGTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 17,
+        "name": "lapis_block",
+        "displayName": "Block of Lapis Lazuli",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOILUULYTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 18,
+        "name": "lapis_block",
+        "displayName": "Block of Lapis Lazuli",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOILUULYTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 19,
+        "name": "emerald_block",
+        "displayName": "Block of Emerald",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOINGOCLUCBAOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 20,
+        "name": "cobblestone",
+        "displayName": "Cobblestone",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOISIEUDACUOI",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 21,
+        "name": "cobblestone",
+        "displayName": "Cobblestone",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOISIEUDACUOI",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 22,
+        "name": "gold_block",
+        "displayName": "Block of Gold",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIVANGTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 23,
+        "name": "gold_block",
+        "displayName": "Block of Gold",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIVANGTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 24,
+        "name": "gold_block",
+        "displayName": "Block of Gold",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIVANGTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 25,
+        "name": "gold_block",
+        "displayName": "Block of Gold",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIVANGTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 26,
+        "name": "diamond",
+        "displayName": "Diamond",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KIMCUONGTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 27,
+        "name": "emerald",
+        "displayName": "Emerald",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:NGOCLUCBAOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 28,
+        "name": "cobblestone",
+        "displayName": "Cobblestone",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:SIEUDACUOI",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 29,
+        "name": "netherite_ingot",
+        "displayName": "Netherite Ingot",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:SIEUHOPKIM",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 30,
+        "name": "gold_ingot",
+        "displayName": "Gold Ingot",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:VANGTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 81,
+        "name": "fishing_rod",
+        "displayName": "Fishing Rod",
+        "lore": [],
+        "identityComponents": [
+          "FISHING_ROD",
+          "MMOITEMS_ITEM_ID:TANTHU"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      {
+        "slot": 82,
+        "name": "diamond_pickaxe",
+        "displayName": "Diamond Pickaxe",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:CUPTUNUNG2",
+          "131033",
+          "CUP",
+          "cuptunung:2"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      }
+    ]
+  },
+  "latest": {
+    "titleText": "ᴋʜᴏ đồ #2",
+    "type": "minecraft:generic_9x6",
+    "slotCount": 90,
+    "items": [
+      {
+        "slot": 0,
+        "name": "charcoal",
+        "displayName": "Charcoal",
+        "count": 32,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:CACBON",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 1,
+        "name": "redstone",
+        "displayName": "Redstone Dust",
+        "count": 9,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:DADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 2,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 3,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 4,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "count": 46,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 5,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 6,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 7,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 8,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 9,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 10,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 11,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 12,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 13,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 14,
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 15,
+        "name": "diamond_block",
+        "displayName": "Block of Diamond",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIKIMCUONGTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 16,
+        "name": "diamond_block",
+        "displayName": "Block of Diamond",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIKIMCUONGTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 17,
+        "name": "lapis_block",
+        "displayName": "Block of Lapis Lazuli",
+        "count": 57,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOILUULYTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 18,
+        "name": "lapis_block",
+        "displayName": "Block of Lapis Lazuli",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOILUULYTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 19,
+        "name": "emerald_block",
+        "displayName": "Block of Emerald",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOINGOCLUCBAOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 20,
+        "name": "cobblestone",
+        "displayName": "Cobblestone",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOISIEUDACUOI",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 21,
+        "name": "cobblestone",
+        "displayName": "Cobblestone",
+        "count": 38,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOISIEUDACUOI",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 22,
+        "name": "gold_block",
+        "displayName": "Block of Gold",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIVANGTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 23,
+        "name": "gold_block",
+        "displayName": "Block of Gold",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIVANGTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 24,
+        "name": "gold_block",
+        "displayName": "Block of Gold",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIVANGTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 25,
+        "name": "gold_block",
+        "displayName": "Block of Gold",
+        "count": 3,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIVANGTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 26,
+        "name": "diamond",
+        "displayName": "Diamond",
+        "count": 7,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KIMCUONGTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 27,
+        "name": "emerald",
+        "displayName": "Emerald",
+        "count": 3,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:NGOCLUCBAOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 28,
+        "name": "cobblestone",
+        "displayName": "Cobblestone",
+        "count": 15,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:SIEUDACUOI",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 29,
+        "name": "netherite_ingot",
+        "displayName": "Netherite Ingot",
+        "count": 2,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:SIEUHOPKIM",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 30,
+        "name": "gold_ingot",
+        "displayName": "Gold Ingot",
+        "count": 2,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:VANGTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 81,
+        "name": "fishing_rod",
+        "displayName": "Fishing Rod",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [
+          "FISHING_ROD",
+          "MMOITEMS_ITEM_ID:TANTHU"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      },
+      {
+        "slot": 82,
+        "name": "diamond_pickaxe",
+        "displayName": "Diamond Pickaxe",
+        "count": 1,
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:CUPTUNUNG2",
+          "131033",
+          "CUP",
+          "cuptunung:2"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customMetadataPresent": true,
+        "customModelData": null
+      }
+    ]
+  },
+  "learned": {},
+  "semantic": {
+    "personalVault": {
+      "capturedAt": 1787144386091,
+      "data": {
+        "items": [
+          {
+            "slot": 0,
+            "logicalId": "carbon",
+            "count": 32,
+            "maxStackSize": 64,
+            "rawName": "charcoal",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:CACBON",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 1,
+            "logicalId": "refined_redstone",
+            "count": 9,
+            "maxStackSize": 64,
+            "rawName": "redstone",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:DADOTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 2,
+            "logicalId": "refined_redstone_block",
+            "count": 64,
+            "maxStackSize": 64,
+            "rawName": "redstone_block",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 3,
+            "logicalId": "refined_redstone_block",
+            "count": 64,
+            "maxStackSize": 64,
+            "rawName": "redstone_block",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 4,
+            "logicalId": "refined_redstone_block",
+            "count": 46,
+            "maxStackSize": 64,
+            "rawName": "redstone_block",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 5,
+            "logicalId": "refined_redstone_block",
+            "count": 64,
+            "maxStackSize": 64,
+            "rawName": "redstone_block",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 6,
+            "logicalId": "refined_redstone_block",
+            "count": 64,
+            "maxStackSize": 64,
+            "rawName": "redstone_block",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 7,
+            "logicalId": "refined_redstone_block",
+            "count": 64,
+            "maxStackSize": 64,
+            "rawName": "redstone_block",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 8,
+            "logicalId": "refined_redstone_block",
+            "count": 64,
+            "maxStackSize": 64,
+            "rawName": "redstone_block",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 9,
+            "logicalId": "refined_redstone_block",
+            "count": 64,
+            "maxStackSize": 64,
+            "rawName": "redstone_block",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 10,
+            "logicalId": "refined_redstone_block",
+            "count": 64,
+            "maxStackSize": 64,
+            "rawName": "redstone_block",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 11,
+            "logicalId": "refined_redstone_block",
+            "count": 64,
+            "maxStackSize": 64,
+            "rawName": "redstone_block",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 12,
+            "logicalId": "refined_redstone_block",
+            "count": 64,
+            "maxStackSize": 64,
+            "rawName": "redstone_block",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 13,
+            "logicalId": "refined_redstone_block",
+            "count": 64,
+            "maxStackSize": 64,
+            "rawName": "redstone_block",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 14,
+            "logicalId": "refined_redstone_block",
+            "count": 64,
+            "maxStackSize": 64,
+            "rawName": "redstone_block",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 15,
+            "logicalId": "refined_diamond_block",
+            "count": 64,
+            "maxStackSize": 64,
+            "rawName": "diamond_block",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOIKIMCUONGTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 16,
+            "logicalId": "refined_diamond_block",
+            "count": 64,
+            "maxStackSize": 64,
+            "rawName": "diamond_block",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOIKIMCUONGTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 17,
+            "logicalId": "refined_lapis_block",
+            "count": 57,
+            "maxStackSize": 64,
+            "rawName": "lapis_block",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOILUULYTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 18,
+            "logicalId": "refined_lapis_block",
+            "count": 64,
+            "maxStackSize": 64,
+            "rawName": "lapis_block",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOILUULYTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 19,
+            "logicalId": "refined_emerald_block",
+            "count": 64,
+            "maxStackSize": 64,
+            "rawName": "emerald_block",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOINGOCLUCBAOTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 20,
+            "logicalId": "super_cobblestone_block",
+            "count": 64,
+            "maxStackSize": 64,
+            "rawName": "cobblestone",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOISIEUDACUOI",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 21,
+            "logicalId": "super_cobblestone_block",
+            "count": 38,
+            "maxStackSize": 64,
+            "rawName": "cobblestone",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOISIEUDACUOI",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 22,
+            "logicalId": "refined_gold_block",
+            "count": 64,
+            "maxStackSize": 64,
+            "rawName": "gold_block",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOIVANGTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 23,
+            "logicalId": "refined_gold_block",
+            "count": 64,
+            "maxStackSize": 64,
+            "rawName": "gold_block",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOIVANGTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 24,
+            "logicalId": "refined_gold_block",
+            "count": 64,
+            "maxStackSize": 64,
+            "rawName": "gold_block",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOIVANGTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 25,
+            "logicalId": "refined_gold_block",
+            "count": 3,
+            "maxStackSize": 64,
+            "rawName": "gold_block",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KHOIVANGTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 26,
+            "logicalId": "refined_diamond",
+            "count": 7,
+            "maxStackSize": 64,
+            "rawName": "diamond",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:KIMCUONGTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 27,
+            "logicalId": "refined_emerald",
+            "count": 3,
+            "maxStackSize": 64,
+            "rawName": "emerald",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:NGOCLUCBAOTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 28,
+            "logicalId": "super_cobblestone",
+            "count": 15,
+            "maxStackSize": 64,
+            "rawName": "cobblestone",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:SIEUDACUOI",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 29,
+            "logicalId": "super_alloy",
+            "count": 2,
+            "maxStackSize": 64,
+            "rawName": "netherite_ingot",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:SIEUHOPKIM",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          },
+          {
+            "slot": 30,
+            "logicalId": "refined_gold",
+            "count": 2,
+            "maxStackSize": 64,
+            "rawName": "gold_ingot",
+            "identityComponents": [
+              "MMOITEMS_ITEM_ID:VANGTINHLUYEN",
+              "MATERIAL"
+            ],
+            "identityNbt": [],
+            "customMetadataPresent": true
+          }
+        ],
+        "totals": {
+          "carbon": 32,
+          "refined_redstone": 9,
+          "refined_redstone_block": 814,
+          "refined_diamond_block": 128,
+          "refined_lapis_block": 121,
+          "refined_emerald_block": 64,
+          "super_cobblestone_block": 102,
+          "refined_gold_block": 195,
+          "refined_diamond": 7,
+          "refined_emerald": 3,
+          "super_cobblestone": 15,
+          "super_alloy": 2,
+          "refined_gold": 2
+        },
+        "slotCount": 54,
+        "occupiedSlotCount": 31,
+        "emptySlotCount": 23,
+        "capturedAt": 1787144386091
+      }
+    }
+  },
+  "lastSource": {
+    "commandKey": "personalVault2",
+    "command": "/pv 2",
+    "clicks": [],
+    "actions": [],
+    "source": "operation"
+  }
+}

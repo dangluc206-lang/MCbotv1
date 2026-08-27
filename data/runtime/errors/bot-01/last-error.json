@@ -1,0 +1,898 @@
+{
+  "failureId": "50a09590-42f3-4705-b171-cd04953e0058",
+  "botId": "bot-01",
+  "connectionGeneration": null,
+  "source": "mode",
+  "subsystem": "b5-craft",
+  "severity": "warning",
+  "code": "B1_B5_PROTECTION_RESERVE_UNDERRUN",
+  "operation": "B5CraftMode",
+  "step": "sell-baseline",
+  "action": null,
+  "resource": "redstone",
+  "message": "partial-sale",
+  "retryable": false,
+  "correlationId": "bot-01:b5-batch:1:storage-protection",
+  "operationId": null,
+  "occurredAt": "2026-08-25T12:11:19.703Z",
+  "phase": "WAITING_BLOCKED",
+  "retryInMs": 0,
+  "diagnostic": {
+    "stack": null
+  },
+  "details": {
+    "operatorError": {
+      "contract": "operator-error-v1",
+      "code": "B1_B5_PROTECTION_RESERVE_UNDERRUN",
+      "category": "UNKNOWN",
+      "severity": "warning",
+      "retryClass": "OPERATOR_GUARDED",
+      "safeToRetry": false,
+      "operatorState": "BLOCKED",
+      "operatorSummary": "Bảo vệ kho đã dừng an toàn sau số lần thử giới hạn.",
+      "technicalSummary": "partial-sale",
+      "allowedActions": [
+        "inspect-diagnostic",
+        "retry-storage-protection",
+        "export-support"
+      ],
+      "correlationId": "bot-01:b5-batch:1:storage-protection",
+      "incidentId": "bot-01:b5-batch:1:storage-protection",
+      "occurredAt": "2026-08-25T12:11:19.703Z",
+      "details": {
+        "batchId": "bot-01:b5-batch:1",
+        "blocker": {
+          "code": "B1_B5_PROTECTION_RESERVE_UNDERRUN",
+          "step": "sell-baseline",
+          "reason": "partial-sale",
+          "resource": "redstone",
+          "signature": "B1_B5_PROTECTION_RESERVE_UNDERRUN:sell-baseline:partial-sale:redstone",
+          "retryable": false,
+          "sameBlockerAttempts": 1,
+          "totalAttempts": 1,
+          "attemptsStarted": 1,
+          "businessFailureAttempts": 1,
+          "staleAborts": 0,
+          "lastAttemptGeneration": 2,
+          "backoffMs": 5000,
+          "nextEligibleAt": 1787659884702
+        },
+        "modeId": "b5-craft",
+        "faultClass": "BUSINESS_BLOCKER"
+      }
+    },
+    "faultClass": "BUSINESS_BLOCKER",
+    "episodeId": "bot-01:b5-batch:1:storage-protection"
+  },
+  "receivedAt": "2026-08-25T12:11:19.703Z",
+  "capturedAt": "2026-08-25T12:11:19.714Z",
+  "event": "runtime:failure",
+  "runtimeState": {
+    "gui": {
+      "active": true,
+      "sessionId": "bot-01:2:1787659879041:l1ga5b",
+      "connectionGeneration": 2,
+      "definitionId": "storage",
+      "identity": {
+        "id": "storage",
+        "candidateId": "storage",
+        "confidence": 0.9027777777777778,
+        "margin": 0.7361111111111112,
+        "ambiguous": false,
+        "reason": "IDENTIFIED",
+        "expectedId": "storage"
+      },
+      "source": {
+        "commandKey": "storage",
+        "command": "/kho",
+        "guiId": "storage",
+        "clicks": [],
+        "actions": [],
+        "source": "operation"
+      },
+      "windowId": 31,
+      "title": {
+        "type": "compound",
+        "value": {
+          "extra": {
+            "type": "list",
+            "value": {
+              "type": "compound",
+              "value": [
+                {
+                  "color": {
+                    "type": "string",
+                    "value": "black"
+                  },
+                  "text": {
+                    "type": "string",
+                    "value": "ᴋʜᴏ ᴄʜứᴀ "
+                  }
+                },
+                {
+                  "color": {
+                    "type": "string",
+                    "value": "green"
+                  },
+                  "text": {
+                    "type": "string",
+                    "value": "▮▮▮"
+                  }
+                },
+                {
+                  "color": {
+                    "type": "string",
+                    "value": "dark_gray"
+                  },
+                  "text": {
+                    "type": "string",
+                    "value": "▯▯▯▯▯"
+                  }
+                }
+              ]
+            }
+          },
+          "text": {
+            "type": "string",
+            "value": ""
+          }
+        }
+      },
+      "type": "minecraft:generic_9x6",
+      "slotCount": 90,
+      "inventoryStart": 54,
+      "inventoryEnd": 90,
+      "occupiedSlots": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60
+      ],
+      "revision": 3557,
+      "lastUpdateAt": 1787659879041
+    },
+    "inventory": {
+      "capturedAt": 1787659879711,
+      "views": [
+        {
+          "source": "current-window",
+          "windowId": 31,
+          "slotCount": 36,
+          "emptySlotCount": 0,
+          "inventoryStart": 54,
+          "inventoryEnd": 90,
+          "items": [
+            {
+              "slot": 54,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 10,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 55,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 6,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 56,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 2,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 57,
+              "name": "amethyst_shard",
+              "displayName": "Amethyst Shard",
+              "count": 64,
+              "identityComponents": [
+                "MMOITEMS_ITEM_ID:AFKSHARD",
+                "MATERIAL"
+              ],
+              "identityNbt": []
+            },
+            {
+              "slot": 58,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 59,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 60,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 61,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 10,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 62,
+              "name": "amethyst_shard",
+              "displayName": "Amethyst Shard",
+              "count": 64,
+              "identityComponents": [
+                "MMOITEMS_ITEM_ID:AFKSHARD",
+                "MATERIAL"
+              ],
+              "identityNbt": []
+            },
+            {
+              "slot": 63,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 3,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 64,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 65,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 3,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 66,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 5,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 67,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 3,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 68,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 8,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 69,
+              "name": "amethyst_shard",
+              "displayName": "Amethyst Shard",
+              "count": 64,
+              "identityComponents": [
+                "MMOITEMS_ITEM_ID:AFKSHARD",
+                "MATERIAL"
+              ],
+              "identityNbt": []
+            },
+            {
+              "slot": 70,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 7,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 71,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 72,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 73,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 3,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 74,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 75,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 76,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 77,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 3,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 78,
+              "name": "amethyst_shard",
+              "displayName": "Amethyst Shard",
+              "count": 64,
+              "identityComponents": [
+                "MMOITEMS_ITEM_ID:AFKSHARD",
+                "MATERIAL"
+              ],
+              "identityNbt": []
+            },
+            {
+              "slot": 79,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 80,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 81,
+              "name": "amethyst_shard",
+              "displayName": "Amethyst Shard",
+              "count": 64,
+              "identityComponents": [
+                "MMOITEMS_ITEM_ID:AFKSHARD",
+                "MATERIAL"
+              ],
+              "identityNbt": []
+            },
+            {
+              "slot": 82,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 16,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 83,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 23,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 84,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 5,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 85,
+              "name": "amethyst_shard",
+              "displayName": "Amethyst Shard",
+              "count": 64,
+              "identityComponents": [
+                "MMOITEMS_ITEM_ID:AFKSHARD",
+                "MATERIAL"
+              ],
+              "identityNbt": []
+            },
+            {
+              "slot": 86,
+              "name": "amethyst_shard",
+              "displayName": "Amethyst Shard",
+              "count": 64,
+              "identityComponents": [
+                "MMOITEMS_ITEM_ID:AFKSHARD",
+                "MATERIAL"
+              ],
+              "identityNbt": []
+            },
+            {
+              "slot": 87,
+              "name": "amethyst_shard",
+              "displayName": "Amethyst Shard",
+              "count": 64,
+              "identityComponents": [
+                "MMOITEMS_ITEM_ID:AFKSHARD",
+                "MATERIAL"
+              ],
+              "identityNbt": []
+            },
+            {
+              "slot": 88,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 3,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 89,
+              "name": "fishing_rod",
+              "displayName": "Fishing Rod",
+              "count": 1,
+              "identityComponents": [
+                "MMOITEMS_ITEM_ID:TANTHU",
+                "FISHING_ROD"
+              ],
+              "identityNbt": []
+            }
+          ]
+        },
+        {
+          "source": "bot-inventory",
+          "windowId": null,
+          "slotCount": 46,
+          "emptySlotCount": 0,
+          "inventoryStart": null,
+          "inventoryEnd": null,
+          "items": [
+            {
+              "slot": 5,
+              "name": "diamond_helmet",
+              "displayName": "Diamond Helmet",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 6,
+              "name": "diamond_chestplate",
+              "displayName": "Diamond Chestplate",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 7,
+              "name": "diamond_leggings",
+              "displayName": "Diamond Leggings",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 8,
+              "name": "diamond_boots",
+              "displayName": "Diamond Boots",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 9,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 10,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 10,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 6,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 11,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 2,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 12,
+              "name": "amethyst_shard",
+              "displayName": "Amethyst Shard",
+              "count": 64,
+              "identityComponents": [
+                "MMOITEMS_ITEM_ID:AFKSHARD",
+                "MATERIAL"
+              ],
+              "identityNbt": []
+            },
+            {
+              "slot": 13,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 14,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 15,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 16,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 10,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 17,
+              "name": "amethyst_shard",
+              "displayName": "Amethyst Shard",
+              "count": 64,
+              "identityComponents": [
+                "MMOITEMS_ITEM_ID:AFKSHARD",
+                "MATERIAL"
+              ],
+              "identityNbt": []
+            },
+            {
+              "slot": 18,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 3,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 19,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 20,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 3,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 21,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 5,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 22,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 3,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 23,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 8,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 24,
+              "name": "amethyst_shard",
+              "displayName": "Amethyst Shard",
+              "count": 64,
+              "identityComponents": [
+                "MMOITEMS_ITEM_ID:AFKSHARD",
+                "MATERIAL"
+              ],
+              "identityNbt": []
+            },
+            {
+              "slot": 25,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 7,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 26,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 27,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 28,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 3,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 29,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 30,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 31,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 32,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 3,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 33,
+              "name": "amethyst_shard",
+              "displayName": "Amethyst Shard",
+              "count": 64,
+              "identityComponents": [
+                "MMOITEMS_ITEM_ID:AFKSHARD",
+                "MATERIAL"
+              ],
+              "identityNbt": []
+            },
+            {
+              "slot": 34,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 35,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 1,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 36,
+              "name": "amethyst_shard",
+              "displayName": "Amethyst Shard",
+              "count": 64,
+              "identityComponents": [
+                "MMOITEMS_ITEM_ID:AFKSHARD",
+                "MATERIAL"
+              ],
+              "identityNbt": []
+            },
+            {
+              "slot": 37,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 16,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 38,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 23,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 39,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 5,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 40,
+              "name": "amethyst_shard",
+              "displayName": "Amethyst Shard",
+              "count": 64,
+              "identityComponents": [
+                "MMOITEMS_ITEM_ID:AFKSHARD",
+                "MATERIAL"
+              ],
+              "identityNbt": []
+            },
+            {
+              "slot": 41,
+              "name": "amethyst_shard",
+              "displayName": "Amethyst Shard",
+              "count": 64,
+              "identityComponents": [
+                "MMOITEMS_ITEM_ID:AFKSHARD",
+                "MATERIAL"
+              ],
+              "identityNbt": []
+            },
+            {
+              "slot": 42,
+              "name": "amethyst_shard",
+              "displayName": "Amethyst Shard",
+              "count": 64,
+              "identityComponents": [
+                "MMOITEMS_ITEM_ID:AFKSHARD",
+                "MATERIAL"
+              ],
+              "identityNbt": []
+            },
+            {
+              "slot": 43,
+              "name": "chest",
+              "displayName": "Chest",
+              "count": 3,
+              "identityComponents": [],
+              "identityNbt": []
+            },
+            {
+              "slot": 44,
+              "name": "fishing_rod",
+              "displayName": "Fishing Rod",
+              "count": 1,
+              "identityComponents": [
+                "MMOITEMS_ITEM_ID:TANTHU",
+                "FISHING_ROD"
+              ],
+              "identityNbt": []
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "id": "bot-02",
+  "enabled": false,
+  "username": "BotFarm02",
+  "auth": "offline",
+  "version": false,
+  "serverProfile": "default",
+  "role": "worker",
+  "readyTimeoutMs": 30000,
+  "reconnect": {
+    "enabled": true,
+    "maxAttempts": 20,
+    "baseDelayMs": 5000,
+    "maxDelayMs": 60000
+  }
+}

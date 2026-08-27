@@ -1,0 +1,126 @@
+{
+  "failureId": "e5950a98-e4c0-4b9a-b2d5-dddd56cfcd7f",
+  "botId": "bot-02",
+  "connectionGeneration": 1,
+  "source": "connection",
+  "subsystem": "connection",
+  "severity": "error",
+  "code": "CONNECTION_FAILED",
+  "operation": "ConnectionManager",
+  "step": "error",
+  "action": null,
+  "resource": null,
+  "message": "client timed out after 30000 milliseconds",
+  "retryable": true,
+  "correlationId": null,
+  "operationId": null,
+  "occurredAt": "2026-08-25T14:23:48.649Z",
+  "phase": null,
+  "retryInMs": 0,
+  "diagnostic": {
+    "name": "Error",
+    "message": "client timed out after 30000 milliseconds",
+    "code": null,
+    "stack": "Error: client timed out after 30000 milliseconds\n    at Timeout._onTimeout (C:\\Users\\lucso\\mcbot_V1\\node_modules\\minecraft-protocol\\src\\client\\keepalive.js:18:28)\n    at listOnTimeout (node:internal/timers:635:17)\n    at process.processTimers (node:internal/timers:571:7)"
+  },
+  "details": {
+    "eventName": "connection:error",
+    "reason": null,
+    "connectionSignals": [
+      {
+        "eventName": "connection:error",
+        "code": "CONNECTION_FAILED",
+        "step": "error",
+        "message": "client timed out after 30000 milliseconds",
+        "reason": null
+      }
+    ]
+  },
+  "receivedAt": "2026-08-25T14:23:49.399Z",
+  "capturedAt": "2026-08-25T14:23:49.403Z",
+  "event": "runtime:failure",
+  "runtimeState": {
+    "gui": {
+      "active": false,
+      "sessionId": null,
+      "connectionGeneration": null,
+      "definitionId": null,
+      "identity": null,
+      "source": null,
+      "windowId": null,
+      "title": null,
+      "type": null,
+      "slotCount": 0,
+      "inventoryStart": null,
+      "inventoryEnd": null,
+      "occupiedSlots": [],
+      "revision": 0,
+      "lastUpdateAt": null
+    },
+    "inventory": {
+      "capturedAt": 1787667829401,
+      "views": [
+        {
+          "source": "bot-inventory",
+          "windowId": null,
+          "slotCount": 46,
+          "emptySlotCount": 31,
+          "inventoryStart": null,
+          "inventoryEnd": null,
+          "items": [
+            {
+              "slot": 36,
+              "name": "book",
+              "displayName": "Book",
+              "count": 1,
+              "identityComponents": [
+                "infobook"
+              ],
+              "identityNbt": []
+            },
+            {
+              "slot": 37,
+              "name": "diamond",
+              "displayName": "Diamond",
+              "count": 1,
+              "identityComponents": [
+                "donate"
+              ],
+              "identityNbt": []
+            },
+            {
+              "slot": 40,
+              "name": "compass",
+              "displayName": "Compass",
+              "count": 1,
+              "identityComponents": [
+                "games"
+              ],
+              "identityNbt": []
+            },
+            {
+              "slot": 43,
+              "name": "turtle_egg",
+              "displayName": "Turtle Egg",
+              "count": 1,
+              "identityComponents": [
+                "diemdanh"
+              ],
+              "identityNbt": []
+            },
+            {
+              "slot": 44,
+              "name": "lime_dye",
+              "displayName": "Lime Dye",
+              "count": 1,
+              "identityComponents": [
+                "PLAYER_HIDER"
+              ],
+              "identityNbt": []
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

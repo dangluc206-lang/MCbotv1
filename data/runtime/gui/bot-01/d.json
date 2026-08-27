@@ -1,0 +1,726 @@
+{
+  "id": "d",
+  "identity": {
+    "definitionId": null,
+    "titleText": "ᴅᴜɴɢᴇᴏɴ",
+    "type": "minecraft:generic_9x6",
+    "slotCount": 90
+  },
+  "route": {
+    "commandKey": "dungeon",
+    "command": "/d",
+    "clicks": [],
+    "source": "discord-gui"
+  },
+  "firstSeenAt": "2026-08-07T20:54:56.083Z",
+  "lastSeenAt": "2026-08-07T20:54:56.083Z",
+  "seenCount": 1,
+  "revision": 1,
+  "structure": {
+    "items": [
+      {
+        "slot": 0,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 1,
+        "name": "purple_stained_glass_pane",
+        "displayName": "Purple Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 2,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 3,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 4,
+        "name": "nether_star",
+        "displayName": "Nether Star",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 5,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 6,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 7,
+        "name": "purple_stained_glass_pane",
+        "displayName": "Purple Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 8,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 9,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 10,
+        "name": "birch_sapling",
+        "displayName": "Birch Sapling",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 12,
+        "name": "pitcher_pod",
+        "displayName": "Pitcher Pod",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 14,
+        "name": "name_tag",
+        "displayName": "Name Tag",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 16,
+        "name": "heavy_core",
+        "displayName": "Heavy Core",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 17,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 18,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 20,
+        "name": "feather",
+        "displayName": "Feather",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 22,
+        "name": "mangrove_propagule",
+        "displayName": "Mangrove Propagule",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 24,
+        "name": "iron_chestplate",
+        "displayName": "Iron Chestplate",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 26,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 27,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 30,
+        "name": "moss_block",
+        "displayName": "Moss Block",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 32,
+        "name": "blue_ice",
+        "displayName": "Blue Ice",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 35,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 36,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 40,
+        "name": "orange_dye",
+        "displayName": "Orange Dye",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 44,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 45,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 46,
+        "name": "purple_stained_glass_pane",
+        "displayName": "Purple Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 47,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 48,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 49,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 50,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 51,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 52,
+        "name": "purple_stained_glass_pane",
+        "displayName": "Purple Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 53,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 54,
+        "name": "cooked_beef",
+        "displayName": "Steak",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 81,
+        "name": "diamond_helmet",
+        "displayName": "Diamond Helmet",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 82,
+        "name": "diamond_chestplate",
+        "displayName": "Diamond Chestplate",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 83,
+        "name": "diamond_leggings",
+        "displayName": "Diamond Leggings",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 84,
+        "name": "diamond_boots",
+        "displayName": "Diamond Boots",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 85,
+        "name": "diamond_axe",
+        "displayName": "Diamond Axe",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 86,
+        "name": "diamond_shovel",
+        "displayName": "Diamond Shovel",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 87,
+        "name": "diamond_hoe",
+        "displayName": "Diamond Hoe",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 88,
+        "name": "diamond_sword",
+        "displayName": "Diamond Sword",
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 89,
+        "name": "diamond_pickaxe",
+        "displayName": "Diamond Pickaxe",
+        "lore": [],
+        "customModelData": null
+      }
+    ]
+  },
+  "latest": {
+    "titleText": "ᴅᴜɴɢᴇᴏɴ",
+    "type": "minecraft:generic_9x6",
+    "slotCount": 90,
+    "items": [
+      {
+        "slot": 0,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 1,
+        "name": "purple_stained_glass_pane",
+        "displayName": "Purple Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 2,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 3,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 4,
+        "name": "nether_star",
+        "displayName": "Nether Star",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 5,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 6,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 7,
+        "name": "purple_stained_glass_pane",
+        "displayName": "Purple Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 8,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 9,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 10,
+        "name": "birch_sapling",
+        "displayName": "Birch Sapling",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 12,
+        "name": "pitcher_pod",
+        "displayName": "Pitcher Pod",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 14,
+        "name": "name_tag",
+        "displayName": "Name Tag",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 16,
+        "name": "heavy_core",
+        "displayName": "Heavy Core",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 17,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 18,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 20,
+        "name": "feather",
+        "displayName": "Feather",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 22,
+        "name": "mangrove_propagule",
+        "displayName": "Mangrove Propagule",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 24,
+        "name": "iron_chestplate",
+        "displayName": "Iron Chestplate",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 26,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 27,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 30,
+        "name": "moss_block",
+        "displayName": "Moss Block",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 32,
+        "name": "blue_ice",
+        "displayName": "Blue Ice",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 35,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 36,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 40,
+        "name": "orange_dye",
+        "displayName": "Orange Dye",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 44,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 45,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 46,
+        "name": "purple_stained_glass_pane",
+        "displayName": "Purple Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 47,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 48,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 49,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 50,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 51,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 52,
+        "name": "purple_stained_glass_pane",
+        "displayName": "Purple Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 53,
+        "name": "black_stained_glass_pane",
+        "displayName": "Black Stained Glass Pane",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 54,
+        "name": "cooked_beef",
+        "displayName": "Steak",
+        "count": 64,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 81,
+        "name": "diamond_helmet",
+        "displayName": "Diamond Helmet",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 82,
+        "name": "diamond_chestplate",
+        "displayName": "Diamond Chestplate",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 83,
+        "name": "diamond_leggings",
+        "displayName": "Diamond Leggings",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 84,
+        "name": "diamond_boots",
+        "displayName": "Diamond Boots",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 85,
+        "name": "diamond_axe",
+        "displayName": "Diamond Axe",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 86,
+        "name": "diamond_shovel",
+        "displayName": "Diamond Shovel",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 87,
+        "name": "diamond_hoe",
+        "displayName": "Diamond Hoe",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 88,
+        "name": "diamond_sword",
+        "displayName": "Diamond Sword",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      },
+      {
+        "slot": 89,
+        "name": "diamond_pickaxe",
+        "displayName": "Diamond Pickaxe",
+        "count": 1,
+        "lore": [],
+        "customModelData": null
+      }
+    ]
+  },
+  "lastSource": {
+    "commandKey": "dungeon",
+    "command": "/d",
+    "clicks": [],
+    "source": "discord-gui"
+  }
+}

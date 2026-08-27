@@ -1,0 +1,165 @@
+{
+  "id": "nung",
+  "identity": {
+    "definitionId": "smelting",
+    "titleText": "ɴᴜɴɢ ᴋʜᴏáɴɢ ѕảɴ",
+    "type": "minecraft:generic_9x1",
+    "slotCount": 45,
+    "inventoryStart": 9,
+    "containerSlotCount": 9
+  },
+  "route": {
+    "commandKey": "smelting",
+    "command": "/nung",
+    "clicks": [],
+    "actions": [],
+    "source": "operation"
+  },
+  "firstSeenAt": "2026-08-07T20:54:46.550Z",
+  "lastSeenAt": "2026-08-25T12:09:41.702Z",
+  "seenCount": 2839,
+  "revision": 110,
+  "structure": {
+    "items": [
+      {
+        "slot": 0,
+        "name": "cobblestone",
+        "displayName": "Cobblestone",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      {
+        "slot": 1,
+        "name": "raw_gold",
+        "displayName": "Raw Gold",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      {
+        "slot": 2,
+        "name": "raw_iron",
+        "displayName": "Raw Iron",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      }
+    ]
+  },
+  "latest": {
+    "titleText": "ɴᴜɴɢ ᴋʜᴏáɴɢ ѕảɴ",
+    "type": "minecraft:generic_9x1",
+    "slotCount": 45,
+    "inventoryStart": 9,
+    "containerSlotCount": 9,
+    "items": [
+      {
+        "slot": 0,
+        "name": "cobblestone",
+        "displayName": "Cobblestone",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customMetadataPresent": false,
+        "customModelData": null
+      },
+      {
+        "slot": 1,
+        "name": "raw_gold",
+        "displayName": "Raw Gold",
+        "count": 64,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customMetadataPresent": false,
+        "customModelData": null
+      },
+      {
+        "slot": 2,
+        "name": "raw_iron",
+        "displayName": "Raw Iron",
+        "count": 44,
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customMetadataPresent": false,
+        "customModelData": null
+      }
+    ]
+  },
+  "learned": {
+    "smelting:raw_iron_to_iron": {
+      "roleId": "smelting:raw_iron_to_iron",
+      "logicalItemId": "raw_iron",
+      "context": "smelting-menu",
+      "bootstrapSlot": 0,
+      "currentSlot": 2,
+      "fingerprint": {
+        "name": "raw_iron",
+        "displayName": "Raw Iron",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "learnedAt": "2026-08-08T06:22:18.629Z",
+      "lastMatchedAt": "2026-08-13T14:36:30.869Z",
+      "relearnCount": 1
+    },
+    "smelting:all": {
+      "roleId": "smelting:all",
+      "logicalItemId": null,
+      "context": "smelting-menu",
+      "bootstrapSlot": 1,
+      "currentSlot": 1,
+      "fingerprint": {
+        "name": "raw_iron",
+        "displayName": "Raw Iron",
+        "lore": [],
+        "customModelData": null
+      },
+      "learnedAt": "2026-08-08T06:52:37.938Z",
+      "lastMatchedAt": "2026-08-08T07:00:35.391Z",
+      "relearnCount": 1
+    },
+    "smelting:raw_gold_to_gold": {
+      "roleId": "smelting:raw_gold_to_gold",
+      "logicalItemId": "raw_gold",
+      "context": "smelting-menu",
+      "bootstrapSlot": null,
+      "currentSlot": 1,
+      "fingerprint": {
+        "name": "raw_gold",
+        "displayName": "Raw Gold",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "learnedAt": "2026-08-08T18:34:56.382Z",
+      "lastMatchedAt": "2026-08-08T18:34:56.382Z",
+      "relearnCount": 0
+    }
+  },
+  "semantic": {},
+  "lastSource": {
+    "commandKey": "smelting",
+    "command": "/nung",
+    "clicks": [],
+    "actions": [],
+    "source": "operation"
+  }
+}

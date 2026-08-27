@@ -1,0 +1,1304 @@
+{
+  "version": 1,
+  "items": {
+    "menu_crafting": {
+      "logicalItemId": "menu_crafting",
+      "fingerprint": {
+        "name": "smithing_table",
+        "displayName": "Smithing Table",
+        "lore": [],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "smithing_table",
+          "displayName": "Smithing Table",
+          "lore": [],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "ks",
+        "roleId": "menu_crafting",
+        "storedLearned": true
+      },
+      "learnedAt": "2026-08-08T06:36:15.637Z",
+      "lastSeenAt": "2026-08-25T14:20:18.330Z"
+    },
+    "refined_redstone": {
+      "logicalItemId": "refined_redstone",
+      "fingerprint": {
+        "name": "redstone",
+        "displayName": "Redstone Dust",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:DADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "redstone",
+          "displayName": "Redstone Dust",
+          "lore": [],
+          "identityComponents": [
+            "MMOITEMS_ITEM_ID:DADOTINHLUYEN",
+            "MATERIAL"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "pv-2",
+        "slot": 1,
+        "semantic": "personalVault",
+        "migrated": true
+      },
+      "learnedAt": "2026-08-08T06:36:15.852Z",
+      "lastSeenAt": "2026-08-25T14:20:18.506Z"
+    },
+    "refined_iron": {
+      "logicalItemId": "refined_iron",
+      "fingerprint": {
+        "name": "iron_ingot",
+        "displayName": "Iron Ingot",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:SATTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "iron_ingot",
+          "displayName": "Iron Ingot",
+          "lore": [],
+          "identityComponents": [
+            "MMOITEMS_ITEM_ID:SATTINHLUYEN",
+            "MATERIAL"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "ks__menu_crafting",
+        "roleId": "recipe:refined_iron",
+        "slot": 14,
+        "storedBootstrap": true
+      },
+      "learnedAt": "2026-08-08T06:36:15.872Z",
+      "lastSeenAt": "2026-08-25T14:20:18.454Z"
+    },
+    "refined_diamond": {
+      "logicalItemId": "refined_diamond",
+      "fingerprint": {
+        "name": "diamond",
+        "displayName": "Diamond",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KIMCUONGTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "diamond",
+          "displayName": "Diamond",
+          "lore": [],
+          "identityComponents": [
+            "MMOITEMS_ITEM_ID:KIMCUONGTINHLUYEN",
+            "MATERIAL"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "pv-2",
+        "slot": 26,
+        "semantic": "personalVault",
+        "migrated": true
+      },
+      "learnedAt": "2026-08-08T06:36:15.891Z",
+      "lastSeenAt": "2026-08-25T14:20:18.570Z"
+    },
+    "refined_emerald": {
+      "logicalItemId": "refined_emerald",
+      "fingerprint": {
+        "name": "emerald",
+        "displayName": "Emerald",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:NGOCLUCBAOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "emerald",
+          "displayName": "Emerald",
+          "lore": [],
+          "identityComponents": [
+            "MMOITEMS_ITEM_ID:NGOCLUCBAOTINHLUYEN",
+            "MATERIAL"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "pv-2",
+        "slot": 27,
+        "semantic": "personalVault",
+        "migrated": true
+      },
+      "learnedAt": "2026-08-08T06:36:15.906Z",
+      "lastSeenAt": "2026-08-25T14:20:18.573Z"
+    },
+    "super_cobblestone_block": {
+      "logicalItemId": "super_cobblestone_block",
+      "fingerprint": {
+        "name": "cobblestone",
+        "displayName": "Cobblestone",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOISIEUDACUOI",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "cobblestone",
+          "displayName": "Cobblestone",
+          "lore": [],
+          "identityComponents": [
+            "MMOITEMS_ITEM_ID:KHOISIEUDACUOI",
+            "MATERIAL"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "pv-2",
+        "slot": 21,
+        "semantic": "personalVault",
+        "migrated": true
+      },
+      "learnedAt": "2026-08-08T06:36:15.927Z",
+      "lastSeenAt": "2026-08-25T14:20:18.557Z"
+    },
+    "refined_coal_block": {
+      "logicalItemId": "refined_coal_block",
+      "fingerprint": {
+        "name": "coal_block",
+        "displayName": "Block of Coal",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOITHANTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "coal_block",
+          "displayName": "Block of Coal",
+          "lore": [],
+          "identityComponents": [
+            "MMOITEMS_ITEM_ID:KHOITHANTINHLUYEN",
+            "MATERIAL"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "ks__menu_crafting",
+        "roleId": "recipe:refined_coal_block",
+        "slot": 21,
+        "storedBootstrap": true
+      },
+      "learnedAt": "2026-08-08T06:36:15.941Z",
+      "lastSeenAt": "2026-08-25T14:20:18.469Z"
+    },
+    "refined_redstone_block": {
+      "logicalItemId": "refined_redstone_block",
+      "fingerprint": {
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "redstone_block",
+          "displayName": "Block of Redstone",
+          "lore": [],
+          "identityComponents": [
+            "MMOITEMS_ITEM_ID:KHOIDADOTINHLUYEN",
+            "MATERIAL"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "pv-2",
+        "slot": 14,
+        "semantic": "personalVault",
+        "migrated": true
+      },
+      "learnedAt": "2026-08-08T06:36:15.956Z",
+      "lastSeenAt": "2026-08-25T14:20:18.540Z"
+    },
+    "refined_lapis_block": {
+      "logicalItemId": "refined_lapis_block",
+      "fingerprint": {
+        "name": "lapis_block",
+        "displayName": "Block of Lapis Lazuli",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOILUULYTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "lapis_block",
+          "displayName": "Block of Lapis Lazuli",
+          "lore": [],
+          "identityComponents": [
+            "MMOITEMS_ITEM_ID:KHOILUULYTINHLUYEN",
+            "MATERIAL"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "pv-2",
+        "slot": 18,
+        "semantic": "personalVault",
+        "migrated": true
+      },
+      "learnedAt": "2026-08-08T06:36:15.971Z",
+      "lastSeenAt": "2026-08-25T14:20:18.550Z"
+    },
+    "refined_iron_block": {
+      "logicalItemId": "refined_iron_block",
+      "fingerprint": {
+        "name": "iron_block",
+        "displayName": "Block of Iron",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOISATTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "iron_block",
+          "displayName": "Block of Iron",
+          "lore": [],
+          "identityComponents": [
+            "MMOITEMS_ITEM_ID:KHOISATTINHLUYEN",
+            "MATERIAL"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "ks__menu_crafting",
+        "roleId": "recipe:refined_iron_block",
+        "slot": 24,
+        "storedBootstrap": true
+      },
+      "learnedAt": "2026-08-08T06:36:15.986Z",
+      "lastSeenAt": "2026-08-25T14:20:18.477Z"
+    },
+    "refined_gold_block": {
+      "logicalItemId": "refined_gold_block",
+      "fingerprint": {
+        "name": "gold_block",
+        "displayName": "Block of Gold",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIVANGTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "gold_block",
+          "displayName": "Block of Gold",
+          "lore": [],
+          "identityComponents": [
+            "MMOITEMS_ITEM_ID:KHOIVANGTINHLUYEN",
+            "MATERIAL"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "pv-2",
+        "slot": 25,
+        "semantic": "personalVault",
+        "migrated": true
+      },
+      "learnedAt": "2026-08-08T06:36:16.000Z",
+      "lastSeenAt": "2026-08-25T14:20:18.567Z"
+    },
+    "refined_diamond_block": {
+      "logicalItemId": "refined_diamond_block",
+      "fingerprint": {
+        "name": "diamond_block",
+        "displayName": "Block of Diamond",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOIKIMCUONGTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "diamond_block",
+          "displayName": "Block of Diamond",
+          "lore": [],
+          "identityComponents": [
+            "MMOITEMS_ITEM_ID:KHOIKIMCUONGTINHLUYEN",
+            "MATERIAL"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "pv-2",
+        "slot": 16,
+        "semantic": "personalVault",
+        "migrated": true
+      },
+      "learnedAt": "2026-08-08T06:36:16.016Z",
+      "lastSeenAt": "2026-08-25T14:20:18.545Z"
+    },
+    "refined_emerald_block": {
+      "logicalItemId": "refined_emerald_block",
+      "fingerprint": {
+        "name": "emerald_block",
+        "displayName": "Block of Emerald",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:KHOINGOCLUCBAOTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "emerald_block",
+          "displayName": "Block of Emerald",
+          "lore": [],
+          "identityComponents": [
+            "MMOITEMS_ITEM_ID:KHOINGOCLUCBAOTINHLUYEN",
+            "MATERIAL"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "pv-2",
+        "slot": 19,
+        "semantic": "personalVault",
+        "migrated": true
+      },
+      "learnedAt": "2026-08-08T06:36:16.033Z",
+      "lastSeenAt": "2026-08-25T14:20:18.552Z"
+    },
+    "carbon": {
+      "logicalItemId": "carbon",
+      "fingerprint": {
+        "name": "charcoal",
+        "displayName": "Charcoal",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:CACBON",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "charcoal",
+          "displayName": "Charcoal",
+          "lore": [],
+          "identityComponents": [
+            "MMOITEMS_ITEM_ID:CACBON",
+            "MATERIAL"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "pv-2",
+        "slot": 0,
+        "semantic": "personalVault",
+        "migrated": true
+      },
+      "learnedAt": "2026-08-08T06:36:16.048Z",
+      "lastSeenAt": "2026-08-25T14:20:18.503Z"
+    },
+    "titanium": {
+      "logicalItemId": "titanium",
+      "fingerprint": {
+        "name": "raw_iron",
+        "displayName": "Raw Iron",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:TITAN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "raw_iron",
+          "displayName": "Raw Iron",
+          "lore": [],
+          "identityComponents": [
+            "MMOITEMS_ITEM_ID:TITAN",
+            "MATERIAL"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "ks__menu_crafting",
+        "roleId": "recipe:titanium",
+        "slot": 31,
+        "storedBootstrap": true
+      },
+      "learnedAt": "2026-08-08T06:36:16.063Z",
+      "lastSeenAt": "2026-08-25T14:20:18.494Z"
+    },
+    "refined_coal": {
+      "logicalItemId": "refined_coal",
+      "fingerprint": {
+        "name": "coal",
+        "displayName": "Coal",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:THANTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "coal",
+          "displayName": "Coal",
+          "lore": [],
+          "identityComponents": [
+            "MMOITEMS_ITEM_ID:THANTINHLUYEN",
+            "MATERIAL"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "ks__menu_crafting",
+        "roleId": "recipe:refined_coal",
+        "slot": 11,
+        "storedBootstrap": true
+      },
+      "learnedAt": "2026-08-08T07:00:50.132Z",
+      "lastSeenAt": "2026-08-25T14:20:18.445Z"
+    },
+    "refined_lapis": {
+      "logicalItemId": "refined_lapis",
+      "fingerprint": {
+        "name": "lapis_lazuli",
+        "displayName": "Lapis Lazuli",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:LUULYTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "lapis_lazuli",
+          "displayName": "Lapis Lazuli",
+          "lore": [],
+          "identityComponents": [
+            "MMOITEMS_ITEM_ID:LUULYTINHLUYEN",
+            "MATERIAL"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "ks__menu_crafting",
+        "roleId": "recipe:refined_lapis",
+        "slot": 13,
+        "storedBootstrap": true
+      },
+      "learnedAt": "2026-08-08T07:00:50.163Z",
+      "lastSeenAt": "2026-08-25T14:20:18.451Z"
+    },
+    "refined_gold": {
+      "logicalItemId": "refined_gold",
+      "fingerprint": {
+        "name": "gold_ingot",
+        "displayName": "Gold Ingot",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:VANGTINHLUYEN",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "gold_ingot",
+          "displayName": "Gold Ingot",
+          "lore": [],
+          "identityComponents": [
+            "MMOITEMS_ITEM_ID:VANGTINHLUYEN",
+            "MATERIAL"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "pv-2",
+        "slot": 30,
+        "semantic": "personalVault",
+        "migrated": true
+      },
+      "learnedAt": "2026-08-08T07:00:50.194Z",
+      "lastSeenAt": "2026-08-25T14:20:18.580Z"
+    },
+    "super_alloy": {
+      "logicalItemId": "super_alloy",
+      "fingerprint": {
+        "name": "netherite_ingot",
+        "displayName": "Netherite Ingot",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:SIEUHOPKIM",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "netherite_ingot",
+          "displayName": "Netherite Ingot",
+          "lore": [],
+          "identityComponents": [
+            "MMOITEMS_ITEM_ID:SIEUHOPKIM",
+            "MATERIAL"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "pv-2",
+        "slot": 29,
+        "semantic": "personalVault",
+        "migrated": true
+      },
+      "learnedAt": "2026-08-08T07:00:50.380Z",
+      "lastSeenAt": "2026-08-25T14:20:18.578Z"
+    },
+    "raw_gold": {
+      "logicalItemId": "raw_gold",
+      "fingerprint": {
+        "name": "raw_gold",
+        "displayName": "Raw Gold",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "raw_gold",
+          "displayName": "Raw Gold",
+          "lore": [],
+          "identityComponents": [],
+          "identityNbt": [],
+          "identityStructuralKeys": [],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "nung",
+        "roleId": "smelting:raw_gold_to_gold",
+        "storedLearned": true
+      },
+      "learnedAt": "2026-08-08T18:34:56.386Z",
+      "lastSeenAt": "2026-08-25T14:20:18.439Z"
+    },
+    "raw_iron": {
+      "logicalItemId": "raw_iron",
+      "fingerprint": {
+        "name": "raw_iron",
+        "displayName": "Raw Iron",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "raw_iron",
+          "displayName": "Raw Iron",
+          "lore": [],
+          "identityComponents": [],
+          "identityNbt": [],
+          "identityStructuralKeys": [],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "nung",
+        "roleId": "smelting:raw_iron_to_iron",
+        "storedLearned": true
+      },
+      "learnedAt": "2026-08-08T18:41:07.679Z",
+      "lastSeenAt": "2026-08-25T14:20:18.436Z"
+    },
+    "tungsten": {
+      "logicalItemId": "tungsten",
+      "fingerprint": {
+        "name": "netherite_scrap",
+        "displayName": "Netherite Scrap",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:VOLFRAM",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "netherite_scrap",
+          "displayName": "Netherite Scrap",
+          "lore": [],
+          "identityComponents": [
+            "MMOITEMS_ITEM_ID:VOLFRAM",
+            "MATERIAL"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "ks__menu_crafting",
+        "roleId": "recipe:tungsten",
+        "slot": 32,
+        "storedBootstrap": true
+      },
+      "learnedAt": "2026-08-08T19:53:47.685Z",
+      "lastSeenAt": "2026-08-25T14:20:18.497Z"
+    },
+    "menu_convert_blocks": {
+      "logicalItemId": "menu_convert_blocks",
+      "fingerprint": {
+        "name": "raw_iron_block",
+        "displayName": "Block of Raw Iron",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "raw_iron_block",
+          "displayName": "Block of Raw Iron",
+          "lore": [],
+          "identityComponents": [],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "ks",
+        "roleId": "menu_convert_blocks",
+        "storedLearned": true
+      },
+      "learnedAt": "2026-08-08T22:05:54.582Z",
+      "lastSeenAt": "2026-08-25T14:20:18.334Z"
+    },
+    "redstone_block": {
+      "logicalItemId": "redstone_block",
+      "fingerprint": {
+        "name": "redstone_block",
+        "displayName": "Block of Redstone",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "redstone_block",
+          "displayName": "Block of Redstone",
+          "lore": [],
+          "identityComponents": [],
+          "identityNbt": [],
+          "identityStructuralKeys": [],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "ks__menu_convert_blocks",
+        "roleId": "conversion:redstone:toBlock",
+        "storedLearned": true
+      },
+      "learnedAt": "2026-08-08T22:05:54.957Z",
+      "lastSeenAt": "2026-08-25T14:20:18.339Z"
+    },
+    "lapis_block": {
+      "logicalItemId": "lapis_block",
+      "fingerprint": {
+        "name": "lapis_block",
+        "displayName": "Block of Lapis Lazuli",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "lapis_block",
+          "displayName": "Block of Lapis Lazuli",
+          "lore": [],
+          "identityComponents": [],
+          "identityNbt": [],
+          "identityStructuralKeys": [],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "ks__menu_convert_blocks",
+        "roleId": "conversion:lapis_lazuli:toBlock",
+        "storedLearned": true
+      },
+      "learnedAt": "2026-08-08T22:06:02.270Z",
+      "lastSeenAt": "2026-08-25T14:20:18.343Z"
+    },
+    "iron_block": {
+      "logicalItemId": "iron_block",
+      "fingerprint": {
+        "name": "iron_block",
+        "displayName": "Block of Iron",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "iron_block",
+          "displayName": "Block of Iron",
+          "lore": [],
+          "identityComponents": [],
+          "identityNbt": [],
+          "identityStructuralKeys": [],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "ks__menu_convert_blocks",
+        "roleId": "conversion:iron_ingot:toBlock",
+        "storedLearned": true
+      },
+      "learnedAt": "2026-08-08T22:06:09.477Z",
+      "lastSeenAt": "2026-08-25T14:20:18.346Z"
+    },
+    "gold_block": {
+      "logicalItemId": "gold_block",
+      "fingerprint": {
+        "name": "gold_block",
+        "displayName": "Block of Gold",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "gold_block",
+          "displayName": "Block of Gold",
+          "lore": [],
+          "identityComponents": [],
+          "identityNbt": [],
+          "identityStructuralKeys": [],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "ks__menu_convert_blocks",
+        "roleId": "conversion:gold_ingot:toBlock",
+        "storedLearned": true
+      },
+      "learnedAt": "2026-08-08T22:06:16.676Z",
+      "lastSeenAt": "2026-08-25T14:20:18.350Z"
+    },
+    "diamond_block": {
+      "logicalItemId": "diamond_block",
+      "fingerprint": {
+        "name": "diamond_block",
+        "displayName": "Block of Diamond",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "diamond_block",
+          "displayName": "Block of Diamond",
+          "lore": [],
+          "identityComponents": [],
+          "identityNbt": [],
+          "identityStructuralKeys": [],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "ks__menu_convert_blocks",
+        "roleId": "conversion:diamond:toBlock",
+        "storedLearned": true
+      },
+      "learnedAt": "2026-08-08T22:06:23.920Z",
+      "lastSeenAt": "2026-08-25T14:20:18.353Z"
+    },
+    "emerald_block": {
+      "logicalItemId": "emerald_block",
+      "fingerprint": {
+        "name": "emerald_block",
+        "displayName": "Block of Emerald",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "emerald_block",
+          "displayName": "Block of Emerald",
+          "lore": [],
+          "identityComponents": [],
+          "identityNbt": [],
+          "identityStructuralKeys": [],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "ks__menu_convert_blocks",
+        "roleId": "conversion:emerald:toBlock",
+        "storedLearned": true
+      },
+      "learnedAt": "2026-08-08T22:06:31.254Z",
+      "lastSeenAt": "2026-08-25T14:20:18.357Z"
+    },
+    "emerald": {
+      "logicalItemId": "emerald",
+      "fingerprint": {
+        "name": "emerald",
+        "displayName": "Emerald",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "emerald",
+          "displayName": "Emerald",
+          "lore": [],
+          "identityComponents": [],
+          "identityNbt": [],
+          "identityStructuralKeys": [],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "ks__menu_convert_blocks",
+        "roleId": "conversion:emerald:toBase",
+        "storedLearned": true
+      },
+      "learnedAt": "2026-08-11T18:26:30.772Z",
+      "lastSeenAt": "2026-08-25T14:20:18.361Z"
+    },
+    "iron_ingot": {
+      "logicalItemId": "iron_ingot",
+      "fingerprint": {
+        "name": "iron_ingot",
+        "displayName": "Iron Ingot",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "iron_ingot",
+          "displayName": "Iron Ingot",
+          "lore": [],
+          "identityComponents": [],
+          "identityNbt": [],
+          "identityStructuralKeys": [],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "ks__menu_convert_blocks",
+        "roleId": "conversion:iron_ingot:toBase",
+        "storedLearned": true
+      },
+      "learnedAt": "2026-08-12T11:23:35.752Z",
+      "lastSeenAt": "2026-08-25T14:20:18.364Z"
+    },
+    "coal_block": {
+      "logicalItemId": "coal_block",
+      "fingerprint": {
+        "name": "coal_block",
+        "displayName": "Block of Coal",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "coal_block",
+          "displayName": "Block of Coal",
+          "lore": [],
+          "identityComponents": [],
+          "identityNbt": [],
+          "identityStructuralKeys": [],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "ks__menu_convert_blocks",
+        "roleId": "conversion:coal:toBlock",
+        "storedLearned": true
+      },
+      "learnedAt": "2026-08-12T11:35:45.058Z",
+      "lastSeenAt": "2026-08-25T14:20:18.366Z"
+    },
+    "coal": {
+      "logicalItemId": "coal",
+      "fingerprint": {
+        "name": "coal",
+        "displayName": "Coal",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "coal",
+          "displayName": "Coal",
+          "lore": [],
+          "identityComponents": [],
+          "identityNbt": [],
+          "identityStructuralKeys": [],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "ks__menu_convert_blocks",
+        "roleId": "conversion:coal:toBase",
+        "storedLearned": true
+      },
+      "learnedAt": "2026-08-12T12:13:16.353Z",
+      "lastSeenAt": "2026-08-25T14:20:18.369Z"
+    },
+    "super_cobblestone": {
+      "logicalItemId": "super_cobblestone",
+      "fingerprint": {
+        "name": "cobblestone",
+        "displayName": "Cobblestone",
+        "lore": [],
+        "identityComponents": [
+          "MMOITEMS_ITEM_ID:SIEUDACUOI",
+          "MATERIAL"
+        ],
+        "identityNbt": [],
+        "identityStructuralKeys": [
+          "custom_data"
+        ],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "cobblestone",
+          "displayName": "Cobblestone",
+          "lore": [],
+          "identityComponents": [
+            "MMOITEMS_ITEM_ID:SIEUDACUOI",
+            "MATERIAL"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "pv-2",
+        "slot": 28,
+        "semantic": "personalVault",
+        "migrated": true
+      },
+      "learnedAt": "2026-08-13T11:39:31.141Z",
+      "lastSeenAt": "2026-08-25T14:20:18.575Z"
+    },
+    "diamond": {
+      "logicalItemId": "diamond",
+      "fingerprint": {
+        "name": "diamond",
+        "displayName": "Diamond",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "diamond",
+          "displayName": "Diamond",
+          "lore": [],
+          "identityComponents": [],
+          "identityNbt": [],
+          "identityStructuralKeys": [],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "ks__menu_convert_blocks",
+        "roleId": "conversion:diamond:toBase",
+        "storedLearned": true
+      },
+      "learnedAt": "2026-08-19T10:57:11.532Z",
+      "lastSeenAt": "2026-08-25T14:20:18.372Z"
+    },
+    "gold_ingot": {
+      "logicalItemId": "gold_ingot",
+      "fingerprint": {
+        "name": "gold_ingot",
+        "displayName": "Gold Ingot",
+        "lore": [],
+        "identityComponents": [],
+        "identityNbt": [],
+        "identityStructuralKeys": [],
+        "customModelData": null
+      },
+      "fingerprints": [
+        {
+          "name": "gold_ingot",
+          "displayName": "Gold Ingot",
+          "lore": [],
+          "identityComponents": [],
+          "identityNbt": [],
+          "identityStructuralKeys": [],
+          "customModelData": null
+        }
+      ],
+      "learnedFrom": {
+        "route": "ks__menu_convert_blocks",
+        "roleId": "conversion:gold_ingot:toBase",
+        "storedLearned": true
+      },
+      "learnedAt": "2026-08-19T11:09:12.594Z",
+      "lastSeenAt": "2026-08-25T14:20:18.375Z"
+    }
+  },
+  "updatedAt": "2026-08-25T14:20:18.581Z"
+}

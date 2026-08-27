@@ -1,0 +1,114 @@
+{
+  "botId": "bot-01",
+  "connectionGeneration": 1,
+  "captureId": 2,
+  "capturedAt": 1787667622494,
+  "reason": "bot-inventory-update",
+  "views": [
+    {
+      "source": "bot-inventory",
+      "windowId": null,
+      "slotCount": 46,
+      "emptySlotCount": 31,
+      "inventoryStart": null,
+      "inventoryEnd": null,
+      "items": [
+        {
+          "slot": 36,
+          "playerSlot": 36,
+          "name": "book",
+          "type": 925,
+          "count": 1,
+          "metadata": 0,
+          "displayName": "Book",
+          "lore": [],
+          "identityComponents": [
+            "infobook"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customMetadataPresent": true,
+          "nbt": {}
+        },
+        {
+          "slot": 37,
+          "playerSlot": 37,
+          "name": "diamond",
+          "type": 805,
+          "count": 1,
+          "metadata": 0,
+          "displayName": "Diamond",
+          "lore": [],
+          "identityComponents": [
+            "donate"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customMetadataPresent": true,
+          "nbt": {}
+        },
+        {
+          "slot": 40,
+          "playerSlot": 40,
+          "name": "compass",
+          "type": 928,
+          "count": 1,
+          "metadata": 0,
+          "displayName": "Compass",
+          "lore": [],
+          "identityComponents": [
+            "games"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customMetadataPresent": true,
+          "nbt": {}
+        },
+        {
+          "slot": 43,
+          "playerSlot": 43,
+          "name": "turtle_egg",
+          "type": 587,
+          "count": 1,
+          "metadata": 0,
+          "displayName": "Turtle Egg",
+          "lore": [],
+          "identityComponents": [
+            "diemdanh"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customMetadataPresent": true,
+          "nbt": {}
+        },
+        {
+          "slot": 44,
+          "playerSlot": 44,
+          "name": "lime_dye",
+          "type": 949,
+          "count": 1,
+          "metadata": 0,
+          "displayName": "Lime Dye",
+          "lore": [],
+          "identityComponents": [
+            "PLAYER_HIDER"
+          ],
+          "identityNbt": [],
+          "identityStructuralKeys": [
+            "custom_data"
+          ],
+          "customMetadataPresent": true,
+          "nbt": {}
+        }
+      ]
+    }
+  ]
+}

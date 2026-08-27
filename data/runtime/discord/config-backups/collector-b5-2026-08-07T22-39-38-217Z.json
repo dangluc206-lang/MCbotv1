@@ -1,0 +1,17 @@
+{
+  "enabled": true,
+  "teleportHomeOnEnable": true,
+  "waitForSkyblockReady": true,
+  "skyblockReadyTimeoutMs": 30000,
+  "pickupLocation": {
+    "x": null,
+    "y": null,
+    "z": null
+  },
+  "arrivalRadius": 1.2,
+  "reanchorRadius": 2.5,
+  "moveTimeoutMs": 30000,
+  "pollIntervalMs": 15000,
+  "errorRetryMs": 5000,
+  "b5CooldownMs": 1800000
+}

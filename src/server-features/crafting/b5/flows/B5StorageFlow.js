@@ -97,7 +97,7 @@ class B5StorageFlow {
             });
         }
 
-        const prepared = await this.b1Materials.ensureBaseAvailable(baseId, required, options);
+        const prepared = await this.b1Materials.ensureBaseAvailable(baseId, required, { ...options, forceDecompress: true });
         if (prepared?.success === false) return prepared;
         if (prepared?.data?.ready === false) {
             this.#clearTransaction();
