@@ -1,7 +1,6 @@
 'use strict';
 
 const FlowError = require('../../../shared/errors/FlowError');
-const Timeout = require('../../../shared/time/Timeout');
 
 class B5ReserveChainCoordinator {
     constructor({ flows, b1Inventory, intermediate, inventoryState, inventoryCounter, progressTracker, finalCraft, config, logger = null, runStep, childOptions, quantityTrace = () => {} }) {
@@ -119,10 +118,10 @@ class B5ReserveChainCoordinator {
             details: { vaultB2Remaining: state.vaultB2Remaining, b2Count: view.b2Count, b3Remaining: state.b3Remaining, maxStacks,
                 emptySlotCount: view.inventory.emptySlotCount, minFreeForB3All: state.minFreeForB3All }
         }, () => this.flows.withdraw.withdraw(chain.b2Id, this.childOptions(context, { maxStacks })));
-        const after = this.inventoryCounter.count(this.inventoryState.snapshot(), chain.b2Id);
+        const after = await this.inventoryState.waitForIncrease(chain.b2Id, before, context.cancellation.token);
         const gained = Math.max(0, after - before);
-        if (gained > 0) state.vaultB2Remaining = Math.max(0, state.vaultB2Remaining - gained);
-        else if (withdrawn?.data?.movedStacks > 0) state.vaultB2Remaining = Math.max(0, state.vaultB2Remaining - withdrawn.data.movedStacks * 64);
+        if (gained <= 0) return false;
+        state.vaultB2Remaining = Math.max(0, state.vaultB2Remaining - gained);
         return true;
     }
 
@@ -158,9 +157,6 @@ class B5ReserveChainCoordinator {
         const actualCrafts = this.inventoryState.actualCrafts(crafted, decision.quantity);
         if (actualCrafts <= 0) this.#throwZeroB2(chain, state, decision.quantity, crafted, baseCount, craftableByBase, b2Count, context);
         state.b2Remaining = Math.max(0, state.b2Remaining - actualCrafts);
-        if (decision.quantity === 'ALL') {
-            await Timeout.delay(1500);
-       }
         return { done: true };
     }
 
