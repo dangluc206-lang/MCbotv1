@@ -1,6 +1,7 @@
 'use strict';
 
 const FlowError = require('../../../shared/errors/FlowError');
+const Timeout = require('../../../shared/time/Timeout');
 
 class B5ReserveChainCoordinator {
     constructor({ flows, b1Inventory, intermediate, inventoryState, inventoryCounter, progressTracker, finalCraft, config, logger = null, runStep, childOptions, quantityTrace = () => {} }) {
@@ -157,6 +158,9 @@ class B5ReserveChainCoordinator {
         const actualCrafts = this.inventoryState.actualCrafts(crafted, decision.quantity);
         if (actualCrafts <= 0) this.#throwZeroB2(chain, state, decision.quantity, crafted, baseCount, craftableByBase, b2Count, context);
         state.b2Remaining = Math.max(0, state.b2Remaining - actualCrafts);
+        if (decision.quantity === 'ALL') {
+            await Timeout.delay(1500);
+       }
         return { done: true };
     }
 
