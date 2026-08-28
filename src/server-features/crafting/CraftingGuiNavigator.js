@@ -106,6 +106,21 @@ class CraftingGuiNavigator {
     }
 
     async resolveRecipeSlot(session, recipeId, recipe, source) {
+        // The server's crafting GUI presents B2 and the stone B3 with the same
+        // vanilla item name. Runtime GUI knowledge cannot safely distinguish the
+        // two from that display-only fingerprint. For this known collision,
+        // the configured recipe slot is authoritative and the learned slot is
+        // not allowed to replace it.
+        if (recipeId === 'super_cobblestone_block') {
+            const configuredSlot = recipe?.menuSlot === undefined ? null : Number(recipe.menuSlot);
+            if (isContainerSlot(session.window, configuredSlot) && session.window?.slots?.[configuredSlot]) {
+                this.trace?.('CRAFT FIXED RECIPE SLOT', 'resolve-recipe-slot', {
+                    recipeId, configuredSlot, reason: 'stone-b3-fixed-slot-authority'
+                });
+                return configuredSlot;
+            }
+        }
+
         if (this.guiKnowledge) {
             return this.guiKnowledge.resolveSlot(session, {
                 source, roleId: `recipe:${recipeId}`, bootstrapSlot: recipe?.menuSlot ?? null,

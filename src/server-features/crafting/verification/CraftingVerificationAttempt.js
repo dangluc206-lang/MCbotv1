@@ -23,9 +23,21 @@ class CraftingVerificationAttempt {
         );
         const snapshotOutputDelta = Math.max(0, afterCounted.count - beforeCounted.count);
         const inputEvidence = this.evidence.inputConsumptionEvidence(before, views, inputRequirements, eventEvidence);
-        const verificationMode = this.#verificationMode(snapshotOutputDelta, expectedOutput, eventEvidence, inputEvidence);
+        const syncIdentityDelta = Math.max(0, Number(syncEvidence?.identityDelta) || 0);
+        const syncIdentityVerified = Boolean(syncEvidence?.expectedIdentity)
+            && syncIdentityDelta >= expectedOutput;
+        const verificationMode = this.#verificationMode(
+            snapshotOutputDelta,
+            expectedOutput,
+            eventEvidence,
+            inputEvidence,
+            syncIdentityVerified
+        );
         return {
-            verified: snapshotOutputDelta >= expectedOutput || Number(eventEvidence.outputDelta || 0) >= expectedOutput || inputEvidence.some(entry => entry.verified),
+            verified: snapshotOutputDelta >= expectedOutput
+                || Number(eventEvidence.outputDelta || 0) >= expectedOutput
+                || syncIdentityVerified
+                || inputEvidence.some(entry => entry.verified),
             verificationMode,
             before: beforeCounted.count,
             after: afterCounted.count,
@@ -80,9 +92,10 @@ class CraftingVerificationAttempt {
         return configured && configured !== outputId ? null : candidate;
     }
 
-    #verificationMode(snapshotOutputDelta, expectedOutput, eventEvidence, inputEvidence) {
+    #verificationMode(snapshotOutputDelta, expectedOutput, eventEvidence, inputEvidence, syncIdentityVerified) {
         if (snapshotOutputDelta >= expectedOutput) return 'output-snapshot-delta';
         if (Number(eventEvidence.outputDelta || 0) >= expectedOutput) return 'output-event-delta';
+        if (syncIdentityVerified) return 'output-identity-sync';
         if (inputEvidence.some(entry => entry.snapshotVerified)) return 'input-snapshot-consumption';
         if (inputEvidence.some(entry => entry.eventVerified)) return 'input-event-consumption';
         return 'none';

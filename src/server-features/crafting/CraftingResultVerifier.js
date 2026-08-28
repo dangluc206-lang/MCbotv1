@@ -48,11 +48,16 @@ class CraftingResultVerifier {
         expectedDelta = null,
         inputRequirements = null,
         inventorySource = before?.inventorySource || 'all',
-        connectionGeneration = before?.connectionGeneration ?? null
+        connectionGeneration = before?.connectionGeneration ?? null,
+        skipInitialSync = false
     } = {}) {
         const maxAttempts = Math.max(1, Number(attempts) || 1);
         const delayMs = Math.max(0, Number(retryMs) || 0);
-        const syncEvidence = await this.#syncBeforeAttempts(outputId, before, expectedDelta, inventorySource, connectionGeneration);
+        // Do not gate output verification on global inventory stability.
+        // The server may deliver inventory mutations in multiple packets; the
+        // output itself is the primary completion signal. Settlement is handled
+        // separately after output confirmation.
+        const syncEvidence = null;
         let last = null;
         for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
             const views = this.evidence.readViews(inventorySource);
@@ -63,6 +68,76 @@ class CraftingResultVerifier {
             if (attempt < maxAttempts && delayMs > 0) await Timeout.delay(delayMs);
         }
         return last || this.#emptyResult(before, inventorySource);
+    }
+
+    async waitForOutputCompletion({
+        outputId,
+        before,
+        expectedDelta = 1,
+        inventorySource = before?.inventorySource || 'all',
+        connectionGeneration = before?.connectionGeneration ?? null,
+        timeoutMs = 8000,
+        pollMs = 50
+    } = {}) {
+        const since = before?.verificationStartedAt || before?.capturedAt || Date.now();
+        const targetDelta = Math.max(1, Number(expectedDelta) || 1);
+        const deadline = Date.now() + Math.max(1, Number(timeoutMs) || 1);
+        let last = null;
+
+        while (Date.now() <= deadline) {
+            const views = this.evidence.readViews(inventorySource);
+            const beforeCounted = this.evidence.countViews(before?.views || [before?.snapshot], outputId);
+            const afterCounted = this.evidence.countViews(views, outputId);
+            const snapshotDelta = Math.max(0, afterCounted.count - beforeCounted.count);
+            const events = this.evidence.eventEvidence(
+                since,
+                outputId,
+                {},
+                inventorySource,
+                connectionGeneration
+            );
+            const eventDelta = Math.max(0, Number(events?.outputDelta || 0));
+            last = {
+                observed: snapshotDelta >= targetDelta || eventDelta >= targetDelta,
+                mode: snapshotDelta >= targetDelta ? 'output-snapshot-delta' : (eventDelta >= targetDelta ? 'output-event-delta' : 'none'),
+                outputId,
+                before: beforeCounted.count,
+                after: afterCounted.count,
+                snapshotDelta,
+                eventDelta,
+                eventCount: Number(events?.eventCount || 0),
+                observedAt: Date.now(),
+                views
+            };
+            if (last.observed) return last;
+            const remaining = deadline - Date.now();
+            if (remaining <= 0) break;
+            await Timeout.delay(Math.min(Math.max(0, Number(pollMs) || 0), remaining));
+        }
+
+        return { ...(last || {}), observed: false, timedOut: true, outputId };
+    }
+
+    async settleAfterCraft({
+        outputId,
+        before,
+        verification,
+        inventorySource = before?.inventorySource || 'all',
+        connectionGeneration = before?.connectionGeneration ?? null,
+        since = null
+    } = {}) {
+        if (!this.inventorySync) return null;
+
+        const settlementSince = Number(since) > 0
+            ? Number(since)
+            : (before?.verificationStartedAt || before?.capturedAt || Date.now());
+        return this.inventorySync.waitForStable({
+            since: settlementSince,
+            beforeViews: verification?.views || before?.views || [before?.snapshot].filter(Boolean),
+            reason: `craft:settlement:${outputId}`,
+            inventorySource,
+            expectedGeneration: connectionGeneration
+        });
     }
 
     #syncBeforeAttempts(outputId, before, expectedDelta, inventorySource, connectionGeneration) {
@@ -86,7 +161,6 @@ class CraftingResultVerifier {
             snapshotMmoCandidates: [], verificationMode: 'none', inventorySource, attempt: 0, syncEvidence: null
         };
     }
-
 }
 
 module.exports = CraftingResultVerifier;

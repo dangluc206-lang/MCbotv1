@@ -15,12 +15,14 @@ class CraftingVerificationCoordinator {
         startedAt, entrySlot, recipeSlot, quantitySlot
     }) {
         const minimumCrafts = quantity === 'ALL' ? 1 : quantity;
-        const verification = await this.resultVerifier.after(recipe.output, before, {
+        const expectedOutput = Number(recipe.outputAmount || 1) * minimumCrafts;
+        let verification = await this.resultVerifier.after(recipe.output, before, {
             attempts: this.config.resultVerifyAttempts,
             retryMs: this.config.resultVerifyRetryMs,
-            expectedDelta: Number(recipe.outputAmount || 1) * minimumCrafts,
+            expectedDelta: expectedOutput,
             inventorySource: 'bot-inventory',
             connectionGeneration: expectedGeneration,
+            skipInitialSync: true,
             inputRequirements: Object.fromEntries(Object.entries(recipe.inputs || {}).map(([inputId, perCraft]) => [
                 inputId,
                 {
@@ -30,12 +32,84 @@ class CraftingVerificationCoordinator {
                 }
             ]))
         });
+
+        let outputCompletion = null;
         if (!verification.verified) {
-            throw this.#uncertain({
-                recipeId, recipe, quantity, before, baseDetails, effectiveInputSource,
-                reconciliationBaseline, verification, bot
+            outputCompletion = await this.resultVerifier.waitForOutputCompletion?.({
+                outputId: recipe.output,
+                before,
+                expectedDelta: Math.max(1, Number(recipe.outputAmount || 1)),
+                inventorySource: 'bot-inventory',
+                connectionGeneration: expectedGeneration,
+                timeoutMs: this.config.outputCompletionTimeoutMs,
+                pollMs: this.config.outputCompletionPollMs
+            });
+
+            if (!outputCompletion?.observed) {
+                throw this.#uncertain({
+                    recipeId, recipe, quantity, before, baseDetails, effectiveInputSource,
+                    reconciliationBaseline, verification, bot
+                });
+            }
+
+            // Re-read once after the output was observed so downstream craft
+            // accounting uses the freshest logical count available.
+            const refreshed = await this.resultVerifier.after(recipe.output, before, {
+                attempts: 1,
+                retryMs: 0,
+                expectedDelta: expectedOutput,
+                inventorySource: 'bot-inventory',
+                connectionGeneration: expectedGeneration,
+                skipInitialSync: true,
+                inputRequirements: Object.fromEntries(Object.entries(recipe.inputs || {}).map(([inputId, perCraft]) => [
+                    inputId,
+                    {
+                        amount: Number(perCraft || 0) * minimumCrafts,
+                        perCraft: Number(perCraft || 0),
+                        source: effectiveInputSource(inputId)
+                    }
+                ]))
+            });
+
+            verification = refreshed.verified ? refreshed : {
+                ...verification,
+                verified: true,
+                before: Number(before?.count || 0),
+                after: Number(before?.count || 0) + Math.max(0, Number(outputCompletion.snapshotDelta || outputCompletion.eventDelta || 0)),
+                delta: Math.max(0, Number(outputCompletion.snapshotDelta || outputCompletion.eventDelta || 0)),
+                verificationMode: outputCompletion.mode || 'output-completion',
+                views: outputCompletion.views || verification.views,
+                countsBySource: refreshed.countsBySource || verification.countsBySource,
+                beforeCountsBySource: refreshed.beforeCountsBySource || verification.beforeCountsBySource,
+                eventEvidence: refreshed.eventEvidence || verification.eventEvidence,
+                inputEvidence: refreshed.inputEvidence || verification.inputEvidence
+            };
+        }
+
+        const settlement = await this.resultVerifier.settleAfterCraft?.({
+            outputId: recipe.output,
+            before,
+            verification: { ...verification, outputCompletion },
+            inventorySource: 'bot-inventory',
+            connectionGeneration: expectedGeneration,
+            since: outputCompletion?.observedAt || null
+        });
+
+        // A settlement timeout means the server is still streaming unrelated
+        // inventory updates. It must not undo a craft whose output was already
+        // proven. Keep the timeout as diagnostic state for the caller.
+        if (settlement?.timedOut) {
+            this.trace('CRAFT SETTLEMENT PENDING', 'verify-output', {
+                recipeId, resource: recipe.output, quantity, phase: 'INFO',
+                settlementElapsedMs: settlement.elapsedMs ?? null,
+                eventCount: settlement.eventCount ?? 0,
+                stablePasses: settlement.stablePasses ?? 0,
+                quietForMs: settlement.quietForMs ?? 0,
+                expectedGeneration,
+                inventorySource: 'bot-inventory'
             });
         }
+
         const actualCrafts = this.support.deriveActualCrafts(recipe, quantity, verification);
         this.trace('CRAFT OK', 'verify-output', {
             recipeId, resource: recipe.output, quantity, phase: 'OK',
@@ -43,6 +117,8 @@ class CraftingVerificationCoordinator {
             actualCrafts,
             producedAmount: actualCrafts * Number(recipe.outputAmount || 1),
             verificationMode: verification.verificationMode || null,
+            settlementMode: settlement ? (settlement.timedOut ? 'post-craft-timeout' : 'post-craft-stable') : 'not-required',
+            settlementElapsedMs: settlement?.elapsedMs ?? 0,
             elapsedMs: Date.now() - startedAt
         });
         return {
@@ -54,7 +130,8 @@ class CraftingVerificationCoordinator {
             entrySlot,
             recipeSlot,
             quantitySlot,
-            verification
+            verification,
+            settlement
         };
     }
 

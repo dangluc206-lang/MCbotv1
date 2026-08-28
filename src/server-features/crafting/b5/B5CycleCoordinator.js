@@ -147,7 +147,7 @@ class B5CycleCoordinator {
         if (plannedB2 <= 0) {
             state.actions.push({ baseId: chain.baseId, status: 'waiting', reason: useAllForB2 ? 'waiting-for-any-b2-input' : 'waiting-for-complete-b2-batch',
                 plannedB2Exact, b2BatchSize, basePerB2, storedEffective: storageKnown ? totalEffective : null, availableB2Crafts: totalB2Crafts });
-            return { outcome: 'break' };
+            return { outcome: 'continue' };
         }
         const reserveChain = { ...chain, b2Crafts: plannedB2, rawNeededFromStorage: requiredRawForStart,
             partialReservePass: useAllForB2 || plannedB2 < plannedB2Exact, useAllForB2 };
