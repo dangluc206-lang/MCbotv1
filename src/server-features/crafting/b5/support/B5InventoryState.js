@@ -23,6 +23,23 @@ class B5InventoryState {
         return best;
     }
 
+    countFromSource(logicalId, source = 'bot-inventory') {
+        const target = String(source || '').trim();
+        const views = typeof this.inventoryReader.readViews === 'function'
+            ? this.inventoryReader.readViews()
+            : (typeof this.inventoryReader.readBotInventory === 'function'
+                ? [{ source: 'bot-inventory', ...this.inventoryReader.readBotInventory() }]
+                : [this.inventoryReader.read()]);
+        let total = 0;
+        let found = false;
+        for (const view of views || []) {
+            if (!view || (target && String(view.source || '').trim() !== target)) continue;
+            found = true;
+            total = Math.max(total, Number(this.inventoryCounter.count(view, logicalId) || 0));
+        }
+        return found ? total : 0;
+    }
+
     snapshot() {
         if (typeof this.inventoryReader.readBotInventory === 'function') return this.inventoryReader.readBotInventory();
         const views = typeof this.inventoryReader.readViews === 'function'
@@ -69,6 +86,66 @@ class B5InventoryState {
             if (best > beforeCount) break;
         }
         return best;
+    }
+
+    async waitForSettledCount(logicalId, minimumCount, cancellationToken, options = {}) {
+        const timeoutMs = Math.max(100, Number(options.timeoutMs ?? this.config?.stageSettlementTimeoutMs ?? this.config?.b2B3SettlementBarrierTimeoutMs ?? 1800));
+        const pollMs = Math.max(10, Number(options.pollMs ?? this.config?.stageSettlementPollMs ?? this.config?.b2B3SettlementBarrierPollMs ?? 50));
+        const quietMs = Math.max(0, Number(options.quietMs ?? this.config?.stageSettlementQuietMs ?? this.config?.b2B3SettlementBarrierQuietMs ?? 100));
+        const requiredStablePasses = Math.max(1, Number(options.stablePasses ?? this.config?.stageSettlementStablePasses ?? this.config?.b2B3SettlementBarrierStablePasses ?? 2));
+        const target = Math.max(0, Number(minimumCount) || 0);
+        const startedAt = Date.now();
+        const deadline = startedAt + timeoutMs;
+
+        const readCount = typeof options.source === 'string' && typeof this.countFromSource === 'function'
+            ? () => this.countFromSource(logicalId, options.source)
+            : () => this.count(logicalId);
+        let current = readCount();
+        let lastObserved = current;
+        let stablePasses = 1;
+        let lastChangeAt = startedAt;
+
+        while (Date.now() <= deadline) {
+            cancellationToken?.throwIfCancelled?.();
+            current = readCount();
+
+            if (current !== lastObserved) {
+                lastObserved = current;
+                stablePasses = 1;
+                lastChangeAt = Date.now();
+            } else {
+                stablePasses += 1;
+            }
+
+            const quietForMs = Math.max(0, Date.now() - lastChangeAt);
+            if (current >= target && stablePasses >= requiredStablePasses && quietForMs >= quietMs) {
+                return {
+                    settled: true,
+                    timedOut: false,
+                    logicalId,
+                    minimumCount: target,
+                    count: current,
+                    stablePasses,
+                    quietForMs,
+                    elapsedMs: Date.now() - startedAt
+                };
+            }
+
+            const remaining = deadline - Date.now();
+            if (remaining <= 0) break;
+            await Timeout.delay(Math.min(pollMs, remaining), { cancellationToken });
+        }
+
+        return {
+            settled: false,
+            timedOut: true,
+            logicalId,
+            minimumCount: target,
+            count: current,
+            stablePasses,
+            quietForMs: Math.max(0, Date.now() - lastChangeAt),
+            elapsedMs: Date.now() - startedAt
+        };
     }
 
     async waitForAtMost(logicalId, maximum, cancellationToken) {

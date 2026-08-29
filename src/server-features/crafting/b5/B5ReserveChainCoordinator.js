@@ -7,10 +7,7 @@ class B5ReserveChainCoordinator {
         Object.assign(this, { flows, b1Inventory, intermediate, inventoryState, inventoryCounter, progressTracker, finalCraft, config, logger, runStep, childOptions, quantityTrace });
     }
 
-    reconfigure(config = {}) {
-        this.config = config || {};
-        return this;
-    }
+    reconfigure(config = {}) { this.config = config || {}; return this; }
 
     async prepare(chain, context, { deferIntermediateDeposit = false, allChains = [] } = {}) {
         const state = this.#initialState(chain, deferIntermediateDeposit, allChains);
@@ -63,9 +60,7 @@ class B5ReserveChainCoordinator {
         const b2Count = this.inventoryCounter.count(inventory, chain.b2Id);
         const b3CraftableNow = Math.floor(b2Count / Math.max(1, chain.b3InputPerCraft));
         return {
-            inventory,
-            b2Count,
-            b3CraftableNow,
+            inventory, b2Count, b3CraftableNow,
             enoughB2ForRemainingB3: state.b3Remaining > 0 && b3CraftableNow >= state.b3Remaining,
             atB3SafetyFloor: Number(inventory.emptySlotCount || 0) <= state.accumulationSafetyFloor,
             noMoreB2SupplyPlanned: state.b2Remaining <= 0 && state.vaultB2Remaining <= 0
@@ -73,8 +68,7 @@ class B5ReserveChainCoordinator {
     }
 
     async #tryCraftB3(chain, state, view, context) {
-        if (!(state.b3Remaining > 0 && view.b3CraftableNow > 0
-            && (view.enoughB2ForRemainingB3 || view.atB3SafetyFloor || view.noMoreB2SupplyPlanned))) return { done: false };
+        if (!(state.b3Remaining > 0 && view.b3CraftableNow > 0 && (view.enoughB2ForRemainingB3 || view.atB3SafetyFloor || view.noMoreB2SupplyPlanned))) return { done: false };
         let inventory = view.inventory;
         let b2Count = view.b2Count;
         if (Number(inventory.emptySlotCount || 0) < state.minFreeForB3All) {
@@ -98,7 +92,7 @@ class B5ReserveChainCoordinator {
             minFreeForB3All: state.minFreeForB3All
         });
         this.progressTracker.set({ running: true, state: 'CRAFTING_B3', currentStep: { kind: 'B3', id: chain.b3Id, crafts: state.b3Remaining } });
-        const crafted = await this.finalCraft.craft(chain.b3RecipeId, quantity, context, chain.b3Id);
+        const crafted = await this.finalCraft.craft(chain.b3RecipeId, quantity, context, chain.b3Id, { stage: 'B3', nextStage: 'B4' });
         const actualCrafts = this.inventoryState.actualCrafts(crafted, quantity);
         if (actualCrafts <= 0) this.#throwZeroB3(chain, state, quantity, crafted, b2Count, context);
         state.b3Remaining = Math.max(0, state.b3Remaining - actualCrafts);
@@ -151,6 +145,8 @@ class B5ReserveChainCoordinator {
             resource: chain.baseId, b2Id: chain.b2Id, sourceMode: inputSource === 'inventory' ? 'INVENTORY_WITHDRAW' : 'STORAGE',
             quantity: decision.quantity, baseCount, emptySlotCount: inventory.emptySlotCount });
         const crafted = await this.finalCraft.craft(chain.b2RecipeId, decision.quantity, context, chain.b2Id, {
+            stage: 'B2',
+            nextStage: 'B3',
             inputSourceOverrides: { [chain.baseId]: inputSource },
             reconciliationBaseline: { inputs: { [chain.baseId]: { source: inputSource, count: baseCount } } }
         });
