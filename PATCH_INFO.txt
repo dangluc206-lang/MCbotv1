@@ -1,0 +1,32 @@
+MCbotv1 B1->B5 stage-contract fix
+Base: main @ 8b17da20dc42429c14d83cede3428795588e5c4c
+
+Purpose:
+- Prevent a successful B2/B3/B4/B5 craft from being blocked by a stage settlement gate that runs after every individual craft.
+- Enforce SETTLED/HANDOFF_READY only at real stage boundaries.
+- Keep repeated same-stage crafts free to continue while output counts are still changing.
+- Scope stage settlement to bot-inventory relevant output identity.
+
+Modified source:
+- src/server-features/crafting/b5/B5FinalCraftCoordinator.js
+- src/server-features/crafting/b5/B5ReserveChainCoordinator.js
+
+Added QA tests:
+- tests/unit/overlay/B5StageHandoffBoundary.test.js
+- tests/unit/overlay/B5StageHandoffFaultInjection.test.js
+
+Behavior:
+- craft() => OUTPUT_VERIFIED only; no stage settlement/handoff per individual craft.
+- B2 reserve chain => settle B2 once immediately before the first B3 transition that depends on newly produced B2.
+- B3 reserve chain => settle B3 once when the B3 reserve is complete, before handing to B4.
+- B4/B5 final chain => settle once after the complete step, before the next stage/final completion.
+- Stage evidence is cleared after handoff to avoid stale reuse.
+
+QA:
+- QA round 1: 3/3 PASS on core boundary tests.
+- QA round 2: 7/7 PASS including fault injection and repeated B2 regression.
+- Final optimized rerun: 7/7 PASS.
+- Syntax/static invariants: PASS.
+- Live Minecraft server E2E: not executed in this environment.
+
+Git was not modified by this task.

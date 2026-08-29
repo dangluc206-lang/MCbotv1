@@ -28,6 +28,11 @@ class B5ReserveChainCoordinator {
             if (chain.partialReservePass === true && state.b2Remaining <= 0 && state.vaultB2Remaining <= 0) break;
             this.#throwStalled(chain, state, view, context);
         }
+        if (state.pendingStageSettlement) {
+            const pendingStage = state.pendingStageSettlement.stage;
+            const to = pendingStage === 'B2' ? 'B3' : 'B4';
+            await this.#settlePendingStage(state, chain, context, to);
+        }
         await this.#depositIfRequired(chain, context, deferIntermediateDeposit);
         return { b2Id: chain.b2Id, b3Id: chain.b3Id, deferred: deferIntermediateDeposit };
     }
@@ -42,7 +47,8 @@ class B5ReserveChainCoordinator {
             vaultB2Remaining: Number(chain.vaultB2 || 0),
             deferIntermediateDeposit,
             allChains,
-            guard: 0
+            guard: 0,
+            pendingStageSettlement: null
         };
     }
 
@@ -69,6 +75,9 @@ class B5ReserveChainCoordinator {
 
     async #tryCraftB3(chain, state, view, context) {
         if (!(state.b3Remaining > 0 && view.b3CraftableNow > 0 && (view.enoughB2ForRemainingB3 || view.atB3SafetyFloor || view.noMoreB2SupplyPlanned))) return { done: false };
+        if (state.pendingStageSettlement?.stage === 'B2') {
+            await this.#settlePendingStage(state, chain, context, 'B3');
+        }
         let inventory = view.inventory;
         let b2Count = view.b2Count;
         if (Number(inventory.emptySlotCount || 0) < state.minFreeForB3All) {
@@ -96,8 +105,37 @@ class B5ReserveChainCoordinator {
         const actualCrafts = this.inventoryState.actualCrafts(crafted, quantity);
         if (actualCrafts <= 0) this.#throwZeroB3(chain, state, quantity, crafted, b2Count, context);
         state.b3Remaining = Math.max(0, state.b3Remaining - actualCrafts);
-        if (state.b3Remaining === 0) state.b2Remaining = 0;
+        if (state.b3Remaining === 0) {
+            state.b2Remaining = 0;
+            const minimumCount = Number.isFinite(Number(crafted?.stageContract?.after))
+                ? Number(crafted.stageContract.after)
+                : b3Count + actualCrafts * Math.max(1, Number(chain.b3OutputAmount || 1));
+            const settlement = await this.finalCraft.settleStage({
+                stage: 'B3', logicalId: chain.b3Id, minimumCount, context
+            });
+            this.logger?.info?.('B5 STAGE HANDOFF READY', {
+                from: 'B3', to: 'B4', generation: context.connectionGeneration, logicalId: chain.b3Id,
+                settledCount: settlement.count, elapsedMs: settlement.elapsedMs
+            });
+        }
         return { done: true };
+    }
+
+    async #settlePendingStage(state, chain, context, toStage, options = {}) {
+        const pending = state.pendingStageSettlement;
+        if (!pending) return null;
+        const stage = String(options.forceStage || pending.stage);
+        const logicalId = pending.logicalId;
+        const minimumCount = Number.isFinite(Number(options.minimumCount))
+            ? Number(options.minimumCount)
+            : Number(pending.minimumCount || 0);
+        const settlement = await this.finalCraft.settleStage({ stage, logicalId, minimumCount, context });
+        this.logger?.info?.('B5 STAGE HANDOFF READY', {
+            from: stage, to: toStage, generation: context.connectionGeneration, logicalId,
+            settledCount: settlement.count, elapsedMs: settlement.elapsedMs
+        });
+        state.pendingStageSettlement = null;
+        return settlement;
     }
 
     async #tryWithdrawOwnedB2(chain, state, view, context) {
@@ -153,6 +191,13 @@ class B5ReserveChainCoordinator {
         const actualCrafts = this.inventoryState.actualCrafts(crafted, decision.quantity);
         if (actualCrafts <= 0) this.#throwZeroB2(chain, state, decision.quantity, crafted, baseCount, craftableByBase, b2Count, context);
         state.b2Remaining = Math.max(0, state.b2Remaining - actualCrafts);
+        state.pendingStageSettlement = {
+            stage: 'B2', logicalId: chain.b2Id,
+            minimumCount: Number.isFinite(Number(crafted?.stageContract?.after))
+                ? Number(crafted.stageContract.after)
+                : Math.max(0, b2Count + actualCrafts * Math.max(1, Number(chain.b2OutputAmount || 1))),
+            expectedDelta: actualCrafts * Math.max(1, Number(chain.b2OutputAmount || 1))
+        };
         return { done: true };
     }
 

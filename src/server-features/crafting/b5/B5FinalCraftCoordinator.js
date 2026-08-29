@@ -22,7 +22,6 @@ class B5FinalCraftCoordinator {
             const outputId = step.outputId || recipe.output;
             const plannedCrafts = Number(step.crafts || 0);
             const stage = outputId === targetId ? 'B5' : 'B4';
-            const nextStage = outputId === targetId ? 'COMPLETE' : (index < steps.length - 1 ? 'B5' : 'NEXT');
             this.progressTracker.set({
                 running: true,
                 state: stage === 'B5' ? 'CRAFTING_B5' : 'CRAFTING_B4',
@@ -38,7 +37,7 @@ class B5FinalCraftCoordinator {
                     step: 'craft-final-chain', resource: outputId, recipeId: step.recipeId,
                     quantity: decision.quantity, reason: decision.reason, remaining, maxCraftable
                 });
-                const crafted = await this.craft(step.recipeId, decision.quantity, context, outputId, { stage, nextStage });
+                const crafted = await this.craft(step.recipeId, decision.quantity, context, outputId, { stage });
                 const actualCrafts = this.inventoryState.actualCrafts(crafted, decision.quantity);
                 if (actualCrafts <= 0) {
                     throw new FlowError(`Craft ${outputId} reported no completed crafts.`, {
@@ -49,8 +48,50 @@ class B5FinalCraftCoordinator {
                 }
                 remaining = Math.max(0, remaining - actualCrafts);
             }
+            const lastVerification = this.#lastStageVerification(step, recipe, outputId, context);
+            if (lastVerification) {
+                await this.settleStage({
+                    stage,
+                    logicalId: outputId,
+                    minimumCount: lastVerification.after,
+                    context
+                });
+                const nextStageForHandoff = outputId === targetId
+                    ? 'COMPLETE'
+                    : (steps[index + 1]?.outputId === targetId ? 'B5' : 'B4');
+                if (nextStageForHandoff !== 'B4' || stage !== 'B4') {
+                    this.stageContract.handoff({
+                        from: stage,
+                        to: nextStageForHandoff,
+                        generation: context.connectionGeneration,
+                        context
+                    });
+                }
+                if (context?.stageVerification?.logicalId === outputId) delete context.stageVerification;
+            }
             this.progressTracker.advance(1, plannedCrafts);
         }
+    }
+
+    #lastStageVerification(step, recipe, outputId, context) {
+        const latest = context?.stageVerification;
+        if (latest?.logicalId === outputId && Number.isFinite(Number(latest.after))) return latest;
+        if (typeof this.inventoryState.countFromSource !== 'function') return null;
+        const current = this.inventoryState.countFromSource(outputId, 'bot-inventory');
+        if (!Number.isFinite(Number(current))) return null;
+        return { stage: outputId === (this.config?.targetId || 'super_alloy') ? 'B5' : 'B4', logicalId: outputId, after: Number(current), source: 'fresh-before-stage-settlement' };
+    }
+
+    async settleStage({ stage, logicalId, minimumCount, context }) {
+        const settlement = await this.inventoryState.waitForSettledCount(logicalId, minimumCount, context.cancellation.token, {
+            timeoutMs: this.config?.stageSettlementTimeoutMs,
+            pollMs: this.config?.stageSettlementPollMs,
+            quietMs: this.config?.stageSettlementQuietMs,
+            stablePasses: this.config?.stageSettlementStablePasses,
+            source: 'bot-inventory'
+        });
+        this.stageContract.requireSettled({ stage, logicalId, settlement, context });
+        return settlement;
     }
 
     async ensureInputs(inputs, craftAmount, context, recipeId) {
@@ -95,32 +136,22 @@ class B5FinalCraftCoordinator {
                 details: { recipeId, amount, stage, data }, trace: context.trace
             });
         }
-        // The crafting service may already have delivered the output by the time
-        // control returns. Capture a fresh before/after delta through settlement.
-        // If the current count is already at the expected threshold, settling it
-        // is still safe because the before count is taken immediately before the
-        // craft operation in normal B5 flow. For callers that supply an earlier
-        // baseline, the verification object is the authoritative count.
         const verificationBefore = Number(data?.verification?.before);
         const verificationAfter = Number(data?.verification?.after);
         const expectedDelta = actualCrafts * Math.max(1, Number(recipe.outputAmount || 1));
         const baseline = Number.isFinite(verificationBefore) ? verificationBefore : beforeOutput;
-        const minimumCount = Number.isFinite(verificationAfter) && verificationAfter >= baseline
-            ? Math.max(baseline + expectedDelta, verificationAfter)
-            : baseline + expectedDelta;
-        const settlement = await this.inventoryState.waitForSettledCount(outputId || recipe.output, minimumCount, context.cancellation.token, {
-            timeoutMs: this.config?.stageSettlementTimeoutMs,
-            pollMs: this.config?.stageSettlementPollMs,
-            quietMs: this.config?.stageSettlementQuietMs,
-            stablePasses: this.config?.stageSettlementStablePasses,
-            source: 'bot-inventory'
+        const observedAfter = Number.isFinite(verificationAfter) ? verificationAfter : this.inventoryState.countFromSource?.(outputId || recipe.output, 'bot-inventory');
+        this.stageContract.verifyOutput({
+            stage, logicalId: outputId || recipe.output, before: baseline,
+            after: observedAfter, expectedDelta, context
         });
-        this.stageContract.verifyOutput({ stage, logicalId: outputId || recipe.output, before: baseline, after: settlement.count, expectedDelta, context });
-        this.stageContract.requireSettled({ stage, logicalId: outputId || recipe.output, settlement, context });
-        if (options.nextStage && options.nextStage !== 'NEXT') {
-            this.stageContract.handoff({ from: stage, to: options.nextStage, generation: options.expectedGeneration ?? context.connectionGeneration, context });
+        if (context) {
+            context.stageVerification = {
+                stage, logicalId: outputId || recipe.output,
+                before: baseline, after: observedAfter, expectedDelta
+            };
         }
-        return { ...data, stageContract: { stage, expectedDelta, settled: true, settlement }, actualCrafts };
+        return { ...data, stageContract: { stage, logicalId: outputId || recipe.output, before: baseline, after: observedAfter, expectedDelta, settled: false }, actualCrafts };
     }
 
     #quantity(step, recipe, remaining, maxCraftable, targetId) {
