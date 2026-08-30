@@ -1,12 +1,7 @@
 {
   "schemaVersion": 3,
   "officialDocuments": [
-    "README.md",
-    "AGENTS.md",
-    "ARCHITECTURE.md",
-    "SERVER_BEHAVIOR.md",
-    "RULES.md",
-    "JS_RESPONSIBILITIES.md"
+    
   ],
   "governedDocumentRoots": [
     "docs/architecture-roadmap"
