@@ -1,11 +1,23 @@
 'use strict';
 
 const { contextBridge, ipcRenderer } = require('electron');
+const SnapshotRevisionGate = require('./SnapshotRevisionGate');
 
-const invoke = (channel, ...args) => ipcRenderer.invoke(channel, ...args);
+const snapshotGate = new SnapshotRevisionGate();
+
+const invoke = (channel, ...args) => ipcRenderer.invoke(channel, ...args).then(result => {
+    if (channel !== 'mcbot:snapshot' || !result?.success) return result;
+    const snapshot = result.data;
+    if (snapshotGate.accept(snapshot)) return result;
+    return { ...result, data: snapshotGate.lastSnapshot };
+});
+
 function subscribe(channel, listener) {
     if (typeof listener !== 'function') return () => {};
-    const handler = (_event, payload) => listener(payload);
+    const handler = (_event, payload) => {
+        if (channel === 'mcbot:snapshot' && !snapshotGate.accept(payload)) return;
+        listener(payload);
+    };
     ipcRenderer.on(channel, handler);
     return () => ipcRenderer.removeListener(channel, handler);
 }
