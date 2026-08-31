@@ -25,13 +25,14 @@ test('SnapshotRevisionGate treats duplicate revisions as idempotent', () => {
     assert.equal(gate.accept({ ...snapshot }), false);
 });
 
-test('SnapshotRevisionGate has a compatibility path only before revisions exist', () => {
+test('SnapshotRevisionGate allows legacy snapshots until revisioned delivery begins', () => {
     const gate = new SnapshotRevisionGate();
     const legacy = { lifecycle: 'RUNNING' };
-    const secondLegacy = { lifecycle: 'STOPPING' };
 
     assert.equal(gate.accept(legacy), true);
-    assert.equal(gate.accept(secondLegacy), false);
+    assert.equal(gate.accept({ lifecycle: 'STOPPING' }), true);
+    assert.equal(gate.accept({ stateRevision: 1, lifecycle: 'RUNNING' }), true);
+    assert.equal(gate.accept({ lifecycle: 'STOPPING' }), false);
 });
 
 test('SnapshotRevisionGate coalesces stale pulls to the freshest accepted snapshot', () => {
