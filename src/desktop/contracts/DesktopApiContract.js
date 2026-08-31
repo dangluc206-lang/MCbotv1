@@ -1,5 +1,7 @@
 'use strict';
 
+const DesktopIpcPolicy = require('./DesktopIpcPolicy');
+
 const CONTRACT = 'desktop-api-v1';
 const MAX_REQUEST_BYTES = 256 * 1024;
 const MAX_DEPTH = 10;
@@ -61,9 +63,20 @@ function coded(code, message) {
     return Object.assign(new Error(message), { code });
 }
 
+function assertChannelDefinition(channel, definition) {
+    return DesktopIpcPolicy.assertChannelDefinition(channel, definition);
+}
+
+function assertCatalogIntegrity() {
+    const result = DesktopIpcPolicy.assertCatalogIntegrity(CATALOG);
+    if (result.channelCount !== Object.keys(CATALOG).length) throw coded('DESKTOP_IPC_CATALOG_COUNT', 'Desktop IPC catalog count changed during validation.');
+    return result;
+}
+
 function validateRequest(channel, args = []) {
     const definition = CATALOG[channel];
     if (!definition) throw coded('DESKTOP_IPC_UNKNOWN_CHANNEL', `IPC channel is not declared: ${channel}`);
+    assertChannelDefinition(channel, definition);
     if (!Array.isArray(args) || args.length > 4) throw coded('DESKTOP_IPC_ARGUMENT_COUNT', 'IPC request has too many arguments.');
     inspectValue(args, 0, { keys: 0 }, new WeakSet());
     let bytes;
@@ -81,4 +94,6 @@ function failure(error) {
     return Object.freeze({ contract: CONTRACT, success: false, error: Object.freeze({ name: error?.name || 'Error', code: error?.code || null, message: String(error?.message || error || 'Unknown Desktop error').slice(0, 2000) }) });
 }
 
-module.exports = Object.freeze({ CONTRACT, GROUPS, CATALOG, MAX_REQUEST_BYTES, MAX_DEPTH, MAX_KEYS, validateRequest, success, failure });
+assertCatalogIntegrity();
+
+module.exports = Object.freeze({ CONTRACT, GROUPS, CATALOG, MAX_REQUEST_BYTES, MAX_DEPTH, MAX_KEYS, validateRequest, success, failure, PERMISSIONS: DesktopIpcPolicy.PERMISSIONS, assertChannelDefinition, assertCatalogIntegrity });
