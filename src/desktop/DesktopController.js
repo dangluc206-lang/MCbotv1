@@ -17,6 +17,7 @@ class DesktopController extends DesktopControllerBase {
         super(options);
         this.stopPromise = null;
         this.stopFailureTransaction = null;
+        this.snapshotRevision = 0;
     }
 
     async start() {
@@ -136,6 +137,12 @@ class DesktopController extends DesktopControllerBase {
         this.stopFailureTransaction = null;
         // The base implementation owns the canonical stopped log. A destroy
         // retry is exceptional; do not synthesize another event here.
+    }
+
+    snapshot() {
+        const snapshot = super.snapshot();
+        this.snapshotRevision += 1;
+        return Object.freeze({ ...snapshot, stateRevision: this.snapshotRevision });
     }
 }
 
