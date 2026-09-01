@@ -1,8 +1,8 @@
 'use strict';
 
 const B5KhoReadFlow = require('./B5KhoReadFlow');
-const B5Pv2ReadFlow = require('./B5Pv2ReadFlow');
-const B5InventoryReadFlow = require('./B5InventoryReadFlow');
+const PersonalVaultReadFlow = require('../../../personal-vault/PersonalVaultReadFlow');
+const InventoryReadFlow = require('../../../inventory/InventoryReadFlow');
 
 class B5ReadFlow {
     constructor({
@@ -23,8 +23,8 @@ class B5ReadFlow {
         // constructing every reader made unrelated unit/runtime compositions fail
         // even when that capability was never called.
         this.kho = kho || (storage?.read ? new B5KhoReadFlow({ storage }) : null);
-        this.pv2 = pv2 || (personalVault?.read ? new B5Pv2ReadFlow({ personalVault }) : null);
-        this.inventory = inventory || (inventoryReader?.read ? new B5InventoryReadFlow({ inventoryReader }) : null);
+        this.pv2 = pv2 || (personalVault?.read ? new PersonalVaultReadFlow({ personalVault }) : null);
+        this.inventory = inventory || (inventoryReader?.read ? new InventoryReadFlow({ inventoryReader }) : null);
     }
 
     readKho(options = {}) {

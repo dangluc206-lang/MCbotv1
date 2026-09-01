@@ -5,7 +5,6 @@ const FlowError = require('../../shared/errors/FlowError');
 const B5ReadFlow = require('./b5/flows/B5ReadFlow');
 const B5PlanningFlow = require('./b5/flows/B5PlanningFlow');
 const B5StorageFlow = require('./b5/flows/B5StorageFlow');
-const B5DepositFlow = require('./b5/flows/B5DepositFlow');
 const B5WithdrawFlow = require('./b5/flows/B5WithdrawFlow');
 const B5CraftFlow = require('./b5/flows/B5CraftFlow');
 const B2InputAcquisitionFlow = require('./b5/flows/B2InputAcquisitionFlow');
@@ -17,6 +16,7 @@ const B5FinalCraftCoordinator = require('./b5/B5FinalCraftCoordinator');
 const B5IntermediateCoordinator = require('./b5/B5IntermediateCoordinator');
 const B5ReserveChainCoordinator = require('./b5/B5ReserveChainCoordinator');
 const B5CycleCoordinator = require('./b5/B5CycleCoordinator');
+const PersonalVaultStorageFlow = require('../personal-vault/PersonalVaultStorageFlow');
 
 class B5AutomationService {
     constructor({
@@ -33,7 +33,8 @@ class B5AutomationService {
         traceRecorder = null,
         config,
         logger = null,
-        flows = {}
+        flows = {},
+        inventoryState
     }) {
         Object.assign(this, {
             planningService,
@@ -61,7 +62,7 @@ class B5AutomationService {
                 storage,
                 source: config?.b2InputSource === 'inventory' ? 'inventory' : 'storage'
             }),
-            deposit: flows.deposit || new B5DepositFlow({ personalVault }),
+            deposit: flows.deposit || new PersonalVaultStorageFlow({ personalVault, config: { verify: true } }),
             withdraw: flows.withdraw || new B5WithdrawFlow({ personalVault }),
             craft: flows.craft || new B5CraftFlow({ crafting })
         });
@@ -74,7 +75,8 @@ class B5AutomationService {
             config,
             runStep: (...args) => this.#runStep(...args),
             childOptions: (...args) => this.#childOptions(...args),
-            quantityTrace: (...args) => this.#quantityTrace(...args)
+            quantityTrace: (...args) => this.#quantityTrace(...args),
+            verificationService: craftingVerificationService
         });
         this.intermediate = new B5IntermediateCoordinator({
             flows: this.flows,
@@ -96,7 +98,8 @@ class B5AutomationService {
             logger,
             runStep: (...args) => this.#runStep(...args),
             childOptions: (...args) => this.#childOptions(...args),
-            ensureFreeIntermediateSlots: (...args) => this.intermediate.ensureFreeIntermediateSlots(...args)
+            ensureFreeIntermediateSlots: (...args) => this.intermediate.ensureFreeIntermediateSlots(...args),
+            verificationService: craftingVerificationService
         });
         this.reserveChain = new B5ReserveChainCoordinator({
             flows: this.flows,

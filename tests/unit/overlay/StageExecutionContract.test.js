@@ -2,10 +2,10 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const B5StageContract = require('../../../src/server-features/crafting/b5/support/B5StageContract');
+const StageExecutionContract = require('../../../src/server-features/crafting/verification/StageExecutionContract');
 
 test('stage contract accepts only verified input/output and settled handoff', () => {
-    const c = new B5StageContract();
+    const c = new StageExecutionContract();
     assert.doesNotThrow(() => c.requireInputReady({ stage: 'B1', logicalId: 'iron', available: 16, required: 16 }));
     assert.throws(() => c.requireInputReady({ stage: 'B1', logicalId: 'iron', available: 8, required: 16 }), /input is not ready/);
     assert.doesNotThrow(() => c.verifyOutput({ stage: 'B2', logicalId: 'refined_iron', before: 0, after: 64, expectedDelta: 64 }));
@@ -15,14 +15,14 @@ test('stage contract accepts only verified input/output and settled handoff', ()
 });
 
 test('stage handoff rejects generation mismatch', () => {
-    const c = new B5StageContract();
+    const c = new StageExecutionContract();
     assert.doesNotThrow(() => c.handoff({ from: 'B2', to: 'B3', generation: 7, context: { connectionGeneration: 7 } }));
     assert.throws(() => c.handoff({ from: 'B2', to: 'B3', generation: 7, context: { connectionGeneration: 8 } }), /across connection generations/);
 });
 
 
 test('complete B1 -> B5 handoff sequence enforces every boundary', () => {
-    const c = new B5StageContract();
+    const c = new StageExecutionContract();
     const generation = 11;
     c.requireInputReady({ stage: 'B1', logicalId: 'raw', available: 512, required: 512, context: { connectionGeneration: generation } });
     c.handoff({ from: 'B1', to: 'B2', generation, context: { connectionGeneration: generation } });

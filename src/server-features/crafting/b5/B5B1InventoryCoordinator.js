@@ -1,12 +1,12 @@
 'use strict';
 
 const FlowError = require('../../../shared/errors/FlowError');
-const B5StageContract = require('./support/B5StageContract');
+const StageExecutionContract = require('../verification/StageExecutionContract');
 
 class B5B1InventoryCoordinator {
-    constructor({ storageFlow, b2Input, inventoryState, recipeRegistry, config, logger = null, runStep, childOptions, ensureFreeIntermediateSlots }) {
-        Object.assign(this, { storageFlow, b2Input, inventoryState, recipeRegistry, config, logger, runStep, childOptions, ensureFreeIntermediateSlots });
-        this.stageContract = new B5StageContract({ logger });
+    constructor({ storageFlow, b2Input, inventoryState, recipeRegistry, config, logger = null, runStep, childOptions, ensureFreeIntermediateSlots, verificationService }) {
+        Object.assign(this, { storageFlow, b2Input, inventoryState, recipeRegistry, config, logger, runStep, childOptions, ensureFreeIntermediateSlots, verificationService });
+        this.verification = verificationService;
     }
 
     reconfigure(config = {}) { this.config = config || {}; }
@@ -15,8 +15,8 @@ class B5B1InventoryCoordinator {
         this.#assertContract(chain, context);
         const request = this.#request(chain, options);
         if (this.b2Input.source === 'storage') {
-            this.stageContract.requireInputReady({ stage: 'B1', logicalId: chain.baseId, available: request.usefulTotal, required: request.basePerB2, context });
-            this.stageContract.handoff({ from: 'B1', to: 'B2', generation: context.connectionGeneration, context });
+            this.verification.requireInputReady({ stage: 'B1', logicalId: chain.baseId, available: request.usefulTotal, required: request.basePerB2, context });
+            this.verification.handoff({ from: 'B1', to: 'B2', generation: context.connectionGeneration, context });
             return {
                 ready: request.plannedCrafts > 0, reason: null, source: 'storage', baseId: chain.baseId, b2Id: chain.b2Id,
                 basePerB2: request.basePerB2, plannedCrafts: request.plannedCrafts, available: request.usefulTotal,

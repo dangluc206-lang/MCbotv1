@@ -5,8 +5,8 @@ const Status = require('../../shared/result/Status');
 const FlowError = require('../../shared/errors/FlowError');
 const Operation = require('../../operations/Operation');
 const B5KhoReadFlow = require('./b5/flows/B5KhoReadFlow');
-const B5Pv2ReadFlow = require('./b5/flows/B5Pv2ReadFlow');
-const B5InventoryReadFlow = require('./b5/flows/B5InventoryReadFlow');
+const PersonalVaultReadFlow = require('../personal-vault/PersonalVaultReadFlow');
+const InventoryReadFlow = require('../inventory/InventoryReadFlow');
 
 class B5PlanningService {
     constructor({
@@ -40,8 +40,12 @@ class B5PlanningService {
         });
         this.readFlows = Object.freeze({
             kho: readFlows.kho || new B5KhoReadFlow({ storage }),
-            pv2: readFlows.pv2 || new B5Pv2ReadFlow({ personalVault }),
-            inventory: readFlows.inventory || new B5InventoryReadFlow({ inventoryReader })
+            pv2: readFlows.pv2 || new PersonalVaultReadFlow({ personalVault, config: { preferData: true, maxAgeMs: guiDataMaxAgeMs } }),
+            inventory: readFlows.inventory || new InventoryReadFlow({ inventoryReader })
+        });
+        this.craftPlanningService = new CraftPlanningService({
+            planner: this.b5Planner,
+            defaultTargetId: this.config.targetId
         });
     }
 
@@ -120,8 +124,8 @@ class B5PlanningService {
             // the current /kho headroom. A blocked block-form reserve is an
             // actionable PREPARE_B1 state, not the same thing as missing stock.
             const allAvailable = this.#mergeCounts(nonStorageAvailable, craftableStorageItems);
-            const planWithoutStorage = this.b5Planner.plan(amount, nonStorageAvailable);
-            const fullPlan = this.b5Planner.plan(amount, allAvailable);
+            const planWithoutStorage = this.craftPlanningService.plan(amount, nonStorageAvailable);
+            const fullPlan = this.craftPlanningService.plan(amount, allAvailable);
             const reservePartition = this.b5Planner.partition(planWithoutStorage);
             const fullPartition = this.b5Planner.partition(fullPlan);
             const chains = this.#buildB3Chains({

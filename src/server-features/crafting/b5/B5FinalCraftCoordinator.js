@@ -1,15 +1,15 @@
 'use strict';
 
 const FlowError = require('../../../shared/errors/FlowError');
-const B5StageContract = require('./support/B5StageContract');
+const CraftingVerificationService = require('../CraftingVerificationService');
 
 class B5FinalCraftCoordinator {
-    constructor({ recipeRegistry, inventoryState, progressTracker, withdrawFlow, craftFlow, config, runStep, childOptions, quantityTrace }) {
+    constructor({ recipeRegistry, inventoryState, progressTracker, withdrawFlow, craftFlow, config, runStep, childOptions, quantityTrace, verificationService }) {
         Object.assign(this, {
             recipeRegistry, inventoryState, progressTracker, withdrawFlow, craftFlow,
-            config, runStep, childOptions, quantityTrace
+            config, runStep, childOptions, quantityTrace, verificationService
         });
-        this.stageContract = new B5StageContract();
+        this.verificationService = verificationService;
     }
 
     reconfigure(config = {}) { this.config = config || {}; }
@@ -60,7 +60,7 @@ class B5FinalCraftCoordinator {
                     ? 'COMPLETE'
                     : (steps[index + 1]?.outputId === targetId ? 'B5' : 'B4');
                 if (nextStageForHandoff !== 'B4' || stage !== 'B4') {
-                    this.stageContract.handoff({
+                    this.verificationService.handoff({
                         from: stage,
                         to: nextStageForHandoff,
                         generation: context.connectionGeneration,
@@ -90,7 +90,7 @@ class B5FinalCraftCoordinator {
             stablePasses: this.config?.stageSettlementStablePasses,
             source: 'bot-inventory'
         });
-        this.stageContract.requireSettled({ stage, logicalId, settlement, context });
+        this.verification.requireSettled({ stage, logicalId, settlement, context });
         return settlement;
     }
 
@@ -115,7 +115,7 @@ class B5FinalCraftCoordinator {
                 shortage = Math.max(0, needed - inInventory);
             }
             if (inInventory < needed) this.#throwInputError(logicalId, recipeId, needed, inInventory, attempts, lastWithdrawal, context);
-            this.stageContract.requireInputReady({ stage: 'INPUT', logicalId, available: inInventory, required: needed, context });
+            this.verification.requireInputReady({ stage: 'INPUT', logicalId, available: inInventory, required: needed, context });
         }
     }
 
@@ -141,7 +141,7 @@ class B5FinalCraftCoordinator {
         const expectedDelta = actualCrafts * Math.max(1, Number(recipe.outputAmount || 1));
         const baseline = Number.isFinite(verificationBefore) ? verificationBefore : beforeOutput;
         const observedAfter = Number.isFinite(verificationAfter) ? verificationAfter : this.inventoryState.countFromSource?.(outputId || recipe.output, 'bot-inventory');
-        this.stageContract.verifyOutput({
+        this.verification.verifyOutput({
             stage, logicalId: outputId || recipe.output, before: baseline,
             after: observedAfter, expectedDelta, context
         });

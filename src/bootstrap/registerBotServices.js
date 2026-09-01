@@ -509,6 +509,10 @@ function registerBotServices({ profile, configuration, shared }) {
     inventoryObservation: inventoryObservationService,
     inventorySync: inventorySyncService,
   });
+  const craftingVerificationService = new CraftingVerificationService({
+    resultVerifier: craftingResultVerifier,
+    stageContract: stageExecutionContract
+  });
   const craftingOperation = new CraftingOperation({
     commandService,
     guiManager,
