@@ -1,7 +1,6 @@
 'use strict';
 
 const FlowError = require('../../../shared/errors/FlowError');
-const CraftingVerificationService = require('../CraftingVerificationService');
 
 class B5FinalCraftCoordinator {
     constructor({ recipeRegistry, inventoryState, progressTracker, withdrawFlow, craftFlow, config, runStep, childOptions, quantityTrace, verificationService }) {

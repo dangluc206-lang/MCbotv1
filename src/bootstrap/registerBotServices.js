@@ -141,6 +141,7 @@ const FishingMovementProbeService = require("../modes/fishing/FishingMovementPro
 const FishingPositionGuard = require("../modes/fishing/FishingPositionGuard");
 const FishingRecoveryPolicy = require("../modes/fishing/FishingRecoveryPolicy");
 const FishingWorldReadinessService = require("../modes/fishing/FishingWorldReadinessService");
+const CraftingVerificationService = require("../server-features/crafting/CraftingVerificationService");
 
 function registerBotServices({ profile, configuration, shared }) {
   const botId = profile.id;
