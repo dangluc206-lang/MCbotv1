@@ -1,6 +1,6 @@
 'use strict';
 
-const FlowError = require('../../../../shared/errors/FlowError');
+const FlowError = require('../../../shared/errors/FlowError');
 
 class StageExecutionContract {
     constructor({ logger = null } = {}) {
@@ -12,7 +12,7 @@ class StageExecutionContract {
         const need = Math.max(0, Number(required) || 0);
         if (!Number.isFinite(actual) || actual < need) {
             throw new FlowError(`${stage} input is not ready for ${logicalId} (${Number.isFinite(actual) ? actual : 'unknown'}/${need}).`, {
-                code: ' CRAFT_STAGE_INPUT_NOT_READY', subsystem: 'b5', step: 'stage-input-ready', action: 'verify stage input', resource: logicalId,
+                code: 'CRAFT_STAGE_INPUT_NOT_READY', subsystem: 'b5', step: 'stage-input-ready', action: 'verify stage input', resource: logicalId,
                 retryable: true, details: { stage, logicalId, available: Number.isFinite(actual) ? actual : null, required: need }, trace: context?.trace
             });
         }

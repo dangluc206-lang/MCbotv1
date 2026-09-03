@@ -34,8 +34,12 @@ class B5AutomationService {
         config,
         logger = null,
         flows = {},
-        inventoryState
+        inventoryState,
+        craftingVerificationService
     }) {
+        if (!craftingVerificationService) {
+            throw new TypeError('B5AutomationService craftingVerificationService is required.');
+        }
         Object.assign(this, {
             planningService,
             crafting,

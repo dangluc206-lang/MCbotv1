@@ -578,6 +578,7 @@ function registerBotServices({ profile, configuration, shared }) {
     traceRecorder: b5TraceRecorder,
     config: b5Config,
     logger,
+    craftingVerificationService,
   });
   const b5Automation = new B5AutomationRuntimeDecorator({ service: b5AutomationCore, workloadMetrics });
   const connectionStateView = new ConnectionStateView({ context });
