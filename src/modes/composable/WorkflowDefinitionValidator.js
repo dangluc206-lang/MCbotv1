@@ -1,17 +1,20 @@
 'use strict';
 
 const WorkflowModuleCatalog = require('./WorkflowModuleCatalog');
+const WorkflowSchemaMigrator = require('./WorkflowSchemaMigrator');
+const normalizeStepFields = require('./WorkflowStepNormalizer');
 const MODE_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const CONTRACT_ID = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 const RESOURCE_ID = /^[a-z][a-z0-9]*(?:[-.:][a-z0-9]+)*$/;
 
 class WorkflowDefinitionValidator {
-    constructor({ maxSteps = 200, maxDepth = 6, maxRepeat = 1000, maxWaitMs = 3600000, moduleCatalog = new WorkflowModuleCatalog() } = {}) {
-        Object.assign(this, { maxSteps, maxDepth, maxRepeat, maxWaitMs });
+    constructor({ maxSteps = 200, maxDepth = 6, maxRepeat = 1000, maxWaitMs = 3600000, moduleCatalog = new WorkflowModuleCatalog(), schemaMigrator = new WorkflowSchemaMigrator(), serverProfile = 'minerua', capabilityRegistry = null } = {}) {
+        Object.assign(this, { maxSteps, maxDepth, maxRepeat, maxWaitMs, schemaMigrator, serverProfile, capabilityRegistry });
         this.modules = moduleCatalog;
     }
 
     normalize(value) {
+        value = this.schemaMigrator.migrate(value);
         if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Định nghĩa mode phải là object.');
         const id = String(value.id || '').trim();
         if (!MODE_ID.test(id)) throw new TypeError('Mode ID chỉ dùng chữ thường, số và dấu gạch ngang.');
@@ -28,6 +31,14 @@ class WorkflowDefinitionValidator {
         const required = new Set(Array.isArray(value.requiredCapabilities) ? value.requiredCapabilities.map(String).map(item => item.trim()).filter(Boolean) : []);
         for (const capability of required) if (!CONTRACT_ID.test(capability)) throw new TypeError(`Capability ID không hợp lệ: ${capability}.`);
         this.#collectCapabilities([...start, ...loopSteps, ...stop], required);
+        if (this.capabilityRegistry?.assertAvailable) this.capabilityRegistry.assertAvailable([...required], `workflow:${id}`);
+        const serverProfiles = Array.isArray(value.serverProfiles) && value.serverProfiles.length
+            ? [...new Set(value.serverProfiles.map(String).map(item => item.trim()).filter(Boolean))]
+            : ['minerua'];
+        if (!serverProfiles.includes(String(this.serverProfile)) && !serverProfiles.includes('generic')) {
+            throw workflowError('WORKFLOW_SERVER_PROFILE_MISMATCH', `Workflow không tương thích server profile: ${this.serverProfile}.`);
+        }
+        const resourceBudget = normalizeBudget(value.resourceBudget, this);
         const requestedResources = Array.isArray(value.requestedResources) && value.requestedResources.length ? [...new Set(value.requestedResources.map(String).map(item => item.trim()).filter(Boolean))] : ['primary-mode'];
         for (const resource of requestedResources) if (!RESOURCE_ID.test(resource)) throw new TypeError(`Resource ID không hợp lệ: ${resource}.`);
         return Object.freeze({
@@ -37,6 +48,9 @@ class WorkflowDefinitionValidator {
             enabled: value.enabled !== false,
             primary: value.primary !== false,
             durable: value.durable !== false,
+            schemaVersion: WorkflowSchemaMigrator.CURRENT_SCHEMA_VERSION,
+            serverProfiles: Object.freeze(serverProfiles.sort()),
+            resourceBudget: Object.freeze(resourceBudget),
             requestedResources: Object.freeze(requestedResources.sort()),
             requiredCapabilities: Object.freeze([...required].sort()),
             workflow: Object.freeze({
@@ -53,8 +67,15 @@ class WorkflowDefinitionValidator {
     }
 
     validate(value) {
-        try { return { valid: true, value: this.normalize(value), errors: [] }; }
-        catch (error) { return { valid: false, value: null, errors: [error.message] }; }
+        try { return { valid: true, value: this.normalize(value), errors: [], diagnostics: [] }; }
+        catch (error) {
+            return {
+                valid: false,
+                value: null,
+                errors: [error.message],
+                diagnostics: [{ code: error.code || 'WORKFLOW_DEFINITION_INVALID', i18nKey: error.i18nKey || 'workflow.definition.invalid', message: error.message }]
+            };
+        }
     }
 
     moduleCatalog() {
@@ -72,92 +93,21 @@ class WorkflowDefinitionValidator {
         if (!step || typeof step !== 'object' || Array.isArray(step)) throw new TypeError(`${path} phải là object.`);
         const type = String(step.type || '').trim();
         if (!this.modules.has(type)) throw new TypeError(`${path}.type không được hỗ trợ: ${type || '<trống>'}.`);
-        // Fail closed by rebuilding from the declared schema. Unknown fields
-        // (including prototype-shaped keys and removed legacy toggles) never
-        // reach persistence or an executor.
-        const normalized = { type };
-        switch (type) {
-        case 'command':
-            if (!String(step.commandKey || '').trim()) throw new TypeError(`${path}.commandKey là bắt buộc.`);
-            normalized.commandKey = String(step.commandKey).trim();
-            normalized.args = step.args && typeof step.args === 'object' && !Array.isArray(step.args) ? { ...step.args } : {};
-            normalized.confirm = step.confirm === true;
-            normalized.timeoutMs = this.#number(step.timeoutMs ?? 5000, `${path}.timeoutMs`, 100, 30000);
-            break;
-        case 'sky-command':
-            if (!String(step.commandId || '').trim()) throw new TypeError(`${path}.commandId là bắt buộc.`);
-            normalized.commandId = String(step.commandId).trim();
-            normalized.skyId = step.skyId == null || step.skyId === '' ? null : String(step.skyId).trim();
-            normalized.args = step.args && typeof step.args === 'object' && !Array.isArray(step.args) ? { ...step.args } : {};
-            break;
-        case 'slash-command':
-            normalized.command = this.#slashCommand(step, path);
-            break;
-        case 'gui-click':
-            normalized.slot = this.#integer(step.slot, `${path}.slot`, 0, 1000);
-            normalized.button = this.#integer(step.button ?? 0, `${path}.button`, 0, 2);
-            normalized.mode = this.#integer(step.mode ?? 0, `${path}.mode`, 0, 6);
-            normalized.verifyGui = step.verifyGui === true;
-            normalized.timeoutMs = this.#number(step.timeoutMs ?? 3000, `${path}.timeoutMs`, 100, 30000);
-            break;
-        case 'wait':
-            normalized.ms = this.#number(step.ms ?? 1000, `${path}.ms`, 0, this.maxWaitMs);
-            break;
-        case 'move':
-            normalized.x = this.#finite(step.x, `${path}.x`); normalized.y = this.#finite(step.y, `${path}.y`); normalized.z = this.#finite(step.z, `${path}.z`);
-            normalized.radius = this.#number(step.radius ?? 1.2, `${path}.radius`, 0.1, 100);
-            normalized.timeoutMs = this.#number(step.timeoutMs ?? 30000, `${path}.timeoutMs`, 100, this.maxWaitMs);
-            break;
-        case 'sky-join':
-            normalized.selection = step.selection == null || step.selection === '' ? null : String(step.selection);
-            break;
-        case 'storage-protect':
-            // B5 storage protection always owns iron/gold smelting. There is no
-            // per-workflow toggle because disabling smelting would violate the
-            // batch-boundary contract.
-            break;
-        case 'wait-gui':
-            normalized.guiId = step.guiId == null || step.guiId === '' ? null : String(step.guiId);
-            normalized.timeoutMs = this.#number(step.timeoutMs ?? 5000, `${path}.timeoutMs`, 100, 30000);
-            break;
-        case 'look':
-            normalized.yaw = this.#finite(step.yaw, `${path}.yaw`);
-            normalized.pitch = this.#finite(step.pitch, `${path}.pitch`);
-            normalized.force = step.force !== false;
-            break;
-        case 'log':
-            normalized.message = String(step.message || '').slice(0, 1000);
-            normalized.level = ['debug','info','warn','error'].includes(step.level) ? step.level : 'info';
-            break;
-        case 'if':
-            normalized.condition = this.#condition(step.condition, `${path}.condition`);
-            normalized.then = this.#steps(step.then || [], `${path}.then`, depth + 1);
-            normalized.else = this.#steps(step.else || [], `${path}.else`, depth + 1);
-            break;
-        case 'repeat':
-            normalized.count = this.#integer(step.count ?? 1, `${path}.count`, 1, this.maxRepeat);
-            normalized.steps = this.#steps(step.steps || [], `${path}.steps`, depth + 1);
-            break;
-        default:
-            break;
+        const descriptor = this.modules.require(type);
+        if (!descriptor.serverProfiles.includes('generic') && !descriptor.serverProfiles.includes('minecraft-generic')
+            && !descriptor.serverProfiles.includes(String(this.serverProfile))) {
+            throw workflowError('WORKFLOW_MODULE_SERVER_PROFILE_MISMATCH', `${path}.type không tương thích server profile ${this.serverProfile}.`);
         }
-        return Object.freeze(normalized);
+        return normalizeStepFields(step, {
+            type, path, depth, maxDepth: this.maxDepth, maxRepeat: this.maxRepeat, maxWaitMs: this.maxWaitMs,
+            steps: (value, nestedPath, nestedDepth) => this.#steps(value, nestedPath, nestedDepth),
+            condition: this.#condition.bind(this), slashCommand: this.#slashCommand.bind(this),
+            finite: this.#finite.bind(this), number: this.#number.bind(this), integer: this.#integer.bind(this)
+        });
     }
 
-    #condition(value, path) {
-        const condition = value && typeof value === 'object' ? { ...value } : {};
-        const type = String(condition.type || 'connected');
-        if (!['connected','gui-open','not-gui-open'].includes(type)) throw new TypeError(`${path}.type không được hỗ trợ.`);
-        return Object.freeze({ type, guiId: condition.guiId == null ? null : String(condition.guiId) });
-    }
-
-    #slashCommand(step, path) {
-        const command = String(step.command || '').trim();
-        if (!command.startsWith('/')) throw new TypeError(`${path}.command phải bắt đầu bằng /.`);
-        if (command.length > 256 || /[\r\n\0]/.test(command)) throw new TypeError(`${path}.command không hợp lệ.`);
-        if (/^\/(?:login|register|reg|l|auth|password|changepassword|cp)\b/i.test(command)) throw new TypeError(`${path}.command không được chứa lệnh đăng nhập/mật khẩu.`);
-        return command;
-    }
+    #condition(value, path) { const condition = value && typeof value === 'object' ? { ...value } : {}; const type = String(condition.type || 'connected'); if (!['connected', 'gui-open', 'not-gui-open'].includes(type)) throw new TypeError(`${path}.type không được hỗ trợ.`); return Object.freeze({ type, guiId: condition.guiId == null ? null : String(condition.guiId) }); }
+    #slashCommand(step, path) { const command = String(step.command || '').trim(); if (!command.startsWith('/')) throw new TypeError(`${path}.command phải bắt đầu bằng /.`); if (command.length > 256 || /[\r\n\0]/.test(command)) throw new TypeError(`${path}.command không hợp lệ.`); if (/^\/(?:login|register|reg|l|auth|password|changepassword|cp)\b/i.test(command)) throw new TypeError(`${path}.command không được chứa lệnh đăng nhập/mật khẩu.`); return command; }
 
     #collectCapabilities(steps, set) {
         for (const step of steps) {
@@ -171,6 +121,37 @@ class WorkflowDefinitionValidator {
     #finite(value, path) { const n = Number(value); if (!Number.isFinite(n)) throw new TypeError(`${path} phải là số.`); return n; }
     #number(value, path, min, max) { const n = this.#finite(value, path); if (n < min || n > max) throw new TypeError(`${path} phải trong khoảng ${min}..${max}.`); return n; }
     #integer(value, path, min, max) { const n = Number(value); if (!Number.isInteger(n) || n < min || n > max) throw new TypeError(`${path} phải là số nguyên ${min}..${max}.`); return n; }
+}
+
+function normalizeBudget(value, validator) {
+    const budget = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const finite = (input, path) => {
+        const number = Number(input);
+        if (!Number.isFinite(number)) throw new TypeError(`${path} phải là số.`);
+        return number;
+    };
+    const number = (input, path, min, max) => {
+        const result = finite(input, path);
+        if (result < min || result > max) throw new TypeError(`${path} phải trong khoảng ${min}..${max}.`);
+        return result;
+    };
+    const integer = (input, path, min, max) => {
+        const result = Number(input);
+        if (!Number.isInteger(result) || result < min || result > max) throw new TypeError(`${path} phải là số nguyên ${min}..${max}.`);
+        return result;
+    };
+    return {
+        maxSteps: integer(budget.maxSteps ?? 2000, 'resourceBudget.maxSteps', 1, 100000),
+        maxRepeats: integer(budget.maxRepeats ?? validator.maxRepeat, 'resourceBudget.maxRepeats', 1, 100000),
+        maxWaitMs: number(budget.maxWaitMs ?? validator.maxWaitMs, 'resourceBudget.maxWaitMs', 0, 24 * 3600000),
+        maxOperations: integer(budget.maxOperations ?? 1000, 'resourceBudget.maxOperations', 1, 100000)
+    };
+}
+
+function workflowError(code, message) {
+    const error = new Error(message);
+    error.code = code;
+    return error;
 }
 
 WorkflowDefinitionValidator.ALLOWED_TYPES = Object.freeze(new WorkflowModuleCatalog().list().map(item => item.type));

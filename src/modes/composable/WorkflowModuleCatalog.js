@@ -2,7 +2,10 @@
 
 const { immutableClone } = require('../../shared/utils/object');
 const WorkflowModulePresentationCatalog = require('./WorkflowModulePresentationCatalog');
+const ModuleRegistry = require('./ModuleRegistry');
+const { createBuiltinExecutors } = require('./WorkflowModuleExecutors');
 const PRESENTATIONS = new WorkflowModulePresentationCatalog();
+const EXECUTORS = createBuiltinExecutors();
 
 const DESCRIPTORS = Object.freeze([
     ['command','Lệnh hệ thống đã đăng ký','commands','command-result',['server-command']],
@@ -25,19 +28,23 @@ const DESCRIPTORS = Object.freeze([
 ].map(([type,label,capability,outputType,transientResources]) => Object.freeze({
     type,label,description:label,capability,outputType,cancellable:true,
     transientResources:Object.freeze(transientResources),
+    serverProfiles:Object.freeze(
+        ['wait','close-gui','look','log','if','repeat'].includes(type)
+            ? ['generic','minecraft-generic','minerua']
+            : ['minecraft-generic','minerua']
+    ),
+    errorCode:`WORKFLOW_MODULE_${type.toUpperCase().replaceAll('-', '_')}_FAILED`,
+    i18nKey:`workflow.modules.${type}.failed`,
+    executor:EXECUTORS[type],
     presentation:Object.freeze(PRESENTATIONS.require(type))
 })));
 
-const BY_TYPE = new Map(DESCRIPTORS.map(item => [item.type,item]));
-
-class WorkflowModuleCatalog {
-    has(type) { return BY_TYPE.has(String(type || '').trim()); }
-    require(type) {
-        const id=String(type || '').trim(); const value=BY_TYPE.get(id);
-        if (!value) { const error=new Error(`Module không được hỗ trợ: ${id || '<trống>'}`); error.code='WORKFLOW_MODULE_UNKNOWN'; throw error; }
-        return immutableClone(value);
+class WorkflowModuleCatalog extends ModuleRegistry {
+    constructor({ descriptors = [], ...options } = {}) {
+        super({ ...options, descriptors: DESCRIPTORS });
+        this.registerAll(descriptors);
     }
-    list() { return DESCRIPTORS.map(item => immutableClone(item)); }
 }
 
 module.exports = WorkflowModuleCatalog;
+module.exports.DESCRIPTORS = DESCRIPTORS.map(item => immutableClone(item));

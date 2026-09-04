@@ -1,6 +1,7 @@
 'use strict';
 
 const WorkflowDefinitionValidator = require('./WorkflowDefinitionValidator');
+const WorkflowResourceBudget = require('./WorkflowResourceBudget');
 
 class WorkflowDryRunService {
     constructor({ validator = new WorkflowDefinitionValidator(), maxExpandedSteps = 5000 } = {}) {
@@ -13,6 +14,7 @@ class WorkflowDryRunService {
         const plan = [];
         const unreachedPaths = [];
         const state = { connected:connected === true, guiId:guiId || null };
+        const budget = new WorkflowResourceBudget(normalized.resourceBudget);
         const visit = (steps, path) => {
             for (let index = 0; index < steps.length; index += 1) {
                 const step = steps[index];
@@ -21,6 +23,10 @@ class WorkflowDryRunService {
                     error.code = 'WORKFLOW_DRY_RUN_LIMIT'; throw error;
                 }
                 const descriptor = this.validator.modules.require(step.type);
+                budget.step();
+                if (step.type === 'wait') budget.wait(step.ms);
+                if (step.type === 'repeat') budget.repeat(step.count);
+                if (descriptor.capability) budget.operation();
                 plan.push(Object.freeze({ index:plan.length, path:`${path}[${index}]`, type:step.type, capability:descriptor.capability, risk:descriptor.presentation.risk, sideEffect:descriptor.transientResources.length > 0 || Boolean(descriptor.capability) }));
                 if (step.type === 'if') {
                     const matched = step.condition.type === 'connected' ? state.connected
@@ -44,9 +50,10 @@ class WorkflowDryRunService {
             estimatedSideEffects:plan.filter(step => step.sideEffect).length,
             requiredCapabilities:[...normalized.requiredCapabilities],
             requestedResources:[...normalized.requestedResources],
-            checks:Object.freeze({ schema:'PASS', forbiddenActions:'PASS', loopBounds:'PASS', capabilityDependencies:'DECLARED', resourceClaims:'DECLARED' }),
+            checks:Object.freeze({ schema:'PASS', forbiddenActions:'PASS', loopBounds:'PASS', capabilityDependencies:'DECLARED', resourceClaims:'DECLARED', resourceBudget:'PASS' }),
             inputState:Object.freeze({ connected:state.connected, guiId:guiId || null }),
             unreachedPaths:Object.freeze(unreachedPaths),
+            resourceBudget:budget.snapshot(),
             plan:Object.freeze(plan)
         });
     }

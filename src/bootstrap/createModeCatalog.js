@@ -17,7 +17,9 @@ function createModeCatalog({ baseDir = process.cwd() } = {}) {
         metadata: {
             kind: 'composable',
             sourceFile: entry.relativeFile,
-            workflow: entry.definition.workflow
+            workflow: entry.definition.workflow,
+            serverProfiles: entry.definition.serverProfiles,
+            resourceBudget: entry.definition.resourceBudget
         }
     }));
 

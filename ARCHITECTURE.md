@@ -1220,4 +1220,8 @@ B5CraftModeService (lifecycle + side-effect façade)
 
 Composable Mode Builder dùng presentation schema cho đủ 17 module, typed start/loop/stop editor, bounded `if/repeat`, static dry-run không gọi capability, template metadata và deterministic package manifest. Unknown field bị loại khi normalize; storage protection không có toggle để bỏ nung sắt/vàng.
 
+Extension contract hiện tại được thực thi qua `ModuleRegistry`: mỗi descriptor có capability, transient resources, server-profile compatibility, error code/i18n key và executor riêng. `WorkflowModuleCatalog` vẫn đăng ký đủ 17 module cũ như compatibility facade; module mới phải đăng ký descriptor hợp lệ, không trùng type và không khai báo capability ngoài registry. `WorkflowStepExecutor` chỉ điều phối descriptor executor, không chứa mapping `step.type` thủ công.
+
+Workflow definition được migrate deterministic trước normalize (schema cũ vẫn được đọc), sau đó validate lại server profile, capability và resource budget. Budget được áp dụng trong runtime cho step/repeat/wait/operation, không chỉ dry-run. Custom mode use cases giữ các dependency đã inject trong suốt vòng đời để validator, template, package và store có thể mock độc lập. Module metadata được trả qua Desktop để UI cảnh báo hoặc vô hiệu hóa module không tương thích profile.
+
 R6 hiện là quyết định `NO_GO_MONOLITH_SUFFICIENT`, không phải work package bị quên. Benchmark synthetic 1/8/16/32/64 bot đạt contract operator projection hiện tại; không có bằng chứng cho thấy worker/process isolation đáng đổi lấy protocol, split-brain và vận hành phức tạp hơn. Quyết định phải mở lại nếu field SLO hoặc incident driver đáp ứng điều kiện XP-500.

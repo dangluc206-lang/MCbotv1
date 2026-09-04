@@ -904,7 +904,7 @@ function registerBotServices({ profile, configuration, shared }) {
     customModes[definition.serviceName] = new ComposableModeService({
       botId,
       modeId: definition.id,
-      definition: { workflow: definition.metadata.workflow },
+      definition: { workflow: definition.metadata.workflow, serverProfiles: definition.metadata.serverProfiles, resourceBudget: definition.metadata.resourceBudget },
       modeContext,
       modeCoordinator,
       catalog: shared.modeCatalog,

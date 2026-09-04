@@ -3,12 +3,17 @@
 const ManagedMode = require('../ManagedMode');
 const Timeout = require('../../shared/time/Timeout');
 const WorkflowStepExecutor = require('./WorkflowStepExecutor');
+const WorkflowResourceBudget = require('./WorkflowResourceBudget');
 
 class ComposableModeService extends ManagedMode {
     constructor({ botId, modeId, definition, modeContext, modeCoordinator, catalog, logger = null } = {}) {
         super({ modeId, botId, modeContext, modeCoordinator, catalog, logger });
-        this.workflow = definition.workflow;
-        this.executor = new WorkflowStepExecutor({ botId, modeId, modeContext, logger, onPhase: phase => this.setPhase(phase) });
+        this.definition = definition;
+        this.workflow = definition.workflow || {};
+        this.executor = new WorkflowStepExecutor({
+            botId, modeId, modeContext, logger, moduleCatalog: definition.moduleCatalog,
+            onPhase: phase => this.setPhase(phase)
+        });
         this.supervisor = null;
         this.cycles = 0;
         this.lastCycleAt = null;
@@ -19,7 +24,7 @@ class ComposableModeService extends ManagedMode {
         this.supervisor = this.createTaskSupervisor('workflow', { historyLimit: 8 });
         if (this.workflow.start.length) {
             this.setPhase('START_STEPS');
-            await this.executor.executeSteps(this.workflow.start, { cancellationToken: null });
+            await this.executor.executeSteps(this.workflow.start, { cancellationToken: null, budget: this.#budget() });
         }
         this.#startLoop();
     }
@@ -30,13 +35,13 @@ class ComposableModeService extends ManagedMode {
         await this.supervisor?.stopAll(reason || 'Workflow stopped.');
         if (this.workflow.stop.length) {
             this.setPhase('STOP_STEPS');
-            await this.executor.executeSteps(this.workflow.stop, {});
+            await this.executor.executeSteps(this.workflow.stop, { budget: this.#budget() });
         }
         this.supervisor = null;
     }
 
     statusDetails() {
-        return { cycles: this.cycles, lastCycleAt: this.lastCycleAt, lastErrorMessage: this.lastErrorMessage, workflow: { loopEnabled: this.workflow.loop.enabled, intervalMs: this.workflow.loop.intervalMs }, tasks: this.supervisor?.snapshot?.() || null };
+        return { cycles: this.cycles, lastCycleAt: this.lastCycleAt, lastErrorMessage: this.lastErrorMessage, workflow: { loopEnabled: this.workflow.loop.enabled, intervalMs: this.workflow.loop.intervalMs }, resourceBudget: this.definition.resourceBudget || null, tasks: this.supervisor?.snapshot?.() || null };
     }
 
     #startLoop() {
@@ -44,7 +49,9 @@ class ComposableModeService extends ManagedMode {
         const handle = this.supervisor.start('loop', async task => {
             while (!task.cancellationToken.isCancelled && this.enabled && !this.paused) {
                 try {
-                    await this.executor.executeSteps(this.workflow.loop.steps, { cancellationToken: task.cancellationToken });
+                    await this.executor.executeSteps(this.workflow.loop.steps, {
+                        cancellationToken: task.cancellationToken, budget: this.#budget()
+                    });
                     this.cycles += 1;
                     this.lastCycleAt = new Date().toISOString();
                     this.lastErrorMessage = null;
@@ -62,6 +69,10 @@ class ComposableModeService extends ManagedMode {
             this.lastErrorMessage = error.message;
             this.setPhase('ERROR');
         });
+    }
+
+    #budget() {
+        return new WorkflowResourceBudget(this.definition.resourceBudget || {});
     }
 }
 
