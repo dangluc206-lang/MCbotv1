@@ -87,6 +87,7 @@ const SmeltingService = require("../server-features/smelting/SmeltingService");
 const CraftingRecipeRegistry = require("../server-features/crafting/CraftingRecipeRegistry");
 const CraftingQuantityResolver = require("../server-features/crafting/CraftingQuantityResolver");
 const CraftingResultVerifier = require("../server-features/crafting/CraftingResultVerifier");
+const StageExecutionContract = require("../server-features/crafting/verification/StageExecutionContract");
 const CraftingOperation = require("../server-features/crafting/CraftingOperation");
 const CraftingService = require("../server-features/crafting/CraftingService");
 const MaterialCalculator = require("../planning/crafting/MaterialCalculator");
@@ -503,13 +504,14 @@ function registerBotServices({ profile, configuration, shared }) {
   const quantityResolver = new CraftingQuantityResolver(
     mineralConfig.crafting || {},
   );
-  const resultVerifier = new CraftingResultVerifier({
+  const craftingResultVerifier = new CraftingResultVerifier({
     inventoryReader,
     inventoryCounter,
     guiKnowledge,
     inventoryObservation: inventoryObservationService,
     inventorySync: inventorySyncService,
   });
+  const stageExecutionContract = new StageExecutionContract({ logger });
   const craftingVerificationService = new CraftingVerificationService({
     resultVerifier: craftingResultVerifier,
     stageContract: stageExecutionContract
@@ -521,7 +523,7 @@ function registerBotServices({ profile, configuration, shared }) {
     itemResolver: itemResolver,
     recipeRegistry,
     quantityResolver,
-    resultVerifier,
+    resultVerifier: craftingResultVerifier,
     guiKnowledge,
     config: mineralConfig.crafting || {},
     logger,

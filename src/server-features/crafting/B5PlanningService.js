@@ -7,6 +7,7 @@ const Operation = require('../../operations/Operation');
 const B5KhoReadFlow = require('./b5/flows/B5KhoReadFlow');
 const PersonalVaultReadFlow = require('../personal-vault/PersonalVaultReadFlow');
 const InventoryReadFlow = require('../inventory/InventoryReadFlow');
+const CraftPlanningService = require('./CraftPlanningService');
 
 class B5PlanningService {
     constructor({
@@ -45,7 +46,7 @@ class B5PlanningService {
         });
         this.craftPlanningService = new CraftPlanningService({
             planner: this.b5Planner,
-            defaultTargetId: this.config.targetId
+            config: { defaultTargetId: this.config.targetId }
         });
     }
 
