@@ -1,15 +1,15 @@
 {
   "version": 1,
-  "revision": 118,
-  "updatedAt": "2026-08-28T16:45:06.268Z",
+  "revision": 120,
+  "updatedAt": "2026-09-05T14:33:47.191Z",
   "intents": {
     "bot-01": {
       "botId": "bot-01",
       "desiredConnection": "CONNECTED",
       "desiredMode": null,
       "modeState": null,
-      "revision": 67,
-      "updatedAt": "2026-08-28T16:45:06.245Z",
+      "revision": 68,
+      "updatedAt": "2026-09-05T14:33:47.172Z",
       "source": "application-startup-idle"
     },
     "bot-02": {
@@ -17,8 +17,8 @@
       "desiredConnection": "CONNECTED",
       "desiredMode": null,
       "modeState": null,
-      "revision": 51,
-      "updatedAt": "2026-08-28T16:45:06.268Z",
+      "revision": 52,
+      "updatedAt": "2026-09-05T14:33:47.191Z",
       "source": "application-startup-idle"
     }
   }

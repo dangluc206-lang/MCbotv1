@@ -704,7 +704,24 @@ class DesktopController {
     }
 
     customModeModules() {
-        return this.customModeUseCases.modules();
+        // Strip executor (function) from each module descriptor to make it IPC-safe.
+        // Backend WorkflowStepExecutor retains executor for actual execution;
+        // this DTO only provides metadata for UI rendering.
+        return this.customModeUseCases.modules().map(module => ({
+            type: module.type,
+            label: module.label,
+            description: module.description,
+            capability: module.capability,
+            outputType: module.outputType,
+            cancellable: module.cancellable,
+            transientResources: [...(module.transientResources || [])],
+            serverProfiles: [...(module.serverProfiles || [])],
+            errorCode: module.errorCode,
+            i18nKey: module.i18nKey,
+            presentation: module.presentation
+                ? JSON.parse(JSON.stringify(module.presentation))
+                : null
+        }));
     }
 
     customModeTemplates() { return this.customModeUseCases.templates(); }

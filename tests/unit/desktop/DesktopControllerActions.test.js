@@ -202,6 +202,43 @@ test('DesktopController exposes safe module catalog without starting Minecraft b
     assert.equal(types.includes('raw-chat'), false);
 });
 
+test('DesktopController.customModeModules() returns IPC-safe DTO without executor functions', () => {
+    const controller = new DesktopController({ baseDir: process.cwd() });
+    const modules = controller.customModeModules();
+
+    // Verify 17 modules are present
+    assert.equal(modules.length, 17, 'must have exactly 17 module types');
+
+    // Verify no executor function leaked into DTO
+    const hasExecutorFunction = modules.some(
+        module => typeof module.executor === 'function' || typeof module.executor?.execute === 'function'
+    );
+    assert.equal(hasExecutorFunction, false, 'must not contain executor function');
+
+    // Verify each module is JSON-serializable (IPC-safe)
+    for (const module of modules) {
+        try {
+            const serialized = JSON.stringify(module);
+            const deserialized = JSON.parse(serialized);
+            assert.ok(deserialized.type, `module must have type: ${module.type}`);
+            assert.ok(deserialized.label, `module must have label: ${module.type}`);
+            assert.equal(typeof deserialized.executor, 'undefined', `module must not have executor: ${module.type}`);
+        } catch (err) {
+            throw new Error(`Module ${module.type} is not JSON-serializable: ${err.message}`);
+        }
+    }
+
+    // Verify expected metadata fields are preserved
+    const commandModule = modules.find(m => m.type === 'command');
+    assert.ok(commandModule, 'command module must exist');
+    assert.equal(commandModule.label, 'Lệnh hệ thống đã đăng ký');
+    assert.equal(commandModule.capability, 'commands');
+    assert.equal(commandModule.outputType, 'command-result');
+    assert.ok(Array.isArray(commandModule.transientResources));
+    assert.ok(Array.isArray(commandModule.serverProfiles));
+    assert.equal(commandModule.cancellable, true);
+});
+
 test('DesktopController updates mode-driven Sky gateway timing without restoring autoJoin/maxAttempts', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcbot-desktop-config-'));
     const target = path.join(dir, 'config', 'skyblock', 'join.json');
