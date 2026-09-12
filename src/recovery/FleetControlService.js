@@ -66,7 +66,10 @@ class FleetControlService {
         const results = [];
         for (const profile of [...this.profiles.values()].sort((left, right) => left.id.localeCompare(right.id))) {
             const intent = await this.store.setIntent(profile.id, {
-                desiredConnection: profile.enabled === false ? 'DISCONNECTED' : 'CONNECTED',
+                // ponytail: fresh operator session always starts offline; the operator
+                // connects each bot explicitly via GUI/Discord. In-process kick/reconnect
+                // intents are untouched because this only runs once per process start.
+                desiredConnection: 'DISCONNECTED',
                 desiredMode: null,
                 modeState: null,
                 source

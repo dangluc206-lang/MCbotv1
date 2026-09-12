@@ -546,7 +546,7 @@ if (hasSingleInstanceLock) {
             if (record?.level === 'error') notify('MCbot error', `${record.scope || 'Application'}: ${record.message || 'Unknown error'}`, `${record.scope}:${record.message}`);
         });
         createTray();
-        createWindow();
+
         powerMonitor.on('resume', () => {
             if (controller?.lifecycle !== 'RUNNING') return;
             controller.reconcileFleet('desktop-system-resume').catch(error => notify('MCbot resume recovery', error.message, 'resume-reconcile'));
@@ -561,6 +561,7 @@ if (hasSingleInstanceLock) {
             publishSnapshot();
         }
         app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); else showMainWindow(); });
+        createWindow();
     }).catch(error => fatalRecovery.handle(error, 'desktop-bootstrap'));
 }
 

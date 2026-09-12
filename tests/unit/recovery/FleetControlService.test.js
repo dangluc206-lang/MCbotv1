@@ -300,7 +300,7 @@ test('explicit per-bot disconnect suspends reconnect and reconnect intent resume
     assert.equal(runtime.context.has(), true);
 });
 
-test('fresh application session clears persisted modes but keeps enabled bot auto-connect intent', async t => {
+test('fresh application session clears persisted modes and starts every bot disconnected', async t => {
     const runtime = fakeRuntime('bot-01', { connected: false });
     const profiles = [
         { id: 'bot-01', enabled: true, username: 'worker' },
@@ -311,7 +311,7 @@ test('fresh application session clears persisted modes but keeps enabled bot aut
     await store.setIntent('bot-02', { desiredConnection: 'CONNECTED', desiredMode: 'collector-b5', modeState: 'ACTIVE', source: 'previous-process' });
     const intents = await control.prepareApplicationSession({ source: 'new-process' });
     assert.equal(intents.length, 2);
-    assert.equal(control.intent('bot-01').desiredConnection, 'CONNECTED');
+    assert.equal(control.intent('bot-01').desiredConnection, 'DISCONNECTED');
     assert.equal(control.intent('bot-01').desiredMode, null);
     assert.equal(control.intent('bot-02').desiredConnection, 'DISCONNECTED');
     assert.equal(control.intent('bot-02').desiredMode, null);

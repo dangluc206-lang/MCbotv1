@@ -57,7 +57,7 @@ class Application {
     async start() {
         await this.lifecycle.start();
         const runtimes = this.botRegistry.list();
-        this.backendReadyLogger?.info?.('MCbot Desktop backend started.', { runtimes: runtimes.length });
+
         await this.#callPreRuntimeServices('start');
         const results = await Promise.allSettled(runtimes.map(runtime => runtime.start()));
         this.#logFailures('start', runtimes, results);

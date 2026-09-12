@@ -356,7 +356,7 @@ Khi thêm mode mới:
 
 ## Session / reconnect / local update rules (v2.5+)
 
-- Một process MCbot mới là một operator session mới: profile `enabled` được tự kết nối, nhưng `desiredMode` của process trước phải bị xóa trước khi runtime start.
+- Một process MCbot mới là một operator session mới: mọi bot bắt đầu DISCONNECTED, operator phải chủ động Connect từng bot qua GUI/Discord; `desiredMode` của process trước phải bị xóa trước khi runtime start. Sau khi operator đã Connect, kick/reconnect trong cùng process vẫn giữ intent và tự resume mode.
 - Server kick/reconnect trong cùng process không được xóa mode intent; `connection:spawned` reconcile lại mode hiện tại.
 - Explicit disconnect của một bot phải suspend `ReconnectManager` đúng bot đó, hủy pending timer và dọn cả connect attempt/client xuất hiện muộn. Explicit connect phải resume reconnect policy.
 - `b5-craft` phải bỏ kết quả nếu `connectionGeneration` thay đổi giữa bất kỳ side effect/snapshot/craft nào; không được tính output của generation cũ.

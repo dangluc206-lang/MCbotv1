@@ -22,32 +22,18 @@ async function main() {
         const startResults = await application.start();
         const runtimes = application.listRuntimes();
         const states = runtimes.map(runtime => runtime.getState());
-        const enabled = profiles.filter(profile => profile.enabled).length;
         const connected = states.filter(state => state.connectionState === 'CONNECTED').length;
-        const reconnecting = states.filter(state => state.connectionState === 'RECONNECTING').length;
         const failedStarts = startResults.filter(result => result.status === 'rejected').length;
         const failedInitializations = initializeResults.filter(result => result.status === 'rejected').length;
 
+        // Bots start DISCONNECTED by design; the operator connects them
+        // explicitly from the GUI/Discord, so connected count is informational.
         logger.info('MCbot application is running.', {
             runtimes: runtimes.length,
-            enabled,
             connected,
-            reconnecting,
             failedInitializations,
             failedStarts
         });
-
-        if (enabled > connected) {
-            logger.warn('Some enabled bots are not connected yet.', {
-                enabled,
-                connected,
-                reconnecting,
-                states: runtimes.map(runtime => ({
-                    botId: runtime.botId,
-                    ...runtime.getState()
-                }))
-            });
-        }
 
         return { application, shutdown };
     } catch (error) {

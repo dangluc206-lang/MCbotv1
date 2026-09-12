@@ -83,9 +83,10 @@ async function createApplication({
     configuration.crossValidator.assertValid(configuration.registry.snapshot(), { botProfiles: profiles });
     fleetControl.setProfiles(profiles);
     // A fresh desktop/application process starts a new operator session.
-    // Enabled bot profiles reconnect automatically, but modes never replay
-    // merely because they were active in the previous process. The same
-    // in-process intent remains durable across server kicks/reconnects.
+    // Every bot starts DISCONNECTED; the operator connects each bot explicitly
+    // via GUI/Discord. Modes never replay merely because they were active in
+    // the previous process. The same in-process intent remains durable across
+    // server kicks/reconnects once the operator has connected a bot.
     await fleetControl.prepareApplicationSession({ source: 'application-startup-idle' });
 
     const enabledByUsername = new Map();
