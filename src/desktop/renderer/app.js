@@ -12,6 +12,7 @@ const state = {
   appInfo: null,
   guiOutput: null,
   page: localStorage.getItem('mcbot.page') || 'dashboard',
+  devPage: localStorage.getItem('mcbot.devPage') || 'dev-overview',
   profilesLoaded: false,
   commandsLoaded: false,
   lastSnapshotReceivedAt: 0,
@@ -37,7 +38,9 @@ const state = {
   ai: { workspace: null, models: [], messages: [], trace: [], busy: false },
   devLogs: [],
   devLogsLoaded: false,
-  incidentDebugId: null
+  incidentDebugId: null,
+  events: [],
+  eventsLoaded: false
 };
 
 const $ = selector => document.querySelector(selector);
@@ -292,6 +295,9 @@ function applyPresentationPreferences() {
   document.body.dataset.theme = state.preferences?.colorTheme === 'high-contrast' ? 'high-contrast' : 'dark';
   const currentButton = $(`.nav-item[data-page="${state.page}"]`);
   if (currentButton?.dataset.experience === 'advanced' && document.body.dataset.experience !== 'advanced') switchPage('dashboard');
+  // Dev shell visibility follows experience level.
+  const devShell = $('.dev-shell');
+  if (devShell) devShell.classList.toggle('hidden', document.body.dataset.experience !== 'advanced');
 }
 
 function renderFirstRun() {
@@ -412,12 +418,14 @@ async function renderInspector() {
 }
 
 function eventMatches(record) {
-  const level = $('#eventLevel')?.value || 'all';
+  const subsystem = $('#eventSubsystem')?.value || 'all';
+  const severity = $('#eventSeverity')?.value || 'all';
   const bot = $('#eventBot')?.value || 'all';
   const query = ($('#eventSearch')?.value || '').trim().toLowerCase();
-  if (level !== 'all' && record.level !== level) return false;
-  if (bot !== 'all' && String(record.meta?.botId || '') !== bot) return false;
-  const text = `${record.scope || ''} ${record.message || ''} ${record.meta?.botId || ''} ${record.meta?.code || ''} ${record.meta?.reason || ''}`.toLowerCase();
+  if (subsystem !== 'all' && String(record.subsystem || '') !== subsystem) return false;
+  if (severity !== 'all' && String(record.severity || '') !== severity) return false;
+  if (bot !== 'all' && String(record.botId || '') !== bot) return false;
+  const text = `${record.eventType || ''} ${record.eventId || ''} ${record.botId || ''} ${record.subsystem || ''} ${record.source || ''} ${record.severity || ''} ${JSON.stringify(record.payload || {})}`.toLowerCase();
   return !query || text.includes(query);
 }
 
@@ -425,21 +433,34 @@ function renderEventStream() {
   if ($('#eventPause')?.checked) return;
   const consoleEl = $('#eventConsole');
   if (!consoleEl) return;
-  const filtered = state.devLogs.filter(eventMatches).slice(-800);
-  consoleEl.innerHTML = filtered.map(record => window.MCbotDevPages.logLine(record)).join('') || '<div class="empty">Chưa có sự kiện phù hợp.</div>';
-  $('#eventCount').textContent = `${filtered.length} / ${state.devLogs.length} sự kiện`;
+  const filtered = state.events.filter(eventMatches).slice(-800);
+  consoleEl.innerHTML = filtered.map(record => window.MCbotDevPages.eventLine(record)).join('') || '<div class="empty">Chưa có sự kiện phù hợp.</div>';
+  $('#eventCount').textContent = `${filtered.length} / ${state.events.length} sự kiện`;
   if ($('#eventAutoScroll')?.checked) consoleEl.scrollTop = consoleEl.scrollHeight;
 }
 
 function scheduleEventRender() {
-  if (state.page !== 'events' || $('#eventPause')?.checked) return;
+  if (state.devPage !== 'events' || $('#eventPause')?.checked) return;
   requestAnimationFrame(renderEventStream);
 }
 
-async function loadDevLogs() {
-  if (state.devLogsLoaded) return;
-  try { state.devLogs = await api(window.mcbot.devLogs(1200)); state.devLogsLoaded = true; }
-  catch (error) { reportRendererError(error, 'dev-logs-load'); }
+async function loadEvents() {
+  if (state.eventsLoaded) return;
+  try { state.events = await api(window.mcbot.eventSnapshot(1200)); state.eventsLoaded = true; }
+  catch (error) { reportRendererError(error, 'events-load'); }
+}
+
+function clearEventView() {
+  state.events = [];
+  state.eventsLoaded = false;
+  loadEvents().then(renderEventStream).catch(() => {});
+}
+
+async function copyEventRecord(eventId) {
+  const record = state.events.find(entry => entry.eventId === eventId);
+  if (!record) return;
+  await navigator.clipboard.writeText(JSON.stringify(record, null, 2));
+  toast('Đã sao chép sự kiện JSON.');
 }
 
 function renderIncidentDebug() {
@@ -560,6 +581,7 @@ function scheduleDynamicRender() {
     syncSelectors();
     if (state.page === 'dashboard') renderDashboard();
     if (state.page === 'modes') renderModes();
+    if (state.devPage === 'dev-overview') renderDevOverview();
     renderFreshness();
   });
 }
@@ -683,7 +705,7 @@ function renderLogs() {
 }
 
 function scheduleLogRender() {
-  if (state.logRenderScheduled || state.page !== 'logs' || $('#logPause').checked) return;
+  if (state.logRenderScheduled || state.devPage !== 'logs' || $('#logPause').checked) return;
   state.logRenderScheduled = true;
   requestAnimationFrame(() => { state.logRenderScheduled = false; renderLogs(); });
 }
@@ -904,6 +926,26 @@ async function handleFleetAction(button) {
   await runAction({ key: `fleet:${action}`, button, success: `Đã thực hiện ${action}.`, fn: () => api(window.mcbot.fleetAction(action)) });
 }
 
+function switchDevPage(page) {
+  const next = window.MCbotDevRouter.apply(page, {
+    document,
+    catalog: pageTitles,
+    experienceLevel: state.preferences?.experienceLevel || 'standard'
+  });
+  if (!next) return;
+  state.devPage = next;
+  localStorage.setItem('mcbot.devPage', next);
+  if (next === 'dev-overview') renderDevOverview();
+  if (next === 'inspector') renderInspector().catch(error => toast(error.message, 'error'));
+  if (next === 'events') { loadEvents().then(renderEventStream).catch(() => {}); }
+  if (next === 'logs') { state.logUnread = 0; renderLogs(); }
+  if (next === 'incident-debug') { loadIncidents().then(() => { renderIncidentDebug(); renderIncidentDebugDetail().catch(() => {}); }).catch(error => toast(error.message, 'error')); }
+  if (next === 'runtime-state') renderRuntimeState();
+  if (next === 'b5-debug') { loadB5Journey().then(renderB5Debug).catch(error => toast(error.message, 'error')); }
+  if (next === 'diagnostics') refreshDiagnostics();
+  if (next === 'config-debug') { if (state.configGroups.length) syncSelect($('#configDebugGroup'), state.configGroups.map(group => `<option value="${esc(group.key)}">${esc(configLabels[group.key] || group.key)}</option>`).join('')); }
+}
+
 function switchPage(page) {
   page = window.MCbotRendererRouter.apply(page, {
     document,
@@ -912,6 +954,8 @@ function switchPage(page) {
   });
   state.page = page;
   localStorage.setItem('mcbot.page', page);
+  // If the target is a Dev nav page, also sync the Dev layout.
+  if (window.MCbotDevRouter.isDevNavPage(page)) switchDevPage(page);
   if (page === 'dashboard') renderDashboard();
   if (page === 'modes') { renderModes(); Promise.all([loadB5PureConfig(), loadB5Rules(), loadStorageProtection(), loadB5Journey()]).catch(error => toast(error.message, 'error')); }
   if (page === 'incidents') loadIncidents().catch(error => toast(error.message, 'error'));
@@ -924,7 +968,7 @@ function switchPage(page) {
   if (page === 'bot-detail') renderBotDetail();
   if (page === 'dev-overview') { renderDevOverview(); loadIncidents().catch(() => {}); }
   if (page === 'inspector') renderInspector().catch(error => toast(error.message, 'error'));
-  if (page === 'events') { loadDevLogs().then(renderEventStream).catch(() => {}); }
+  if (page === 'events') { loadEvents().then(renderEventStream).catch(() => {}); }
   if (page === 'incident-debug') { loadIncidents().then(() => { renderIncidentDebug(); renderIncidentDebugDetail().catch(() => {}); }).catch(error => toast(error.message, 'error')); }
   if (page === 'runtime-state') renderRuntimeState();
   if (page === 'b5-debug') { loadB5Journey().then(renderB5Debug).catch(error => toast(error.message, 'error')); }
@@ -1341,6 +1385,7 @@ function bindEvents() {
     if (fleetAction) handleFleetAction(fleetAction).catch(() => {});
   });
   $('#nav').addEventListener('click', event => { const item = event.target.closest('.nav-item'); if (item) switchPage(item.dataset.page); });
+  $('#devNav').addEventListener('click', event => { const item = event.target.closest('.dev-nav-item'); if (item) switchDevPage(item.dataset.devPage); });
   $('#openCommandPalette').onclick = () => openCommandPalette().catch(error => toast(error.message, 'error'));
   $('#commandPaletteInput').addEventListener('input', event => renderCommandPalette(event.target.value).catch(error => toast(error.message, 'error')));
   $('#commandPaletteResults').addEventListener('click', event => { const item = event.target.closest('[data-palette-route]'); if (!item) return; $('#commandPaletteDialog').close(); switchPage(item.dataset.paletteRoute); });
@@ -1679,10 +1724,16 @@ function bindEvents() {
   $('#botDetailSelect').onchange = renderBotDetail;
   $('#inspectorBotSelect').onchange = () => renderInspector().catch(() => {});
   $('#inspectorRefresh').onclick = () => renderInspector().catch(() => {});
-  for (const id of ['eventLevel', 'eventBot']) $('#' + id).addEventListener('change', renderEventStream);
+  for (const id of ['eventSubsystem', 'eventSeverity', 'eventBot']) $('#' + id).addEventListener('change', renderEventStream);
   $('#eventSearch').addEventListener('input', () => requestAnimationFrame(renderEventStream));
   $('#eventPause').addEventListener('change', () => { if (!$('#eventPause').checked) renderEventStream(); });
   $('#eventAutoScroll').addEventListener('change', renderEventStream);
+  $('#clearEventView').onclick = clearEventView;
+  $('#eventConsole').addEventListener('click', event => {
+    const button = event.target.closest('[data-event-copy]');
+    if (!button) return;
+    copyEventRecord(button.dataset.eventCopy).catch(error => { reportRendererError(error, 'clipboard-event'); toast('Không sao chép được sự kiện.', 'error'); });
+  });
   $('#incidentDebugList').addEventListener('click', event => {
     const item = event.target.closest('[data-incident-debug-id]');
     if (!item) return;
@@ -1722,19 +1773,25 @@ async function initialize() {
   restoreLocalPreferences();
   loadAiLocalSettings();
   switchPage(state.page);
+  switchDevPage(state.devPage);
   window.mcbot.onSnapshot(acceptSnapshot);
   window.mcbot.onLog(log => {
     state.logs.push(log);
     if (state.logs.length > 2500) state.logs.splice(0, state.logs.length - 2500);
-    if (state.page !== 'logs' || $('#logPause').checked) { state.logUnread += 1; updateLogUnread(); }
+    if (state.devPage !== 'logs' || $('#logPause').checked) { state.logUnread += 1; updateLogUnread(); }
     else scheduleLogRender();
   });
   try { state.logs = await api(window.mcbot.logs(800)); } catch (error) { reportRendererError(error, 'initial-log-load'); }
   window.mcbot.onDevLog(record => {
     state.devLogs.push(record);
     if (state.devLogs.length > 4000) state.devLogs.splice(0, state.devLogs.length - 4000);
+  });
+  window.mcbot.onEvent(record => {
+    state.events.push(record);
+    if (state.events.length > 4000) state.events.splice(0, state.events.length - 4000);
     scheduleEventRender();
   });
+  loadEvents().then(renderEventStream).catch(() => {});
   const appInfoPromise = api(window.mcbot.appInfo()).then(info => { state.appInfo = info; $('#appVersion').textContent = `MCbot Desktop · v${info.version}${info.packaged ? '' : ' · DEV'}`; }).catch(error => reportRendererError(error, 'app-info-load'));
   await Promise.all([refreshSnapshot({ quiet: true }), loadPreferences(), appInfoPromise]);
   await Promise.all([loadReadinessAndHealth(), loadIncidents()]).catch(error => toast(error.message, 'error'));

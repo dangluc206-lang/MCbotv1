@@ -326,6 +326,7 @@ function registerIpc() {
     safeHandle('mcbot:gui:inspect', (botId, options) => controller.inspectGui(botId, options));
     safeHandle('mcbot:logs', limit => controller.logSnapshot({ limit }));
     safeHandle('mcbot:dev:logs', limit => controller.devLogSnapshot({ limit }));
+    safeHandle('mcbot:events:snapshot', limit => controller.eventSnapshot({ limit }));
     safeHandle('mcbot:bot:dev-detail', botId => controller.botDevDetail(botId));
     safeHandle('mcbot:b5:trace', botId => controller.b5Trace(botId));
     safeHandle('mcbot:diagnostics:list', limit => controller.diagnostics({ limit }));
@@ -550,6 +551,9 @@ if (hasSingleInstanceLock) {
         });
         controller.onDevLog(record => {
             if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mcbot:dev-log', record);
+        });
+        controller.onEvent(record => {
+            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mcbot:event', record);
         });
         createTray();
 

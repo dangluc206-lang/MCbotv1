@@ -14,7 +14,7 @@ const GROUPS = Object.freeze({
     update: ['mcbot:update:migration-status','mcbot:update:rollback-config','mcbot:update:local-status','mcbot:update:local-select','mcbot:update:local-clear','mcbot:update:local-install'],
     ai: ['mcbot:ai:status','mcbot:ai:workspace:select','mcbot:ai:workspace:inspect','mcbot:ai:chat'],
     desktop: ['mcbot:secrets:status','mcbot:secrets:set','mcbot:secrets:clear','mcbot:secrets:reset','mcbot:preferences:get','mcbot:preferences:set','mcbot:presentation:search','mcbot:shell:project','mcbot:shell:logs','mcbot:shell:backups','mcbot:shell:support'],
-    dev: ['mcbot:dev:logs','mcbot:bot:dev-detail','mcbot:b5:trace']
+    dev: ['mcbot:dev:logs','mcbot:bot:dev-detail','mcbot:b5:trace','mcbot:events:snapshot']
 });
 
 const READ_SUFFIX = /(?::get|:list|:status|:read|:preview|:search|:info|:snapshot|:health|:readiness|:journey|:groups|:commands|:logs|:backups|:modules)$/;

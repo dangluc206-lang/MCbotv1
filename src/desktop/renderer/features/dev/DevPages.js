@@ -7,21 +7,13 @@
   // Pure presenters for the Dev experience. No runtime logic here: they only
   // format data already provided by the shared backend snapshot/IPC surface.
 
-  function fleetRows(bots, viConnection) {
-    return bots.map(bot => {
-      const mode = bot.modeOwner?.modeId || bot.modeOwner?.mode || bot.intent?.desiredMode || '—';
-      const ops = Number(bot.operation?.active || 0);
-      const gui = bot.gui?.definitionId || bot.gui?.title || '—';
-      return `<div class="log-line"><span class="log-time">${escapeText(bot.state?.connectionState || '—')}</span>` +
-        `<span class="log-level">${escapeText(String(bot.connectionGeneration ?? '—'))}</span>` +
-        `<span class="log-scope">${escapeText(bot.botId)}</span>` +
-        `<span class="log-message">mode=${escapeText(String(mode))} · ops=${ops} · gen=${escapeText(String(bot.connectionGeneration ?? '—'))} · intent=${escapeText(String(intentText(bot.intent)))} · gui=${escapeText(String(gui))} · services=${(bot.services || []).length}</span></div>`;
-    }).join('') || '<div class="empty">Không có runtime nào.</div>';
-  }
+  // ---- Shared state helpers ----
 
-  function intentText(intent) {
-    if (!intent) return '—';
-    return `${intent.desiredConnection || '—'}${intent.desiredMode ? `/${intent.desiredMode}` : ''}${intent.modeState ? `/${intent.modeState}` : ''}`;
+  function stateView({ loading = false, empty = null, error = null, content = '' } = {}) {
+    if (loading) return '<div class="dev-state dev-loading"><span class="dev-spinner" aria-hidden="true"></span><p>Đang tải…</p></div>';
+    if (error) return `<div class="dev-state dev-error" role="alert"><strong>Lỗi</strong><p>${escapeText(error)}</p></div>`;
+    if (empty) return `<div class="dev-state dev-empty"><p>${escapeText(empty)}</p></div>`;
+    return content;
   }
 
   // Entities are assembled at runtime so editor auto-formatting cannot strip them.
@@ -34,6 +26,33 @@
       .replace(/"/g, `${AMP}quot;`)
       .replace(/'/g, `${AMP}#39;`);
   }
+
+  function shorten(value) {
+    const text = typeof value === 'object' ? JSON.stringify(value) : String(value ?? '');
+    return text.length > 80 ? `${text.slice(0, 77)}…` : text;
+  }
+
+  // ---- Fleet ----
+
+  function fleetRows(bots, viConnection) {
+    if (!bots?.length) return stateView({ empty: 'Không có runtime nào.' });
+    return bots.map(bot => {
+      const mode = bot.modeOwner?.modeId || bot.modeOwner?.mode || bot.intent?.desiredMode || '—';
+      const ops = Number(bot.operation?.active || 0);
+      const gui = bot.gui?.definitionId || bot.gui?.title || '—';
+      return `<div class="log-line"><span class="log-time">${escapeText(bot.state?.connectionState || '—')}</span>` +
+        `<span class="log-level">${escapeText(String(bot.connectionGeneration ?? '—'))}</span>` +
+        `<span class="log-scope">${escapeText(bot.botId)}</span>` +
+        `<span class="log-message">mode=${escapeText(String(mode))} · ops=${ops} · gen=${escapeText(String(bot.connectionGeneration ?? '—'))} · intent=${escapeText(String(intentText(bot.intent)))} · gui=${escapeText(String(gui))} · services=${(bot.services || []).length}</span></div>`;
+    }).join('');
+  }
+
+  function intentText(intent) {
+    if (!intent) return '—';
+    return `${intent.desiredConnection || '—'}${intent.desiredMode ? `/${intent.desiredMode}` : ''}${intent.modeState ? `/${intent.modeState}` : ''}`;
+  }
+
+  // ---- Bot detail ----
 
   function botDetail(bot, helpers) {
     const { viConnection, viPhase, modeInfo, position, activeOperation } = helpers;
@@ -64,16 +83,17 @@
     </article>`;
   }
 
+  // ---- Log / Event line ----
+
   function logLine(record) {
     const time = new Date(record.timestamp).toLocaleTimeString('vi-VN', { hour12: false });
-    const meta = record.meta ? Object.entries(record.meta).filter(([key]) => key !== 'stack').slice(0, 6).map(([key, value]) => `${key}=${shorten(value)}`).join(' · ') : '';
-    return `<div class="log-line ${escapeText(record.level)}"><span class="log-time">${escapeText(time)}</span><span class="log-level ${escapeText(record.level)}">${escapeText(String(record.level || '').toUpperCase())}</span><span class="log-scope" title="${escapeText(record.scope)}">${escapeText(record.scope)}</span><span class="log-message">${escapeText(record.message)}${meta ? ` <span class="log-meta">· ${escapeText(meta)}</span>` : ''}</span></div>`;
+    const meta = record.meta ? Object.entries(record.meta).filter(([key]) => key !== 'stack' && key !== 'error').map(([key, value]) => `${key}=${shorten(value)}`).join(' · ') : '';
+    const stack = String(record.meta?.stack || record.meta?.error?.stack || '').trim();
+    const stackHtml = stack ? `<details class="log-stack"><summary>Stack trace</summary><pre>${escapeText(stack)}</pre></details>` : '';
+    return `<div class="log-line ${escapeText(record.level)}"><span class="log-time">${escapeText(time)}</span><span class="log-level ${escapeText(record.level)}">${escapeText(String(record.level || '').toUpperCase())}</span><span class="log-scope" title="${escapeText(record.scope)}">${escapeText(record.scope)}</span><span class="log-message">${escapeText(record.message)}${meta ? ` <span class="log-meta">· ${escapeText(meta)}</span>` : ''}${stackHtml}</span></div>`;
   }
 
-  function shorten(value) {
-    const text = typeof value === 'object' ? JSON.stringify(value) : String(value ?? '');
-    return text.length > 80 ? `${text.slice(0, 77)}…` : text;
-  }
+  // ---- Incident timeline ----
 
   function incidentTimeline(incident, diagnostic) {
     const entries = [];
@@ -89,7 +109,7 @@
       for (const entry of incident.history) entries.push(['Transition', `${entry.state || entry.to || '—'} · ${entry.reason || ''} · ${entry.at || ''}`]);
     }
     if (diagnostic) entries.push(['Raw diagnostic (JSON)', `<pre class="compact-output">${escapeText(JSON.stringify(diagnostic, null, 2))}</pre>`]);
-    return `<div class="incident-timeline">${chunk(entries).map(([label, value]) => `<div class="timeline-step"><span>${escapeText(label)}</span><strong>${value}</strong></div>`).join('') || '<div class="empty">Không có timeline.</div>'}</div>`;
+    return `<div class="incident-timeline">${chunk(entries).map(([label, value]) => `<div class="timeline-step"><span>${escapeText(label)}</span><strong>${value}</strong></div>`).join('') || stateView({ empty: 'Không có timeline.' })}</div>`;
   }
 
   function chunk(entries) {
@@ -98,5 +118,92 @@
     return pairs;
   }
 
-  return Object.freeze({ fleetRows, botDetail, logLine, incidentTimeline });
+  // ---- Inspector ----
+
+  function inspectorView(detail) {
+    if (!detail) return stateView({ empty: 'Chưa có dữ liệu inspector.' });
+    return `<pre class="dev-json-output">${escapeText(JSON.stringify(detail, null, 2))}</pre>`;
+  }
+
+  // ---- Event stream (EventBus inspector) ----
+
+  function eventLine(record) {
+    const time = new Date(record.timestamp).toLocaleTimeString('vi-VN', { hour12: false });
+    const type = record.eventType || '—';
+    const summary = [record.eventId, type].filter(Boolean).join(' · ');
+    const meta = [
+      record.botId ? `bot=${escapeText(record.botId)}` : '',
+      record.generation ? `gen=${escapeText(String(record.generation))}` : '',
+      record.attemptEpoch ? `attempt=${escapeText(String(record.attemptEpoch))}` : '',
+      record.source ? `source=${escapeText(record.source)}` : '',
+      record.subsystem ? `subsystem=${escapeText(record.subsystem)}` : ''
+    ].filter(Boolean).join(' · ');
+    const rawJson = escapeText(JSON.stringify(record, null, 2));
+    return `<div class="event-line ${escapeText(record.severity || 'info')}" data-event-id="${escapeText(record.eventId)}">` +
+      `<span class="log-time">${escapeText(time)}</span>` +
+      `<span class="log-level ${escapeText(record.severity || 'info')}">${escapeText(String((record.severity || 'info')).toUpperCase())}</span>` +
+      `<span class="log-scope">${escapeText(String(record.subsystem || '—'))}</span>` +
+      `<div class="event-body"><strong>${escapeText(summary)}</strong>` +
+      `<span class="log-meta">${meta ? `· ${meta}` : ''}</span>` +
+      `${rawJson ? `<details class="event-raw"><summary>Xem JSON</summary><pre>${rawJson}</pre></details>` : ''}` +
+      `<div class="actions event-actions"><button class="button ghost small" data-event-copy="${escapeText(record.eventId)}">Copy</button></div>` +
+      `</div></div>`;
+  }
+
+  function eventStream(records) {
+    if (!records?.length) return stateView({ empty: 'Chưa có sự kiện phù hợp.' });
+    return records.map(eventLine).join('');
+  }
+
+  // ---- Log stream ----
+
+  function logStream(records) {
+    if (!records?.length) return stateView({ empty: 'Không có nhật ký phù hợp.' });
+    return records.map(logLine).join('');
+  }
+
+  // ---- Runtime state ----
+
+  function runtimeStateView(snapshot) {
+    if (!snapshot) return stateView({ empty: 'Chưa có snapshot.' });
+    return `<pre class="dev-json-output">${escapeText(JSON.stringify(snapshot, null, 2))}</pre>`;
+  }
+
+  // ---- B5 Debug ----
+
+  function b5DebugView(journey, trace) {
+    const journeyHtml = journey?.length ? journey.map(entry => {
+      const botId = entry.botId || '—';
+      const completed = entry.completedB5 ?? '—';
+      const state = entry.state || '—';
+      return `<div class="b5-journey-card panel"><strong>${escapeText(botId)}</strong><span>${escapeText(state)} · ${escapeText(String(completed))} B5</span></div>`;
+    }).join('') : stateView({ empty: 'Chưa có trạng thái B5.' });
+    const traceHtml = trace ? `<pre class="dev-json-output">${escapeText(JSON.stringify(trace, null, 2))}</pre>` : stateView({ empty: 'Chưa có trace.' });
+    return `${journeyHtml}${traceHtml}`;
+  }
+
+  // ---- Diagnostics ----
+
+  function diagnosticsView(items) {
+    if (!items?.length) return stateView({ empty: 'Chưa có bản ghi lỗi runtime.' });
+    return items.map(item => {
+      const id = item.id || item.name;
+      const title = [item.botId, item.code || (item.corrupt ? 'BẢN GHI HỎNG' : 'Lỗi runtime')].filter(Boolean).join(' · ');
+      const meta = `${new Date(item.modifiedAt).toLocaleString('vi-VN')} · ${item.size} bytes${item.severity ? ` · ${item.severity}` : ''}`;
+      return `<div class="diagnostic-item" data-diagnostic="${escapeText(id)}"><strong>${escapeText(title || id)}</strong><span>${escapeText(meta)}</span></div>`;
+    }).join('');
+  }
+
+  // ---- Config Debug ----
+
+  function configDebugView(group) {
+    if (!group) return stateView({ empty: 'Chọn nhóm cấu hình.' });
+    return `<pre class="dev-json-output">${escapeText(JSON.stringify(group, null, 2))}</pre>`;
+  }
+
+  return Object.freeze({
+    stateView, fleetRows, botDetail, logLine, incidentTimeline,
+    inspectorView, eventStream, eventLine, logStream, runtimeStateView,
+    b5DebugView, diagnosticsView, configDebugView
+  });
 }));

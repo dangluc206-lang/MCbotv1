@@ -18,6 +18,7 @@ const B5OperatorProjection = require('./b5/B5OperatorProjection');
 const ConfigurationWorkspaceService = require('./configuration/ConfigurationWorkspaceService');
 const BackupCatalogService = require('./backup/BackupCatalogService');
 const OperatorSnapshotProjector = require('./projection/OperatorSnapshotProjector');
+const EventInspectorBridge = require('./events/EventInspectorBridge');
 const CustomModeUseCases = require('./use-cases/CustomModeUseCases');
 const BotProfileUseCases = require('./use-cases/BotProfileUseCases');
 const ModeConfigurationUseCases = require('./use-cases/ModeConfigurationUseCases');
@@ -58,6 +59,7 @@ class DesktopController {
         this.devLogs = [];
         this.devListeners = new Set();
         this.maxDevLogs = Math.max(500, Number(maxLogs) * 3 || 3600);
+        this.eventInspectorBridge = null;
         this.startPromise = null;
         this.startedAt = null;
         this.logPersistenceFailure = null;
@@ -123,6 +125,15 @@ class DesktopController {
         return this.devLogs.slice(-safeLimit).map(entry => ({ ...entry }));
     }
 
+    onEvent(listener) {
+        if (typeof listener !== 'function') throw new TypeError('event listener must be a function');
+        return this.eventInspectorBridge?.onEvent?.(listener) || (() => {});
+    }
+
+    eventSnapshot({ limit = 1000 } = {}) {
+        return this.eventInspectorBridge?.snapshot?.({ limit }) || [];
+    }
+
     reportRendererError(payload = {}) {
         const message = String(payload?.message || 'Unknown renderer error').slice(0, 2000);
         const stack = payload?.stack ? String(payload.stack).slice(0, 8000) : null;
@@ -166,6 +177,7 @@ class DesktopController {
             this.bootStage = 'RUNTIME_START';
             await this.bundle.application.initialize();
             await this.bundle.application.start();
+            this.#startEventInspectorBridge();
             this.lifecycle = 'RUNNING';
             this.bootFailure = null;
             this.bootStage = null;
@@ -218,6 +230,7 @@ class DesktopController {
             await this.bundle.application.stop();
             await this.bundle.application.destroy();
         } finally {
+            this.#stopEventInspectorBridge();
             this.bundle = null;
             this.lifecycle = 'STOPPED';
             this.startedAt = null;
@@ -847,6 +860,39 @@ class DesktopController {
             });
         }
         return this.runtimeFailureArtifactRepository;
+    }
+
+    #startEventInspectorBridge() {
+        const bundle = this.bundle;
+        if (!bundle?.shared?.eventBus) return;
+        this.#stopEventInspectorBridge();
+        const bridge = new EventInspectorBridge({
+            sharedEventBus: bundle.shared.eventBus,
+            runtimes: () => bundle.application?.listRuntimes?.() || [],
+            maxEvents: 3000
+        });
+        bridge.watchAll();
+        this.eventInspectorBridge = bridge;
+        this.#publishLog({
+            timestamp: VietnamTime.iso(),
+            level: 'info',
+            scope: 'EventInspector',
+            message: 'Dev event inspector subscribed to event buses.',
+            meta: { busCount: this.#eventBusCount() }
+        }, { persist: false });
+    }
+
+    #eventBusCount() {
+        const bundle = this.bundle;
+        let count = bundle?.shared?.eventBus ? 1 : 0;
+        count += (bundle?.application?.listRuntimes?.() || []).filter(runtime => runtime?.getService?.('eventBus')).length;
+        return count;
+    }
+
+    #stopEventInspectorBridge() {
+        if (!this.eventInspectorBridge) return;
+        try { this.eventInspectorBridge.unwatch?.(); } catch { /* ignore */ }
+        this.eventInspectorBridge = null;
     }
 
 

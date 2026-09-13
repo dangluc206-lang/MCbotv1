@@ -19,23 +19,11 @@
         <button class="nav-item active" data-page="dashboard"><span>01</span>Tổng quan</button>
         <button class="nav-item" data-page="bots"><span>02</span>Bot</button>
         <button class="nav-item" data-page="bot-detail"><span>03</span>Chi tiết bot</button>
+        <div class="nav-group-label">Xây dựng</div>
         <button class="nav-item" data-page="modes"><span>04</span>Chế độ</button>
-        <div class="nav-group-label">Hệ thống</div>
+        <div class="nav-group-label">Bảo trì</div>
         <button class="nav-item" data-page="incidents"><span>05</span>Sự cố <b id="incidentBadge" class="nav-badge hidden">0</b></button>
         <button class="nav-item" data-page="settings"><span>06</span>Cài đặt</button>
-        <div class="nav-group-label" data-experience="advanced">Dev</div>
-        <button class="nav-item" data-page="dev-overview" data-experience="advanced"><span>01</span>Fleet</button>
-        <button class="nav-item" data-page="inspector" data-experience="advanced"><span>02</span>Inspector</button>
-        <button class="nav-item" data-page="events" data-experience="advanced"><span>03</span>Event Stream</button>
-        <button class="nav-item" data-page="logs" data-experience="advanced"><span>04</span>Nhật ký <b id="logUnreadBadge" class="nav-badge hidden">0</b></button>
-        <button class="nav-item" data-page="incident-debug" data-experience="advanced"><span>05</span>Incident Debug</button>
-        <button class="nav-item" data-page="runtime-state" data-experience="advanced"><span>06</span>Runtime State</button>
-        <button class="nav-item" data-page="b5-debug" data-experience="advanced"><span>07</span>B5 Debug</button>
-        <button class="nav-item" data-page="builder" data-experience="advanced"><span>08</span>Tạo chế độ</button>
-        <button class="nav-item" data-page="tools" data-experience="advanced"><span>09</span>Công cụ</button>
-        <button class="nav-item" data-page="diagnostics" data-experience="advanced"><span>10</span>Chẩn đoán</button>
-        <button class="nav-item" data-page="config-debug" data-experience="advanced"><span>11</span>Config Debug</button>
-        <button class="nav-item" data-page="ai" data-experience="advanced"><span>12</span>AI Local</button>
       </nav>
       <div class="sidebar-bottom">
         <div class="backend-state"><span id="backendDot" class="dot"></span><div><small>Hệ thống nền</small><strong id="backendState">...</strong></div></div>
@@ -171,183 +159,9 @@
         </div>
       </section>
 
-
-      <section class="page" id="page-builder">
-        <div class="section-head"><div><h2>Trình tạo chế độ bằng mô-đun</h2><p>Ghép các bước an toàn: lệnh đã đăng ký, nhấp GUI, di chuyển, chờ, /is, vào Sky, đọc kho, bảo vệ kho, chế B5, điều kiện và lặp.</p></div></div>
-        <div class="builder-layout">
-          <div class="panel form-panel">
-            <div class="panel-title"><h2>Thông tin chế độ</h2><span class="tag">KHÔNG EVAL</span></div>
-            <label>Chế độ đã lưu<select id="customModeSelect"><option value="">— Tạo mới —</option></select></label>
-            <label>ID chế độ<input id="customModeId" placeholder="mining-tu-dong"></label>
-            <label>Tên hiển thị<input id="customModeLabel" placeholder="Mining tự động"></label>
-            <label>Mô tả<textarea id="customModeDescription" rows="3"></textarea></label>
-            <label class="check"><input id="customModeEnabled" type="checkbox" checked> Bật chế độ này khi khởi động backend</label>
-            <label>Độ trễ vòng lặp (ms)<input id="customModeLoopDelay" type="number" min="0" value="1000"></label>
-            <div class="actions"><button class="button ghost" id="newCustomMode">Mới</button><button class="button danger" id="deleteCustomMode">Xóa</button></div>
-          </div>
-          <div class="panel">
-            <div class="panel-title"><h2>Kho mô-đun</h2><span id="moduleCount" class="tag">0</span></div>
-            <label>Tìm mô-đun<input id="moduleSearch" placeholder="B5, GUI, lệnh, chờ…"></label>
-            <div class="actions compact"><select id="customModeTemplate"><option value="">— Thư viện mẫu —</option></select><button class="button ghost small" id="applyCustomTemplate">Dùng mẫu</button></div>
-            <div id="modulePalette" class="module-palette"></div>
-          </div>
-        </div>
-        <div class="panel section-gap">
-          <div class="panel-title"><div><h2>Luồng chạy</h2><p class="helper">Thêm mô-đun rồi chỉnh tham số có kiểu. JSON chỉ hiện ở chế độ Nâng cao.</p></div><div class="actions compact"><button class="button ghost" id="dryRunCustomMode">Chạy mô phỏng</button><button class="button ghost advanced-builder" id="packageCustomMode">Kiểm tra package</button><button class="button ghost" id="clearCustomSteps">Xóa bước</button><button class="button primary" id="saveCustomMode">Lưu chế độ</button></div></div>
-          <div class="workflow-columns"><div><h3>Khi bắt đầu</h3><div id="customStartSteps" class="workflow-list"></div></div><div><h3>Vòng lặp chính</h3><div id="customLoopSteps" class="workflow-list"></div></div><div><h3>Khi dừng</h3><div id="customStopSteps" class="workflow-list"></div></div></div>
-        </div>
-        <pre id="customModeSimulation" class="panel section-gap">Chưa chạy mô phỏng.</pre>
-        <details class="panel section-gap advanced-builder"><summary>Cấu hình JSON nâng cao của chế độ</summary><textarea id="customModeJson" aria-label="Cấu hình JSON nâng cao của chế độ" class="code-editor" rows="18" spellcheck="false"></textarea><div class="actions"><button class="button ghost" id="applyCustomJson">Áp dụng JSON vào trình dựng</button></div></details>
-      </section>
-
-      <section class="page" id="page-tools">
-        <div class="panel form-panel">
-          <div class="panel-title"><div><h2>Lệnh riêng theo Sky</h2><p class="helper">Đăng ký lệnh riêng cho từng Sky. Bot chỉ được gửi khi đang ở đúng Sky đó; lệnh hệ thống của automation không bị ghi đè.</p></div><span class="tag">THEO SKY</span></div>
-          <div class="inline-fields"><label>Sky<select id="skyCommandSky"></select></label><label>Bot dùng để thử<select id="skyCommandBot"></select></label></div>
-          <div class="inline-fields"><label>ID lệnh<input id="skyCommandId" placeholder="autofarm"></label><label>Tên hiển thị<input id="skyCommandLabel" placeholder="Auto Farm"></label></div>
-          <label>Lệnh server<input id="skyCommandValue" placeholder="/autofarm"></label>
-          <label>Mô tả<input id="skyCommandDescription" placeholder="Tùy chọn"></label>
-          <label class="check"><input id="skyCommandEnabled" type="checkbox" checked> Bật lệnh này</label>
-          <label>Tham số JSON khi thử lệnh<textarea id="skyCommandArgs" rows="3" spellcheck="false">{}</textarea></label>
-          <div class="actions"><button class="button ghost" id="newSkyCommand">Lệnh mới</button><button class="button primary" id="saveSkyCommand">Lưu + áp dụng ngay</button></div>
-          <div id="skyCommandList" class="section-gap"><div class="empty">Chưa tải danh sách lệnh.</div></div>
-        </div>
-        <div class="two-column section-gap">
-          <div class="panel form-panel">
-            <div class="panel-title"><h2>Trung tâm lệnh</h2><span class="tag">Chỉ lệnh đã đăng ký</span></div>
-            <p>Gửi lệnh đã đăng ký qua dịch vụ lệnh; không gửi chat thô trực tiếp.</p>
-            <label>Bot<select id="commandBot"></select></label>
-            <label>Lệnh<select id="commandKey"></select></label>
-            <label>Tham số JSON<textarea id="commandArgs" rows="5" spellcheck="false">{}</textarea></label>
-            <div class="inline-fields"><label class="check"><input id="commandConfirm" type="checkbox"> Chờ xác nhận nếu lệnh có quy tắc</label><label>Thời gian chờ tối đa (ms)<input id="commandTimeout" type="number" min="500" max="30000" value="5000"></label></div>
-            <button class="button primary" id="sendCommandBtn">Gửi lệnh</button>
-          </div>
-          <div class="panel output-panel"><div class="panel-title"><h2>Kết quả lệnh</h2><button class="button ghost small" id="copyCommandBtn">Sao chép</button></div><pre id="commandOutput">Chưa gửi lệnh.</pre></div>
-        </div>
-        <div class="two-column section-gap">
-          <div class="panel form-panel">
-            <div class="panel-title"><h2>Trình kiểm tra GUI</h2><span class="tag">Xác minh</span></div>
-            <p>Mở GUI máy chủ bằng lệnh đã đăng ký, nhấp ô tùy chọn và chụp trạng thái.</p>
-            <label>Bot<select id="guiBot"></select></label>
-            <label>Lệnh<select id="guiCommand"></select></label>
-            <label>Các ô cần nhấp<input id="guiSlots" placeholder="Ví dụ: 10, 16, 49"></label>
-            <label>Thời gian chờ tối đa (ms)<input id="guiTimeout" type="number" min="1000" value="7000"></label>
-            <button class="button primary" id="inspectGuiBtn">Chụp GUI</button>
-          </div>
-          <div class="panel output-panel"><div class="panel-title"><h2>Kết quả GUI</h2><button class="button ghost small" id="copyGuiBtn">Sao chép</button></div><pre id="guiOutput">Chưa có bản chụp trạng thái.</pre></div>
-        </div>
-      </section>
-
-      <section class="page" id="page-logs">
-        <div class="page-heading"><div><h1>Nhật ký</h1><p>Chỉ hiển thị hoạt động chính và cảnh báo. Khi có lỗi cần phân tích sâu, mở file nhật ký chi tiết.</p></div></div>
-        <div class="toolbar panel">
-          <select id="logLevel" aria-label="Lọc mức nhật ký"><option value="all">Mọi mức</option><option value="info">Thông tin</option><option value="warn">Cảnh báo</option><option value="error">Lỗi</option></select>
-          <select id="logBot" aria-label="Lọc bot trong nhật ký"><option value="all">Mọi bot</option></select>
-          <input id="logSearch" aria-label="Tìm nhật ký" placeholder="Tìm nội dung, phạm vi, tác vụ...">
-          <label class="check toolbar-check"><input id="logPause" type="checkbox"> Tạm dừng hiển thị</label>
-          <label class="check toolbar-check"><input id="logAutoScroll" type="checkbox" checked> Tự cuộn</label>
-          <button class="button ghost" id="clearLogView">Xóa màn hình</button><button class="button ghost" id="openDetailedLogs">Mở log chi tiết</button>
-        </div>
-        <div class="log-summary"><span id="logCount">0 dòng nhật ký</span><span id="logPausedHint"></span></div>
-        <div class="log-console panel" id="logConsole"></div>
-      </section>
-
-      <section class="page" id="page-diagnostics">
-        <div class="panel support-bar">
-          <div><strong>Gói hỗ trợ</strong><span>Xuất bản chụp trạng thái + 500 dòng nhật ký + bản ghi lỗi đã che dữ liệu nhạy cảm thành một file JSON.</span></div>
-          <div class="actions compact"><button class="button primary" id="exportSupport">Xuất gói</button><button class="button ghost" id="openSupport">Mở thư mục</button></div>
-        </div>
-        <div class="two-column diagnostic-layout section-gap">
-          <div class="panel"><div class="panel-title"><h2>Lỗi khi chạy</h2><button class="button ghost small" id="refreshDiagnostics">Làm mới</button></div><div id="diagnosticList" class="diagnostic-list"></div></div>
-          <div class="panel output-panel"><h2>Chi tiết</h2><pre id="diagnosticOutput">Chọn một bản ghi lỗi.</pre></div>
-        </div>
-      </section>
-
-      <section class="page" id="page-ai">
-        <div class="ai-layout">
-          <div class="panel ai-sidebar-panel">
-            <div class="panel-title"><div><h2>Local AI Agent</h2><p class="helper">AI đọc project qua tool nội bộ, không được truy cập .env/secret/node_modules/data/out.</p></div><span id="aiStatusTag" class="tag">CHƯA KẾT NỐI</span></div>
-            <label>Ollama / OpenAI-compatible URL<input id="aiBaseUrl" value="http://127.0.0.1:11434/v1" spellcheck="false"></label>
-            <div class="actions"><button class="button ghost" id="aiRefreshModels">Kiểm tra Ollama</button></div>
-            <label>Model<select id="aiModel"><option value="">Chưa tải model</option></select></label>
-            <label>Quyền của agent<select id="aiPermission"><option value="READ">READ · chỉ đọc/phân tích</option><option value="PATCH">PATCH · được sửa file</option><option value="DEVELOP">DEVELOP · sửa + test/validator</option><option value="ADMIN">ADMIN · DEVELOP + điều khiển bot whitelist</option></select></label>
-            <hr>
-            <label>Project workspace<input id="aiWorkspace" readonly placeholder="Chưa chọn project"></label>
-            <div class="actions"><button class="button primary" id="aiSelectWorkspace">Chọn project</button><button class="button ghost" id="aiInspectWorkspace">Quét lại</button></div>
-            <div class="backend-overview ai-workspace-stats"><div><span>Phiên bản</span><strong id="aiWorkspaceVersion">—</strong></div><div><span>File nguồn</span><strong id="aiWorkspaceFiles">—</strong></div><div><span>AGENTS</span><strong id="aiWorkspaceAgents">—</strong></div></div>
-            <p class="helper">Bản packaged cần chọn thư mục source project trên máy. Bản DEV có thể chọn chính thư mục MCbot hiện tại.</p>
-          </div>
-
-          <div class="panel ai-chat-panel">
-            <div class="panel-title"><div><h2>Chat với project</h2><p class="helper">Agent tự search/read code, sửa bằng patch và chạy check tùy theo quyền bạn chọn.</p></div><div class="actions compact"><button class="button ghost small" id="aiNewChat">Chat mới</button><button class="button ghost small" id="aiCopyLast">Sao chép trả lời</button></div></div>
-            <div class="ai-quick-actions">
-              <button class="button ghost small" data-ai-prompt="Đọc trạng thái runtime và log gần nhất. Phân tích bot đang làm gì, lỗi nào đáng chú ý và nguyên nhân gần nhất. Không sửa code.">Phân tích runtime</button>
-              <button class="button ghost small" data-ai-prompt="Audit luồng B5 hiện tại từ mode tới storage protection/crafting. Chỉ ra blocker hoặc điểm rủi ro dựa trên code hiện tại. Không sửa nếu tôi chưa yêu cầu.">Kiểm tra B5</button>
-              <button class="button ghost small" data-ai-prompt="Đọc AGENTS.md, RULES.md và ARCHITECTURE.md rồi tóm tắt các ràng buộc quan trọng mà mọi thay đổi code phải tuân theo.">Đọc luật project</button>
-            </div>
-            <div id="aiMessages" class="ai-messages"><div class="ai-empty">Chọn project + model rồi nhập yêu cầu. Ví dụ: “tìm nguyên nhân B5 bị timeout và sửa, sau đó chạy test liên quan”.</div></div>
-            <div id="aiTrace" class="ai-trace hidden"></div>
-            <div class="ai-composer">
-              <textarea id="aiPrompt" aria-label="Yêu cầu cho Local AI Agent" rows="4" placeholder="Ra lệnh cho Local AI Agent..." spellcheck="false"></textarea>
-              <div class="ai-composer-actions"><span id="aiBusyText" class="helper">Sẵn sàng.</span><button class="button primary" id="aiSend">Gửi</button></div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       <section class="page" id="page-bot-detail">
         <div class="section-head"><div><h2>Chi tiết bot</h2><p>Trạng thái kết nối, chế độ, nhân vật và cảnh báo của một bot</p></div><label>Bot<select id="botDetailSelect"></select></label></div>
         <div id="botDetailContent"><div class="empty panel">Chọn một bot để xem chi tiết.</div></div>
-      </section>
-
-      <section class="page" id="page-dev-overview">
-        <div class="section-head"><div><h2>Tổng quan fleet (Dev)</h2><p>Toàn bộ lifecycle, connection, generation, mode, operation và health</p></div></div>
-        <div class="metric-grid" id="devFleetMetrics"></div>
-        <div class="log-console panel" id="devFleetTable"></div>
-      </section>
-
-      <section class="page" id="page-inspector">
-        <div class="section-head"><div><h2>Bot Inspector</h2><p>Trạng thái runtime đầy đủ: state, intent, generation, mode, operation, services</p></div><label>Bot<select id="inspectorBotSelect"></select></label><button class="button ghost" id="inspectorRefresh">Làm mới</button></div>
-        <pre id="inspectorOutput" class="log-console panel">Chọn một bot để inspect.</pre>
-      </section>
-
-      <section class="page" id="page-events">
-        <div class="section-head"><div><h2>Event Stream</h2><p>Log runtime chưa fold (DEBUG/INFO/WARN/ERROR) theo thời gian thực</p></div></div>
-        <div class="toolbar panel">
-          <select id="eventLevel" aria-label="Lọc mức"><option value="all">Mọi mức</option><option value="debug">Debug</option><option value="info">Info</option><option value="warn">Warn</option><option value="error">Error</option></select>
-          <select id="eventBot" aria-label="Lọc bot"><option value="all">Mọi bot</option></select>
-          <input id="eventSearch" aria-label="Tìm sự kiện" placeholder="Tìm scope, message, code...">
-          <label class="check toolbar-check"><input id="eventPause" type="checkbox"> Tạm dừng</label>
-          <label class="check toolbar-check"><input id="eventAutoScroll" type="checkbox" checked> Tự cuộn</label>
-        </div>
-        <div class="log-summary"><span id="eventCount">0 sự kiện</span></div>
-        <div class="log-console panel" id="eventConsole"></div>
-      </section>
-
-      <section class="page" id="page-incident-debug">
-        <div class="section-head"><div><h2>Incident Debugger</h2><p>Timeline sự cố: incident → evidence → operation → recovery; xem raw diagnostic</p></div><button class="button ghost" id="refreshIncidentDebug">Làm mới</button></div>
-        <div class="incident-layout">
-          <div class="panel"><div id="incidentDebugList" class="incident-list"><div class="empty">Đang tải sự cố…</div></div></div>
-          <div class="panel output-panel" id="incidentDebugDetail"><div class="empty">Chọn một sự cố để xem timeline đầy đủ.</div></div>
-        </div>
-      </section>
-
-      <section class="page" id="page-runtime-state">
-        <div class="section-head"><div><h2>Runtime State</h2><p>Snapshot toàn bộ hệ thống: lifecycle, fleet, boot failure, raw JSON</p></div><button class="button ghost" id="runtimeStateRefresh">Làm mới</button><button class="button ghost" id="runtimeStateCopy">Sao chép JSON</button></div>
-        <pre id="runtimeStateOutput" class="log-console panel">Chưa có snapshot.</pre>
-      </section>
-
-      <section class="page" id="page-b5-debug">
-        <div class="section-head"><div><h2>B5 Debug</h2><p>Journey operator + trace replay fixture của B5</p></div><label>Bot<select id="b5DebugBotSelect"></select></label><button class="button ghost" id="b5DebugRefresh">Làm mới</button></div>
-        <div id="b5DebugJourney" class="b5-journey-grid"><div class="empty panel">Chưa có trạng thái B5.</div></div>
-        <div class="section-head"><div><h2>Trace replay fixture</h2><p>Planning input/digest để replay offline qua scripts/replay-b5-plan.js</p></div></div>
-        <pre id="b5DebugTrace" class="log-console panel">Chọn một bot để đọc trace.</pre>
-      </section>
-
-      <section class="page" id="page-config-debug">
-        <div class="section-head"><div><h2>Configuration Debug</h2><p>Xem raw + effective config của mọi nhóm; dùng Configuration Workspace để xem diff</p></div><label>Nhóm<select id="configDebugGroup"></select></label><button class="button ghost" id="configDebugLoad">Tải</button></div>
-        <p id="configDebugHint" class="helper"></p>
-        <pre id="configDebugOutput" class="log-console panel">Chọn nhóm cấu hình.</pre>
       </section>
 
       <section class="page" id="page-settings">
@@ -405,6 +219,209 @@
           <div class="panel danger-zone"><h2>Khẩn cấp</h2><p>Dừng toàn bộ chế độ rồi ngắt kết nối tất cả bot. Dùng khi cần ngắt tự động hóa ngay.</p><button class="button danger strong" id="emergencyStop">DỪNG KHẨN CẤP</button></div>
         </div>
       </section>
+
+      <!-- ===== Dev experience (separate layout, shown alongside User UI) ===== -->
+      <div class="dev-shell" data-experience="advanced">
+        <aside class="dev-sidebar">
+          <div class="dev-brand">
+            <div class="dev-brand-mark">DEV</div>
+            <div class="dev-brand-copy"><strong>Dev Tools</strong><span>Phân tích & gỡ lỗi</span></div>
+          </div>
+          <nav id="devNav" aria-label="Điều hướng Dev">
+            <div class="nav-group-label">Nâng cao</div>
+            <button class="dev-nav-item active" data-dev-page="dev-overview"><span>01</span>Fleet</button>
+            <button class="dev-nav-item" data-dev-page="inspector"><span>02</span>Inspector</button>
+            <button class="dev-nav-item" data-dev-page="events"><span>03</span>Events</button>
+            <button class="dev-nav-item" data-dev-page="logs"><span>04</span>Logs</button>
+            <button class="dev-nav-item" data-dev-page="incident-debug"><span>05</span>Incident Debug</button>
+            <button class="dev-nav-item" data-dev-page="runtime-state"><span>06</span>Runtime State</button>
+            <button class="dev-nav-item" data-dev-page="b5-debug"><span>07</span>B5 Debug</button>
+            <button class="dev-nav-item" data-dev-page="diagnostics"><span>08</span>Diagnostics</button>
+            <button class="dev-nav-item" data-dev-page="config-debug"><span>09</span>Config Debug</button>
+          </nav>
+        </aside>
+        <div class="dev-main">
+          <header class="dev-topbar">
+            <div class="title-block"><h1 id="devPageTitle">Dev · Tổng quan fleet</h1><p id="devPageSubtitle">Lifecycle, connection, generation, mode, operation, health</p></div>
+          </header>
+
+          <section class="dev-page active" id="dev-page-dev-overview">
+            <div class="section-head"><div><h2>Tổng quan fleet (Dev)</h2><p>Toàn bộ lifecycle, connection, generation, mode, operation và health</p></div></div>
+            <div class="metric-grid" id="devFleetMetrics"></div>
+            <div class="log-console panel" id="devFleetTable"></div>
+          </section>
+
+          <section class="dev-page" id="dev-page-inspector">
+            <div class="section-head"><div><h2>Bot Inspector</h2><p>Trạng thái runtime đầy đủ: state, intent, generation, mode, operation, services</p></div><label>Bot<select id="inspectorBotSelect"></select></label><button class="button ghost" id="inspectorRefresh">Làm mới</button></div>
+            <pre id="inspectorOutput" class="log-console panel">Chọn một bot để inspect.</pre>
+          </section>
+
+          <section class="dev-page" id="dev-page-events">
+            <div class="section-head"><div><h2>Event Stream</h2><p>EventBus inspector: eventId, type, timestamp, botId, generation, attemptEpoch, source, payload</p></div></div>
+            <div class="toolbar panel">
+              <select id="eventSubsystem" aria-label="Lọc subsystem"><option value="all">Mọi subsystem</option><option value="connection">Connection</option><option value="reconnect">Reconnect</option><option value="mode">Mode</option><option value="operation">Operation</option><option value="gui">GUI</option><option value="inventory">Inventory</option><option value="storage">Storage</option><option value="crafting">Crafting</option><option value="movement">Movement</option><option value="skyblock">Skyblock</option></select>
+              <select id="eventSeverity" aria-label="Lọc độ nghiêm trọng"><option value="all">Mọi mức</option><option value="error">Error</option><option value="warn">Warn</option><option value="info">Info</option><option value="debug">Debug</option></select>
+              <select id="eventBot" aria-label="Lọc bot"><option value="all">Mọi bot</option></select>
+              <input id="eventSearch" aria-label="Tìm sự kiện" placeholder="Tìm eventType, eventId, source, payload...">
+              <label class="check toolbar-check"><input id="eventPause" type="checkbox"> Tạm dừng</label>
+              <label class="check toolbar-check"><input id="eventAutoScroll" type="checkbox" checked> Tự cuộn</label>
+              <button class="button ghost" id="clearEventView" title="Xóa màn hình">Xóa màn hình</button>
+            </div>
+            <div class="log-summary"><span id="eventCount">0 sự kiện</span></div>
+            <div class="log-console panel" id="eventConsole"></div>
+          </section>
+
+          <section class="dev-page" id="dev-page-logs" data-page="logs">
+            <div class="page-heading"><div><h1>Nhật ký</h1><p>Chỉ hiển thị hoạt động chính và cảnh báo. Khi có lỗi cần phân tích sâu, mở file nhật ký chi tiết.</p></div></div>
+            <div class="toolbar panel">
+              <select id="logLevel" aria-label="Lọc mức nhật ký"><option value="all">Mọi mức</option><option value="info">Thông tin</option><option value="warn">Cảnh báo</option><option value="error">Lỗi</option></select>
+              <select id="logBot" aria-label="Lọc bot trong nhật ký"><option value="all">Mọi bot</option></select>
+              <input id="logSearch" aria-label="Tìm nhật ký" placeholder="Tìm nội dung, phạm vi, tác vụ...">
+              <label class="check toolbar-check"><input id="logPause" type="checkbox"> Tạm dừng hiển thị</label>
+              <label class="check toolbar-check"><input id="logAutoScroll" type="checkbox" checked> Tự cuộn</label>
+              <button class="button ghost" id="clearLogView">Xóa màn hình</button><button class="button ghost" id="openDetailedLogs">Mở log chi tiết</button>
+            </div>
+            <div class="log-summary"><span id="logCount">0 dòng nhật ký</span><span id="logPausedHint"></span></div>
+            <div class="log-console panel" id="logConsole"></div>
+          </section>
+
+          <section class="dev-page" id="dev-page-incident-debug">
+            <div class="section-head"><div><h2>Incident Debugger</h2><p>Timeline sự cố: incident → evidence → operation → recovery; xem raw diagnostic</p></div><button class="button ghost" id="refreshIncidentDebug">Làm mới</button></div>
+            <div class="incident-layout">
+              <div class="panel"><div id="incidentDebugList" class="incident-list"><div class="empty">Đang tải sự cố…</div></div></div>
+              <div class="panel output-panel" id="incidentDebugDetail"><div class="empty">Chọn một sự cố để xem timeline đầy đủ.</div></div>
+            </div>
+          </section>
+
+          <section class="dev-page" id="dev-page-runtime-state">
+            <div class="section-head"><div><h2>Runtime State</h2><p>Snapshot toàn bộ hệ thống: lifecycle, fleet, boot failure, raw JSON</p></div><button class="button ghost" id="runtimeStateRefresh">Làm mới</button><button class="button ghost" id="runtimeStateCopy">Sao chép JSON</button></div>
+            <pre id="runtimeStateOutput" class="log-console panel">Chưa có snapshot.</pre>
+          </section>
+
+          <section class="dev-page" id="dev-page-b5-debug">
+            <div class="section-head"><div><h2>B5 Debug</h2><p>Journey operator + trace replay fixture của B5</p></div><label>Bot<select id="b5DebugBotSelect"></select></label><button class="button ghost" id="b5DebugRefresh">Làm mới</button></div>
+            <div id="b5DebugJourney" class="b5-journey-grid"><div class="empty panel">Chưa có trạng thái B5.</div></div>
+            <div class="section-head"><div><h2>Trace replay fixture</h2><p>Planning input/digest để replay offline qua scripts/replay-b5-plan.js</p></div></div>
+            <pre id="b5DebugTrace" class="log-console panel">Chọn một bot để đọc trace.</pre>
+          </section>
+
+          <section class="dev-page" id="dev-page-diagnostics" data-page="diagnostics">
+            <div class="panel support-bar">
+              <div><strong>Gói hỗ trợ</strong><span>Xuất bản chụp trạng thái + 500 dòng nhật ký + bản ghi lỗi đã che dữ liệu nhạy cảm thành một file JSON.</span></div>
+              <div class="actions compact"><button class="button primary" id="exportSupport">Xuất gói</button><button class="button ghost" id="openSupport">Mở thư mục</button></div>
+            </div>
+            <div class="two-column diagnostic-layout section-gap">
+              <div class="panel"><div class="panel-title"><h2>Lỗi khi chạy</h2><button class="button ghost small" id="refreshDiagnostics">Làm mới</button></div><div id="diagnosticList" class="diagnostic-list"></div></div>
+              <div class="panel output-panel"><h2>Chi tiết</h2><pre id="diagnosticOutput">Chọn một bản ghi lỗi.</pre></div>
+            </div>
+          </section>
+
+          <section class="dev-page" id="dev-page-config-debug">
+            <div class="section-head"><div><h2>Configuration Debug</h2><p>Xem raw + effective config của mọi nhóm; dùng Configuration Workspace để xem diff</p></div><label>Nhóm<select id="configDebugGroup"></select></label><button class="button ghost" id="configDebugLoad">Tải</button></div>
+            <p id="configDebugHint" class="helper"></p>
+            <pre id="configDebugOutput" class="log-console panel">Chọn nhóm cấu hình.</pre>
+          </section>
+        </div>
+      </div>
+
+      <!-- ===== Dev-only pages accessible via command palette / URL (not in Dev nav) ===== -->
+      <section class="page" id="page-builder" data-page="builder" data-experience="advanced">
+        <div class="section-head"><div><h2>Trình tạo chế độ bằng mô-đun</h2><p>Ghép các bước an toàn: lệnh đã đăng ký, nhấp GUI, di chuyển, chờ, /is, vào Sky, đọc kho, bảo vệ kho, chế B5, điều kiện và lặp.</p></div></div>
+        <div class="builder-layout">
+          <div class="panel form-panel">
+            <div class="panel-title"><h2>Thông tin chế độ</h2><span class="tag">KHÔNG EVAL</span></div>
+            <label>Chế độ đã lưu<select id="customModeSelect"><option value="">— Tạo mới —</option></select></label>
+            <label>ID chế độ<input id="customModeId" placeholder="mining-tu-dong"></label>
+            <label>Tên hiển thị<input id="customModeLabel" placeholder="Mining tự động"></label>
+            <label>Mô tả<textarea id="customModeDescription" rows="3"></textarea></label>
+            <label class="check"><input id="customModeEnabled" type="checkbox" checked> Bật chế độ này khi khởi động backend</label>
+            <label>Độ trễ vòng lặp (ms)<input id="customModeLoopDelay" type="number" min="0" value="1000"></label>
+            <div class="actions"><button class="button ghost" id="newCustomMode">Mới</button><button class="button danger" id="deleteCustomMode">Xóa</button></div>
+          </div>
+          <div class="panel">
+            <div class="panel-title"><h2>Kho mô-đun</h2><span id="moduleCount" class="tag">0</span></div>
+            <label>Tìm mô-đun<input id="moduleSearch" placeholder="B5, GUI, lệnh, chờ…"></label>
+            <div class="actions compact"><select id="customModeTemplate"><option value="">— Thư viện mẫu —</option></select><button class="button ghost small" id="applyCustomTemplate">Dùng mẫu</button></div>
+            <div id="modulePalette" class="module-palette"></div>
+          </div>
+        </div>
+        <div class="panel section-gap">
+          <div class="panel-title"><div><h2>Luồng chạy</h2><p class="helper">Thêm mô-đun rồi chỉnh tham số có kiểu. JSON chỉ hiện ở chế độ Nâng cao.</p></div><div class="actions compact"><button class="button ghost" id="dryRunCustomMode">Chạy mô phỏng</button><button class="button ghost advanced-builder" id="packageCustomMode">Kiểm tra package</button><button class="button ghost" id="clearCustomSteps">Xóa bước</button><button class="button primary" id="saveCustomMode">Lưu chế độ</button></div></div>
+          <div class="workflow-columns"><div><h3>Khi bắt đầu</h3><div id="customStartSteps" class="workflow-list"></div></div><div><h3>Vòng lặp chính</h3><div id="customLoopSteps" class="workflow-list"></div></div><div><h3>Khi dừng</h3><div id="customStopSteps" class="workflow-list"></div></div></div>
+        </div>
+        <pre id="customModeSimulation" class="panel section-gap">Chưa chạy mô phỏng.</pre>
+        <details class="panel section-gap advanced-builder"><summary>Cấu hình JSON nâng cao của chế độ</summary><textarea id="customModeJson" aria-label="Cấu hình JSON nâng cao của chế độ" class="code-editor" rows="18" spellcheck="false"></textarea><div class="actions"><button class="button ghost" id="applyCustomJson">Áp dụng JSON vào trình dựng</button></div></details>
+      </section>
+
+      <section class="page" id="page-tools" data-page="tools" data-experience="advanced">
+        <div class="panel form-panel">
+          <div class="panel-title"><div><h2>Lệnh riêng theo Sky</h2><p class="helper">Đăng ký lệnh riêng cho từng Sky. Bot chỉ được gửi khi đang ở đúng Sky đó; lệnh hệ thống của automation không bị ghi đè.</p></div><span class="tag">THEO SKY</span></div>
+          <div class="inline-fields"><label>Sky<select id="skyCommandSky"></select></label><label>Bot dùng để thử<select id="skyCommandBot"></select></label></div>
+          <div class="inline-fields"><label>ID lệnh<input id="skyCommandId" placeholder="autofarm"></label><label>Tên hiển thị<input id="skyCommandLabel" placeholder="Auto Farm"></label></div>
+          <label>Lệnh server<input id="skyCommandValue" placeholder="/autofarm"></label>
+          <label>Mô tả<input id="skyCommandDescription" placeholder="Tùy chọn"></label>
+          <label class="check"><input id="skyCommandEnabled" type="checkbox" checked> Bật lệnh này</label>
+          <label>Tham số JSON khi thử lệnh<textarea id="skyCommandArgs" rows="3" spellcheck="false">{}</textarea></label>
+          <div class="actions"><button class="button ghost" id="newSkyCommand">Lệnh mới</button><button class="button primary" id="saveSkyCommand">Lưu + áp dụng ngay</button></div>
+          <div id="skyCommandList" class="section-gap"><div class="empty">Chưa tải danh sách lệnh.</div></div>
+        </div>
+        <div class="two-column section-gap">
+          <div class="panel form-panel">
+            <div class="panel-title"><h2>Trung tâm lệnh</h2><span class="tag">Chỉ lệnh đã đăng ký</span></div>
+            <p>Gửi lệnh đã đăng ký qua dịch vụ lệnh; không gửi chat thô trực tiếp.</p>
+            <label>Bot<select id="commandBot"></select></label>
+            <label>Lệnh<select id="commandKey"></select></label>
+            <label>Tham số JSON<textarea id="commandArgs" rows="5" spellcheck="false">{}</textarea></label>
+            <div class="inline-fields"><label class="check"><input id="commandConfirm" type="checkbox"> Chờ xác nhận nếu lệnh có quy tắc</label><label>Thời gian chờ tối đa (ms)<input id="commandTimeout" type="number" min="500" max="30000" value="5000"></label></div>
+            <button class="button primary" id="sendCommandBtn">Gửi lệnh</button>
+          </div>
+          <div class="panel output-panel"><div class="panel-title"><h2>Kết quả lệnh</h2><button class="button ghost small" id="copyCommandBtn">Sao chép</button></div><pre id="commandOutput">Chưa gửi lệnh.</pre></div>
+        </div>
+        <div class="two-column section-gap">
+          <div class="panel form-panel">
+            <div class="panel-title"><h2>Trình kiểm tra GUI</h2><span class="tag">Xác minh</span></div>
+            <p>Mở GUI máy chủ bằng lệnh đã đăng ký, nhấp ô tùy chọn và chụp trạng thái.</p>
+            <label>Bot<select id="guiBot"></select></label>
+            <label>Lệnh<select id="guiCommand"></select></label>
+            <label>Các ô cần nhấp<input id="guiSlots" placeholder="Ví dụ: 10, 16, 49"></label>
+            <label>Thời gian chờ tối đa (ms)<input id="guiTimeout" type="number" min="1000" value="7000"></label>
+            <button class="button primary" id="inspectGuiBtn">Chụp GUI</button>
+          </div>
+          <div class="panel output-panel"><div class="panel-title"><h2>Kết quả GUI</h2><button class="button ghost small" id="copyGuiBtn">Sao chép</button></div><pre id="guiOutput">Chưa có bản chụp trạng thái.</pre></div>
+        </div>
+      </section>
+
+      <section class="page" id="page-ai" data-page="ai" data-experience="advanced">
+        <div class="ai-layout">
+          <div class="panel ai-sidebar-panel">
+            <div class="panel-title"><div><h2>Local AI Agent</h2><p class="helper">AI đọc project qua tool nội bộ, không được truy cập .env/secret/node_modules/data/out.</p></div><span id="aiStatusTag" class="tag">CHƯA KẾT NỐI</span></div>
+            <label>Ollama / OpenAI-compatible URL<input id="aiBaseUrl" value="http://127.0.0.1:11434/v1" spellcheck="false"></label>
+            <div class="actions"><button class="button ghost" id="aiRefreshModels">Kiểm tra Ollama</button></div>
+            <label>Model<select id="aiModel"><option value="">Chưa tải model</option></select></label>
+            <label>Quyền của agent<select id="aiPermission"><option value="READ">READ · chỉ đọc/phân tích</option><option value="PATCH">PATCH · được sửa file</option><option value="DEVELOP">DEVELOP · sửa + test/validator</option><option value="ADMIN">ADMIN · DEVELOP + điều khiển bot whitelist</option></select></label>
+            <hr>
+            <label>Project workspace<input id="aiWorkspace" readonly placeholder="Chưa chọn project"></label>
+            <div class="actions"><button class="button primary" id="aiSelectWorkspace">Chọn project</button><button class="button ghost" id="aiInspectWorkspace">Quét lại</button></div>
+            <div class="backend-overview ai-workspace-stats"><div><span>Phiên bản</span><strong id="aiWorkspaceVersion">—</strong></div><div><span>File nguồn</span><strong id="aiWorkspaceFiles">—</strong></div><div><span>AGENTS</span><strong id="aiWorkspaceAgents">—</strong></div></div>
+            <p class="helper">Bản packaged cần chọn thư mục source project trên máy. Bản DEV có thể chọn chính thư mục MCbot hiện tại.</p>
+          </div>
+
+          <div class="panel ai-chat-panel">
+            <div class="panel-title"><div><h2>Chat với project</h2><p class="helper">Agent tự search/read code, sửa bằng patch và chạy check tùy theo quyền bạn chọn.</p></div><div class="actions compact"><button class="button ghost small" id="aiNewChat">Chat mới</button><button class="button ghost small" id="aiCopyLast">Sao chép trả lời</button></div></div>
+            <div class="ai-quick-actions">
+              <button class="button ghost small" data-ai-prompt="Đọc trạng thái runtime và log gần nhất. Phân tích bot đang làm gì, lỗi nào đáng chú ý và nguyên nhân gần nhất. Không sửa code.">Phân tích runtime</button>
+              <button class="button ghost small" data-ai-prompt="Audit luồng B5 hiện tại từ mode tới storage protection/crafting. Chỉ ra blocker hoặc điểm rủi ro dựa trên code hiện tại. Không sửa nếu tôi chưa yêu cầu.">Kiểm tra B5</button>
+              <button class="button ghost small" data-ai-prompt="Đọc AGENTS.md, RULES.md và ARCHITECTURE.md rồi tóm tắt các ràng buộc quan trọng mà mọi thay đổi code phải tuân theo.">Đọc luật project</button>
+            </div>
+            <div id="aiMessages" class="ai-messages"><div class="ai-empty">Chọn project + model rồi nhập yêu cầu. Ví dụ: “tìm nguyên nhân B5 bị timeout và sửa, sau đó chạy test liên quan”.</div></div>
+            <div id="aiTrace" class="ai-trace hidden"></div>
+            <div class="ai-composer">
+              <textarea id="aiPrompt" aria-label="Yêu cầu cho Local AI Agent" rows="4" placeholder="Ra lệnh cho Local AI Agent..." spellcheck="false"></textarea>
+              <div class="ai-composer-actions"><span id="aiBusyText" class="helper">Sẵn sàng.</span><button class="button primary" id="aiSend">Gửi</button></div>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -429,6 +446,7 @@
   <script src="core/RendererApiClient.js"></script>
   <script src="core/Html.js"></script>
   <script src="core/RendererRouter.js"></script>
+  <script src="core/DevRouter.js"></script>
   <script src="core/KeyedDom.js"></script>
   <script src="components/AccessibleDialog.js"></script>
   <script src="pages/PageCatalog.js"></script>
