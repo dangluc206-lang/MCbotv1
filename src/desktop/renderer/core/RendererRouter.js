@@ -9,9 +9,15 @@
     const value = ALIASES[page] || page;
     return catalog[value] ? value : 'dashboard';
   }
+  // USER pages are always allowed; DEV pages require experienceLevel='advanced'.
+  // Legacy 'ADVANCED' group from older catalogs is treated as DEV.
+  function groupOf(catalog, page) {
+    const group = catalog[page]?.group || 'USER';
+    return group === 'ADVANCED' ? 'DEV' : group;
+  }
   function allowed(page, experienceLevel, catalog) {
     const normalized = normalize(page, catalog);
-    return catalog[normalized]?.group !== 'ADVANCED' || experienceLevel === 'advanced' ? normalized : 'dashboard';
+    return groupOf(catalog, normalized) === 'DEV' && experienceLevel !== 'advanced' ? 'dashboard' : normalized;
   }
   function apply(page, { document, catalog, experienceLevel = 'standard' } = {}) {
     const next = allowed(page, experienceLevel, catalog);
@@ -22,5 +28,5 @@
     document.querySelector('#pageSubtitle').textContent = title.subtitle;
     return next;
   }
-  return Object.freeze({ ALIASES, normalize, allowed, apply });
+  return Object.freeze({ ALIASES, normalize, groupOf, allowed, apply });
 }));

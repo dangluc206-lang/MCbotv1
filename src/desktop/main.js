@@ -325,6 +325,9 @@ function registerIpc() {
     safeHandle('mcbot:config:restore', backupId => restoreConfigBackup(backupId));
     safeHandle('mcbot:gui:inspect', (botId, options) => controller.inspectGui(botId, options));
     safeHandle('mcbot:logs', limit => controller.logSnapshot({ limit }));
+    safeHandle('mcbot:dev:logs', limit => controller.devLogSnapshot({ limit }));
+    safeHandle('mcbot:bot:dev-detail', botId => controller.botDevDetail(botId));
+    safeHandle('mcbot:b5:trace', botId => controller.b5Trace(botId));
     safeHandle('mcbot:diagnostics:list', limit => controller.diagnostics({ limit }));
     safeHandle('mcbot:diagnostics:read', artifactId => controller.readDiagnostic(artifactId));
     safeHandle('mcbot:support:export', request => controller.exportSupportBundle(request));
@@ -544,6 +547,9 @@ if (hasSingleInstanceLock) {
         controller.onLog(record => {
             if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mcbot:log', record);
             if (record?.level === 'error') notify('MCbot error', `${record.scope || 'Application'}: ${record.message || 'Unknown error'}`, `${record.scope}:${record.message}`);
+        });
+        controller.onDevLog(record => {
+            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mcbot:dev-log', record);
         });
         createTray();
 

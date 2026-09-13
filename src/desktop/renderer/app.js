@@ -34,7 +34,10 @@ const state = {
   b5Journey: [],
   configWorkspace: null,
   backupCatalog: [],
-  ai: { workspace: null, models: [], messages: [], trace: [], busy: false }
+  ai: { workspace: null, models: [], messages: [], trace: [], busy: false },
+  devLogs: [],
+  devLogsLoaded: false,
+  incidentDebugId: null
 };
 
 const $ = selector => document.querySelector(selector);
@@ -199,6 +202,7 @@ function botCard(bot, fullActions = false) {
   const player = bot.player;
   const operation = activeOperation(bot);
   const id = bot.botId;
+  const showTech = document.body.dataset.experience === 'advanced';
   const b5Details = bot.modes?.b5Craft?.details || {};
   const b5Episode = b5Details.protectionEpisode || null;
   const b5CanRetry = mode.id === 'b5-craft' && b5Details.recovery?.allowedActions?.includes('retry-storage-protection') && b5Episode;
@@ -247,7 +251,7 @@ function botCard(bot, fullActions = false) {
     <div class="mode-box">
       <div class="mode-row"><div><div class="mode-title">${esc(mode.name)}</div><div class="mode-phase">${esc(mode.phase)}</div></div><span class="badge ${mode.className}">${esc(viModeBadge(mode.className))}</span></div>
       ${operation ? `<div class="operation-line"><span>${esc(operation.active)} tác vụ</span><strong title="${esc(operation.detail)}">${esc(operation.name)}${operation.detail ? ` · ${esc(operation.detail)}` : ''}</strong></div>` : '<div class="operation-line"><span>0 tác vụ</span><strong>Không có tác vụ đang chạy</strong></div>'}
-      <div class="status-detail-grid">
+      ${showTech ? `<div class="status-detail-grid">
         <div class="status-detail"><span>Sky gateway</span><strong>${bot.skyAutoJoin ? `${esc(bot.skyAutoJoin?.location || 'UNKNOWN')} · ${esc(bot.skyAutoJoin?.activeTarget || bot.skyAutoJoin?.readyTarget || profile.skyblockSelection || '—')} · ${bot.skyAutoJoin?.ready ? 'Sẵn sàng' : bot.skyAutoJoin?.pending ? 'Đang xử lý' : bot.skyAutoJoin?.target ? 'Đang chờ mode gateway' : 'Không có mode yêu cầu'}` : '—'}</strong></div>
         <div class="status-detail"><span>Bảo vệ kho B5</span><strong>${bot.storageProtection?.storageProtection ? `Reserve ${esc(bot.storageProtection.storageProtection.reserveCoverage ?? 1.5)} B5 · bán 64-only ${bot.storageProtection.storageProtection.sellingCapabilityEnabled === false ? 'không khả dụng' : 'khả dụng'} · chỉ nung raw iron/raw gold` : '—'}</strong></div>
         <div class="status-detail"><span>GUI hiện tại</span><strong>${esc(bot.gui?.definitionId || bot.gui?.identity?.candidateId || bot.gui?.title || 'Không mở')}${Number.isFinite(bot.gui?.identity?.confidence) ? ` · ${(Number(bot.gui.identity.confidence) * 100).toFixed(0)}%` : ''}</strong></div>
@@ -256,8 +260,8 @@ function botCard(bot, fullActions = false) {
         <div class="status-detail"><span>Hướng nhìn</span><strong>${Number.isFinite(player?.yaw) ? `${Number(player.yaw).toFixed(2)} / ${Number(player.pitch || 0).toFixed(2)}` : '—'}</strong></div>
         <div class="status-detail"><span>Lần thử vào Sky</span><strong>${esc(bot.skyAutoJoin?.pending?.attempt ?? (bot.skyAutoJoin?.ready ? 'Hoàn tất' : '—'))}</strong></div>
         <div class="status-detail"><span>Lỗi gần nhất</span><strong title="${esc(bot.state?.lastError?.message || bot.state?.lastError || '')}">${esc(bot.state?.lastError?.message || bot.state?.lastError || 'Không có')}</strong></div>
-      </div>
-      ${mode.id === 'b5-craft' ? (() => { const d = bot.modes?.b5Craft?.details || {}; const blocker = d.lastAutomationBlockers?.[0] || null; const blockerText = blocker ? `${blocker.baseId ? `${blocker.baseId}: ` : ''}${blocker.reason || blocker.status || 'đang chờ'}` : ''; const protection = d.protectionEpisode || null; const protectionBlocker = protection?.blocker || null; const protectionText = protection ? `${protection.state || 'PENDING'} · attempt ${protection.totalAttempts ?? 0}${protectionBlocker ? ` · ${protectionBlocker.resource ? `${protectionBlocker.resource}: ` : ''}${protectionBlocker.reason || protectionBlocker.code || 'blocked'} · backoff ${protectionBlocker.backoffMs ?? 0}ms${Number.isFinite(protection.nextEligibleAt) ? ` · retry ${Math.max(0, protection.nextEligibleAt - Date.now())}ms` : ''}` : ''}` : ''; const trace = d.b5Automation?.trace || null; const decision = trace?.plan?.decision; const traceText = trace ? `${trace.traceId || ''}${decision?.kind ? ` · ${decision.kind}${decision.resource ? ` ${decision.resource}` : ''}` : ''}` : ''; const batchText = d.batchId ? `${d.batchId}${d.batchProtectionRequired ? ' · chờ bảo vệ kho' : ' · đã bảo vệ kho'}` : 'chưa có batch'; return `<div class="operation-line"><span>B5 thuần</span><strong>Đã hoàn tất: ${esc(d.completedB5 ?? 0)} · Engine: ${esc(d.automationRuns ?? 0)} lượt / ${esc(d.productiveCycles ?? 0)} có tiến triển · ${esc(batchText)} · ${esc(d.waitingReason ? `Đang chờ: ${viWaitingReason(d.waitingReason)}` : 'Đang xử lý')}</strong></div>${protectionText ? `<div class="operation-line"><span>Gate bảo vệ kho</span><strong title="${esc(protectionText)}">${esc(protectionText)}</strong></div>` : ''}${traceText ? `<div class="operation-line"><span>Trace B5 gần nhất</span><strong title="${esc(traceText)}">${esc(traceText)}</strong></div>` : ''}${blockerText ? `<div class="operation-line"><span>Điểm chặn B5</span><strong title="${esc(blockerText)}">${esc(blockerText)}</strong></div>` : ''}`; })() : ''}
+      </div>` : ''}
+      ${showTech && mode.id === 'b5-craft' ? (() => { const d = bot.modes?.b5Craft?.details || {}; const blocker = d.lastAutomationBlockers?.[0] || null; const blockerText = blocker ? `${blocker.baseId ? `${blocker.baseId}: ` : ''}${blocker.reason || blocker.status || 'đang chờ'}` : ''; const protection = d.protectionEpisode || null; const protectionBlocker = protection?.blocker || null; const protectionText = protection ? `${protection.state || 'PENDING'} · attempt ${protection.totalAttempts ?? 0}${protectionBlocker ? ` · ${protectionBlocker.resource ? `${protectionBlocker.resource}: ` : ''}${protectionBlocker.reason || protectionBlocker.code || 'blocked'} · backoff ${protectionBlocker.backoffMs ?? 0}ms${Number.isFinite(protection.nextEligibleAt) ? ` · retry ${Math.max(0, protection.nextEligibleAt - Date.now())}ms` : ''}` : ''}` : ''; const trace = d.b5Automation?.trace || null; const decision = trace?.plan?.decision; const traceText = trace ? `${trace.traceId || ''}${decision?.kind ? ` · ${decision.kind}${decision.resource ? ` ${decision.resource}` : ''}` : ''}` : ''; const batchText = d.batchId ? `${d.batchId}${d.batchProtectionRequired ? ' · chờ bảo vệ kho' : ' · đã bảo vệ kho'}` : 'chưa có batch'; return `<div class="operation-line"><span>B5 thuần</span><strong>Đã hoàn tất: ${esc(d.completedB5 ?? 0)} · Engine: ${esc(d.automationRuns ?? 0)} lượt / ${esc(d.productiveCycles ?? 0)} có tiến triển · ${esc(batchText)} · ${esc(d.waitingReason ? `Đang chờ: ${viWaitingReason(d.waitingReason)}` : 'Đang xử lý')}</strong></div>${protectionText ? `<div class="operation-line"><span>Gate bảo vệ kho</span><strong title="${esc(protectionText)}">${esc(protectionText)}</strong></div>` : ''}${traceText ? `<div class="operation-line"><span>Trace B5 gần nhất</span><strong title="${esc(traceText)}">${esc(traceText)}</strong></div>` : ''}${blockerText ? `<div class="operation-line"><span>Điểm chặn B5</span><strong title="${esc(blockerText)}">${esc(blockerText)}</strong></div>` : ''}`; })() : ''}
     </div>
     ${mainActions}${b5RecoveryButton}${modeActions}
   </article>`;
@@ -372,6 +376,115 @@ function renderModes() {
   $('#modeCards').innerHTML = bots.length ? bots.map(bot => botCard(bot, true)).join('') : '<div class="empty panel">Chưa có tiến trình bot.</div>';
 }
 
+// ---- Dev experience pages (render-only; data comes from the shared backend) ----
+
+function renderBotDetail() {
+  const root = $('#botDetailContent');
+  if (!root) return;
+  const bot = (state.snapshot?.bots || []).find(entry => entry.botId === $('#botDetailSelect')?.value);
+  root.innerHTML = bot ? window.MCbotDevPages.botDetail(bot, { viConnection, viPhase, modeInfo, position, activeOperation }) : '<div class="empty panel">Chọn một bot để xem chi tiết.</div>';
+}
+
+function renderDevOverview() {
+  const bots = state.snapshot?.bots || [];
+  const metrics = $('#devFleetMetrics');
+  if (metrics) {
+    const connected = bots.filter(bot => bot.connectionOnline === true).length;
+    const lifecycle = state.snapshot?.lifecycle || 'STOPPED';
+    metrics.innerHTML = [
+      ['Lifecycle', viPhase(lifecycle), `uptime ${formatDuration(state.snapshot?.system?.uptimeMs || 0)}`],
+      ['Bots', `${connected}/${bots.length}`, 'online / tổng'],
+      ['Memory', `${state.snapshot?.system?.memoryMb ?? '—'} MB`, 'RSS process'],
+      ['Incidents', String((state.incidents || []).filter(item => ['OPEN','RECOVERING','NEEDS_ACTION'].includes(item.state)).length), 'đang mở']
+    ].map(([label, value, sub]) => `<div class="metric"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(sub)}</small></div>`).join('');
+  }
+  const table = $('#devFleetTable');
+  if (table) table.innerHTML = window.MCbotDevPages.fleetRows(bots, viConnection);
+}
+
+async function renderInspector() {
+  const output = $('#inspectorOutput');
+  if (!output) return;
+  const botId = $('#inspectorBotSelect')?.value;
+  if (!botId) { output.textContent = 'Chọn một bot để inspect.'; return; }
+  try { output.textContent = JSON.stringify(await api(window.mcbot.botDevDetail(botId)), null, 2); }
+  catch (error) { output.textContent = `Inspector lỗi: ${error.message}`; }
+}
+
+function eventMatches(record) {
+  const level = $('#eventLevel')?.value || 'all';
+  const bot = $('#eventBot')?.value || 'all';
+  const query = ($('#eventSearch')?.value || '').trim().toLowerCase();
+  if (level !== 'all' && record.level !== level) return false;
+  if (bot !== 'all' && String(record.meta?.botId || '') !== bot) return false;
+  const text = `${record.scope || ''} ${record.message || ''} ${record.meta?.botId || ''} ${record.meta?.code || ''} ${record.meta?.reason || ''}`.toLowerCase();
+  return !query || text.includes(query);
+}
+
+function renderEventStream() {
+  if ($('#eventPause')?.checked) return;
+  const consoleEl = $('#eventConsole');
+  if (!consoleEl) return;
+  const filtered = state.devLogs.filter(eventMatches).slice(-800);
+  consoleEl.innerHTML = filtered.map(record => window.MCbotDevPages.logLine(record)).join('') || '<div class="empty">Chưa có sự kiện phù hợp.</div>';
+  $('#eventCount').textContent = `${filtered.length} / ${state.devLogs.length} sự kiện`;
+  if ($('#eventAutoScroll')?.checked) consoleEl.scrollTop = consoleEl.scrollHeight;
+}
+
+function scheduleEventRender() {
+  if (state.page !== 'events' || $('#eventPause')?.checked) return;
+  requestAnimationFrame(renderEventStream);
+}
+
+async function loadDevLogs() {
+  if (state.devLogsLoaded) return;
+  try { state.devLogs = await api(window.mcbot.devLogs(1200)); state.devLogsLoaded = true; }
+  catch (error) { reportRendererError(error, 'dev-logs-load'); }
+}
+
+function renderIncidentDebug() {
+  const list = $('#incidentDebugList');
+  if (!list) return;
+  const items = state.incidents || [];
+  list.innerHTML = items.length ? items.map(item => `<div class="incident-item ${item.id === state.incidentDebugId ? 'selected' : ''}" data-incident-debug-id="${esc(item.id)}"><strong>${esc(item.code || item.id)}</strong><span>${esc(item.botId || '')} · ${esc(item.state)} · ${esc(item.severity || '')}</span></div>`).join('') : '<div class="empty">Không có sự cố nào.</div>';
+}
+
+async function renderIncidentDebugDetail() {
+  const detail = $('#incidentDebugDetail');
+  if (!detail) return;
+  const incident = (state.incidents || []).find(item => item.id === state.incidentDebugId);
+  if (!incident) { detail.innerHTML = '<div class="empty">Chọn một sự cố để xem timeline đầy đủ.</div>'; return; }
+  let diagnostic = null;
+  const artifactId = incident.evidenceRefs?.at(-1);
+  if (artifactId) { try { diagnostic = await api(window.mcbot.readDiagnostic(artifactId)); } catch { diagnostic = null; } }
+  detail.innerHTML = window.MCbotDevPages.incidentTimeline(incident, diagnostic);
+}
+
+function renderRuntimeState() {
+  const output = $('#runtimeStateOutput');
+  if (output && state.snapshot) output.textContent = JSON.stringify(state.snapshot, null, 2);
+}
+
+async function renderB5Debug() {
+  const botId = $('#b5DebugBotSelect')?.value;
+  const traceEl = $('#b5DebugTrace');
+  if (!botId || !traceEl) return;
+  const journey = state.b5Journey.find(item => item.botId === botId);
+  $('#b5DebugJourney').innerHTML = window.MCbotB5JourneyPresenter.render(journey ? [journey] : [], esc);
+  try { traceEl.textContent = JSON.stringify(await api(window.mcbot.b5Trace(botId)), null, 2); }
+  catch (error) { traceEl.textContent = `Trace lỗi: ${error.message}`; }
+}
+
+async function loadConfigDebug() {
+  const key = $('#configDebugGroup')?.value;
+  if (!key) return;
+  try {
+    const group = await api(window.mcbot.configGroup(key));
+    $('#configDebugOutput').textContent = JSON.stringify(group, null, 2);
+    $('#configDebugHint').textContent = `effective value · schema ${group.schema} · file ${group.file}`;
+  } catch (error) { $('#configDebugOutput').textContent = `Lỗi: ${error.message}`; $('#configDebugHint').textContent = ''; }
+}
+
 function renderProfiles() {
   const profiles = state.profiles || [];
   if (!profiles.length) {
@@ -406,7 +519,8 @@ function syncSelectors() {
   const signature = `${bots.map(bot => `${bot.botId}:${bot.profile?.displayName || ''}`).join('|')}::${state.commands.map(command => `${command.key}:${command.command || ''}`).join('|')}`;
   if (signature === state.selectorSignature) return;
   state.selectorSignature = signature;
-  for (const id of ['guiBot', 'commandBot', 'skyCommandBot', 'collectorConfigBot', 'fishingConfigBot', 'secretBotSelect']) syncSelect($('#' + id), botOptions);
+  for (const id of ['guiBot', 'commandBot', 'skyCommandBot', 'collectorConfigBot', 'fishingConfigBot', 'secretBotSelect', 'botDetailSelect', 'inspectorBotSelect', 'b5DebugBotSelect']) syncSelect($('#' + id), botOptions);
+  syncSelect($('#eventBot'), '<option value="all">Mọi bot</option>' + botOptions, 'all');
   syncSelect($('#incidentBotFilter'), '<option value="">Tất cả bot</option>' + botOptions);
   syncSelect($('#logBot'), '<option value="all">Mọi bot</option>' + botOptions, localStorage.getItem('mcbot.logBot') || 'all');
   syncSelect($('#guiCommand'), guiCommandOptions);
@@ -807,6 +921,14 @@ function switchPage(page) {
   if (page === 'logs') { state.logUnread = 0; renderLogs(); }
   if (page === 'diagnostics') refreshDiagnostics();
   if (page === 'ai') { renderAiMessages(); renderAiTrace(); if (!state.ai.models.length) refreshAiModels().catch(error => reportRendererError(error, 'ai-model-auto-refresh')); }
+  if (page === 'bot-detail') renderBotDetail();
+  if (page === 'dev-overview') { renderDevOverview(); loadIncidents().catch(() => {}); }
+  if (page === 'inspector') renderInspector().catch(error => toast(error.message, 'error'));
+  if (page === 'events') { loadDevLogs().then(renderEventStream).catch(() => {}); }
+  if (page === 'incident-debug') { loadIncidents().then(() => { renderIncidentDebug(); renderIncidentDebugDetail().catch(() => {}); }).catch(error => toast(error.message, 'error')); }
+  if (page === 'runtime-state') renderRuntimeState();
+  if (page === 'b5-debug') { loadB5Journey().then(renderB5Debug).catch(error => toast(error.message, 'error')); }
+  if (page === 'config-debug') { if (state.configGroups.length) syncSelect($('#configDebugGroup'), state.configGroups.map(group => `<option value="${esc(group.key)}">${esc(configLabels[group.key] || group.key)}</option>`).join('')); }
 }
 
 async function loadCollectorConfig() {
@@ -1554,6 +1676,27 @@ function bindEvents() {
   $('#fishingArea').onchange = fillFishingArea;
   $('#saveFishingConfig').onclick = event => runAction({ key: 'fishing-config', button: event.currentTarget, success: 'Đã lưu cấu hình câu cá.', refresh: false, fn: () => api(window.mcbot.updateFishingArea($('#fishingConfigBot').value, { areaId: $('#fishingArea').value, x: Number($('#fishingX').value), y: Number($('#fishingY').value), z: Number($('#fishingZ').value), pitchDegrees: Number($('#fishingPitch').value) })) }).catch(() => {});
 
+  $('#botDetailSelect').onchange = renderBotDetail;
+  $('#inspectorBotSelect').onchange = () => renderInspector().catch(() => {});
+  $('#inspectorRefresh').onclick = () => renderInspector().catch(() => {});
+  for (const id of ['eventLevel', 'eventBot']) $('#' + id).addEventListener('change', renderEventStream);
+  $('#eventSearch').addEventListener('input', () => requestAnimationFrame(renderEventStream));
+  $('#eventPause').addEventListener('change', () => { if (!$('#eventPause').checked) renderEventStream(); });
+  $('#eventAutoScroll').addEventListener('change', renderEventStream);
+  $('#incidentDebugList').addEventListener('click', event => {
+    const item = event.target.closest('[data-incident-debug-id]');
+    if (!item) return;
+    state.incidentDebugId = item.dataset.incidentDebugId;
+    renderIncidentDebug();
+    renderIncidentDebugDetail().catch(() => {});
+  });
+  $('#refreshIncidentDebug').onclick = () => loadIncidents().then(() => { renderIncidentDebug(); return renderIncidentDebugDetail(); }).catch(error => toast(error.message, 'error'));
+  $('#runtimeStateRefresh').onclick = () => refreshSnapshot({ quiet: true }).then(renderRuntimeState);
+  $('#runtimeStateCopy').onclick = () => navigator.clipboard.writeText($('#runtimeStateOutput').textContent || '').then(() => toast('Đã sao chép snapshot JSON.')).catch(error => toast(error.message, 'error'));
+  $('#b5DebugBotSelect').onchange = () => renderB5Debug().catch(() => {});
+  $('#b5DebugRefresh').onclick = () => loadB5Journey().then(renderB5Debug).catch(error => toast(error.message, 'error'));
+  $('#configDebugLoad').onclick = () => loadConfigDebug().catch(error => toast(error.message, 'error'));
+
   document.addEventListener('keydown', event => {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
       event.preventDefault(); openCommandPalette().catch(error => toast(error.message, 'error'));
@@ -1587,6 +1730,11 @@ async function initialize() {
     else scheduleLogRender();
   });
   try { state.logs = await api(window.mcbot.logs(800)); } catch (error) { reportRendererError(error, 'initial-log-load'); }
+  window.mcbot.onDevLog(record => {
+    state.devLogs.push(record);
+    if (state.devLogs.length > 4000) state.devLogs.splice(0, state.devLogs.length - 4000);
+    scheduleEventRender();
+  });
   const appInfoPromise = api(window.mcbot.appInfo()).then(info => { state.appInfo = info; $('#appVersion').textContent = `MCbot Desktop · v${info.version}${info.packaged ? '' : ' · DEV'}`; }).catch(error => reportRendererError(error, 'app-info-load'));
   await Promise.all([refreshSnapshot({ quiet: true }), loadPreferences(), appInfoPromise]);
   await Promise.all([loadReadinessAndHealth(), loadIncidents()]).catch(error => toast(error.message, 'error'));

@@ -53,6 +53,11 @@ class DesktopController {
         this.configureEnvironment(environment);
         this.logs = [];
         this.logListeners = new Set();
+        // Dev UI stream: sanitized records BEFORE the operator fold policy,
+        // so DEBUG/WARN chains stay traceable. Bounded ring buffer only.
+        this.devLogs = [];
+        this.devListeners = new Set();
+        this.maxDevLogs = Math.max(500, Number(maxLogs) * 3 || 3600);
         this.startPromise = null;
         this.startedAt = null;
         this.logPersistenceFailure = null;
@@ -105,6 +110,17 @@ class DesktopController {
         if (typeof listener !== 'function') throw new TypeError('log listener must be a function');
         this.logListeners.add(listener);
         return () => this.logListeners.delete(listener);
+    }
+
+    onDevLog(listener) {
+        if (typeof listener !== 'function') throw new TypeError('dev log listener must be a function');
+        this.devListeners.add(listener);
+        return () => this.devListeners.delete(listener);
+    }
+
+    devLogSnapshot({ limit = 1000 } = {}) {
+        const safeLimit = Math.max(1, Math.min(this.maxDevLogs, Number(limit) || 1000));
+        return this.devLogs.slice(-safeLimit).map(entry => ({ ...entry }));
     }
 
     reportRendererError(payload = {}) {
@@ -255,6 +271,32 @@ class DesktopController {
         const bot = this.snapshot().bots.find(item => item.botId === botId);
         if (!bot) throw Object.assign(new Error(`Bot does not exist: ${botId}`), { code: 'DESKTOP_BOT_NOT_FOUND' });
         return { contract: 'operator-bot-detail-v1', snapshotRevision: projection.revision, snapshotDigest: projection.digest, bot };
+    }
+
+    // Dev UI Bot Inspector: same runtime snapshot the operator view uses, plus
+    // the registered service names. No new state system; read-only projection.
+    botDevDetail(botId) {
+        const bot = this.snapshot().bots.find(item => item.botId === botId);
+        if (!bot) throw Object.assign(new Error(`Bot does not exist: ${botId}`), { code: 'DESKTOP_BOT_NOT_FOUND' });
+        const runtime = this.#runtime(botId);
+        return {
+            contract: 'dev-bot-detail-v1',
+            bot,
+            services: Object.keys(runtime.services || {}).sort(),
+            projectedAt: VietnamTime.iso()
+        };
+    }
+
+    // Dev UI B5 Debug: expose the existing B5 trace recorder replay fixture.
+    b5Trace(botId) {
+        const runtime = this.#runtime(botId);
+        const recorder = runtime.getService?.('b5TraceRecorder');
+        return {
+            contract: 'dev-b5-trace-v1',
+            botId,
+            replayFixture: recorder?.latestReplayFixture?.() || null,
+            projectedAt: VietnamTime.iso()
+        };
     }
 
     b5OperatorJourney(botId = null) {
@@ -937,7 +979,8 @@ class DesktopController {
             storageProtection,
             gui,
             platform,
-            operation
+            operation,
+            services: Object.keys(runtime.services || {}).sort()
         });
     }
 
@@ -986,6 +1029,21 @@ class DesktopController {
         // intentionally receives only operator-relevant events, with repeated
         // messages folded so long B5/reconnect loops stay readable.
         if (persist) this.#persistLog(sanitized);
+
+        // Dev UI receives the same sanitized record pre-fold (DEBUG included).
+        this.devLogs.push(sanitized);
+        if (this.devLogs.length > this.maxDevLogs) this.devLogs.splice(0, this.devLogs.length - this.maxDevLogs);
+        for (const listener of [...this.devListeners]) {
+            try {
+                listener(sanitized);
+            } catch (error) {
+                this.logListenerFailure = {
+                    at: VietnamTime.iso(),
+                    error: plainError(error)
+                };
+            }
+        }
+
         const visible = this.logPolicy?.project?.(sanitized) || null;
         if (!visible) return;
 

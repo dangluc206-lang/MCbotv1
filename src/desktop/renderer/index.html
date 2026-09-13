@@ -18,17 +18,24 @@
         <div class="nav-group-label">Vận hành</div>
         <button class="nav-item active" data-page="dashboard"><span>01</span>Tổng quan</button>
         <button class="nav-item" data-page="bots"><span>02</span>Bot</button>
-        <button class="nav-item" data-page="modes"><span>03</span>Chế độ</button>
-        <div class="nav-group-label">Xây dựng</div>
-        <button class="nav-item" data-page="builder"><span>04</span>Tạo chế độ</button>
-        <div class="nav-group-label">Bảo trì</div>
+        <button class="nav-item" data-page="bot-detail"><span>03</span>Chi tiết bot</button>
+        <button class="nav-item" data-page="modes"><span>04</span>Chế độ</button>
+        <div class="nav-group-label">Hệ thống</div>
         <button class="nav-item" data-page="incidents"><span>05</span>Sự cố <b id="incidentBadge" class="nav-badge hidden">0</b></button>
-        <button class="nav-item" data-page="logs"><span>06</span>Nhật ký <b id="logUnreadBadge" class="nav-badge hidden">0</b></button>
-        <button class="nav-item" data-page="settings"><span>07</span>Cài đặt</button>
-        <div class="nav-group-label" data-experience="advanced">Nâng cao</div>
-        <button class="nav-item" data-page="tools" data-experience="advanced"><span>08</span>Công cụ</button>
-        <button class="nav-item" data-page="diagnostics" data-experience="advanced"><span>09</span>Chẩn đoán</button>
-        <button class="nav-item" data-page="ai" data-experience="advanced"><span>10</span>AI Local</button>
+        <button class="nav-item" data-page="settings"><span>06</span>Cài đặt</button>
+        <div class="nav-group-label" data-experience="advanced">Dev</div>
+        <button class="nav-item" data-page="dev-overview" data-experience="advanced"><span>01</span>Fleet</button>
+        <button class="nav-item" data-page="inspector" data-experience="advanced"><span>02</span>Inspector</button>
+        <button class="nav-item" data-page="events" data-experience="advanced"><span>03</span>Event Stream</button>
+        <button class="nav-item" data-page="logs" data-experience="advanced"><span>04</span>Nhật ký <b id="logUnreadBadge" class="nav-badge hidden">0</b></button>
+        <button class="nav-item" data-page="incident-debug" data-experience="advanced"><span>05</span>Incident Debug</button>
+        <button class="nav-item" data-page="runtime-state" data-experience="advanced"><span>06</span>Runtime State</button>
+        <button class="nav-item" data-page="b5-debug" data-experience="advanced"><span>07</span>B5 Debug</button>
+        <button class="nav-item" data-page="builder" data-experience="advanced"><span>08</span>Tạo chế độ</button>
+        <button class="nav-item" data-page="tools" data-experience="advanced"><span>09</span>Công cụ</button>
+        <button class="nav-item" data-page="diagnostics" data-experience="advanced"><span>10</span>Chẩn đoán</button>
+        <button class="nav-item" data-page="config-debug" data-experience="advanced"><span>11</span>Config Debug</button>
+        <button class="nav-item" data-page="ai" data-experience="advanced"><span>12</span>AI Local</button>
       </nav>
       <div class="sidebar-bottom">
         <div class="backend-state"><span id="backendDot" class="dot"></span><div><small>Hệ thống nền</small><strong id="backendState">...</strong></div></div>
@@ -288,6 +295,61 @@
         </div>
       </section>
 
+      <section class="page" id="page-bot-detail">
+        <div class="section-head"><div><h2>Chi tiết bot</h2><p>Trạng thái kết nối, chế độ, nhân vật và cảnh báo của một bot</p></div><label>Bot<select id="botDetailSelect"></select></label></div>
+        <div id="botDetailContent"><div class="empty panel">Chọn một bot để xem chi tiết.</div></div>
+      </section>
+
+      <section class="page" id="page-dev-overview">
+        <div class="section-head"><div><h2>Tổng quan fleet (Dev)</h2><p>Toàn bộ lifecycle, connection, generation, mode, operation và health</p></div></div>
+        <div class="metric-grid" id="devFleetMetrics"></div>
+        <div class="log-console panel" id="devFleetTable"></div>
+      </section>
+
+      <section class="page" id="page-inspector">
+        <div class="section-head"><div><h2>Bot Inspector</h2><p>Trạng thái runtime đầy đủ: state, intent, generation, mode, operation, services</p></div><label>Bot<select id="inspectorBotSelect"></select></label><button class="button ghost" id="inspectorRefresh">Làm mới</button></div>
+        <pre id="inspectorOutput" class="log-console panel">Chọn một bot để inspect.</pre>
+      </section>
+
+      <section class="page" id="page-events">
+        <div class="section-head"><div><h2>Event Stream</h2><p>Log runtime chưa fold (DEBUG/INFO/WARN/ERROR) theo thời gian thực</p></div></div>
+        <div class="toolbar panel">
+          <select id="eventLevel" aria-label="Lọc mức"><option value="all">Mọi mức</option><option value="debug">Debug</option><option value="info">Info</option><option value="warn">Warn</option><option value="error">Error</option></select>
+          <select id="eventBot" aria-label="Lọc bot"><option value="all">Mọi bot</option></select>
+          <input id="eventSearch" aria-label="Tìm sự kiện" placeholder="Tìm scope, message, code...">
+          <label class="check toolbar-check"><input id="eventPause" type="checkbox"> Tạm dừng</label>
+          <label class="check toolbar-check"><input id="eventAutoScroll" type="checkbox" checked> Tự cuộn</label>
+        </div>
+        <div class="log-summary"><span id="eventCount">0 sự kiện</span></div>
+        <div class="log-console panel" id="eventConsole"></div>
+      </section>
+
+      <section class="page" id="page-incident-debug">
+        <div class="section-head"><div><h2>Incident Debugger</h2><p>Timeline sự cố: incident → evidence → operation → recovery; xem raw diagnostic</p></div><button class="button ghost" id="refreshIncidentDebug">Làm mới</button></div>
+        <div class="incident-layout">
+          <div class="panel"><div id="incidentDebugList" class="incident-list"><div class="empty">Đang tải sự cố…</div></div></div>
+          <div class="panel output-panel" id="incidentDebugDetail"><div class="empty">Chọn một sự cố để xem timeline đầy đủ.</div></div>
+        </div>
+      </section>
+
+      <section class="page" id="page-runtime-state">
+        <div class="section-head"><div><h2>Runtime State</h2><p>Snapshot toàn bộ hệ thống: lifecycle, fleet, boot failure, raw JSON</p></div><button class="button ghost" id="runtimeStateRefresh">Làm mới</button><button class="button ghost" id="runtimeStateCopy">Sao chép JSON</button></div>
+        <pre id="runtimeStateOutput" class="log-console panel">Chưa có snapshot.</pre>
+      </section>
+
+      <section class="page" id="page-b5-debug">
+        <div class="section-head"><div><h2>B5 Debug</h2><p>Journey operator + trace replay fixture của B5</p></div><label>Bot<select id="b5DebugBotSelect"></select></label><button class="button ghost" id="b5DebugRefresh">Làm mới</button></div>
+        <div id="b5DebugJourney" class="b5-journey-grid"><div class="empty panel">Chưa có trạng thái B5.</div></div>
+        <div class="section-head"><div><h2>Trace replay fixture</h2><p>Planning input/digest để replay offline qua scripts/replay-b5-plan.js</p></div></div>
+        <pre id="b5DebugTrace" class="log-console panel">Chọn một bot để đọc trace.</pre>
+      </section>
+
+      <section class="page" id="page-config-debug">
+        <div class="section-head"><div><h2>Configuration Debug</h2><p>Xem raw + effective config của mọi nhóm; dùng Configuration Workspace để xem diff</p></div><label>Nhóm<select id="configDebugGroup"></select></label><button class="button ghost" id="configDebugLoad">Tải</button></div>
+        <p id="configDebugHint" class="helper"></p>
+        <pre id="configDebugOutput" class="log-console panel">Chọn nhóm cấu hình.</pre>
+      </section>
+
       <section class="page" id="page-settings">
         <div class="settings-grid">
           <div class="panel form-panel">
@@ -377,6 +439,7 @@
   <script src="features/builder/TypedModuleEditor.js"></script>
   <script src="features/modes/ModeViewModel.js"></script>
   <script src="features/connection/ConnectionViewModel.js"></script>
+  <script src="features/dev/DevPages.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
