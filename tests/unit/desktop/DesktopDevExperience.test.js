@@ -211,3 +211,143 @@ test('dev presenters handle empty inputs with stateView', () => {
     assert.ok(DevPages.diagnosticsView([]).includes('dev-empty'));
     assert.ok(DevPages.configDebugView(null).includes('dev-empty'));
 });
+test('normalizeEnvelope infers subsystem and severity from eventType', () => {
+    const { normalizeEnvelope } = require('../../../src/desktop/events/EventInspectorBridge');
+    const record = normalizeEnvelope({ eventType: 'connection:spawned', botId: 'bot-01', connectionGeneration: 3, attemptEpoch: 1, payload: { host: 'mc.example.com' } });
+    assert.equal(record.subsystem, 'connection');
+    assert.equal(record.severity, 'info');
+    assert.equal(record.botId, 'bot-01');
+    assert.equal(record.generation, 3);
+    assert.equal(record.attemptEpoch, 1);
+    assert.equal(record.source, 'connection');
+    assert.ok(record.eventId.startsWith('evt-'));
+    assert.equal(typeof record.timestamp, 'number');
+    assert.deepEqual(record.payload, { host: 'mc.example.com' });
+});
+
+test('normalizeEnvelope redacts sensitive payload keys', () => {
+    const { normalizeEnvelope } = require('../../../src/desktop/events/EventInspectorBridge');
+    const record = normalizeEnvelope({ eventType: 'connection:login', botId: 'bot-01', payload: { username: 'steve', password: 's3cret', token: 'abc123' } });
+    assert.equal(record.payload.username, 'steve');
+    assert.equal(record.payload.password, '[REDACTED]');
+    assert.equal(record.payload.token, '[REDACTED]');
+});
+
+test('normalizeEnvelope rejects records without eventType', () => {
+    const { normalizeEnvelope } = require('../../../src/desktop/events/EventInspectorBridge');
+    assert.equal(normalizeEnvelope({}), null);
+    assert.equal(normalizeEnvelope({ botId: 'bot-01' }), null);
+    assert.equal(normalizeEnvelope(null), null);
+});
+
+test('inferSubsystem maps every taxonomy prefix', () => {
+    const { inferSubsystem } = require('../../../src/desktop/events/EventInspectorBridge');
+    assert.equal(inferSubsystem('connection:spawned'), 'connection');
+    assert.equal(inferSubsystem('reconnect:scheduled'), 'reconnect');
+    assert.equal(inferSubsystem('mode:collector-b5:paused'), 'mode');
+    assert.equal(inferSubsystem('operation:step'), 'operation');
+    assert.equal(inferSubsystem('gui:opened'), 'gui');
+    assert.equal(inferSubsystem('inventory:delta'), 'inventory');
+    assert.equal(inferSubsystem('storage:protected'), 'storage');
+    assert.equal(inferSubsystem('kho:sell'), 'storage');
+    assert.equal(inferSubsystem('b1:normalize'), 'storage');
+    assert.equal(inferSubsystem('crafting:recipe'), 'crafting');
+    assert.equal(inferSubsystem('recipe:lookup'), 'crafting');
+    assert.equal(inferSubsystem('movement:position'), 'movement');
+    assert.equal(inferSubsystem('skyblock:gateway:succeeded'), 'skyblock');
+    assert.equal(inferSubsystem('resource-pack:accepted'), 'skyblock');
+    assert.equal(inferSubsystem('server-login:started'), 'skyblock');
+    assert.equal(inferSubsystem('player:death'), 'skyblock');
+    assert.equal(inferSubsystem('fishing:packet-observation'), 'mode');
+    assert.equal(inferSubsystem('command:message'), 'mode');
+    assert.equal(inferSubsystem('runtime:failure'), 'operation');
+    assert.equal(inferSubsystem(''), 'mode');
+});
+
+test('inferSeverity classifies error/warn/debug/info', () => {
+    const { inferSeverity } = require('../../../src/desktop/events/EventInspectorBridge');
+    assert.equal(inferSeverity('connection:failed'), 'error');
+    assert.equal(inferSeverity('connection:kicked'), 'error');
+    assert.equal(inferSeverity('reconnect:scheduled'), 'warn');
+    assert.equal(inferSeverity('reconnect:attempting'), 'warn');
+    assert.equal(inferSeverity('gui:updated'), 'debug');
+    assert.equal(inferSeverity('inventory:observed'), 'debug');
+    assert.equal(inferSeverity('connection:spawned'), 'info');
+    assert.equal(inferSeverity('mode:collector-b5:cycle-completed'), 'info');
+});
+
+test('EventInspectorBridge only dispatches known event names', () => {
+    const { EventInspectorBridge } = require('../../../src/desktop/events/EventInspectorBridge');
+    const seen = [];
+    const handlers = {};
+    const mockBus = { on: (name, handler) => { handlers[name] = handler; return () => {}; } };
+    const bridge = new EventInspectorBridge({ sharedEventBus: mockBus, listener: record => seen.push(record) });
+    bridge.watchAll();
+    handlers['connection:spawned']({ eventType: 'connection:spawned', botId: 'bot-01', connectionGeneration: 1, payload: { ok: true } });
+    handlers['reconnect:attempting']({ eventType: 'reconnect:attempting', botId: 'bot-01', connectionGeneration: 1, payload: { n: 2 } });
+    assert.equal(seen.filter(record => record.eventType === 'connection:spawned').length, 1);
+    assert.equal(seen.filter(record => record.eventType === 'reconnect:attempting').length, 1);
+    bridge.unwatch();
+    assert.equal(bridge.events.length, 0, 'unwatch clears the buffer');
+});
+
+test('EventInspectorBridge snapshot returns a copy and respects limit', () => {
+    const { EventInspectorBridge } = require('../../../src/desktop/events/EventInspectorBridge');
+    const handlers = {};
+    const mockBus = { on: (name, handler) => { handlers[name] = handler; return () => {}; } };
+    const bridge = new EventInspectorBridge({ sharedEventBus: mockBus, maxEvents: 50 });
+    bridge.watchAll();
+    handlers['connection:spawned']({ eventType: 'connection:spawned', botId: 'bot-01', connectionGeneration: 1, payload: { n: 1 } });
+    const snap = bridge.snapshot({ limit: 10 });
+    assert.equal(snap.length, 1);
+    snap.push({ eventType: 'injected' });
+    assert.equal(bridge.events.length, 1, 'snapshot must not mutate the internal buffer');
+    assert.equal(bridge.snapshot({ limit: 1000 }).length, 1);
+    bridge.unwatch();
+});
+
+test('EventInspectorBridge onEvent replaces listener and returns unsubscribe', () => {
+    const { EventInspectorBridge } = require('../../../src/desktop/events/EventInspectorBridge');
+    const second = [];
+    const handlers = {};
+    const mockBus = { on: (name, handler) => { handlers[name] = handler; return () => {}; } };
+    const bridge = new EventInspectorBridge({ sharedEventBus: mockBus });
+    bridge.watchAll();
+    const off = bridge.onEvent(record => second.push(record));
+    handlers['connection:spawned']({ eventType: 'connection:spawned', botId: 'bot-01', connectionGeneration: 1, payload: {} });
+    assert.ok(second.length >= 1, 'listener must receive the dispatched event');
+    off();
+    assert.equal(bridge.listener, null);
+    bridge.unwatch();
+});
+
+test('DevPages.eventLine renders event fields, escapes html, and exposes raw json + copy', () => {
+    const record = { eventId: 'evt-123', eventType: 'connection:spawned', timestamp: new Date().toISOString(), botId: 'bot-01', generation: 3, attemptEpoch: 1, source: 'connection', subsystem: 'connection', severity: 'info', payload: { host: 'mc.example.com', msg: '<script>alert(1)</script>' } };
+    const html = DevPages.eventLine(record);
+    assert.ok(html.includes('evt-123'), 'event id must render');
+    assert.ok(html.includes('connection:spawned'), 'event type must render');
+    assert.ok(html.includes('bot=bot-01'), 'botId meta must render');
+    assert.ok(html.includes('gen=3'), 'generation meta must render');
+    assert.ok(html.includes('attempt=1'), 'attemptEpoch meta must render');
+    assert.ok(html.includes('source=connection'), 'source meta must render');
+    assert.ok(html.includes('subsystem=connection'), 'subsystem meta must render');
+    assert.ok(html.includes('data-event-id="evt-123"'), 'copy data attribute must render');
+    assert.ok(html.includes('data-event-copy="evt-123"'), 'copy button data attribute must render');
+    assert.ok(html.includes('event-raw'), 'raw json details must render');
+    assert.ok(html.includes('Xem JSON'), 'raw json summary label must render');
+    assert.ok(!html.includes('<script>alert(1)</script>'));
+    assert.ok(html.includes('&lt;script&gt;'), 'script tag must be html-escaped in raw json');
+    assert.ok(html.includes('event-line info'));
+});
+
+test('DevPages.eventStream renders multiple events and empty state', () => {
+    const records = [
+        { eventId: 'e1', eventType: 'connection:spawned', timestamp: new Date().toISOString(), botId: 'bot-01', subsystem: 'connection', severity: 'info', payload: {} },
+        { eventId: 'e2', eventType: 'connection:kicked', timestamp: new Date().toISOString(), botId: 'bot-02', subsystem: 'connection', severity: 'error', payload: {} }
+    ];
+    const html = DevPages.eventStream(records);
+    assert.ok(html.includes('e1'));
+    assert.ok(html.includes('e2'));
+    assert.ok(html.includes('event-line error'));
+    assert.ok(DevPages.eventStream([]).includes('dev-empty'));
+});
