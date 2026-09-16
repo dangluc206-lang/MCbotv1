@@ -4,7 +4,6 @@ const ManagedMode = require('../ManagedMode');
 const Timeout = require('../../shared/time/Timeout');
 const Status = require('../../shared/result/Status');
 const Result = require('../../shared/result/Result');
-const Operation = require('../../operations/Operation');
 const ReconciliationBarrier = require('../../shared/reconciliation/ReconciliationBarrier');
 const ModeFaultPolicy = require('../ModeFaultPolicy');
 const B5CampaignSession = require('./campaign/B5CampaignSession');
@@ -15,6 +14,7 @@ const B5StatusProjection = require('./status/B5StatusProjection');
 const B5CycleConfigBoundary = require('./B5CycleConfigBoundary');
 const B5SharedStorageLease = require('./storage/B5SharedStorageLease');
 const B5GenerationPreparer = require('./B5GenerationPreparer');
+const { createB1MaterialOperation } = require('../../server-features/storage/b1/B1MaterialOperation');
 
 const PROTECTION_SAME_BLOCKER_LIMIT = 3;
 const PROTECTION_TOTAL_AUTO_ATTEMPT_LIMIT = 6;
@@ -341,18 +341,15 @@ class B5CraftModeService extends ManagedMode {
                     attempt: episode?.totalAttempts || this.storageProtectionRuns,
                     startedAt: new Date().toISOString()
                 };
-                const protectionOperation = new Operation({
+                const protectionOperation = createB1MaterialOperation({
                     name: 'B5StorageProtectionBoundary',
-                    lockKeys: [],
-                    returnsResult: true,
-                    execute: operationContext => this.b1Materials.protectForB5Batch({
-                        cancellationToken: operationContext.cancellation.token,
-                        operationContext,
-                        expectedGeneration: operationContext.connectionGeneration,
+                    b1Materials: this.b1Materials,
+                    action: 'protectForB5Batch',
+                    args: {
                         batchId: protectionBatchId,
                         trigger: protectionTrigger,
                         episodeId: episode?.episodeId || null
-                    })
+                    }
                 });
                 const protectedResult = await this.modeContext.run(protectionOperation, {
                     // Storage protection is bounded by an immutable business plan and
@@ -581,15 +578,10 @@ class B5CraftModeService extends ManagedMode {
                 if (typeof this.b1Materials.preprocessForCraft === 'function'
                     && this.#generationCurrent(generation)) {
                     this.setPhase('POST_B5_SMELTING');
-                    const postB5Smelting = new Operation({
+                    const postB5Smelting = createB1MaterialOperation({
                         name: 'B5PostCraftSmelting',
-                        lockKeys: [],
-                        returnsResult: true,
-                        execute: operationContext => this.b1Materials.preprocessForCraft({
-                            cancellationToken: operationContext.cancellation.token,
-                            operationContext,
-                            expectedGeneration: operationContext.connectionGeneration
-                        })
+                        b1Materials: this.b1Materials,
+                        action: 'preprocessForCraft'
                     });
                     const smeltResult = await this.modeContext.run(postB5Smelting, {
                         timeoutMs: null,
