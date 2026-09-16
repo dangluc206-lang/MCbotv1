@@ -351,3 +351,48 @@ test('DevPages.eventStream renders multiple events and empty state', () => {
     assert.ok(html.includes('event-line error'));
     assert.ok(DevPages.eventStream([]).includes('dev-empty'));
 });
+
+test('EventInspectorBridge is constructible through the DesktopController import path', () => {
+    // Regression for "DesktopRenderer EventInspectorBridge is not a constructor":
+    // DesktopController previously assigned the whole frozen namespace object
+    // (not the class) and called `new` on it at backend start.
+    const mod = require('../../../src/desktop/events/EventInspectorBridge');
+    assert.equal(typeof mod, 'object', 'module must export a named namespace');
+    assert.equal(typeof mod.EventInspectorBridge, 'function', 'named export must be the class');
+    const instance = new mod.EventInspectorBridge({ listener: () => {} });
+    assert.equal(typeof instance.watchAll, 'function');
+    assert.equal(typeof instance.snapshot, 'function');
+    assert.equal(typeof instance.onEvent, 'function');
+    assert.deepEqual(instance.snapshot(), []);
+});
+
+test('bridge consumers destructure the named export instead of re-exporting the namespace', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const desktopDir = path.join(__dirname, '..', '..', '..', 'src', 'desktop');
+    const offenders = [];
+    const walk = dir => {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            const full = path.join(dir, entry.name);
+            if (entry.isDirectory()) walk(full);
+            else if (entry.name.endsWith('.js')) {
+                const src = fs.readFileSync(full, 'utf8');
+                for (const match of src.matchAll(/require\(\s*(['"])([^'"]*events[\\\/]EventInspectorBridge)\1\s*\)/g)) {
+                    const before = src.slice(Math.max(0, match.index - 200), match.index);
+                    const after = src.slice(match.index + match[0].length, match.index + match[0].length + 40);
+                    // Valid forms: destructuring before the require (single or multi
+                    // line), or direct property access after it. Anything else means
+                    // the whole namespace object was bound and `new` would throw.
+                    const destructured = /\{\s*[^{}]*EventInspectorBridge[^{}]*\}\s*=\s*$/.test(before);
+                    const propertyAccess = /^\s*\.\s*EventInspectorBridge/.test(after);
+                    if (!destructured && !propertyAccess) {
+                        offenders.push(`${path.relative(desktopDir, full)}: ${src.slice(before.length + match.index, match.index + match[0].length + after.length).split(/\r?\n/)[0].trim()}`);
+                    }
+                }
+            }
+        }
+    };
+    walk(desktopDir);
+    assert.deepEqual(offenders, [],
+        'require of EventInspectorBridge module must destructure the class: const { EventInspectorBridge } = require(...)');
+});

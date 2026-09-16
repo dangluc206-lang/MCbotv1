@@ -18,7 +18,9 @@ const B5OperatorProjection = require('./b5/B5OperatorProjection');
 const ConfigurationWorkspaceService = require('./configuration/ConfigurationWorkspaceService');
 const BackupCatalogService = require('./backup/BackupCatalogService');
 const OperatorSnapshotProjector = require('./projection/OperatorSnapshotProjector');
-const EventInspectorBridge = require('./events/EventInspectorBridge');
+// Named export destructure: the module exports a frozen namespace
+// ({ EventInspectorBridge, normalizeEnvelope, ... }), NOT the class itself.
+const { EventInspectorBridge } = require('./events/EventInspectorBridge');
 const CustomModeUseCases = require('./use-cases/CustomModeUseCases');
 const BotProfileUseCases = require('./use-cases/BotProfileUseCases');
 const ModeConfigurationUseCases = require('./use-cases/ModeConfigurationUseCases');
