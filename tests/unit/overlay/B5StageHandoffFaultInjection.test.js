@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const B5InventoryState = require('../../../src/server-features/crafting/b5/support/B5InventoryState');
 const B5FinalCraftCoordinator = require('../../../src/server-features/crafting/b5/B5FinalCraftCoordinator');
+const B5StageContract = require('../../../src/server-features/crafting/b5/support/B5StageContract');
 
 function ctx() { return { cancellation: { token: { throwIfCancelled() {} } }, connectionGeneration: 7, trace: null }; }
 
@@ -53,7 +54,7 @@ test('final B4 stage settlement happens once after all repeated crafts', async (
         inventoryState, progressTracker: { set() {}, advance() {} },
         withdrawFlow: { async withdraw() {} },
         craftFlow: { async craft() { crafts += 1; return { actualCrafts: 1, verification: { before: crafts - 1, after: crafts } }; } },
-        config: { targetId: 'b5out' }, runStep: async (_c, _m, fn) => ({ data: await fn() }), childOptions: (_c, o={}) => o, quantityTrace() {}
+        config: { targetId: 'b5out' }, runStep: async (_c, _m, fn) => ({ data: await fn() }), childOptions: (_c, o={}) => o, quantityTrace() {}, verificationService: new B5StageContract()
     });
     await final.execute([{ recipeId: 'b4', outputId: 'b4out', crafts: 4 }], ctx());
     assert.equal(crafts, 4);
@@ -72,7 +73,7 @@ test('stage timeout blocks handoff after output is verified', async () => {
         recipeRegistry: { require() { return { output: 'b4out', outputAmount: 1, inputs: {} }; } },
         inventoryState, progressTracker: { set() {}, advance() {} }, withdrawFlow: { async withdraw() {} },
         craftFlow: { async craft() { crafts += 1; return { actualCrafts: 1, verification: { before: crafts - 1, after: crafts } }; } },
-        config: { targetId: 'b5out' }, runStep: async (_c, _m, fn) => ({ data: await fn() }), childOptions: (_c, o={}) => o, quantityTrace() {}
+        config: { targetId: 'b5out' }, runStep: async (_c, _m, fn) => ({ data: await fn() }), childOptions: (_c, o={}) => o, quantityTrace() {}, verificationService: new B5StageContract()
     });
     await assert.rejects(final.execute([{ recipeId: 'b4', outputId: 'b4out', crafts: 1 }], ctx()), /did not settle/);
     assert.equal(crafts, 1);

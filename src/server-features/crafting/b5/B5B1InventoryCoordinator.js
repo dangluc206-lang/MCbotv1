@@ -29,7 +29,7 @@ class B5B1InventoryCoordinator {
         if (state.available < request.basePerB2 && state.emptySlots <= request.reserveSlots) {
             const freed = await this.ensureFreeIntermediateSlots(chain, context, request.reserveSlots + 1, {
                 reason: 'reserve one B1 transfer slot before B2', preserveAtLeastB2: chain.b3InputPerCraft,
-                preferCurrentB2: false, allChains: options.allChains || []
+                preferCurrentB2: false, allChains: options.allChains || [], targetId: options.targetId || null
             });
             state = this.#state(chain, request.reserveSlots, freed?.snapshot || null);
         }

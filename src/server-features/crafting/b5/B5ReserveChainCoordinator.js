@@ -9,8 +9,8 @@ class B5ReserveChainCoordinator {
 
     reconfigure(config = {}) { this.config = config || {}; return this; }
 
-    async prepare(chain, context, { deferIntermediateDeposit = false, allChains = [] } = {}) {
-        const state = this.#initialState(chain, deferIntermediateDeposit, allChains);
+    async prepare(chain, context, { deferIntermediateDeposit = false, allChains = [], targetId = null } = {}) {
+        const state = this.#initialState(chain, deferIntermediateDeposit, allChains, targetId);
         while (state.b3Remaining > 0 || state.b2Remaining > 0) {
             context.cancellation.token.throwIfCancelled();
             this.#guard(state, chain, context);
@@ -37,7 +37,7 @@ class B5ReserveChainCoordinator {
         return { b2Id: chain.b2Id, b3Id: chain.b3Id, deferred: deferIntermediateDeposit };
     }
 
-    #initialState(chain, deferIntermediateDeposit, allChains) {
+    #initialState(chain, deferIntermediateDeposit, allChains, targetId = null) {
         const minFreeForB3All = Math.max(1, Number(this.config?.b3AllMinEmptySlots || 1));
         return {
             minFreeForB3All,
@@ -47,6 +47,7 @@ class B5ReserveChainCoordinator {
             vaultB2Remaining: Number(chain.vaultB2 || 0),
             deferIntermediateDeposit,
             allChains,
+            targetId,
             guard: 0,
             pendingStageSettlement: null
         };
@@ -83,7 +84,7 @@ class B5ReserveChainCoordinator {
         if (Number(inventory.emptySlotCount || 0) < state.minFreeForB3All) {
             const freed = await this.intermediate.ensureFreeIntermediateSlots(chain, context, state.minFreeForB3All, {
                 reason: 'reserve one output slot before B2->B3 ALL', preserveAtLeastB2: chain.b3InputPerCraft,
-                preferCurrentB2: chain.useAllForB2 === true, allChains: state.allChains
+                preferCurrentB2: chain.useAllForB2 === true, allChains: state.allChains, targetId: state.targetId
             });
             inventory = freed.snapshot;
             state.vaultB2Remaining += freed.depositedB2Count;
@@ -160,7 +161,7 @@ class B5ReserveChainCoordinator {
     async #tryCraftB2(chain, state, view, context) {
         if (state.b2Remaining <= 0) return { done: false };
         const acquired = await this.b1Inventory.acquire(chain, context, {
-            b2Remaining: state.b2Remaining, minFreeForB3All: state.minFreeForB3All, allChains: state.allChains
+            b2Remaining: state.b2Remaining, minFreeForB3All: state.minFreeForB3All, allChains: state.allChains, targetId: state.targetId
         });
         if (!acquired.ready) return { result: {
             b2Id: chain.b2Id, b3Id: chain.b3Id, deferred: state.deferIntermediateDeposit, waitingForMaterial: true,

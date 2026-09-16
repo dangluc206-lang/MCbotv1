@@ -3,10 +3,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const B5FinalCraftCoordinator = require('../../../src/server-features/crafting/b5/B5FinalCraftCoordinator');
+const B5StageContract = require('../../../src/server-features/crafting/b5/support/B5StageContract');
 
 class InventoryStateMock {
     constructor(sequence) { this.sequence = [...sequence]; this.index = 0; }
     count() { return this.sequence[Math.min(this.index++, this.sequence.length - 1)]; }
+    countFromSource() { return this.sequence[Math.min(this.index, this.sequence.length - 1)]; }
     async waitForSettledCount(_id, minimumCount) {
         const counts = [];
         while (this.index < this.sequence.length) counts.push(this.sequence[this.index++]);
@@ -24,16 +26,18 @@ function coordinator(inv, craftData = { actualCrafts: 1 }) {
     const progressTracker = { set() {}, advance() {} };
     const runStep = async (_ctx, _meta, fn) => ({ data: await fn() });
     const craftFlow = { async craft() { return { actualCrafts: craftData.actualCrafts }; } };
-    return new B5FinalCraftCoordinator({ recipeRegistry, inventoryState: inv, progressTracker, withdrawFlow: {}, craftFlow, config: { targetId: 'b5', stageSettlementTimeoutMs: 200 }, runStep, childOptions: () => ({}), quantityTrace: () => {} });
+    return new B5FinalCraftCoordinator({ recipeRegistry, inventoryState: inv, progressTracker, withdrawFlow: {}, craftFlow, config: { targetId: 'b5', stageSettlementTimeoutMs: 200 }, runStep, childOptions: () => ({}), quantityTrace: () => {}, verificationService: new B5StageContract() });
 }
 
-test('B2/B3/B4/B5 craft gate waits for relevant output settlement before returning', async () => {
+test('B2/B3/B4/B5 craft gate verifies the output delta before returning', async () => {
     const inv = new InventoryStateMock([10, 11, 11, 11]);
     const c = coordinator(inv);
     const ctx = { connectionGeneration: 7, cancellation: { token: { throwIfCancelled() {} } }, trace: [] };
     const data = await c.craft('r', 1, ctx, 'b4', { stage: 'B4', nextStage: 'B5' });
     assert.equal(data.stageContract.stage, 'B4');
-    assert.equal(data.stageContract.settled, true);
+    // Per-craft crafts only verify the output; settlement happens once at the
+    // stage boundary (see B5StageHandoffBoundary).
+    assert.equal(data.stageContract.settled, false);
     assert.equal(data.actualCrafts, 1);
 });
 

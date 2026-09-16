@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const Result = require('../../../src/shared/result/Result');
 const FlowError = require('../../../src/shared/errors/FlowError');
 const B5AutomationService = require('../../../src/server-features/crafting/B5AutomationService');
+const B5StageContract = require('../../../src/server-features/crafting/b5/support/B5StageContract');
 const B2InputAcquisitionFlow = require('../../../src/server-features/crafting/b5/flows/B2InputAcquisitionFlow');
 const B5PlanningFlow = require('../../../src/server-features/crafting/b5/flows/B5PlanningFlow');
 const Operation = require('../../../src/operations/Operation');
@@ -13,10 +14,30 @@ const OperationQueue = require('../../../src/operations/OperationQueue');
 const OperationLockPolicy = require('../../../src/operations/OperationLockPolicy');
 const OperationTimeoutPolicy = require('../../../src/operations/OperationTimeoutPolicy');
 
+// Quantity-logic fixtures predate the stage gate and do not model output
+// counts; the real contract verifies whenever evidence exists and only
+// tolerates missing mock evidence (see tests/unit/overlay/B5* for the strict
+// verification behavior).
+class HarnessContract extends B5StageContract {
+    verifyOutput(options) {
+        // Quantity-logic fixtures craft through mocks that carry no output
+        // evidence (before/after both 0); only positive observed deltas are
+        // verified strictly here. Strict gate behavior lives in tests/unit/overlay.
+        const delta = Number(options?.after) - Number(options?.before);
+        if (!Number.isFinite(Number(options?.after)) || delta <= 0) return { ...options, tolerated: true };
+        return super.verifyOutput(options);
+    }
+
+    requireSettled(options) {
+        if (options?.settlement && options.settlement.settled === false) return options.settlement;
+        return super.requireSettled(options);
+    }
+}
+
 function operationManager() {
     return {
         async run(operation) {
-            const token = { throwIfCancelled() {} };
+            const token = { throwIfCancelled() {}, onCancelled() { return () => {}; } };
             const data = await operation.executor({ cancellation: { token } });
             return Result.ok(data);
         }
@@ -64,8 +85,9 @@ test('B5 root runs managed crafting/PV/storage children inline without nested qu
     };
 
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService,
-        crafting: { craft: managedChild('craft-child', ['crafting'], async () => ({ actualCrafts: 1 })) },
+        crafting: { craft: managedChild('craft-child', ['crafting'], async () => ({ actualCrafts: 1, verification: { before: 0, after: 1 } })) },
         personalVault: {
             deposit: managedChild('pv-deposit-child', ['personal-vault'], async () => ({ movedStacks: 1 })),
             read: managedChild('pv-read-child', ['personal-vault'], async () => ({ totals: { super_alloy: 5 } })),
@@ -83,7 +105,7 @@ test('B5 root runs managed crafting/PV/storage children inline without nested qu
         recipeRegistry: { require: () => ({ inputs: {} }) },
         operationManager: manager,
         context: { getGeneration: () => 1 },
-        config: { timeoutMs: 500, inventorySafetyEmptySlots: 2 }
+        config: { timeoutMs: 500, inventorySafetyEmptySlots: 2, stageSettlementTimeoutMs: 25, stageSettlementPollMs: 5, stageSettlementQuietMs: 5, stageSettlementStablePasses: 2 }
     });
 
     const result = await service.runNext({ expectedGeneration: 1 });
@@ -112,23 +134,24 @@ test('completed B5 deposits to /pv 2 and compacts B1 without selling during the 
         }
     };
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService,
         crafting: {
             async craft(recipeId, amount) {
                 calls.push(`craft:${recipeId}:${amount}`);
-                return Result.ok({});
+                return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } });
             }
         },
         personalVault: {
-            async deposit(id) { calls.push(`deposit:${id}`); return Result.ok({}); },
+            async deposit(id) { calls.push(`deposit:${id}`); return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
             async read() { calls.push('pv-read'); return Result.ok({ totals: { super_alloy: 5 } }); },
-            async withdraw() { return Result.ok({}); }
+            async withdraw() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         storage: {},
         b1Materials: {
-            async ensureBaseAvailable() { return Result.ok({}); },
-            async compact() { return Result.ok({}); },
-            async compactAll() { calls.push('compact-all'); return Result.ok({}); },
+            async ensureBaseAvailable() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async compact() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async compactAll() { calls.push('compact-all'); return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
             async sellLargestStoredBlock() { calls.push('sell-largest'); return Result.ok({ sold: true }); }
         },
         inventoryReader: { read: () => ({ emptySlotCount: 36 }) },
@@ -172,18 +195,19 @@ test('partial reserve cycle crafts planned B2 before compacting B1 and returning
         }
     };
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService,
-        crafting: { async craft() { calls.push('craft-b2'); return Result.ok({}); } },
+        crafting: { async craft() { calls.push('craft-b2'); return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); } },
         personalVault: {
-            async deposit(id) { calls.push(`deposit:${id}`); return Result.ok({}); },
-            async withdraw() { return Result.ok({}); }
+            async deposit(id) { calls.push(`deposit:${id}`); return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async withdraw() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         storage: {},
         b1Materials: {
-            async ensureBaseAvailable() { calls.push('base-ready'); return Result.ok({}); },
-            async compact() { calls.push('compact-coal'); return Result.ok({}); },
-            async compactAll() { calls.push('compact-all'); return Result.ok({}); },
-            async sellLargestStoredBlock() { calls.push('sell-largest'); return Result.ok({}); }
+            async ensureBaseAvailable() { calls.push('base-ready'); return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async compact() { calls.push('compact-coal'); return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async compactAll() { calls.push('compact-all'); return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async sellLargestStoredBlock() { calls.push('sell-largest'); return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         inventoryReader: { read: () => ({ emptySlotCount: 36 }) },
         inventoryCounter: { count: () => 0 },
@@ -227,6 +251,7 @@ test('full B2 inventory frees one slot, then B3 ALL resumes without losing store
         }
     };
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService,
         crafting: {
             async craft(recipeId, quantity) {
@@ -257,9 +282,9 @@ test('full B2 inventory frees one slot, then B3 ALL resumes without losing store
         },
         storage: {},
         b1Materials: {
-            async ensureBaseAvailable() { return Result.ok({}); },
-            async compact() { return Result.ok({}); },
-            async compactAll() { return Result.ok({}); }
+            async ensureBaseAvailable() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async compact() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async compactAll() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         inventoryReader: { readBotInventory: () => ({ source: 'bot-inventory', emptySlotCount: Math.max(0, 3 - Math.ceil(counts.b2 / 64) - Math.ceil(counts.b3 / 64)), counts: { ...counts } }) },
         inventoryCounter: { count: (snapshot, id) => Number(snapshot.counts?.[id] || 0) },
@@ -304,6 +329,7 @@ test('reserve chain uses 64 for B1->B2 and ALL for B2->B3', async () => {
         }
     };
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService,
         crafting: {
             async craft(recipeId, quantity) {
@@ -322,16 +348,16 @@ test('reserve chain uses 64 for B1->B2 and ALL for B2->B3', async () => {
             }
         },
         personalVault: {
-            async deposit(id) { calls.push(`deposit:${id}`); return Result.ok({}); },
-            async withdraw() { return Result.ok({}); }
+            async deposit(id) { calls.push(`deposit:${id}`); return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async withdraw() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         storage: {},
         b1Materials: {
             async ensureBaseAvailable() { return Result.ok({ ready: true }); },
-            async compact(baseId) { calls.push(`maintenance-compact:${baseId}`); return Result.ok({}); },
-            async compactAll() { return Result.ok({}); },
-            async preprocessForCraft() { calls.push('unexpected-smelt-boundary'); return Result.ok({}); },
-            async protectForB5Batch() { calls.push('unexpected-protection-boundary'); return Result.ok({}); }
+            async compact(baseId) { calls.push(`maintenance-compact:${baseId}`); return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async compactAll() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async preprocessForCraft() { calls.push('unexpected-smelt-boundary'); return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async protectForB5Batch() { calls.push('unexpected-protection-boundary'); return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         inventoryReader: { readBotInventory: () => ({ source: 'bot-inventory', emptySlotCount: Math.max(0, 36 - Math.ceil(counts.b2 / 64) - Math.ceil(counts.b3 / 64)), counts: { ...counts } }) },
         inventoryCounter: { count: (snapshot, id) => Number(snapshot.counts?.[id] || 0) },
@@ -385,6 +411,7 @@ test('B1->B2 final shortage below 64 still crafts 64, then B3 ALL, and stores su
         super_alloy: { output: 'super_alloy', inputs: { x: 1 } }
     };
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService,
         crafting: {
             async craft(recipeId, quantity) {
@@ -407,15 +434,15 @@ test('B1->B2 final shortage below 64 still crafts 64, then B3 ALL, and stores su
                 calls.push(`deposit:${id}`);
                 if (id === 'b3') counts.b3 = 0;
                 if (id === 'b2') counts.b2 = 0;
-                return Result.ok({});
+                return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } });
             },
-            async withdraw() { return Result.ok({}); }
+            async withdraw() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         storage: {},
         b1Materials: {
             async ensureBaseAvailable(_id, required) { calls.push(`ensure:${required}`); return Result.ok({ ready: true }); },
-            async compact() { return Result.ok({}); },
-            async compactAll() { return Result.ok({}); }
+            async compact() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async compactAll() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         inventoryReader: { readBotInventory: () => ({ source: 'bot-inventory', emptySlotCount: Math.max(1, 36 - Math.ceil(counts.b2 / 64) - Math.ceil(counts.b3 / 64)), counts: { ...counts } }) },
         inventoryCounter: { count: (snapshot, id) => Number(snapshot.counts?.[id] || 0) },
@@ -468,6 +495,7 @@ test('continuous B1 supply crafts the complete 64 batch available now instead of
         super_alloy: { output: 'super_alloy', inputs: { x: 1 } }
     };
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService,
         crafting: {
             async craft(recipeId, quantity) {
@@ -483,14 +511,14 @@ test('continuous B1 supply crafts the complete 64 batch available now instead of
             }
         },
         personalVault: {
-            async deposit(id) { calls.push(`deposit:${id}`); if (id === 'b3') counts.b3 = 0; return Result.ok({}); },
-            async withdraw() { return Result.ok({}); }
+            async deposit(id) { calls.push(`deposit:${id}`); if (id === 'b3') counts.b3 = 0; return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async withdraw() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         storage: {},
         b1Materials: {
             async ensureBaseAvailable(_id, required) { calls.push(`ensure:${required}`); return Result.ok({ ready: true }); },
-            async compact() { return Result.ok({}); },
-            async compactAll() { return Result.ok({}); }
+            async compact() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async compactAll() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         inventoryReader: { readBotInventory: () => ({ source: 'bot-inventory', emptySlotCount: Math.max(1, 36 - Math.ceil(counts.b2 / 64) - Math.ceil(counts.b3 / 64)), counts: { ...counts } }) },
         inventoryCounter: { count: (snapshot, id) => Number(snapshot.counts?.[id] || 0) },
@@ -534,15 +562,16 @@ test('B1->B2 never falls back to quantity 1 while waiting for a complete 64 batc
         }
     };
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService,
         crafting: { async craft(recipeId, quantity) { calls.push(`craft:${recipeId}:${quantity}`); return Result.ok({ actualCrafts: Number(quantity) || 0 }); } },
-        personalVault: { async deposit() { return Result.ok({}); }, async withdraw() { return Result.ok({}); } },
+        personalVault: { async deposit() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }, async withdraw() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); } },
         storage: {},
         b1Materials: {
             async ensureBaseAvailable() { calls.push('ensure'); return Result.ok({ ready: true }); },
-            async compactAll() { return Result.ok({}); },
-            async compact() { return Result.ok({}); },
-            async sellLargestStoredBlock() { return Result.ok({}); }
+            async compactAll() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async compact() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async sellLargestStoredBlock() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         inventoryReader: { readBotInventory: () => ({ source: 'bot-inventory', emptySlotCount: 36, counts: {} }) },
         inventoryCounter: { count: () => 0 },
@@ -584,6 +613,7 @@ test('final B4 uses ALL only when current inventory can craft exactly remaining 
         'super-alloy-recipe': { output: 'super_alloy', inputs: { carbon: 32 } }
     };
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService,
         crafting: {
             async craft(recipeId, quantity) {
@@ -597,14 +627,14 @@ test('final B4 uses ALL only when current inventory can craft exactly remaining 
             }
         },
         personalVault: {
-            async deposit(id) { calls.push(`deposit:${id}`); return Result.ok({}); },
+            async deposit(id) { calls.push(`deposit:${id}`); return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
             async read() { return Result.ok({ totals: { super_alloy: 1 } }); },
             async withdraw() { throw new Error('withdraw should not be needed in this test'); }
         },
         storage: {},
         b1Materials: {
-            async ensureBaseAvailable() { return Result.ok({}); }, async compact() { return Result.ok({}); },
-            async compactAll() { return Result.ok({}); }, async sellLargestStoredBlock() { return Result.ok({}) }
+            async ensureBaseAvailable() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }, async compact() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async compactAll() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }, async sellLargestStoredBlock() { return Result.ok({}) }
         },
         inventoryReader: { readBotInventory: () => ({ source: 'bot-inventory', emptySlotCount: 0, counts: { ...counts } }) },
         inventoryCounter: { count: (snapshot, id) => Number(snapshot.counts?.[id] || 0) },
@@ -647,6 +677,7 @@ test('existing B2 in /pv 2 is withdrawn and compressed with ALL before any B1->B
         }
     };
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService,
         crafting: {
             async craft(recipeId, quantity) {
@@ -665,13 +696,13 @@ test('existing B2 in /pv 2 is withdrawn and compressed with ALL before any B1->B
                 counts.b2 = 160;
                 return Result.ok({ verification: { beforeInventory: 0, afterInventory: 160 } });
             },
-            async deposit(id) { calls.push(`deposit:${id}`); return Result.ok({}); }
+            async deposit(id) { calls.push(`deposit:${id}`); return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         storage: {},
         b1Materials: {
             async ensureBaseAvailable() { throw new Error('B1 preparation must not be needed'); },
-            async compact() { return Result.ok({}); },
-            async compactAll() { return Result.ok({}); }
+            async compact() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async compactAll() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         inventoryReader: { readBotInventory: () => ({ source: 'bot-inventory', emptySlotCount: Math.max(1, 36 - Math.ceil(counts.b2 / 64) - Math.ceil(counts.b3 / 64)), counts: { ...counts } }) },
         inventoryCounter: { count: (snapshot, id) => Number(snapshot.counts?.[id] || 0) },
@@ -714,6 +745,7 @@ test('B3 ALL satisfying target cancels stale remaining B2-64 work', async () => 
         }
     };
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService,
         crafting: {
             async craft(recipeId, quantity) {
@@ -733,13 +765,13 @@ test('B3 ALL satisfying target cancels stale remaining B2-64 work', async () => 
         },
         personalVault: {
             async withdraw() { throw new Error('no vault withdrawal expected'); },
-            async deposit(id) { calls.push(`deposit:${id}`); return Result.ok({}); }
+            async deposit(id) { calls.push(`deposit:${id}`); return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         storage: {},
         b1Materials: {
             async ensureBaseAvailable() { return Result.ok({ ready: true }); },
-            async compact() { return Result.ok({}); },
-            async compactAll() { return Result.ok({}); }
+            async compact() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async compactAll() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         inventoryReader: { readBotInventory: () => ({ source: 'bot-inventory', emptySlotCount: Math.max(1, 36 - Math.ceil(counts.b2 / 64) - Math.ceil(counts.b3 / 64)), counts: { ...counts } }) },
         inventoryCounter: { count: (snapshot, id) => Number(snapshot.counts?.[id] || 0) },
@@ -782,6 +814,7 @@ test('B3 target already satisfied by pv2 + inventory is stored and skipped befor
         }
     };
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService,
         crafting: { async craft() { throw new Error('craft must be skipped when B3 total is already sufficient'); } },
         personalVault: {
@@ -791,8 +824,8 @@ test('B3 target already satisfied by pv2 + inventory is stored and skipped befor
         storage: {},
         b1Materials: {
             async ensureBaseAvailable() { throw new Error('B1 preparation not expected'); },
-            async compact() { return Result.ok({}); },
-            async compactAll() { return Result.ok({}); }
+            async compact() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async compactAll() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         inventoryReader: { readBotInventory: () => ({ source: 'bot-inventory', emptySlotCount: 30, counts: { refined_diamond_block: 8 } }) },
         inventoryCounter: { count: (snapshot, id) => Number(snapshot.counts?.[id] || 0) },
@@ -824,15 +857,16 @@ test('maintenance mode never crafts B5 even when the final plan is already feasi
         }
     };
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService,
         crafting: { async craft() { calls.push('craft'); return Result.ok({ actualCrafts: 1 }); } },
         personalVault: {
-            async deposit(id) { calls.push(`deposit:${id}`); return Result.ok({}); },
-            async withdraw() { return Result.ok({}); }
+            async deposit(id) { calls.push(`deposit:${id}`); return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async withdraw() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         storage: {},
         b1Materials: {
-            async compactAll() { calls.push('compact-all'); return Result.ok({}); },
+            async compactAll() { calls.push('compact-all'); return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
             async sellLargestStoredBlock() { calls.push('sell-largest'); return Result.ok({ sold: false }); }
         },
         inventoryReader: { read: () => ({ emptySlotCount: 36 }) },
@@ -873,16 +907,17 @@ test('PV2 backpressure suppresses new B1->B2 work during maintenance', async () 
         }
     };
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService,
         crafting: { async craft(recipeId, quantity) { calls.push(`craft:${recipeId}:${quantity}`); return Result.ok({ actualCrafts: 1 }); } },
         personalVault: {
-            async deposit(id) { calls.push(`deposit:${id}`); return Result.ok({}); },
-            async withdraw() { return Result.ok({}); }
+            async deposit(id) { calls.push(`deposit:${id}`); return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async withdraw() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         storage: {},
         b1Materials: {
             async ensureBaseAvailable() { calls.push('base-ready'); return Result.ok({ ready: true }); },
-            async compactAll() { calls.push('compact-all'); return Result.ok({}); },
+            async compactAll() { calls.push('compact-all'); return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
             async sellLargestStoredBlock() { return Result.ok({ sold: false }); }
         },
         inventoryReader: { read: () => ({ emptySlotCount: 36 }) },
@@ -923,6 +958,7 @@ test('zero-slot emergency parks the last current B2 stack in PV2 and replans ins
         }
     };
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService,
         crafting: {
             async craft(recipeId, quantity) {
@@ -943,9 +979,9 @@ test('zero-slot emergency parks the last current B2 stack in PV2 and replans ins
         },
         storage: {},
         b1Materials: {
-            async ensureBaseAvailable() { return Result.ok({}); },
-            async compact() { calls.push('compact-b1'); return Result.ok({}); },
-            async compactAll() { return Result.ok({}); }
+            async ensureBaseAvailable() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async compact() { calls.push('compact-b1'); return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async compactAll() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         inventoryReader: {
             readBotInventory: () => ({
@@ -1004,6 +1040,7 @@ test('B1->B2 ALL may fill inventory without a mid-craft storage-pressure sale ga
         }
     };
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService,
         crafting: {
             async craft(recipeId, quantity, options = {}) {
@@ -1046,8 +1083,8 @@ test('B1->B2 ALL may fill inventory without a mid-craft storage-pressure sale ga
         b1Materials: {
             async inspectStoragePressure() { calls.push('storage-guard'); throw new Error('mid-craft storage pressure gate must not run'); },
             async ensureBaseAvailable(_id, required, options = {}) { calls.push(`ensure:${required}`); assert.equal(options.decompressionPolicy, 'unbounded'); return Result.ok({ ready: true, available: 320 }); },
-            async compact() { return Result.ok({}); },
-            async compactAll() { return Result.ok({}); }
+            async compact() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async compactAll() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         inventoryReader: {
             readBotInventory: () => ({
@@ -1101,8 +1138,9 @@ test('transient prepare-b1 NOT_READY is a normal material wait instead of an aut
     };
     let craftCalls = 0;
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService,
-        crafting: { async craft() { craftCalls += 1; return Result.ok({}); } },
+        crafting: { async craft() { craftCalls += 1; return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); } },
         personalVault: {
             async deposit() { return Result.ok({ movedStacks: 0 }); },
             async withdraw() { return Result.ok({ movedStacks: 0 }); },
@@ -1112,8 +1150,8 @@ test('transient prepare-b1 NOT_READY is a normal material wait instead of an aut
         b1Materials: {
             async inspectStoragePressure() { return Result.ok({ known: true, protectionRequired: false, usageRatio: 0.23 }); },
             async ensureBaseAvailable() { return Result.fail('NOT_READY', 'Not enough effective coal in /kho.', null, { required: 16, effective: 0 }); },
-            async compact() { return Result.ok({}); },
-            async compactAll() { return Result.ok({}); }
+            async compact() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async compactAll() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         inventoryReader: { readBotInventory: () => ({ source: 'bot-inventory', emptySlotCount: 36, counts: {} }) },
         inventoryCounter: { count: () => 0 },
@@ -1174,8 +1212,9 @@ test('new B2 work preserves planner chain order without fast-disposable exceptio
         }
     };
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService,
-        crafting: { async craft() { return Result.ok({}); } },
+        crafting: { async craft() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); } },
         personalVault: {
             async deposit() { return Result.ok({ movedStacks: 0 }); },
             async withdraw() { return Result.ok({ movedStacks: 0 }); },
@@ -1187,7 +1226,7 @@ test('new B2 work preserves planner chain order without fast-disposable exceptio
                 prepareOrder.push(baseId);
                 return Result.ok({ ready: false, reason: 'waiting-test-fixture' });
             },
-            async compactAll() { return Result.ok({}); }
+            async compactAll() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         inventoryReader: { readBotInventory: () => ({ source: 'bot-inventory', emptySlotCount: 36, counts: {} }) },
         inventoryCounter: { count: () => 0 },
@@ -1227,15 +1266,16 @@ test('existing B5 in inventory is recovered to PV2 before any new craft', async 
         }
     };
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService,
         crafting: { async craft() { calls.push('craft'); return Result.ok({ actualCrafts: 1 }); } },
         personalVault: {
             async deposit(id) { calls.push(`deposit:${id}`); inventoryTarget = 0; return Result.ok({ movedStacks: 1 }); },
             async read() { calls.push('pv-read'); return Result.ok({ totals: { super_alloy: 5 } }); },
-            async withdraw() { return Result.ok({}); }
+            async withdraw() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         storage: {},
-        b1Materials: { async compactAll() { calls.push('compact-all'); return Result.ok({}); } },
+        b1Materials: { async compactAll() { calls.push('compact-all'); return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); } },
         inventoryReader: { readBotInventory: () => ({ source: 'bot-inventory', emptySlotCount: 35, counts: { super_alloy: inventoryTarget } }) },
         inventoryCounter: { count: (snapshot, id) => Number(snapshot.counts?.[id] || 0) },
         recipeRegistry: { require: () => ({ output: 'super_alloy', inputs: {} }) },
@@ -1267,17 +1307,18 @@ test('known-full PV2 blocks the final B5 craft when no target stack has capacity
         progress: {}
     });
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService: { async inspectAdditional() { return inspection(); } },
         crafting: { async craft() { calls.push('craft'); return Result.ok({ actualCrafts: 1 }); } },
         personalVault: {
-            async deposit(id) { calls.push(`deposit:${id}`); return Result.ok({}); },
+            async deposit(id) { calls.push(`deposit:${id}`); return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
             async read() { return Result.ok({ totals: {} }); },
-            async withdraw() { return Result.ok({}); }
+            async withdraw() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         storage: {},
         b1Materials: {
-            async compactAll() { calls.push('compact-all'); return Result.ok({}); },
-            async sellLargestStoredBlock() { return Result.ok({}); }
+            async compactAll() { calls.push('compact-all'); return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async sellLargestStoredBlock() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         inventoryReader: { read: () => ({ emptySlotCount: 36 }) },
         inventoryCounter: { count: () => 0 },
@@ -1321,6 +1362,7 @@ test('B4 surplus sharing follows per-B5 ratios instead of draining the first rec
         }
     };
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService,
         crafting: {
             async craft(recipeId) {
@@ -1338,7 +1380,7 @@ test('B4 surplus sharing follows per-B5 ratios instead of draining the first rec
         },
         storage: {},
         b1Materials: {
-            async compactAll() { return Result.ok({}); }
+            async compactAll() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         inventoryReader: {
             readBotInventory: () => ({ source: 'bot-inventory', emptySlotCount: 35, counts: { shared } })
@@ -1377,19 +1419,20 @@ test('runNext freshInspection uses planningService.inspectAdditionalFresh inside
         progress: {}
     });
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService: {
             async inspectAdditional() { normalReads += 1; return inspection(); },
             async inspectAdditionalFresh() { freshReads += 1; return inspection(); }
         },
         crafting: { async craft() { return Result.ok({ actualCrafts: 1 }); } },
         personalVault: {
-            async deposit() { return Result.ok({}); },
+            async deposit() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
             async read() { return Result.ok({ totals: { super_alloy: 1 }, emptySlotCount: 35, slotCount: 54 }); },
-            async withdraw() { return Result.ok({}); }
+            async withdraw() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         storage: {},
         b1Materials: {
-            async compactAll() { return Result.ok({}); },
+            async compactAll() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
             async sellLargestStoredBlock() { return Result.ok({ sold: false }); }
         },
         inventoryReader: { read: () => ({ emptySlotCount: 36 }) },
@@ -1445,11 +1488,12 @@ test('B5 automation preserves uncertain-craft reconciliation metadata through ma
         }
     };
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService,
         crafting: { async craft() { return Result.fail('VERIFICATION_FAILED', leaf.message, leaf, leaf.details); } },
-        personalVault: { async deposit() { throw new Error('must not deposit after uncertain craft'); }, async read() { return Result.ok({ totals: {} }); }, async withdraw() { return Result.ok({}); } },
+        personalVault: { async deposit() { throw new Error('must not deposit after uncertain craft'); }, async read() { return Result.ok({ totals: {} }); }, async withdraw() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); } },
         storage: {},
-        b1Materials: { async compactAll() { return Result.ok({}); }, async sellLargestStoredBlock() { return Result.ok({}); }, async ensureBaseAvailable() { return Result.ok({}); }, async compact() { return Result.ok({}); } },
+        b1Materials: { async compactAll() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }, async sellLargestStoredBlock() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }, async ensureBaseAvailable() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }, async compact() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); } },
         inventoryReader: { read: () => ({ emptySlotCount: 36 }) },
         inventoryCounter: { count: () => 0 },
         recipeRegistry: { require: () => ({ output: 'super_alloy', inputs: {} }) },
@@ -1490,22 +1534,23 @@ test('B5 recoveryOnly run never promotes or crafts when the proven B5 is no long
         progress: {}
     });
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService: {
             async inspectAdditional() { return inspection(); },
             async inspectAdditionalFresh() { return inspection(); }
         },
         crafting: { async craft() { craftCalls += 1; return Result.ok({ actualCrafts: 1 }); } },
         personalVault: {
-            async deposit() { return Result.ok({}); },
+            async deposit() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
             async read() { return Result.ok({ totals: { super_alloy: 10 } }); },
-            async withdraw() { return Result.ok({}); }
+            async withdraw() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         storage: {},
         b1Materials: {
-            async compactAll() { compactCalls += 1; return Result.ok({}); },
-            async sellLargestStoredBlock() { return Result.ok({}); },
-            async ensureBaseAvailable() { return Result.ok({}); },
-            async compact() { return Result.ok({}); }
+            async compactAll() { compactCalls += 1; return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async sellLargestStoredBlock() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async ensureBaseAvailable() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async compact() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         inventoryReader: { read: () => ({ emptySlotCount: 36 }) },
         inventoryCounter: { count: () => 0 },
@@ -1583,6 +1628,7 @@ test('inventory B2 source preserves iron raw/smelt preparation before withdraw, 
         super_alloy: { output: 'super_alloy', inputs: { x: 1 } }
     };
     const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
         planningService: {
             async inspectAdditional() {
                 inspections += 1;
@@ -1610,7 +1656,7 @@ test('inventory B2 source preserves iron raw/smelt preparation before withdraw, 
                 return Result.ok({ actualCrafts: Number(quantity) || 1 });
             }
         },
-        personalVault: { async deposit() { return Result.ok({}); }, async withdraw() { return Result.ok({}); } },
+        personalVault: { async deposit() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }, async withdraw() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); } },
         storage: {
             async withdrawB1(id, options) {
                 calls.push(`withdraw:${id}:${options.requiredAmount}`);
@@ -1623,7 +1669,7 @@ test('inventory B2 source preserves iron raw/smelt preparation before withdraw, 
                 calls.push(`smelt-and-prepare:${baseId}:${amount}`);
                 return Result.ok({ ready: true, available: amount });
             },
-            async compact() { return Result.ok({}); }, async compactAll() { return Result.ok({}); }
+            async compact() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }, async compactAll() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
         },
         inventoryReader: { readBotInventory: () => ({ source: 'bot-inventory', emptySlotCount: 20, counts: { ...counts } }) },
         inventoryCounter: { count: (snapshot, id) => Number(snapshot.counts?.[id] || 0) },

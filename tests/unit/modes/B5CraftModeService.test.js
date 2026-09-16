@@ -10,6 +10,7 @@ const EventBus = require('../../../src/core/EventBus');
 const Result = require('../../../src/shared/result/Result');
 const FlowError = require('../../../src/shared/errors/FlowError');
 const B5AutomationService = require('../../../src/server-features/crafting/B5AutomationService');
+const B5StageContract = require('../../../src/server-features/crafting/b5/support/B5StageContract');
 const OperationManager = require('../../../src/operations/OperationManager');
 const OperationQueue = require('../../../src/operations/OperationQueue');
 const OperationLockPolicy = require('../../../src/operations/OperationLockPolicy');
@@ -971,6 +972,7 @@ async function actualWrappedUncertainFinalChainResult({ leafOutputId = 'super_al
         progress: {}
     });
     const service = new B5AutomationService({
+        craftingVerificationService: new B5StageContract(),
         planningService: {
             async inspectAdditional() { return inspection(); },
             async inspectAdditionalFresh() { return inspection(); }

@@ -14,6 +14,8 @@ const B5StatusProjection = require('./status/B5StatusProjection');
 const B5CycleConfigBoundary = require('./B5CycleConfigBoundary');
 const B5SharedStorageLease = require('./storage/B5SharedStorageLease');
 const B5GenerationPreparer = require('./B5GenerationPreparer');
+const B5RequestExecution = require('./B5RequestExecution');
+const CraftingRequest = require('../../items/CraftingRequest');
 const { createB1MaterialOperation } = require('../../server-features/storage/b1/B1MaterialOperation');
 
 const PROTECTION_SAME_BLOCKER_LIMIT = 3;
@@ -32,6 +34,8 @@ class B5CraftModeService extends ManagedMode {
         b1Materials,
         b5Planning,
         b5Automation,
+        craftingItemRegistry = null,
+        craftingChainPlanner = null,
         sharedStorageLeases = null,
         storageLeaseKey = null,
         failurePublisher = null,
@@ -44,8 +48,11 @@ class B5CraftModeService extends ManagedMode {
         if (!b1Materials?.protectForB5Batch) throw new TypeError('B5CraftModeService B1 storage protection service is required.');
         if (!b5Planning?.inspectAdditionalFresh) throw new TypeError('B5CraftModeService B5 planning service is required.');
         if (!b5Automation?.runNext) throw new TypeError('B5CraftModeService B5 automation service is required.');
-        Object.assign(this, { island, skyblockReadiness, skyTarget, b1Materials, b5Planning, b5Automation });
+        Object.assign(this, { island, skyblockReadiness, skyTarget, b1Materials, b5Planning, b5Automation, craftingItemRegistry, craftingChainPlanner });
         this.config = this.#normalizeConfig(config);
+        this.activeRequest = null;
+        this.requestExecution = null;
+        this.lastRequestResult = null;
         this.supervisor = null;
         this.preparedGeneration = null;
         this.lastCycleAt = null;
@@ -105,6 +112,63 @@ class B5CraftModeService extends ManagedMode {
     }
 
     queueRulesConfig(config) { return this.configBoundary.queue(config, { immediate: !this.enabled || this.paused }); }
+
+    /**
+     * Task 5: dynamic craft request. Takes effect at the next cycle boundary;
+     * a running cycle is never interrupted. `input` is a CraftingRequest or
+     * { targetItemId, quantity } where quantity is a positive integer or 'ALL'.
+     */
+    setCraftRequest(input) {
+        if (!this.craftingItemRegistry) {
+            return Result.fail(Status.NOT_READY, 'B5CraftModeService yêu cầu CraftingItemRegistry để nhận yêu cầu chế tạo.');
+        }
+        let request;
+        try {
+            request = input instanceof CraftingRequest
+                ? input
+                : CraftingRequest.create({ targetItemId: input?.targetItemId, quantity: input?.quantity, itemRegistry: this.craftingItemRegistry });
+        } catch (error) {
+            const code = String(error?.code || 'B5_REQUEST_INVALID');
+            return Result.fail(Status.NOT_READY, error?.message || 'Yêu cầu chế tạo không hợp lệ.', error, { errorCode: code });
+        }
+        const recipeEntry = this.craftingItemRegistry.getRecipe
+            ? this.craftingItemRegistry.getRecipe(request.targetItemId)
+            : null;
+        if (!recipeEntry) {
+            return Result.fail(Status.NOT_READY, `Mục tiêu '${request.targetItemId}' không có công thức chế tạo.`, null, { errorCode: 'B5_REQUEST_TARGET_NOT_CRAFTABLE' });
+        }
+        if (this.craftingChainPlanner && request.quantityMode === 'FIXED') {
+            try {
+                this.craftingChainPlanner.plan({ request, available: {} });
+            } catch (error) {
+                return Result.fail(Status.NOT_READY, error?.message || 'Không lập được kế hoạch cho yêu cầu chế tạo.', error, { errorCode: 'B5_REQUEST_TARGET_NOT_CRAFTABLE' });
+            }
+        }
+        this.activeRequest = request;
+        this.requestExecution = new B5RequestExecution({ request });
+        this.lastRequestResult = null;
+        this.logger?.info?.('B5 REQUEST SET.', {
+            botId: this.botId, operation: 'B5CraftMode', step: 'craft-request-set',
+            targetId: request.targetItemId, quantityMode: request.quantityMode, quantity: request.quantity
+        });
+        return Result.ok({ request: { targetItemId: request.targetItemId, targetDisplayName: request.targetDisplayName, quantityMode: request.quantityMode, quantity: request.quantity }, appliedAt: 'next-cycle' });
+    }
+
+    clearCraftRequest(reason = null) {
+        const snapshot = this.requestExecution?.snapshot() || null;
+        this.requestExecution = null;
+        this.activeRequest = null;
+        this.logger?.info?.('B5 REQUEST CLEARED.', {
+            botId: this.botId, operation: 'B5CraftMode', step: 'craft-request-clear', reason: reason || null,
+            finalState: snapshot?.state || null, completedUnits: snapshot?.completedUnits ?? 0
+        });
+        if (this.waitingReason === 'craft-request-terminal') this.waitingReason = null;
+        return snapshot;
+    }
+
+    #requestSnapshot() {
+        return this.requestExecution?.snapshot() || this.lastRequestResult || null;
+    }
 
     async onEnable() {
         this.faultPolicy.reset('enable');

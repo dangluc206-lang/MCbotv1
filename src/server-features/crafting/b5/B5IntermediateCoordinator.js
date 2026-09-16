@@ -56,7 +56,8 @@ class B5IntermediateCoordinator {
             if (!this.reserveChain?.prepare) throw new Error('B5 reserve coordinator is unavailable.');
             const result = await this.reserveChain.prepare({ ...chain, b2Crafts: 0, b3Crafts: crafts, readyToReserve: true }, context, {
                 deferIntermediateDeposit: true,
-                allChains: inspection.data?.chains || []
+                allChains: inspection.data?.chains || [],
+                targetId: inspection.data?.fullPlan?.targetId || null
             });
             if (result?.deferredForSpace) {
                 actions.push({ status: 'b2-pv2-parked-for-space', b2Id: chain.b2Id, b3Id: chain.b3Id, data: result });
@@ -157,7 +158,7 @@ class B5IntermediateCoordinator {
         return this.#requireInspection(await inspect(), 'B5 inspection failed after B4 compaction.');
     }
 
-    async ensureFreeIntermediateSlots(chain, context, minFreeSlots, { reason = null, preserveAtLeastB2 = 0, preferCurrentB2 = false, allChains = [] } = {}) {
+    async ensureFreeIntermediateSlots(chain, context, minFreeSlots, { reason = null, preserveAtLeastB2 = 0, preferCurrentB2 = false, allChains = [], targetId = null } = {}) {
         this.progressTracker.set({ running: true, state: 'FREEING_SPACE', currentStep: { kind: 'SPACE', id: chain.b3Id } });
         let snapshot = this.inventoryState.spaceSnapshot();
         const state = { depositedB2Count: 0, attempts: 0, emergencyParkedCurrentB2: false, attemptedIds: new Set() };
@@ -165,7 +166,7 @@ class B5IntermediateCoordinator {
             snapshot = await this.#parkCurrentB2(chain, context, minFreeSlots, snapshot, state, true);
             if (Number(snapshot.emptySlotCount || 0) >= minFreeSlots) return this.#spaceResult(snapshot, state);
         }
-        const candidateIds = this.#spaceReleaseCandidates(chain, allChains, { preserveAtLeastB2 });
+        const candidateIds = this.#spaceReleaseCandidates(chain, allChains, { preserveAtLeastB2, targetId });
         for (const logicalId of candidateIds) {
             if (Number(snapshot.emptySlotCount || 0) >= minFreeSlots) break;
             snapshot = await this.#offloadCandidate(logicalId, chain, context, minFreeSlots, preserveAtLeastB2, snapshot, state);
@@ -204,10 +205,11 @@ class B5IntermediateCoordinator {
         return this.inventoryState.waitForFreeSlots(minFreeSlots, context.cancellation.token);
     }
 
-    #spaceReleaseCandidates(chain, allChains, { preserveAtLeastB2 = 0 } = {}) {
+    #spaceReleaseCandidates(chain, allChains, { preserveAtLeastB2 = 0, targetId = null } = {}) {
         const candidates = [];
         const push = id => { const value = String(id || '').trim(); if (value && !candidates.includes(value)) candidates.push(value); };
-        const targetRecipe = this.recipeResolver.recipeForOutput(this.config?.targetId || 'super_alloy');
+        const activeTarget = String(targetId || '').trim() || this.config?.targetId || 'super_alloy';
+        const targetRecipe = this.recipeResolver.recipeForOutput(activeTarget);
         for (const b4Id of Object.keys(targetRecipe?.recipe?.inputs || {})) push(b4Id);
         push(chain.b3Id);
         for (const candidate of allChains || []) if (candidate?.b3Id !== chain.b3Id) push(candidate?.b3Id);

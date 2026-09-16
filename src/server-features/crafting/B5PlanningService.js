@@ -67,8 +67,10 @@ class B5PlanningService {
         fresh = false,
         cancellationToken = null,
         operationContext = null,
-        expectedGeneration = null
+        expectedGeneration = null,
+        targetId = null
     }) {
+        const resolvedTarget = this.#resolveTarget(targetId);
         try {
             const childOptions = {
                 cancellationToken,
@@ -90,7 +92,7 @@ class B5PlanningService {
             const inventorySnapshot = inventoryViews.find(view => view?.source === 'current-window')
                 || inventoryViews.find(view => view?.source === 'bot-inventory')
                 || inventoryViews[0];
-            const knownIds = this.#knownIds();
+            const knownIds = this.#knownIds(resolvedTarget);
             const inventoryTotals = {};
             const inventoryTotalsBySource = {};
             for (const id of knownIds) {
@@ -109,8 +111,8 @@ class B5PlanningService {
             const vaultTotals = { ...(vaultResult.data?.totals || {}) };
             const effectiveInventoryTotals = { ...inventoryTotals };
             if (additional) {
-                delete vaultTotals[this.b5Planner.targetId];
-                delete effectiveInventoryTotals[this.b5Planner.targetId];
+                delete vaultTotals[resolvedTarget];
+                delete effectiveInventoryTotals[resolvedTarget];
             }
 
             const nonStorageAvailable = this.#mergeCounts(vaultTotals, effectiveInventoryTotals);
@@ -125,8 +127,8 @@ class B5PlanningService {
             // the current /kho headroom. A blocked block-form reserve is an
             // actionable PREPARE_B1 state, not the same thing as missing stock.
             const allAvailable = this.#mergeCounts(nonStorageAvailable, craftableStorageItems);
-            const planWithoutStorage = this.craftPlanningService.plan(amount, nonStorageAvailable);
-            const fullPlan = this.craftPlanningService.plan(amount, allAvailable);
+            const planWithoutStorage = this.craftPlanningService.plan(resolvedTarget, amount, nonStorageAvailable);
+            const fullPlan = this.craftPlanningService.plan(resolvedTarget, amount, allAvailable);
             const reservePartition = this.b5Planner.partition(planWithoutStorage);
             const fullPartition = this.b5Planner.partition(fullPlan);
             const chains = this.#buildB3Chains({
@@ -178,7 +180,7 @@ class B5PlanningService {
             const wrapped = FlowError.wrap(error, {
                 code: 'B5_PLANNING_FAILED', subsystem: 'b5-planning', operation: 'B5PlanningService',
                 step: 'calculate-plan', action: additional ? 'inspect additional B5' : 'inspect B5 target',
-                resource: this.b5Planner.targetId, details: { amount, additional }
+                resource: resolvedTarget, details: { amount, additional, targetId: resolvedTarget }
             });
             return Result.fail(Operation.statusForError(wrapped), wrapped.message, wrapped, wrapped.toDiagnostic());
         }
@@ -445,7 +447,13 @@ class B5PlanningService {
         });
     }
 
-    #knownIds() {
+    #resolveTarget(targetId) {
+        // Per-request target wins; null keeps the legacy config target so
+        // existing callers/tests behave exactly as before.
+        return String(targetId || this.b5Planner.targetId || '').trim() || null;
+    }
+
+    #knownIds(targetId = null) {
         // Storage-direct keeps B1 authoritative in /kho. Inventory-source B2
         // also counts leftover B1 so the next batch does not withdraw or
         // accumulate a duplicate amount.
@@ -456,7 +464,7 @@ class B5PlanningService {
         for (const tier of tiers) {
             for (const id of this.tiers?.[tier] || []) ids.add(id);
         }
-        ids.add(this.b5Planner.targetId);
+        ids.add(String(targetId || '').trim() || this.b5Planner.targetId);
         return ids;
     }
 

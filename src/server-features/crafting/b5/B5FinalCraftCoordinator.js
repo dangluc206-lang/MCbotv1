@@ -9,18 +9,23 @@ class B5FinalCraftCoordinator {
             config, runStep, childOptions, quantityTrace, verificationService
         });
         this.verificationService = verificationService;
+        // craft()/settleStage() reference this.verification; keep the alias in
+        // sync with the injected verificationService contract.
+        this.verification = verificationService;
     }
 
     reconfigure(config = {}) { this.config = config || {}; }
 
-    async execute(steps, context) {
-        const targetId = this.config?.targetId || 'super_alloy';
+    async execute(steps, context, { targetId = null } = {}) {
+        // A per-request target overrides the configured default so a non-B5 target
+        // (e.g. titanium) still reaches its own final stage and handoff contract.
+        const executionTarget = String(targetId || this.config?.targetId || '').trim() || 'super_alloy';
         for (let index = 0; index < steps.length; index += 1) {
             const step = steps[index];
             const recipe = this.recipeRegistry.require(step.recipeId);
             const outputId = step.outputId || recipe.output;
             const plannedCrafts = Number(step.crafts || 0);
-            const stage = outputId === targetId ? 'B5' : 'B4';
+            const stage = outputId === executionTarget ? 'B5' : 'B4';
             this.progressTracker.set({
                 running: true,
                 state: stage === 'B5' ? 'CRAFTING_B5' : 'CRAFTING_B4',
@@ -31,7 +36,7 @@ class B5FinalCraftCoordinator {
                 context.cancellation.token.throwIfCancelled();
                 await this.ensureInputs(recipe.inputs || {}, remaining, context, step.recipeId);
                 const maxCraftable = this.inventoryState.maxCraftable(recipe.inputs || {});
-                const decision = this.#quantity(step, recipe, remaining, maxCraftable, targetId);
+                const decision = this.#quantity(step, recipe, remaining, maxCraftable, executionTarget);
                 this.quantityTrace('B5 QUANTITY DECISION', {
                     step: 'craft-final-chain', resource: outputId, recipeId: step.recipeId,
                     quantity: decision.quantity, reason: decision.reason, remaining, maxCraftable
@@ -47,7 +52,7 @@ class B5FinalCraftCoordinator {
                 }
                 remaining = Math.max(0, remaining - actualCrafts);
             }
-            const lastVerification = this.#lastStageVerification(step, recipe, outputId, context);
+            const lastVerification = this.#lastStageVerification(step, recipe, outputId, context, executionTarget);
             if (lastVerification) {
                 await this.settleStage({
                     stage,
@@ -55,9 +60,9 @@ class B5FinalCraftCoordinator {
                     minimumCount: lastVerification.after,
                     context
                 });
-                const nextStageForHandoff = outputId === targetId
+                const nextStageForHandoff = outputId === executionTarget
                     ? 'COMPLETE'
-                    : (steps[index + 1]?.outputId === targetId ? 'B5' : 'B4');
+                    : (steps[index + 1]?.outputId === executionTarget ? 'B5' : 'B4');
                 if (nextStageForHandoff !== 'B4' || stage !== 'B4') {
                     this.verificationService.handoff({
                         from: stage,
@@ -72,13 +77,14 @@ class B5FinalCraftCoordinator {
         }
     }
 
-    #lastStageVerification(step, recipe, outputId, context) {
+    #lastStageVerification(step, recipe, outputId, context, executionTarget = null) {
         const latest = context?.stageVerification;
         if (latest?.logicalId === outputId && Number.isFinite(Number(latest.after))) return latest;
         if (typeof this.inventoryState.countFromSource !== 'function') return null;
         const current = this.inventoryState.countFromSource(outputId, 'bot-inventory');
         if (!Number.isFinite(Number(current))) return null;
-        return { stage: outputId === (this.config?.targetId || 'super_alloy') ? 'B5' : 'B4', logicalId: outputId, after: Number(current), source: 'fresh-before-stage-settlement' };
+        const finalTarget = executionTarget || this.config?.targetId || 'super_alloy';
+        return { stage: outputId === finalTarget ? 'B5' : 'B4', logicalId: outputId, after: Number(current), source: 'fresh-before-stage-settlement' };
     }
 
     async settleStage({ stage, logicalId, minimumCount, context }) {
@@ -149,6 +155,15 @@ class B5FinalCraftCoordinator {
                 stage, logicalId: outputId || recipe.output,
                 before: baseline, after: observedAfter, expectedDelta
             };
+        }
+        if (options.nextStage) {
+            // Settlement stays at the stage boundary (execute()/#settlePendingStage);
+            // the per-craft contract only validates the handoff generation.
+            this.verificationService.handoff({
+                from: stage, to: String(options.nextStage),
+                generation: options.expectedGeneration ?? context?.connectionGeneration ?? null,
+                context
+            });
         }
         return { ...data, stageContract: { stage, logicalId: outputId || recipe.output, before: baseline, after: observedAfter, expectedDelta, settled: false }, actualCrafts };
     }

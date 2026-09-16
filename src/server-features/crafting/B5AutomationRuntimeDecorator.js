@@ -10,6 +10,7 @@ class B5AutomationRuntimeDecorator {
     status() { return this.service.status(); }
     run(...args) { return this.#measure(() => this.service.run(...args)); }
     runNext(...args) { return this.#measure(() => this.service.runNext(...args)); }
+    runTarget(...args) { return this.#measure(() => this.service.runTarget(...args)); }
     runMaintenance(...args) { return this.#measure(() => this.service.runMaintenance(...args)); }
 
     reconfigure(config = {}) {

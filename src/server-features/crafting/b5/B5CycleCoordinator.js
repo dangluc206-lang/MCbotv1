@@ -32,9 +32,9 @@ class B5CycleCoordinator {
         return this.#result(state, options, amount);
     }
 
-    #inspector(amount, context, { additional, freshInspection = false }) {
+    #inspector(amount, context, { additional, freshInspection = false, targetId = null }) {
         return () => {
-            const child = { additional, ...this.childOptions(context) };
+            const child = { additional, ...(targetId ? { targetId } : {}), ...this.childOptions(context) };
             return freshInspection && typeof this.flows.read.inspectFresh === 'function'
                 ? this.flows.read.inspectFresh(amount, child)
                 : this.flows.read.inspect(amount, child);
@@ -43,7 +43,7 @@ class B5CycleCoordinator {
 
     async #initialize(amount, context, options, inspect) {
         const first = await this.runStep(context, {
-            subsystem: 'b5', step: 'inspect-initial', action: 'read /kho + /pv 2 + inventory', resource: 'super_alloy'
+            subsystem: 'b5', step: 'inspect-initial', action: 'read /kho + /pv 2 + inventory', resource: options?.targetId || 'target'
         }, inspect);
         const targetId = first.data.fullPlan.targetId;
         const state = {
@@ -200,7 +200,7 @@ class B5CycleCoordinator {
         const result = await this.runStep(context, {
             subsystem: 'b5', step: 'reserve-b3-chain', action: 'craft B2/B3 then immediately promote upward', resource: chain.baseId,
             details: { b2Id: chain.b2Id, b3Id: chain.b3Id, b2Crafts: plan.plannedB2, b3Crafts: plan.plannedB3 }
-        }, () => this.reserveChain.prepare(reserveChain, context, { deferIntermediateDeposit: true, allChains: state.workingInspection.data?.chains || state.chainCatalog }));
+        }, () => this.reserveChain.prepare(reserveChain, context, { deferIntermediateDeposit: true, allChains: state.workingInspection.data?.chains || state.chainCatalog, targetId: state.targetId }));
         state.actions.push({ baseId: chain.baseId, status: result?.waitingForMaterial ? 'waiting-current-material'
             : (result?.deferredForSpace ? 'deferred-for-space' : (result?.deferredForFreshReplan ? 'deferred-for-fresh-replan' : 'reserved')),
             b3Id: chain.b3Id, b3Crafts: plan.plannedB3, data: result || null });
@@ -262,7 +262,7 @@ class B5CycleCoordinator {
         }
         try {
             await this.runStep(context, { subsystem: 'b5', step: 'craft-final-chain', action: 'craft highest-priority B4/B5 final steps', resource: targetId,
-                details: { steps: finalSteps, targetId, targetVaultBefore } }, () => this.finalCraft.execute(finalSteps, context));
+                details: { steps: finalSteps, targetId, targetVaultBefore } }, () => this.finalCraft.execute(finalSteps, context, { targetId }));
         } catch (error) {
             throw FlowError.wrap(error, { details: { b5CompletionContext: { finalChain: true, targetId, targetVaultBefore } } });
         }
@@ -330,7 +330,7 @@ class B5CycleCoordinator {
         const productive = state.completedNewB5 || state.actions.some(action => B5ActionDiagnostics.isProductiveAction(action));
         return {
             amount, additional: options.additional, mode: options.mode, allowFinalB5: options.allowFinalB5, allowNewB2: state.createNewB2, actions: state.actions,
-            complete: state.completedNewB5, completedNewB5: state.completedNewB5, targetId: state.targetId,
+            complete: state.completedNewB5, completedNewB5: state.completedNewB5, completedAmount: state.completedNewB5 ? amount : 0, targetId: state.targetId,
             plan: state.afterReserve.data?.executionPlan || state.workingInspection.data?.executionPlan || state.first.data?.executionPlan || null,
             b5Ready: this.recipeResolver.isB5DirectlyReady(state.afterReserve.data, amount),
             pv2Backpressure: state.afterReserve.data?.personalVaultPressure || state.first.data?.personalVaultPressure || null,

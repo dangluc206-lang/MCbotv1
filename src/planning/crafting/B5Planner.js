@@ -11,8 +11,14 @@ class B5Planner {
         }
     }
 
-    plan(amount, available = {}) {
-        return this.planner.plan(this.targetId, amount, available);
+    /**
+     * CraftPlanningService always calls plan(targetId, amount, available); a
+     * per-request targetId therefore overrides this.targetId (which stays the
+     * legacy/config default so existing callers keep their exact behavior).
+     */
+    plan(targetId, amount = 1, available = {}) {
+        const resolvedTarget = String(targetId || this.targetId || '').trim() || this.targetId;
+        return this.planner.plan(resolvedTarget, amount, available);
     }
 
     partition(plan) {

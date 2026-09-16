@@ -3,6 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const B5AutomationService = require('../../../src/server-features/crafting/B5AutomationService');
 const B5AutomationRuntimeDecorator = require('../../../src/server-features/crafting/B5AutomationRuntimeDecorator');
+const B5StageContract = require('../../../src/server-features/crafting/b5/support/B5StageContract');
 
 function serviceFixture() {
     const b2Input = {
@@ -19,7 +20,8 @@ function serviceFixture() {
         inventoryReader: { snapshot() { return { items: [], emptySlotCount: 36 }; } },
         inventoryCounter: { count() { return 0; } },
         recipeRegistry: { require() { return { inputs: {} }; } },
-        operationManager: { run() {} }, config: { targetId: 'super_alloy', b2InputSource: 'storage' }, flows
+        operationManager: { run() {} }, config: { targetId: 'super_alloy', b2InputSource: 'storage' }, flows,
+        craftingVerificationService: new B5StageContract()
     });
     return { service, b2Input, plan };
 }

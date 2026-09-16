@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const B5B1InventoryCoordinator = require('../../../src/server-features/crafting/b5/B5B1InventoryCoordinator');
+const B5StageContract = require('../../../src/server-features/crafting/b5/support/B5StageContract');
 
 function createHarness({ source = 'inventory', configuredSource = 'inventory', count = 0, emptySlots = 6 } = {}) {
     let inventoryCount = count;
@@ -37,7 +38,8 @@ function createHarness({ source = 'inventory', configuredSource = 'inventory', c
         config: { inventorySafetyEmptySlots: 2, b2InputSource: configuredSource },
         async runStep(_context, _step, action) { return action(); },
         childOptions(_context, extra = {}) { return extra; },
-        async ensureFreeIntermediateSlots() { slots += 4; return { snapshot: { emptySlotCount: slots } }; }
+        async ensureFreeIntermediateSlots() { slots += 4; return { snapshot: { emptySlotCount: slots } }; },
+        verificationService: new B5StageContract()
     });
     const chain = { baseId: 'coal', b2Id: 'refined_coal', b2RecipeId: 'refined_coal', b3InputPerCraft: 4 };
     const context = { trace: { id: 'test' } };
