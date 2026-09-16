@@ -143,6 +143,7 @@ const FishingPositionGuard = require("../modes/fishing/FishingPositionGuard");
 const FishingRecoveryPolicy = require("../modes/fishing/FishingRecoveryPolicy");
 const FishingWorldReadinessService = require("../modes/fishing/FishingWorldReadinessService");
 const CraftingVerificationService = require("../server-features/crafting/CraftingVerificationService");
+const CraftingItemRegistry = require("../items/CraftingItemRegistry");
 
 function registerBotServices({ profile, configuration, shared }) {
   const botId = profile.id;
@@ -537,6 +538,11 @@ function registerBotServices({ profile, configuration, shared }) {
   const craftingPlanner = new CraftingPlanner({
     recipeRegistry,
     materialCalculator,
+  });
+  const craftingItemRegistry = new CraftingItemRegistry({
+    itemRegistry: shared.itemRegistry,
+    recipeRegistry,
+    tiers: serverProfile.requireCatalog("craftingTiers"),
   });
   const craftingTiers = serverProfile.requireCatalog("craftingTiers");
   const b5Config = configuration.registry.require("b5");
@@ -1089,6 +1095,7 @@ function registerBotServices({ profile, configuration, shared }) {
       diagnostics,
       slotResolver,
       routeRegistry,
+      craftingItemRegistry,
     },
   });
 }
