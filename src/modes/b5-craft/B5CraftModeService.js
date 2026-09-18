@@ -52,7 +52,7 @@ class B5CraftModeService extends ManagedMode {
         this.config = this.#normalizeConfig(config);
         this.activeRequest = null;
         this.requestExecution = null;
-        this.lastRequestResult = null;
+        this.reconciliationRequest = null;
         this.supervisor = null;
         this.preparedGeneration = null;
         this.lastCycleAt = null;
@@ -146,7 +146,6 @@ class B5CraftModeService extends ManagedMode {
         }
         this.activeRequest = request;
         this.requestExecution = new B5RequestExecution({ request });
-        this.lastRequestResult = null;
         this.logger?.info?.('B5 REQUEST SET.', {
             botId: this.botId, operation: 'B5CraftMode', step: 'craft-request-set',
             targetId: request.targetItemId, quantityMode: request.quantityMode, quantity: request.quantity
@@ -167,7 +166,7 @@ class B5CraftModeService extends ManagedMode {
     }
 
     #requestSnapshot() {
-        return this.requestExecution?.snapshot() || this.lastRequestResult || null;
+        return this.requestExecution?.snapshot() || null;
     }
 
     async onEnable() {
@@ -199,6 +198,9 @@ class B5CraftModeService extends ManagedMode {
         this.manualResumeGeneration = null;
         this.pendingCraftReconciliation = null;
         this.pendingB5CompletionProvenance = null;
+        this.reconciliationRequest = null;
+        this.requestExecution = null;
+        this.activeRequest = null;
         this.batchId = null;
         this.batchTrigger = null;
         this.batchProtectionRequired = false;
@@ -233,6 +235,7 @@ class B5CraftModeService extends ManagedMode {
                 blockBaseConversion: true,
                 crafting: true
             },
+            craftRequest: this.#requestSnapshot(),
             preparedGeneration: this.preparedGeneration,
             lastCycleAt: this.lastCycleAt,
             waitingReason: this.waitingReason,
@@ -314,6 +317,52 @@ class B5CraftModeService extends ManagedMode {
             this.setPhase('ERROR');
         });
     }
+    #requestIdleTerminal(cycleRequest) {
+        return Boolean(cycleRequest?.isTerminal() && !this.pendingCraftReconciliation && !this.pendingB5CompletionProvenance);
+    }
+
+    #planRequestCycle(cycleRequest, generation, cancellationToken) {
+        const recoveryTarget = this.pendingB5CompletionProvenance?.outputId;
+        const decision = cycleRequest?.nextCycle();
+        if (decision?.action === 'WAIT' && !recoveryTarget) return { wait: true };
+        const cycleOptions = {
+            cancellationToken,
+            expectedGeneration: generation,
+            freshInspection: true,
+            recoveryOnly: Boolean(this.pendingB5CompletionProvenance),
+            decompressionPolicy: 'unbounded'
+        };
+        return { wait: false, cycleOptions, targetId: recoveryTarget || cycleRequest?.targetItemId || null, recoveryTarget };
+    }
+
+    #recordRequestCycle(cycleRequest, result, generation, recoveryTarget) {
+        if (cycleRequest === this.requestExecution && !recoveryTarget) {
+            cycleRequest?.record(result, { generation, expectedGeneration: this.modeContext.generation() });
+        }
+    }
+
+    async #runAutomationCycle(cycleRequest, generation, cancellationToken) {
+        const plan = this.#planRequestCycle(cycleRequest, generation, cancellationToken);
+        if (plan.wait) {
+            this.setPhase('WAITING_RECONCILE');
+            await Timeout.delay(this.config.reconciliation.unresolvedPollMs, { cancellationToken });
+            return { wait: true };
+        }
+        const result = plan.targetId
+            ? await (this.b5Automation.runTarget || this.b5Automation.runNext).call(this.b5Automation, { ...plan.cycleOptions, targetId: plan.targetId })
+            : await this.b5Automation.runNext(plan.cycleOptions);
+        this.#recordRequestCycle(cycleRequest, result, generation, plan.recoveryTarget);
+        return { wait: false, result };
+    }
+
+    async #idleForTerminalRequest(cycleRequest, cancellationToken) {
+        if (!this.#requestIdleTerminal(cycleRequest)) return false;
+        this.waitingReason = 'craft-request-terminal';
+        this.setPhase('WAITING_REQUEST');
+        await Timeout.delay(this.config.pollIntervalMs, { cancellationToken });
+        return true;
+    }
+
     async #loop(cancellationToken) {
         while (!cancellationToken.isCancelled && this.enabled && !this.paused) {
             this.configBoundary.applyPending();
@@ -323,6 +372,8 @@ class B5CraftModeService extends ManagedMode {
                 await Timeout.delay(this.config.disconnectedPollMs, { cancellationToken });
                 continue;
             }
+            const cycleRequest = this.requestExecution;
+            if (await this.#idleForTerminalRequest(cycleRequest, cancellationToken)) continue;
             const generation = this.modeContext.generation();
             if (this.preparedGeneration !== null
                 && this.preparedGeneration !== generation
@@ -565,13 +616,10 @@ class B5CraftModeService extends ManagedMode {
             this.setPhase('CRAFTING');
             this.automationRuns += 1;
             this.lastAutomationAt = new Date().toISOString();
-            const result = await this.b5Automation.runNext({
-                cancellationToken,
-                expectedGeneration: generation,
-                freshInspection: true,
-                recoveryOnly: Boolean(this.pendingB5CompletionProvenance),
-                decompressionPolicy: 'unbounded'
-            });
+            if (cycleRequest?.isTerminal()) continue;
+            const cycle = await this.#runAutomationCycle(cycleRequest, generation, cancellationToken);
+            if (cycle.wait) continue;
+            const result = cycle.result;
             if (!this.#generationCurrent(generation)) {
                 await this.#waitForFreshGeneration(cancellationToken, 'generation-changed-during-craft');
                 continue;
@@ -582,7 +630,7 @@ class B5CraftModeService extends ManagedMode {
                 : [];
 
             if (result?.success === false) {
-                await this.#handleSoftFailure(result, cancellationToken, generation);
+                await this.#handleSoftFailure(result, cancellationToken, generation, cycleRequest);
                 continue;
             }
 
@@ -1027,11 +1075,12 @@ class B5CraftModeService extends ManagedMode {
         this.waitingReason = null;
     }
 
-    async #handleSoftFailure(result, cancellationToken, generation) {
+    async #handleSoftFailure(result, cancellationToken, generation, cycleRequest = null) {
         this.lastResult = this.#compactResult(result);
         const status = String(result?.status || '').toUpperCase();
         const capturedReconciliation = this.#captureCraftReconciliation(result, generation);
         if (capturedReconciliation) {
+            this.reconciliationRequest = cycleRequest;
             this.waitingReason = 'craft-reconciliation';
             this.setPhase('WAITING_RECONCILE');
             await Timeout.delay(this.config.reconciliation.retryMs, { cancellationToken });
@@ -1522,6 +1571,13 @@ class B5CraftModeService extends ManagedMode {
         const provenAmount = Math.max(1, Number(provenance.amount || 1));
         const requestedAmount = Math.max(1, Number(amount || provenAmount));
         const completedAmount = Math.min(provenAmount, requestedAmount);
+        if (this.reconciliationRequest === this.requestExecution) {
+            this.reconciliationRequest?.resolveReconciliation({
+                verified: true, generation: verificationGeneration, expectedGeneration: this.modeContext.generation(),
+                targetId: provenance.outputId, completedAmount: amount
+            });
+        }
+        this.reconciliationRequest = null;
         this.lastAccountedB5ProvenanceId = provenance.markerId;
         this.completedB5 += completedAmount;
         this.#armBatchProtection('post-b5-complete');

@@ -104,6 +104,63 @@ function harness({ enabled = true, generationRef = { value: 7 }, craftImplementa
     return { mode, coordinator, calls };
 }
 
+test('dynamic request reconciles a verified deposit and idles without another craft', async () => {
+    const { mode, coordinator, calls } = harness({
+        craftImplementation: async () => uncertainFinalB5Result(),
+        planningImplementation: async () => ({ success: true, data: { personalVault: { totals: { super_alloy: 11 } }, inventoryTotals: {} } })
+    });
+    mode.craftingItemRegistry = {
+        resolveById: id => ({ id, displayName: id }),
+        getRecipe: () => ({ output: 'super_alloy', outputAmount: 1 })
+    };
+    mode.b5Automation.runTarget = options => mode.b5Automation.runNext(options);
+    assert.equal(mode.setCraftRequest({ targetItemId: 'super_alloy', quantity: 1 }).success, true);
+    await coordinator.initialize(); await coordinator.start();
+    try {
+        await mode.enable();
+        await waitUntil(() => mode.status().details.completedB5 === 1);
+        assert.equal(mode.requestExecution.snapshot().state, 'COMPLETED',
+            'mode accounted verified PV2 deposit but did not resolve its request');
+        await waitUntil(() => mode.status().phase === 'WAITING_REQUEST');
+        const status = mode.status();
+        assert.equal(status.details.craftRequest.completedUnits, 1);
+        assert.equal(status.details.craftRequest.awaitingReconciliation, false);
+        await new Promise(resolve => setTimeout(resolve, 25));
+        assert.equal(calls.craft, 1);
+    } finally {
+        await mode.disable('test complete');
+    }
+});
+
+test('a replacement request set during reconciliation never inherits the old credit', async () => {
+    const { mode, coordinator, calls } = harness({
+        craftImplementation: async () => uncertainFinalB5Result(),
+        planningImplementation: async () => ({ success: true, data: { personalVault: { totals: { super_alloy: 11 } }, inventoryTotals: {} } })
+    });
+    mode.craftingItemRegistry = {
+        resolveById: id => ({ id, displayName: id }),
+        getRecipe: () => ({ output: 'super_alloy', outputAmount: 1 })
+    };
+    mode.b5Automation.runTarget = options => mode.b5Automation.runNext(options);
+    assert.equal(mode.setCraftRequest({ targetItemId: 'super_alloy', quantity: 1 }).success, true);
+    await coordinator.initialize(); await coordinator.start();
+    try {
+        await mode.enable();
+        await waitUntil(() => mode.status().details.pendingCraftReconciliation !== null);
+        assert.equal(mode.setCraftRequest({ targetItemId: 'carbon', quantity: 1 }).success, true, 'replacement request must be accepted while reconciliation is in flight');
+        await waitUntil(() => mode.status().details.completedB5 === 1);
+        const replacement = mode.requestExecution;
+        assert.equal(replacement.snapshot().targetItemId, 'carbon');
+        assert.equal(replacement.snapshot().state, 'PENDING', 'old deposit must not credit the replacement request');
+        assert.equal(replacement.snapshot().completedUnits, 0);
+        await waitUntil(() => calls.craft >= 2, 500);
+        assert.equal(String(calls.craftOptions[1].targetId || ''), 'carbon',
+            'replacement request must own the next cycle toward its own target');
+    } finally {
+        await mode.disable('test complete');
+    }
+});
+
 test('B5 rules apply immediately while idle and only at the next cycle boundary while running', async () => {
     const { mode, coordinator, calls } = harness();
     const idle = mode.queueRulesConfig({ b2InputSource: 'inventory' });

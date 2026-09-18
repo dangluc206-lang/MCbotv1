@@ -4,6 +4,7 @@ class B5StatusProjection {
     static create(source = {}) {
         return {
             policy: { ...source.policy },
+            craftRequest: source.craftRequest || null,
             preparedGeneration: source.preparedGeneration ?? null,
             lastCycleAt: source.lastCycleAt ?? null,
             waitingReason: source.waitingReason ?? null,

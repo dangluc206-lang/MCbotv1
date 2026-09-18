@@ -6,7 +6,7 @@ const StageExecutionContract = require('../verification/StageExecutionContract')
 class B5B1InventoryCoordinator {
     constructor({ storageFlow, b2Input, inventoryState, recipeRegistry, config, logger = null, runStep, childOptions, ensureFreeIntermediateSlots, verificationService }) {
         Object.assign(this, { storageFlow, b2Input, inventoryState, recipeRegistry, config, logger, runStep, childOptions, ensureFreeIntermediateSlots, verificationService });
-        this.verification = verificationService;
+        this.stageContract = verificationService;
     }
 
     reconfigure(config = {}) { this.config = config || {}; }
@@ -15,8 +15,8 @@ class B5B1InventoryCoordinator {
         this.#assertContract(chain, context);
         const request = this.#request(chain, options);
         if (this.b2Input.source === 'storage') {
-            this.verificationService.requireInputReady({ stage: 'B1', logicalId: chain.baseId, available: request.usefulTotal, required: request.basePerB2, context });
-            this.verificationService.handoff({ from: 'B1', to: 'B2', generation: context.connectionGeneration, context });
+            this.stageContract.requireInputReady({ stage: 'B1', logicalId: chain.baseId, available: request.usefulTotal, required: request.basePerB2, context });
+            this.stageContract.handoff({ from: 'B1', to: 'B2', generation: context.connectionGeneration, context });
             return {
                 ready: request.plannedCrafts > 0, reason: null, source: 'storage', baseId: chain.baseId, b2Id: chain.b2Id,
                 basePerB2: request.basePerB2, plannedCrafts: request.plannedCrafts, available: request.usefulTotal,
@@ -37,8 +37,8 @@ class B5B1InventoryCoordinator {
         state = this.#state(chain, request.reserveSlots);
         const craftable = Math.floor(state.available / request.basePerB2);
         if (craftable > 0) {
-            this.verificationService.requireInputReady({ stage: 'B1', logicalId: chain.baseId, available: state.available, required: request.basePerB2, context });
-            this.verificationService.handoff({ from: 'B1', to: 'B2', generation: context.connectionGeneration, context });
+            this.stageContract.requireInputReady({ stage: 'B1', logicalId: chain.baseId, available: state.available, required: request.basePerB2, context });
+            this.stageContract.handoff({ from: 'B1', to: 'B2', generation: context.connectionGeneration, context });
         }
         return {
             ready: craftable > 0, reason: craftable > 0 ? null : 'b1-transfer-not-ready', baseId: chain.baseId, b2Id: chain.b2Id,

@@ -92,6 +92,7 @@ const CraftingOperation = require("../server-features/crafting/CraftingOperation
 const CraftingService = require("../server-features/crafting/CraftingService");
 const MaterialCalculator = require("../planning/crafting/MaterialCalculator");
 const CraftingPlanner = require("../planning/crafting/CraftingPlanner");
+const CraftingChainPlanner = require("../planning/crafting/CraftingChainPlanner");
 const B5Planner = require("../planning/crafting/B5Planner");
 const B5ExecutionPlanner = require("../planning/crafting/B5ExecutionPlanner");
 const B5PlanningService = require("../server-features/crafting/B5PlanningService");
@@ -551,6 +552,10 @@ function registerBotServices({ profile, configuration, shared }) {
     targetId: b5Config.targetId,
     tiers: craftingTiers,
   });
+  const craftingChainPlanner = new CraftingChainPlanner({
+    craftingPlanner,
+    craftingItemRegistry,
+  });
   const b5ExecutionPlanner = new B5ExecutionPlanner();
   const b5TraceRecorder = new B5TraceRecorder({
     botId,
@@ -898,6 +903,8 @@ function registerBotServices({ profile, configuration, shared }) {
     b1Materials,
     b5Planning,
     b5Automation,
+    craftingItemRegistry,
+    craftingChainPlanner,
     sharedStorageLeases: shared.sharedResourceLeases,
     storageLeaseKey: `storage:${profile.serverProfile || "default"}`,
     failurePublisher: runtimeFailurePublisher,

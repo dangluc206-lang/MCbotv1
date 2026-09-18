@@ -27,8 +27,15 @@ class B5RequestExecution {
         this.request = request;
         this.targetItemId = request.targetItemId;
         this.quantityMode = request.quantityMode;
-        this.maxCyclesWithoutTargetUnit = Math.max(1, Number(maxCyclesWithoutTargetUnit || DEFAULTS.maxCyclesWithoutTargetUnit));
-        this.maxBlockedStreakForAll = Math.max(1, Number(maxBlockedStreakForAll || DEFAULTS.maxBlockedStreakForAll));
+        if (![maxCyclesWithoutTargetUnit, maxBlockedStreakForAll].every(value => Number.isSafeInteger(value) && value > 0)) {
+            throw new TypeError('Request guard limits must be positive safe integers.');
+        }
+        if (!['FIXED', 'ALL'].includes(request.quantityMode)
+            || (request.quantityMode === 'FIXED' && (!Number.isSafeInteger(request.quantity) || request.quantity <= 0))) {
+            throw new TypeError('Request quantity must be a positive safe integer or ALL.');
+        }
+        this.maxCyclesWithoutTargetUnit = maxCyclesWithoutTargetUnit;
+        this.maxBlockedStreakForAll = maxBlockedStreakForAll;
         this.#reset();
     }
 
@@ -57,6 +64,7 @@ class B5RequestExecution {
 
     nextCycle() {
         if (this.isTerminal()) return this.#stop(this.state, this.lastError || this.lastBlocker);
+        if (this.awaitingReconciliation) return Object.freeze({ action: 'WAIT', reason: 'awaiting-reconciliation' });
         if (this.quantityMode === 'FIXED' && this.completedUnits >= this.quantity) {
             this.state = 'COMPLETED';
             return this.#stop('COMPLETED', null);
@@ -75,21 +83,31 @@ class B5RequestExecution {
             return Object.freeze({ ignored: 'stale-generation', state: this.state });
         }
         if (this.isTerminal()) return Object.freeze({ ignored: 'terminal', state: this.state });
+        if (this.awaitingReconciliation) return Object.freeze({ ignored: 'awaiting-reconciliation', state: this.state });
 
         const data = result?.data || {};
         this.cycles += 1;
+        this.cyclesSinceTargetUnit += 1;
         this.awaitingReconciliation = false;
 
+        if (result?.meta?.requiresReconciliation === true || data.requiresReconciliation === true
+            || result?.error?.details?.outcome?.requiresReconciliation === true) {
+            this.awaitingReconciliation = true;
+            this.lastError = 'awaiting-reconciliation';
+            return this.snapshot();
+        }
         if (result?.success === false) {
             return this.#recordFailure(result, data);
         }
 
         const targetMatch = String(data.targetId || '') === this.targetItemId;
-        const completedAmount = Math.max(1, Number(data.completedAmount || 1));
-        if (data.completedNewB5 === true && targetMatch) {
-            this.completedUnits = this.quantityMode === 'ALL'
-                ? this.completedUnits + completedAmount
-                : Math.min(this.quantity, this.completedUnits + completedAmount);
+        if (data.completedNewB5 === true) {
+            if (result?.success !== true || !targetMatch || data.completedAmount !== 1) {
+                this.state = 'FAILED';
+                this.lastError = 'invalid-target-completion-evidence';
+                return this.snapshot();
+            }
+            this.completedUnits += 1;
             this.blockedStreak = 0;
             this.cyclesSinceTargetUnit = 0;
             this.lastBlocker = null;
@@ -97,10 +115,13 @@ class B5RequestExecution {
         } else if (data.productive === true) {
             this.productiveCycles += 1;
             this.blockedStreak = 0;
-            this.cyclesSinceTargetUnit += 1;
         } else {
             this.blockedStreak += 1;
             this.lastBlocker = this.#blockerOf(data);
+            if (result?.success === true && data.waitingForMaterials === true && this.quantityMode === 'ALL') {
+                this.state = 'EXHAUSTED';
+                this.lastError = this.lastBlocker;
+            }
         }
 
         this.lastRecord = { cycles: this.cycles, completedUnits: this.completedUnits, blockedStreak: this.blockedStreak };
@@ -108,19 +129,27 @@ class B5RequestExecution {
         return this.snapshot();
     }
 
+    // Called only after the mode's existing fresh-state/provenance verification.
+    resolveReconciliation({ verified = false, generation = null, expectedGeneration = null, targetId = null, completedAmount = 0 } = {}) {
+        if (!this.awaitingReconciliation || verified !== true || generation === null || expectedGeneration === null
+            || generation !== expectedGeneration || this.isTerminal()) return this.snapshot();
+        if (completedAmount !== 0 && (completedAmount !== 1 || targetId !== this.targetItemId)) return this.snapshot();
+        this.awaitingReconciliation = false;
+        if (completedAmount === 1) {
+            return this.record({ success: true, data: { targetId, completedNewB5: true, completedAmount } }, { generation, expectedGeneration });
+        }
+        this.#applyGuards();
+        return this.snapshot();
+    }
+
     #applyGuards() {
-        if (this.state === 'COMPLETED') return;
-        if (this.quantityMode === 'ALL') {
-            if (this.blockedStreak >= this.maxBlockedStreakForAll) {
-                this.state = 'EXHAUSTED';
-                this.lastError = this.lastBlocker || 'blocked-without-progress';
-            } else if (this.cyclesSinceTargetUnit > this.maxCyclesWithoutTargetUnit) {
-                this.state = 'EXHAUSTED';
-                this.lastError = 'productive-without-target-unit';
-            }
-        } else if (this.cycles === 1 && this.blockedStreak >= this.maxBlockedStreakForAll && this.completedUnits === 0) {
+        if (this.isTerminal()) return;
+        if (this.blockedStreak >= this.maxBlockedStreakForAll) {
             this.state = 'EXHAUSTED';
-            this.lastError = this.lastBlocker || 'cannot-start-any-unit';
+            this.lastError = this.lastBlocker || 'blocked-without-progress';
+        } else if (this.cyclesSinceTargetUnit >= this.maxCyclesWithoutTargetUnit) {
+            this.state = 'EXHAUSTED';
+            this.lastError = 'cycles-without-target-unit';
         }
     }
 
@@ -140,6 +169,7 @@ class B5RequestExecution {
             this.transientFailures += 1;
             this.blockedStreak += 1;
             this.lastBlocker = code || result?.message || 'transient-failure';
+            this.#applyGuards();
             return this.snapshot();
         }
         this.state = 'FAILED';

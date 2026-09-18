@@ -1035,8 +1035,10 @@ SkyblockAutoJoinService readiness
 → B1StorageMaterialService.protectForB5Batch()
    (fresh /kho → nung raw iron/raw gold → nén B1 → bán 64-only theo immutable baseline)
 → B5PlanningService.inspectAdditionalFresh()
-→ B5AutomationService.runNext()
+→ B5AutomationService.runNext() / runTarget(targetId)
 ```
+
+Yêu cầu chế tạo động (Task 5): `B5CraftModeService.setCraftRequest({ targetItemId, quantity })` tạo `B5RequestExecution` — state machine thuần đếm đơn vị đã xác minh. Quantity là số đơn vị B5 **mới sản xuất thêm** (không phải tổng tồn kho); `ALL` là chế độ với `quantity/remaining = null`, không bao giờ là Infinity. Mỗi chu kỳ chạy đúng một đơn vị với fresh inspection; guard FIXED/ALL đều có bounded stop. Request terminal (`COMPLETED`/`EXHAUSTED`/`FAILED`) đưa mode về idle `WAITING_REQUEST`, không tự resume legacy crafting; `clearCraftRequest()` và disable xóa intent, pause/reconnect giữ nguyên. Kết quả chu kỳ chỉ được ghi vào request sở hữu chu kỳ đó; kết quả stale (generation khác) hoặc đến sau khi operator thay request bị bỏ qua, và credit sau reconciliation chỉ đi qua bằng chứng PV2/fresh đã xác minh (`#accountProvenB5Completion`).
 
 Invariant của mode này:
 

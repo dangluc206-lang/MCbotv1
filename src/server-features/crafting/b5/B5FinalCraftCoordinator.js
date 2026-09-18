@@ -6,12 +6,10 @@ class B5FinalCraftCoordinator {
     constructor({ recipeRegistry, inventoryState, progressTracker, withdrawFlow, craftFlow, config, runStep, childOptions, quantityTrace, verificationService }) {
         Object.assign(this, {
             recipeRegistry, inventoryState, progressTracker, withdrawFlow, craftFlow,
-            config, runStep, childOptions, quantityTrace, verificationService
+            config, runStep, childOptions, quantityTrace
         });
-        this.verificationService = verificationService;
-        // craft()/settleStage() reference this.verification; keep the alias in
-        // sync with the injected verificationService contract.
-        this.verification = verificationService;
+        // craft()/settleStage()/ensureInputs() call the injected stage contract.
+        this.stageContract = verificationService;
     }
 
     reconfigure(config = {}) { this.config = config || {}; }
@@ -64,7 +62,7 @@ class B5FinalCraftCoordinator {
                     ? 'COMPLETE'
                     : (steps[index + 1]?.outputId === executionTarget ? 'B5' : 'B4');
                 if (nextStageForHandoff !== 'B4' || stage !== 'B4') {
-                    this.verificationService.handoff({
+                    this.stageContract.handoff({
                         from: stage,
                         to: nextStageForHandoff,
                         generation: context.connectionGeneration,
@@ -95,7 +93,7 @@ class B5FinalCraftCoordinator {
             stablePasses: this.config?.stageSettlementStablePasses,
             source: 'bot-inventory'
         });
-        this.verification.requireSettled({ stage, logicalId, settlement, context });
+        this.stageContract.requireSettled({ stage, logicalId, settlement, context });
         return settlement;
     }
 
@@ -120,7 +118,7 @@ class B5FinalCraftCoordinator {
                 shortage = Math.max(0, needed - inInventory);
             }
             if (inInventory < needed) this.#throwInputError(logicalId, recipeId, needed, inInventory, attempts, lastWithdrawal, context);
-            this.verification.requireInputReady({ stage: 'INPUT', logicalId, available: inInventory, required: needed, context });
+        this.stageContract.requireInputReady({ stage: 'INPUT', logicalId, available: inInventory, required: needed, context });
         }
     }
 
@@ -146,7 +144,7 @@ class B5FinalCraftCoordinator {
         const expectedDelta = actualCrafts * Math.max(1, Number(recipe.outputAmount || 1));
         const baseline = Number.isFinite(verificationBefore) ? verificationBefore : beforeOutput;
         const observedAfter = Number.isFinite(verificationAfter) ? verificationAfter : this.inventoryState.countFromSource?.(outputId || recipe.output, 'bot-inventory');
-        this.verification.verifyOutput({
+        this.stageContract.verifyOutput({
             stage, logicalId: outputId || recipe.output, before: baseline,
             after: observedAfter, expectedDelta, context
         });
@@ -159,7 +157,7 @@ class B5FinalCraftCoordinator {
         if (options.nextStage) {
             // Settlement stays at the stage boundary (execute()/#settlePendingStage);
             // the per-craft contract only validates the handoff generation.
-            this.verificationService.handoff({
+            this.stageContract.handoff({
                 from: stage, to: String(options.nextStage),
                 generation: options.expectedGeneration ?? context?.connectionGeneration ?? null,
                 context
