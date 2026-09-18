@@ -25,6 +25,7 @@ const CustomModeUseCases = require('./use-cases/CustomModeUseCases');
 const BotProfileUseCases = require('./use-cases/BotProfileUseCases');
 const ModeConfigurationUseCases = require('./use-cases/ModeConfigurationUseCases');
 const FleetControlUseCases = require('./use-cases/FleetControlUseCases');
+const B5CraftRequestUseCases = require('./use-cases/B5CraftRequestUseCases');
 const { plainError, resultPayload } = require('./contracts/DesktopResult');
 
 const SUPPORT_PREVIEW_TTL_MS = 60000;
@@ -95,6 +96,10 @@ class DesktopController {
             requireRunning: () => this.#requireRunning()
         });
         this.fleetControlUseCases = new FleetControlUseCases({
+            bundleProvider: () => this.bundle,
+            requireRunning: () => this.#requireRunning()
+        });
+        this.b5CraftRequestUseCases = new B5CraftRequestUseCases({
             bundleProvider: () => this.bundle,
             requireRunning: () => this.#requireRunning()
         });
@@ -436,6 +441,10 @@ class DesktopController {
         }));
     }
 
+
+    b5CraftItems(botId) { return this.b5CraftRequestUseCases.items(botId); }
+    setB5CraftRequest(botId, request) { return this.b5CraftRequestUseCases.set(botId, request); }
+    clearB5CraftRequest(botId) { return this.b5CraftRequestUseCases.clear(botId); }
 
     reconcileFleet(reason = 'desktop-reconcile') { return this.fleetControlUseCases.reconcile(reason); }
     fleetAction(action) { return this.fleetControlUseCases.fleetAction(action); }

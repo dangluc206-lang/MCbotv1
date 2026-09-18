@@ -1220,6 +1220,8 @@ B5CraftModeService (lifecycle + side-effect façade)
 
 `RuntimeConfigMigrator` giữ public façade nhưng delegating seam đã có cho version reader, pure planner, journal, filesystem applier, tree verifier và recovery coordinator. Mọi mutation file mới phải được khai báo trong `architecture/artifact-ownership.json`.
 
+Desktop UI của mode chế B5 dùng yêu cầu động thay cho target tier cố định: operator chọn item thật trong game (nhãn là `displayName` từ `CraftingItemRegistry`, không hiển thị B1–B5) và nhập số lượng hoặc `ALL`. Renderer chỉ gửi `{ targetItemId, quantity }` qua IPC `mcbot:b5:craft-items:list` (READ), `mcbot:b5:craft-request:set` và `mcbot:b5:craft-request:clear`; `B5CraftRequestUseCases` chuyển tiếp nguyên vẹn tới `B5CraftModeService.setCraftRequest()`/`clearCraftRequest()`. Không có recipe, `/kho` hay craft logic trong renderer, không có fallback `super_alloy`, và `CraftingRequest` trong mode vẫn là nơi validate/own request.
+
 Composable Mode Builder dùng presentation schema cho đủ 17 module, typed start/loop/stop editor, bounded `if/repeat`, static dry-run không gọi capability, template metadata và deterministic package manifest. Unknown field bị loại khi normalize; storage protection không có toggle để bỏ nung sắt/vàng.
 
 Extension contract hiện tại được thực thi qua `ModuleRegistry`: mỗi descriptor có capability, transient resources, server-profile compatibility, error code/i18n key và executor riêng. `WorkflowModuleCatalog` vẫn đăng ký đủ 17 module cũ như compatibility facade; module mới phải đăng ký descriptor hợp lệ, không trùng type và không khai báo capability ngoài registry. `WorkflowStepExecutor` chỉ điều phối descriptor executor, không chứa mapping `step.type` thủ công.

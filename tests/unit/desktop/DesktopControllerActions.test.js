@@ -111,6 +111,43 @@ test('DesktopController routes guarded B5 recovery through the mode use case wit
     }]);
 });
 
+test('DesktopController passes a dynamic B5 craft request straight to the mode service', async () => {
+    const calls = { set: [], clear: [] };
+    const items = [{ id: 'titanium', displayName: 'Titanium', recipe: { output: 'titanium', inputs: {} } }];
+    const expectedItems = [{ id: 'titanium', displayName: 'Titanium' }];
+    const controller = new DesktopController({ baseDir: process.cwd() });
+    controller.lifecycle = 'RUNNING';
+    controller.bundle = {
+        application: {
+            getRuntime: () => ({
+                getService(name) {
+                    if (name === 'b5CraftMode') {
+                        return {
+                            setCraftRequest(request) { calls.set.push(request); return ok('SUCCESS', { appliedAt: 'next-cycle' }); },
+                            clearCraftRequest(reason) { calls.clear.push(reason); return { state: 'COMPLETED', completedUnits: 2 }; }
+                        };
+                    }
+                    if (name === 'craftingItemRegistry') return { items: () => items };
+                    return null;
+                }
+            })
+        }
+    };
+    assert.deepEqual(controller.b5CraftItems('bot-01'), { items: expectedItems });
+    const setResult = await controller.setB5CraftRequest('bot-01', { targetItemId: 'titanium', quantity: 10 });
+    assert.equal(setResult.success, true);
+    assert.deepEqual(calls.set, [{ targetItemId: 'titanium', quantity: 10 }]);
+    const clearResult = await controller.clearB5CraftRequest('bot-01');
+    assert.equal(clearResult.success, true);
+    assert.deepEqual(calls.clear, ['desktop-operator']);
+});
+
+test('DesktopController refuses craft requests while the backend is not running', async () => {
+    const controller = new DesktopController({ baseDir: process.cwd() });
+    controller.lifecycle = 'STOPPED';
+    await assert.rejects(() => controller.setB5CraftRequest('bot-01', { targetItemId: 'titanium', quantity: 1 }));
+});
+
 test('DesktopController snapshot separates client online presence from connection phase', () => {
     const controller = new DesktopController({ baseDir: process.cwd() });
     const context = new BotContext('bot-01');

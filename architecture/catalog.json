@@ -23,6 +23,7 @@
     "src/desktop/renderer/pages/PageCatalog.js",
     "src/desktop/renderer/features/b5/B5ViewModel.js",
     "src/desktop/renderer/features/b5/B5JourneyPresenter.js",
+    "src/desktop/renderer/features/b5/B5CraftRequestPanel.js",
     "src/desktop/renderer/features/incidents/IncidentViewModel.js",
     "src/desktop/renderer/features/incidents/IncidentPresenter.js",
     "src/desktop/renderer/features/builder/TypedModuleEditor.js",

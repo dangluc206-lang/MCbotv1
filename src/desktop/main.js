@@ -283,6 +283,9 @@ function registerIpc() {
     safeHandle('mcbot:mode:stop', botId => controller.stopMode(botId));
     safeHandle('mcbot:mode:restart', botId => controller.restartMode(botId));
     safeHandle('mcbot:mode:b5-retry-storage-protection', (botId, request) => controller.retryB5StorageProtection(botId, request));
+    safeHandle('mcbot:b5:craft-items:list', botId => controller.b5CraftItems(botId));
+    safeHandle('mcbot:b5:craft-request:set', (botId, request) => controller.setB5CraftRequest(botId, request));
+    safeHandle('mcbot:b5:craft-request:clear', botId => controller.clearB5CraftRequest(botId));
     safeHandle('mcbot:bot:home', botId => controller.goHome(botId));
     safeHandle('mcbot:fleet:action', action => controller.fleetAction(action));
     safeHandle('mcbot:commands', () => controller.commandOptions());

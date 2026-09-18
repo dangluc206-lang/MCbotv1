@@ -266,8 +266,41 @@ function botCard(bot, fullActions = false) {
       </div>` : ''}
       ${showTech && mode.id === 'b5-craft' ? (() => { const d = bot.modes?.b5Craft?.details || {}; const blocker = d.lastAutomationBlockers?.[0] || null; const blockerText = blocker ? `${blocker.baseId ? `${blocker.baseId}: ` : ''}${blocker.reason || blocker.status || 'đang chờ'}` : ''; const protection = d.protectionEpisode || null; const protectionBlocker = protection?.blocker || null; const protectionText = protection ? `${protection.state || 'PENDING'} · attempt ${protection.totalAttempts ?? 0}${protectionBlocker ? ` · ${protectionBlocker.resource ? `${protectionBlocker.resource}: ` : ''}${protectionBlocker.reason || protectionBlocker.code || 'blocked'} · backoff ${protectionBlocker.backoffMs ?? 0}ms${Number.isFinite(protection.nextEligibleAt) ? ` · retry ${Math.max(0, protection.nextEligibleAt - Date.now())}ms` : ''}` : ''}` : ''; const trace = d.b5Automation?.trace || null; const decision = trace?.plan?.decision; const traceText = trace ? `${trace.traceId || ''}${decision?.kind ? ` · ${decision.kind}${decision.resource ? ` ${decision.resource}` : ''}` : ''}` : ''; const batchText = d.batchId ? `${d.batchId}${d.batchProtectionRequired ? ' · chờ bảo vệ kho' : ' · đã bảo vệ kho'}` : 'chưa có batch'; return `<div class="operation-line"><span>B5 thuần</span><strong>Đã hoàn tất: ${esc(d.completedB5 ?? 0)} · Engine: ${esc(d.automationRuns ?? 0)} lượt / ${esc(d.productiveCycles ?? 0)} có tiến triển · ${esc(batchText)} · ${esc(d.waitingReason ? `Đang chờ: ${viWaitingReason(d.waitingReason)}` : 'Đang xử lý')}</strong></div>${protectionText ? `<div class="operation-line"><span>Gate bảo vệ kho</span><strong title="${esc(protectionText)}">${esc(protectionText)}</strong></div>` : ''}${traceText ? `<div class="operation-line"><span>Trace B5 gần nhất</span><strong title="${esc(traceText)}">${esc(traceText)}</strong></div>` : ''}${blockerText ? `<div class="operation-line"><span>Điểm chặn B5</span><strong title="${esc(blockerText)}">${esc(blockerText)}</strong></div>` : ''}`; })() : ''}
     </div>
-    ${mainActions}${b5RecoveryButton}${modeActions}
+    ${mainActions}${b5RecoveryButton}${mode.id === 'b5-craft' ? window.MCbotB5CraftRequestPanel.render({ botId: id, items: b5CraftItemsCache[id] || [], request: bot.modes?.b5Craft?.details?.craftRequest || null, phase: mode.phase, draft: b5CraftDraft(id), esc }) : ''}
   </article>`;
+}
+
+const b5CraftItemsCache = {};
+const b5CraftDrafts = {};
+function b5CraftDraft(botId) {
+  return b5CraftDrafts[botId] || (b5CraftDrafts[botId] = { itemId: '', quantity: '', all: false });
+}
+function captureB5CraftDraft(panel) {
+  const botId = panel?.dataset?.b5RequestBot;
+  if (!botId) return;
+  b5CraftDrafts[botId] = {
+    itemId: panel.querySelector('[data-b5-request-item]')?.value || '',
+    quantity: panel.querySelector('[data-b5-request-quantity]')?.value ?? '',
+    all: Boolean(panel.querySelector('[data-b5-request-all]')?.checked)
+  };
+}
+async function hydrateB5CraftItems() {
+  const bots = (state.snapshot?.bots || []).filter(bot => bot.modes?.b5Craft);
+  for (const bot of bots) {
+    try {
+      if (!b5CraftItemsCache[bot.botId]) {
+        const result = await api(window.mcbot.b5CraftItems(bot.botId));
+        b5CraftItemsCache[bot.botId] = window.MCbotB5CraftRequestPanel.craftables(result?.items || []);
+      }
+      const panel = document.querySelector(`[data-b5-request-bot="${bot.botId}"]`);
+      const select = panel?.querySelector('select[data-b5-request-item]');
+      if (select && !select.options.length && b5CraftItemsCache[bot.botId].length) {
+        select.innerHTML = b5CraftItemsCache[bot.botId].map(entry => `<option value="${esc(entry.id)}">${esc(entry.displayName)}</option>`).join('');
+      }
+      const draft = b5CraftDraft(bot.botId);
+      if (select && draft.itemId) select.value = draft.itemId;
+    } catch (error) { reportRendererError(error, 'b5-craft-items'); }
+  }
 }
 
 function renderDashboard() {
@@ -288,6 +321,7 @@ function renderDashboard() {
   }
   renderFirstRun();
   renderHealth();
+  hydrateB5CraftItems().catch(() => {});
 }
 
 function applyPresentationPreferences() {
@@ -900,6 +934,15 @@ async function handleBotAction(button) {
         idempotencyKey
       }))
     });
+  }
+  if (action === 'b5-request-start') {
+    const form = window.MCbotB5CraftRequestPanel.readForm(button);
+    captureB5CraftDraft(button.closest('[data-b5-request-bot]'));
+    return runAction({ key: `b5-request:${bot}`, button, success: `Đã gửi yêu cầu chế ${form.quantity === 'ALL' ? 'ALL' : form.quantity} × ${form.targetItemId}.`, fn: () => api(window.mcbot.setB5CraftRequest(bot, form)) });
+  }
+  if (action === 'b5-request-clear') {
+    b5CraftDrafts[bot] = { itemId: b5CraftDraft(bot).itemId, quantity: '', all: false };
+    return runAction({ key: `b5-request:${bot}`, button, success: 'Đã xóa yêu cầu chế tạo.', fn: () => api(window.mcbot.clearB5CraftRequest(bot)) });
   }
   if (action === 'save-profile') {
     const row = button.closest('tr');
@@ -1759,6 +1802,8 @@ function bindEvents() {
       event.preventDefault(); switchPage('logs');
     }
   });
+  document.addEventListener('input', event => { const panel = event.target?.closest?.('[data-b5-request-bot]'); if (panel) captureB5CraftDraft(panel); });
+  document.addEventListener('change', event => { const panel = event.target?.closest?.('[data-b5-request-bot]'); if (panel) captureB5CraftDraft(panel); });
 }
 
 function restoreLocalPreferences() {

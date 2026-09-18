@@ -444,6 +444,10 @@ kbd { padding:2px 5px; border:1px solid var(--border); border-radius:5px; color:
 .b5-stage { min-width:78px; padding:8px; border:1px solid var(--border-soft); border-radius:9px; color:var(--muted); font-size:12px; }
 .b5-stage.active { border-color:var(--accent); color:var(--text); background:rgba(98,173,255,.09); }
 .b5-stage.verified { border-color:rgba(72,209,155,.45); color:var(--good); }
+.b5-request-panel { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px; }
+.b5-request-panel select, .b5-request-panel input[type="number"] { background:var(--panel-bg, transparent); color:inherit; border:1px solid var(--border-soft); border-radius:8px; padding:6px 8px; }
+.b5-request-panel .b5-request-all { display:flex; align-items:center; gap:4px; font-size:12px; color:var(--muted); }
+.b5-request-panel .b5-request-status { font-size:12px; color:var(--muted); }
 .b5-contract-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
 .b5-contract-grid > div { padding:9px; border:1px solid var(--border-soft); border-radius:9px; }
 .b5-contract-grid span,.b5-contract-grid strong { display:block; font-size:12px; }
