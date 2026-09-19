@@ -378,6 +378,31 @@ const craftingTiers = validator('craftingTiers', (value, errors) => {
     for (const tier of ['B1','B2','B3','B4','B5']) stringArray(value[tier], `craftingTiers.${tier}`, errors, { allowEmpty: false });
 });
 
+const craftingTargets = validator('craftingTargets', (value, errors) => {
+    unknown(value, ['schemaVersion','allowedTiers','allowItems','denyItems','overrides'], 'craftingTargets', errors);
+    if (value.schemaVersion !== undefined && value.schemaVersion !== 1) errors.push('craftingTargets.schemaVersion must be 1');
+    if (!Array.isArray(value.allowedTiers)) {
+        errors.push('craftingTargets.allowedTiers must be an array');
+    } else {
+        for (const tier of value.allowedTiers) {
+            if (!['B1','B2','B3','B4','B5'].includes(tier)) errors.push(`craftingTargets.allowedTiers tier is unsupported: ${tier}`);
+        }
+    }
+    for (const field of ['allowItems', 'denyItems']) stringArray(value[field], `craftingTargets.${field}`, errors, { allowEmpty: true });
+    if (Array.isArray(value.allowItems) && Array.isArray(value.denyItems)) {
+        for (const itemId of value.allowItems) {
+            if (value.denyItems.includes(itemId)) errors.push(`craftingTargets item ${itemId} is both allowed and denied`);
+        }
+    }
+    if (value.overrides !== undefined && !object(value.overrides)) errors.push('craftingTargets.overrides must be an object');
+    for (const [itemId, override] of Object.entries(value.overrides || {})) {
+        if (!requiredObject(override, `craftingTargets.overrides.${itemId}`, errors)) continue;
+        unknown(override, ['enabled','displayName'], `craftingTargets.overrides.${itemId}`, errors);
+        if (override.enabled !== undefined) requiredBoolean(override.enabled, `craftingTargets.overrides.${itemId}.enabled`);
+        if (override.displayName !== undefined) requiredString(override.displayName, `craftingTargets.overrides.${itemId}.displayName`);
+    }
+});
+
 const b5 = validator('b5', (value, errors) => {
     const keys = ['targetId','timeoutMs','inventorySafetyEmptySlots','quantityOptimization','b3AllMinEmptySlots','b1SupplyMode','b2InputSource','personalVaultBackpressure','pvInventorySettleTimeoutMs','pvInventorySettlePollMs'];
     unknown(value, keys, 'b5', errors);
@@ -602,6 +627,7 @@ module.exports = Object.freeze({
     skyblock,
     recipes,
     craftingTiers,
+    craftingTargets,
     b5,
     collectorB5Mode,
     b5CraftMode,

@@ -28,6 +28,7 @@ const SPECS = [
     ['skyblock', 'config/skyblock/join.json', 'skyblock'],
     ['recipes', 'config/server-data/recipes.json', 'recipes'],
     ['craftingTiers', 'config/server-data/crafting-tiers.json', 'craftingTiers'],
+    ['craftingTargets', 'config/server-data/crafting-targets.json', 'craftingTargets'],
     ['b5', 'config/server-data/b5.json', 'b5'],
     ['collectorB5Mode', 'config/modes/collector-b5.json', 'collectorB5Mode'],
     ['b5CraftMode', 'config/modes/b5-craft.json', 'b5CraftMode'],

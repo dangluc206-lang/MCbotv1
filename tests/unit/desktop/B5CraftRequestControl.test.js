@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const ItemRegistry = require('../../../src/items/ItemRegistry');
 const CraftingRecipeRegistry = require('../../../src/server-features/crafting/CraftingRecipeRegistry');
 const CraftingItemRegistry = require('../../../src/items/CraftingItemRegistry');
+const CraftingTargetRegistry = require('../../../src/items/CraftingTargetRegistry');
 const CraftingRequest = require('../../../src/items/CraftingRequest');
 const B5CraftRequestUseCases = require('../../../src/desktop/use-cases/B5CraftRequestUseCases');
 const DesktopApiContract = require('../../../src/desktop/contracts/DesktopApiContract');
@@ -13,6 +14,7 @@ const DesktopApiContract = require('../../../src/desktop/contracts/DesktopApiCon
 const ITEMS = require('../../../config/items/items.json');
 const RECIPES = require('../../../config/server-data/recipes.json');
 const TIERS = require('../../../config/server-data/crafting-tiers.json');
+const TARGET_POLICY = require('../../../config/server-data/crafting-targets.json');
 
 function createRegistry() {
     return new CraftingItemRegistry({
@@ -26,6 +28,7 @@ function createRegistry() {
 // real CraftingRequest so the control plane is exercised against real contracts.
 function harness({ withMode = true, withRegistry = true } = {}) {
     const registry = createRegistry();
+    const targetRegistry = new CraftingTargetRegistry({ craftingItemRegistry: registry, policy: TARGET_POLICY });
     const calls = { set: [], clear: [] };
     const mode = {
         setCraftRequest(request) {
@@ -46,13 +49,18 @@ function harness({ withMode = true, withRegistry = true } = {}) {
         bundleProvider: () => ({
             application: {
                 getRuntime: () => ({
-                    getService: name => (name === 'b5CraftMode' ? (withMode ? mode : null) : (withRegistry ? registry : null))
+                    getService: name => {
+                        if (name === 'b5CraftMode') return withMode ? mode : null;
+                        if (name === 'craftingTargetRegistry') return withRegistry ? targetRegistry : null;
+                        if (name === 'craftingItemRegistry') return withRegistry ? registry : null;
+                        return null;
+                    }
                 })
             }
         }),
         requireRunning: () => {}
     });
-    return { useCases, calls };
+    return { useCases, calls, registry, targetRegistry };
 }
 
 test('item list comes from CraftingItemRegistry with real in-game display names', () => {
@@ -66,11 +74,22 @@ test('item list comes from CraftingItemRegistry with real in-game display names'
 });
 
 test('item list exposes only registry items that are actually craftable', () => {
-    const { useCases } = harness();
-    const registry = createRegistry();
+    const { useCases, registry } = harness();
     const { items } = useCases.items('bot-01');
     assert.equal(items.every(entry => Boolean(registry.getRecipe(entry.id))), true);
     assert.equal(items.some(entry => entry.id === 'cobblestone'), false, 'raw B1 material without a recipe must not be offered');
+});
+
+test('operator item list follows the crafting target policy, not every craftable', () => {
+    const { useCases } = harness();
+    const { items } = useCases.items('bot-01');
+    const ids = new Set(items.map(entry => entry.id));
+    for (const tier of TARGET_POLICY.allowedTiers) {
+        for (const itemId of TIERS[tier]) assert.equal(ids.has(itemId), true, `${itemId} must be offered`);
+    }
+    for (const itemId of TIERS.B2) {
+        assert.equal(ids.has(itemId), false, `B2 intermediate ${itemId} must not be an operator target by default`);
+    }
 });
 
 test('item list never presents a tier letter as the operator-facing label', () => {

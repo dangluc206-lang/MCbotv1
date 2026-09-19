@@ -308,9 +308,56 @@ class ConfigurationContractValidator {
             errors.push(`b5.targetId has no producing recipe: ${targetId}`);
         }
 
+        this.#validateCraftingTargets(snapshot, errors, recipeOutputs, tierMembership);
+
         const smeltingIds = new Set(Object.keys(snapshot.smelting?.recipes || {}));
         for (const recipeId of snapshot.mineralConversions?.smeltingRecipeIds || []) {
             addReference(errors, smeltingIds, recipeId, 'mineralConversions.smeltingRecipeIds', 'smelting recipe');
+        }
+    }
+
+    #validateCraftingTargets(snapshot, errors, recipeOutputs, tierMembership) {
+        const targets = snapshot.craftingTargets;
+        if (!isObject(targets)) return;
+        const allowedTiers = new Set(targets.allowedTiers || []);
+        const referenced = [
+            ...new Set([
+                ...(targets.allowItems || []),
+                ...(targets.denyItems || []),
+                ...Object.keys(targets.overrides || {})
+            ])
+        ];
+        for (const itemId of referenced) {
+            if (!recipeOutputs.has(itemId)) {
+                errors.push(`craftingTargets item ${itemId} must have a producing recipe`);
+            }
+        }
+        const enabledTargets = new Set();
+        for (const [tier, ids] of Object.entries(snapshot.craftingTiers || {})) {
+            if (!allowedTiers.has(tier)) continue;
+            for (const itemId of ids || []) {
+                if (recipeOutputs.has(itemId) && !(targets.denyItems || []).includes(itemId)
+                    && targets.overrides?.[itemId]?.enabled !== false) {
+                    enabledTargets.add(itemId);
+                }
+            }
+        }
+        for (const itemId of targets.allowItems || []) {
+            if (targets.overrides?.[itemId]?.enabled !== false) enabledTargets.add(itemId);
+        }
+        for (const itemId of Object.keys(targets.overrides || {})) {
+            if (targets.overrides[itemId]?.enabled === true) enabledTargets.add(itemId);
+        }
+        if (enabledTargets.size === 0) {
+            errors.push('craftingTargets must resolve to at least one craftable target');
+            return;
+        }
+        for (const itemId of enabledTargets) {
+            const tier = tierMembership.get(itemId);
+            if (tier && !allowedTiers.has(tier) && !(targets.allowItems || []).includes(itemId)
+                && targets.overrides?.[itemId]?.enabled === undefined) {
+                errors.push(`craftingTargets item ${itemId} belongs to tier ${tier} which is not in allowedTiers`);
+            }
         }
     }
 

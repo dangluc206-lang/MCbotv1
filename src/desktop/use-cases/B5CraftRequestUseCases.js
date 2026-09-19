@@ -17,12 +17,12 @@ class B5CraftRequestUseCases {
 
     items(botId) {
         this.requireRunning();
-        const registry = this.#runtime(botId).getService?.('craftingItemRegistry');
-        if (!registry || typeof registry.items !== 'function') {
-            throw new Error(`Crafting item registry is unavailable for ${botId}.`);
+        const targets = this.#runtime(botId).getService?.('craftingTargetRegistry');
+        if (!targets || typeof targets.targets !== 'function') {
+            throw new Error(`Crafting target registry is unavailable for ${botId}.`);
         }
-        const items = registry.items()
-            .filter(entry => entry.recipe)
+        const items = targets.targets()
+            .filter(entry => entry?.recipe)
             .map(entry => ({ id: entry.id, displayName: entry.displayName }));
         return { items };
     }

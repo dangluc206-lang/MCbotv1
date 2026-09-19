@@ -28,6 +28,7 @@ function createServerProfileRegistry(serverConfig, profileKnowledge = {}) {
         items: knowledge.items || 'items',
         recipes: knowledge.recipes || 'recipes',
         craftingTiers: knowledge.craftingTiers || 'craftingTiers',
+        craftingTargets: knowledge.craftingTargets || 'craftingTargets',
         storage: knowledge.storage || 'storage',
         personalVault: knowledge.personalVault || 'personalVault',
         minerals: knowledge.minerals || 'minerals',

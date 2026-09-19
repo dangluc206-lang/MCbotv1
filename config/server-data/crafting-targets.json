@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "allowedTiers": ["B3", "B4", "B5"],
+  "allowItems": [],
+  "denyItems": [],
+  "overrides": {}
+}

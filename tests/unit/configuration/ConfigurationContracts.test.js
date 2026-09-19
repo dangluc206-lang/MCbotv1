@@ -53,7 +53,7 @@ function assertContractError(mutator, pattern) {
 }
 
 test('all active configuration groups have schemas, validate, and reject unknown top-level entries', () => {
-    assert.equal(ConfigSpecs.length, 32);
+    assert.equal(ConfigSpecs.length, 33);
     for (const spec of ConfigSpecs) {
         assert.equal(typeof spec.schema, 'string', `${spec.key} must declare a schema`);
         const validate = schemas[spec.schema];
@@ -66,6 +66,27 @@ test('all active configuration groups have schemas, validate, and reject unknown
         const rejected = validate(unknown);
         assert.equal(rejected.valid, false, `${spec.key} accepted an unknown top-level entry`);
     }
+});
+
+test('craftingTargets references craftable items and resolves to at least one target', () => {
+    assertContractError(value => {
+        value.craftingTargets.allowItems = ['not_a_recipe_output'];
+    }, /craftingTargets item not_a_recipe_output must have a producing recipe/);
+    assertContractError(value => {
+        value.craftingTargets.denyItems = ['phantom_item'];
+    }, /craftingTargets item phantom_item must have a producing recipe/);
+    assertContractError(value => {
+        value.craftingTargets.overrides = { phantom_item: { enabled: true } };
+    }, /craftingTargets item phantom_item must have a producing recipe/);
+    assertContractError(value => {
+        value.craftingTargets.allowedTiers = [];
+        value.craftingTargets.allowItems = [];
+        value.craftingTargets.overrides = {};
+    }, /craftingTargets must resolve to at least one craftable target/);
+    assertContractError(value => {
+        value.craftingTargets.allowedTiers = ['B1'];
+        value.craftingTargets.allowItems = [];
+    }, /craftingTargets must resolve to at least one craftable target/);
 });
 
 test('legacy B5/storage config without B2 input source or withdrawal policy remains valid', () => {
