@@ -49,7 +49,6 @@
     "test:e2e:desktop": "node --test tests/e2e/desktop/desktop-critical-flow.test.js",
     "support:validate": "node scripts/validate-support-bundle.js --self-check",
     "support:validate:file": "node scripts/validate-support-bundle.js",
-    "check:product-docs": "node scripts/check-product-docs.js",
     "check:static": "node scripts/check-static-quality.js",
     "check:critical-coverage": "node scripts/check-critical-coverage.js",
     "check:version": "node scripts/check-version-contract.js",

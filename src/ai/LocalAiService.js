@@ -7,7 +7,7 @@ const ProjectWorkspace = require('./knowledge/ProjectWorkspace');
 const AiToolRegistry = require('./tools/AiToolRegistry');
 const AgentSession = require('./AgentSession');
 
-const OFFICIAL_DOCS = ['AGENTS.md', 'RULES.md', 'ARCHITECTURE.md', 'SERVER_BEHAVIOR.md', 'JS_RESPONSIBILITIES.md', 'README.md'];
+const OFFICIAL_DOCS = [];
 
 class LocalAiService {
     constructor({ provider = new OllamaProvider(), controllerProvider = () => null } = {}) {

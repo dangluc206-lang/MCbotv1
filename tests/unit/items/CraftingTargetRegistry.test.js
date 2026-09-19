@@ -109,8 +109,7 @@ test('overrides can disable a target or rename it for the operator', () => {
     assert.equal(renamed.requireById('titanium').displayName, 'Titanium X');
 });
 
-test('a brand new item and recipe become a target with config+data only', () => {
-    const items = {
+test('a brand new item and recipe become a target with config+data only', () => {    const items = {
         ...ITEMS,
         mythril: {
             representations: {
