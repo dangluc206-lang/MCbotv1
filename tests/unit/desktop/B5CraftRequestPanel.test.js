@@ -73,6 +73,41 @@ test('readForm rejects empty, zero, negative and fractional quantities at the UI
     assert.throws(() => Panel.readForm(fakePanel({ itemId: '', quantity: '10' })), /Hãy chọn vật phẩm/);
 });
 
+test('optionsHtml renders the registry list and never keeps the placeholder', () => {
+    const html = Panel.optionsHtml(ITEMS, {}, esc);
+    assert.doesNotMatch(html, /Không có vật phẩm chế tạo/);
+    assert.match(html, /<option value="titanium">Titanium<\/option>/);
+    assert.match(html, /<option value="carbon">Carbon<\/option>/);
+    assert.match(html, /<option value="super_alloy">Siêu hợp kim<\/option>/);
+    assert.equal((html.match(/<option/g) || []).length, 3);
+});
+
+test('optionsHtml falls back to the placeholder only when the registry list is empty', () => {
+    assert.match(Panel.optionsHtml([], {}, esc), /Không có vật phẩm chế tạo/);
+    assert.match(Panel.optionsHtml([{ id: 'broken' }], {}, esc), /Không có vật phẩm chế tạo/);
+});
+
+test('optionsHtml keeps the selected draft item across a re-render', () => {
+    const html = Panel.optionsHtml(ITEMS, { itemId: 'carbon' }, esc);
+    assert.match(html, /<option value="carbon" selected>Carbon<\/option>/);
+    assert.equal((html.match(/selected/g) || []).length, 1);
+});
+
+test('render restores the drafted item, quantity and ALL flag after a snapshot refresh', () => {
+    const html = Panel.render({ botId: 'bot-01', items: ITEMS, request: null, phase: '', draft: { itemId: 'titanium', quantity: '10', all: true }, esc });
+    assert.match(html, /<option value="titanium" selected>Titanium<\/option>/);
+    assert.match(html, /data-b5-request-quantity[^>]*value="10"/);
+    assert.match(html, /data-b5-request-all checked/);
+});
+
+test('per-bot draft state never leaks between bots', () => {
+    const first = Panel.render({ botId: 'bot-01', items: ITEMS, request: null, phase: '', draft: { itemId: 'titanium', quantity: '10' }, esc });
+    const second = Panel.render({ botId: 'bot-02', items: ITEMS, request: null, phase: '', draft: {}, esc });
+    assert.match(first, /<option value="titanium" selected>/);
+    assert.equal((second.match(/selected/g) || []).length, 0);
+    assert.match(second, /data-b5-request-quantity[^>]*value=""/);
+});
+
 test('statusText reports FIXED remaining, ALL mode, state labels and stop reason', () => {
     assert.equal(Panel.statusText(null, '').line, 'Không có yêu cầu chế tạo');
 

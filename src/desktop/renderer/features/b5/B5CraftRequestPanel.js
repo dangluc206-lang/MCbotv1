@@ -29,16 +29,24 @@
     return { line: `${request.targetDisplayName || request.targetItemId}`, detail };
   }
 
-  function render({ botId, items = [], request = null, phase = '', draft = {}, esc }) {
-    const options = craftables(items).map(entry =>
+  // Single source of truth for the <select> body: placeholder only when the
+  // registry list is empty, otherwise real item options keyed by item id.
+  function optionsHtml(items = [], draft = {}, esc = String) {
+    const options = craftables(items);
+    if (!options.length) return '<option value="">Không có vật phẩm chế tạo</option>';
+    return options.map(entry =>
       `<option value="${esc(entry.id)}"${draft.itemId === entry.id ? ' selected' : ''}>${esc(entry.displayName)}</option>`).join('');
+  }
+
+  function render({ botId, items = [], request = null, phase = '', draft = {}, esc }) {
+    const options = optionsHtml(items, draft, esc);
     const status = statusText(request, phase);
     const hasRequest = Boolean(request?.targetItemId);
     return `<div class="actions b5-request-panel" data-b5-request-bot="${esc(botId)}">
-      <select data-b5-request-item aria-label="Vật phẩm cần chế">${options || '<option value="">Không có vật phẩm chế tạo</option>'}</select>
+      <select data-b5-request-item aria-label="Vật phẩm cần chế">${options}</select>
       <input data-b5-request-quantity type="number" min="1" step="1" placeholder="Số lượng" aria-label="Số lượng" value="${esc(draft.quantity || '')}">
       <label class="b5-request-all"><input type="checkbox" data-b5-request-all${draft.all ? ' checked' : ''}> ALL</label>
-      <button class="button primary" data-action="b5-request-start" data-bot="${esc(botId)}" ${options ? '' : 'disabled'}>Bắt đầu chế</button>
+      <button class="button primary" data-action="b5-request-start" data-bot="${esc(botId)}" ${craftables(items).length ? '' : 'disabled'}>Bắt đầu chế</button>
       <button class="button" data-action="b5-request-clear" data-bot="${esc(botId)}" ${hasRequest ? '' : 'disabled'}>Xóa yêu cầu</button>
       <span class="b5-request-status" title="${esc(status.detail)}">${esc(status.line)}${status.detail ? ` · ${esc(status.detail)}` : ''}</span>
     </div>`;
@@ -59,5 +67,5 @@
     return { targetItemId: itemId, quantity };
   }
 
-  return Object.freeze({ craftables, statusText, render, readForm });
+  return Object.freeze({ craftables, optionsHtml, statusText, render, readForm });
 }));

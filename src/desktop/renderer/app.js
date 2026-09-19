@@ -134,7 +134,7 @@ function viPressure(level) {
 }
 
 function viPhase(phase) {
-  const map = { OFF:'Tắt', STOPPED:'Tắt', STARTING:'Đang khởi động', RUNNING:'Đang chạy', PAUSED:'Tạm dừng', PAUSING:'Đang tạm dừng', RESUMING:'Đang tiếp tục', STOPPING:'Đang dừng', PREPARING:'Đang chuẩn bị', WAITING_CONNECTION:'Chờ kết nối', WAITING_SKYBLOCK:'Chờ Skyblock', B1_NORMALIZATION:'Đang nung / đổi khối B1', B5_COOLDOWN:'Đang nghỉ sau B5', GOING_HOME:'Đang /is', STORAGE_CHECK:'Đang kiểm tra kho', STORAGE_PROTECTION:'Đang bảo vệ kho', READING_B5:'Đang đọc vật liệu B5', CRAFTING:'Đang chế tạo', WAITING_STORAGE:'Chờ giảm áp lực kho', WAITING_HEADROOM:'Chờ chỗ trống để bung khối', WAITING_MATERIALS:'Chờ vật liệu', WAITING_PV2:'Chờ PV2', B5_COMPLETED:'Đã chế xong B5', WAITING_RETRY:'Chờ thử lại', WAITING_MANUAL_RESUME:'Chờ bấm Tiếp tục sau reconnect', ERROR:'Lỗi' };
+  const map = { OFF:'Tắt', STOPPED:'Tắt', STARTING:'Đang khởi động', RUNNING:'Đang chạy', PAUSED:'Tạm dừng', PAUSING:'Đang tạm dừng', RESUMING:'Đang tiếp tục', STOPPING:'Đang dừng', PREPARING:'Đang chuẩn bị', WAITING_CONNECTION:'Chờ kết nối', WAITING_SKYBLOCK:'Chờ Skyblock', B1_NORMALIZATION:'Đang nung / đổi khối B1', B5_COOLDOWN:'Đang nghỉ sau B5', GOING_HOME:'Đang /is', STORAGE_CHECK:'Đang kiểm tra kho', STORAGE_PROTECTION:'Đang bảo vệ kho', READING_B5:'Đang đọc vật liệu B5', CRAFTING:'Đang chế tạo', WAITING_STORAGE:'Chờ giảm áp lực kho', WAITING_HEADROOM:'Chờ chỗ trống để bung khối', WAITING_MATERIALS:'Chờ vật liệu', WAITING_PV2:'Chờ PV2', B5_COMPLETED:'Đã chế xong B5', WAITING_REQUEST:'Chờ yêu cầu chế tạo', WAITING_RETRY:'Chờ thử lại', WAITING_MANUAL_RESUME:'Chờ bấm Tiếp tục sau reconnect', ERROR:'Lỗi' };
   return map[String(phase || '').toUpperCase()] || String(phase || '—').replaceAll('_',' ');
 }
 
@@ -266,7 +266,7 @@ function botCard(bot, fullActions = false) {
       </div>` : ''}
       ${showTech && mode.id === 'b5-craft' ? (() => { const d = bot.modes?.b5Craft?.details || {}; const blocker = d.lastAutomationBlockers?.[0] || null; const blockerText = blocker ? `${blocker.baseId ? `${blocker.baseId}: ` : ''}${blocker.reason || blocker.status || 'đang chờ'}` : ''; const protection = d.protectionEpisode || null; const protectionBlocker = protection?.blocker || null; const protectionText = protection ? `${protection.state || 'PENDING'} · attempt ${protection.totalAttempts ?? 0}${protectionBlocker ? ` · ${protectionBlocker.resource ? `${protectionBlocker.resource}: ` : ''}${protectionBlocker.reason || protectionBlocker.code || 'blocked'} · backoff ${protectionBlocker.backoffMs ?? 0}ms${Number.isFinite(protection.nextEligibleAt) ? ` · retry ${Math.max(0, protection.nextEligibleAt - Date.now())}ms` : ''}` : ''}` : ''; const trace = d.b5Automation?.trace || null; const decision = trace?.plan?.decision; const traceText = trace ? `${trace.traceId || ''}${decision?.kind ? ` · ${decision.kind}${decision.resource ? ` ${decision.resource}` : ''}` : ''}` : ''; const batchText = d.batchId ? `${d.batchId}${d.batchProtectionRequired ? ' · chờ bảo vệ kho' : ' · đã bảo vệ kho'}` : 'chưa có batch'; return `<div class="operation-line"><span>B5 thuần</span><strong>Đã hoàn tất: ${esc(d.completedB5 ?? 0)} · Engine: ${esc(d.automationRuns ?? 0)} lượt / ${esc(d.productiveCycles ?? 0)} có tiến triển · ${esc(batchText)} · ${esc(d.waitingReason ? `Đang chờ: ${viWaitingReason(d.waitingReason)}` : 'Đang xử lý')}</strong></div>${protectionText ? `<div class="operation-line"><span>Gate bảo vệ kho</span><strong title="${esc(protectionText)}">${esc(protectionText)}</strong></div>` : ''}${traceText ? `<div class="operation-line"><span>Trace B5 gần nhất</span><strong title="${esc(traceText)}">${esc(traceText)}</strong></div>` : ''}${blockerText ? `<div class="operation-line"><span>Điểm chặn B5</span><strong title="${esc(blockerText)}">${esc(blockerText)}</strong></div>` : ''}`; })() : ''}
     </div>
-    ${mainActions}${b5RecoveryButton}${mode.id === 'b5-craft' ? window.MCbotB5CraftRequestPanel.render({ botId: id, items: b5CraftItemsCache[id] || [], request: bot.modes?.b5Craft?.details?.craftRequest || null, phase: mode.phase, draft: b5CraftDraft(id), esc }) : ''}
+    ${mainActions}${b5RecoveryButton}${modeActions}${mode.id === 'b5-craft' ? window.MCbotB5CraftRequestPanel.render({ botId: id, items: b5CraftItemsCache[id] || [], request: bot.modes?.b5Craft?.details?.craftRequest || null, phase: bot.modes?.b5Craft?.phase || '', draft: b5CraftDraft(id), esc }) : ''}
   </article>`;
 }
 
@@ -285,20 +285,25 @@ function captureB5CraftDraft(panel) {
   };
 }
 async function hydrateB5CraftItems() {
-  const bots = (state.snapshot?.bots || []).filter(bot => bot.modes?.b5Craft);
-  for (const bot of bots) {
+  const panels = [...document.querySelectorAll('[data-b5-request-bot]')];
+  for (const panel of panels) {
+    const botId = panel.dataset.b5RequestBot;
+    if (!botId) continue;
     try {
-      if (!b5CraftItemsCache[bot.botId]) {
-        const result = await api(window.mcbot.b5CraftItems(bot.botId));
-        b5CraftItemsCache[bot.botId] = window.MCbotB5CraftRequestPanel.craftables(result?.items || []);
+      if (!b5CraftItemsCache[botId]) {
+        const result = await api(window.mcbot.b5CraftItems(botId));
+        b5CraftItemsCache[botId] = window.MCbotB5CraftRequestPanel.craftables(result?.items || []);
       }
-      const panel = document.querySelector(`[data-b5-request-bot="${bot.botId}"]`);
-      const select = panel?.querySelector('select[data-b5-request-item]');
-      if (select && !select.options.length && b5CraftItemsCache[bot.botId].length) {
-        select.innerHTML = b5CraftItemsCache[bot.botId].map(entry => `<option value="${esc(entry.id)}">${esc(entry.displayName)}</option>`).join('');
+      const items = b5CraftItemsCache[botId];
+      if (!items.length) continue;
+      const draft = b5CraftDraft(botId);
+      const select = panel.querySelector('select[data-b5-request-item]');
+      if (select) {
+        select.innerHTML = window.MCbotB5CraftRequestPanel.optionsHtml(items, draft, esc);
+        if (draft.itemId) select.value = draft.itemId;
       }
-      const draft = b5CraftDraft(bot.botId);
-      if (select && draft.itemId) select.value = draft.itemId;
+      const start = panel.querySelector('[data-action="b5-request-start"]');
+      if (start) start.disabled = false;
     } catch (error) { reportRendererError(error, 'b5-craft-items'); }
   }
 }
@@ -414,6 +419,7 @@ async function loadB5Journey() {
 function renderModes() {
   const bots = state.snapshot?.bots || [];
   $('#modeCards').innerHTML = bots.length ? bots.map(bot => botCard(bot, true)).join('') : '<div class="empty panel">Chưa có tiến trình bot.</div>';
+  hydrateB5CraftItems().catch(() => {});
 }
 
 // ---- Dev experience pages (render-only; data comes from the shared backend) ----
