@@ -18,7 +18,7 @@ const CHANNELS = Object.freeze([
     'mcbot:config:b5-craft:get', 'mcbot:config:b5-rules:get', 'mcbot:config:storage-protection:get',
     'mcbot:config:sky-auto-join:get', 'mcbot:config:collector:get', 'mcbot:config:fishing:get',
     'mcbot:logs', 'mcbot:diagnostics:list', 'mcbot:app:info', 'mcbot:update:local-status',
-    'mcbot:update:migration-status', 'mcbot:preferences:get', 'mcbot:secrets:status', 'mcbot:ai:status',
+    'mcbot:update:migration-status', 'mcbot:preferences:get', 'mcbot:secrets:status',
     'mcbot:renderer:error', 'mcbot:support:preview'
 ]);
 
@@ -70,7 +70,7 @@ async function run() {
     await clickButtonByName(window.webContents, 'Khởi động');
     await waitFor(window.webContents, "document.querySelector('#backendState')?.textContent.includes('Đang chạy')");
 
-    const pages = ['Bot', 'Chế độ', 'Tạo chế độ', 'Sự cố', 'Công cụ', 'Nhật ký', 'Chẩn đoán', 'AI Local', 'Cài đặt', 'Tổng quan'];
+    const pages = ['Bot', 'Chế độ', 'Tạo chế độ', 'Sự cố', 'Công cụ', 'Nhật ký', 'Chẩn đoán', 'Cài đặt', 'Tổng quan'];
     for (const page of pages) {
         await clickButtonByName(window.webContents, page);
         await waitFor(window.webContents, `document.querySelector('#pageTitle')?.textContent===${JSON.stringify(page)}`);

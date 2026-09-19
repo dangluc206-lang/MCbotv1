@@ -10,8 +10,7 @@ const ENTRIES = Object.freeze([
     { id: 'route-builder', label: 'Tạo chế độ', route: 'builder', group: 'BUILD', requirement: 'BACKEND_RUNNING' },
     { id: 'route-settings', label: 'Cấu hình an toàn', route: 'settings', group: 'MAINTAIN', requirement: 'NONE' },
     { id: 'route-diagnostics', label: 'Chẩn đoán kỹ thuật', route: 'diagnostics', group: 'ADVANCED', requirement: 'ADVANCED_PRESENTATION' },
-    { id: 'route-ai', label: 'Local AI', route: 'ai', group: 'ADVANCED', requirement: 'ADVANCED_PRESENTATION' }
-]);
+    ]);
 
 function search(query, { experienceLevel = 'standard', limit = 12 } = {}) {
     const needle = String(query || '').trim().toLocaleLowerCase('vi');

@@ -390,38 +390,6 @@
           <div class="panel output-panel"><div class="panel-title"><h2>Kết quả GUI</h2><button class="button ghost small" id="copyGuiBtn">Sao chép</button></div><pre id="guiOutput">Chưa có bản chụp trạng thái.</pre></div>
         </div>
       </section>
-
-      <section class="page" id="page-ai" data-page="ai" data-experience="advanced">
-        <div class="ai-layout">
-          <div class="panel ai-sidebar-panel">
-            <div class="panel-title"><div><h2>Local AI Agent</h2><p class="helper">AI đọc project qua tool nội bộ, không được truy cập .env/secret/node_modules/data/out.</p></div><span id="aiStatusTag" class="tag">CHƯA KẾT NỐI</span></div>
-            <label>Ollama / OpenAI-compatible URL<input id="aiBaseUrl" value="http://127.0.0.1:11434/v1" spellcheck="false"></label>
-            <div class="actions"><button class="button ghost" id="aiRefreshModels">Kiểm tra Ollama</button></div>
-            <label>Model<select id="aiModel"><option value="">Chưa tải model</option></select></label>
-            <label>Quyền của agent<select id="aiPermission"><option value="READ">READ · chỉ đọc/phân tích</option><option value="PATCH">PATCH · được sửa file</option><option value="DEVELOP">DEVELOP · sửa + test/validator</option><option value="ADMIN">ADMIN · DEVELOP + điều khiển bot whitelist</option></select></label>
-            <hr>
-            <label>Project workspace<input id="aiWorkspace" readonly placeholder="Chưa chọn project"></label>
-            <div class="actions"><button class="button primary" id="aiSelectWorkspace">Chọn project</button><button class="button ghost" id="aiInspectWorkspace">Quét lại</button></div>
-            <div class="backend-overview ai-workspace-stats"><div><span>Phiên bản</span><strong id="aiWorkspaceVersion">—</strong></div><div><span>File nguồn</span><strong id="aiWorkspaceFiles">—</strong></div><div><span>AGENTS</span><strong id="aiWorkspaceAgents">—</strong></div></div>
-            <p class="helper">Bản packaged cần chọn thư mục source project trên máy. Bản DEV có thể chọn chính thư mục MCbot hiện tại.</p>
-          </div>
-
-          <div class="panel ai-chat-panel">
-            <div class="panel-title"><div><h2>Chat với project</h2><p class="helper">Agent tự search/read code, sửa bằng patch và chạy check tùy theo quyền bạn chọn.</p></div><div class="actions compact"><button class="button ghost small" id="aiNewChat">Chat mới</button><button class="button ghost small" id="aiCopyLast">Sao chép trả lời</button></div></div>
-            <div class="ai-quick-actions">
-              <button class="button ghost small" data-ai-prompt="Đọc trạng thái runtime và log gần nhất. Phân tích bot đang làm gì, lỗi nào đáng chú ý và nguyên nhân gần nhất. Không sửa code.">Phân tích runtime</button>
-              <button class="button ghost small" data-ai-prompt="Audit luồng B5 hiện tại từ mode tới storage protection/crafting. Chỉ ra blocker hoặc điểm rủi ro dựa trên code hiện tại. Không sửa nếu tôi chưa yêu cầu.">Kiểm tra B5</button>
-              <button class="button ghost small" data-ai-prompt="Đọc AGENTS.md, RULES.md và ARCHITECTURE.md rồi tóm tắt các ràng buộc quan trọng mà mọi thay đổi code phải tuân theo.">Đọc luật project</button>
-            </div>
-            <div id="aiMessages" class="ai-messages"><div class="ai-empty">Chọn project + model rồi nhập yêu cầu. Ví dụ: “tìm nguyên nhân B5 bị timeout và sửa, sau đó chạy test liên quan”.</div></div>
-            <div id="aiTrace" class="ai-trace hidden"></div>
-            <div class="ai-composer">
-              <textarea id="aiPrompt" aria-label="Yêu cầu cho Local AI Agent" rows="4" placeholder="Ra lệnh cho Local AI Agent..." spellcheck="false"></textarea>
-              <div class="ai-composer-actions"><span id="aiBusyText" class="helper">Sẵn sàng.</span><button class="button primary" id="aiSend">Gửi</button></div>
-            </div>
-          </div>
-        </div>
-      </section>
     </main>
   </div>
 

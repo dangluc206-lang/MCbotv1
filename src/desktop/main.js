@@ -11,7 +11,6 @@ const DesktopRuntimeBootstrap = require('./use-cases/DesktopRuntimeBootstrap');
 const LocalZipUpdateService = require('./update/LocalZipUpdateService');
 require('./update/local-update-helper');
 const localUpdateHelperPath = require.resolve('./update/local-update-helper');
-const LocalAiService = require('../ai/LocalAiService');
 const { handleSquirrelLifecycle } = require('./update/SquirrelLifecycle');
 const { runDesktopShutdownSequence } = require('./DesktopShutdownSequence');
 const { CrashMarkerStore, createDesktopFatalRecovery } = require('./DesktopFatalRecovery');
@@ -40,7 +39,6 @@ let windowStateTimer = null;
 let localUpdateService = null;
 let runtimeMigrator = null;
 let runtimeBootstrap = null;
-let aiService = null;
 let readinessService = null;
 let operatorSnapshotDelivery = null;
 let rendererRecovery = { startedAt: 0, count: 0 };
@@ -262,18 +260,6 @@ function registerIpc() {
     safeHandle('mcbot:update:local-select', () => selectLocalUpdateZip());
     safeHandle('mcbot:update:local-clear', () => localUpdateService?.clear?.());
     safeHandle('mcbot:update:local-install', () => installLocalUpdateZip());
-    safeHandle('mcbot:ai:status', options => aiService.status(options || {}));
-    safeHandle('mcbot:ai:workspace:select', async () => {
-        const result = await dialog.showOpenDialog(mainWindow || undefined, {
-            title: 'Chọn thư mục project cho Local AI',
-            properties: ['openDirectory']
-        });
-        if (result.canceled || !result.filePaths?.[0]) return { canceled: true };
-        const workspace = await aiService.inspectWorkspace(result.filePaths[0]);
-        return { canceled: false, workspace };
-    });
-    safeHandle('mcbot:ai:workspace:inspect', workspaceRoot => aiService.inspectWorkspace(workspaceRoot));
-    safeHandle('mcbot:ai:chat', request => aiService.runAgent(request || {}));
     safeHandle('mcbot:renderer:error', payload => controller.reportRendererError(payload));
     safeHandle('mcbot:bot:connect', botId => controller.connect(botId));
     safeHandle('mcbot:bot:disconnect', botId => controller.disconnect(botId));
@@ -545,13 +531,7 @@ if (hasSingleInstanceLock) {
             send: snapshot => {
                 if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) mainWindow.webContents.send('mcbot:operator-snapshot', snapshot);
             }
-        });
-        aiService = new LocalAiService({ controllerProvider: () => controller });
-        registerIpc();
-        controller.onLog(record => {
-            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mcbot:log', record);
-            if (record?.level === 'error') notify('MCbot error', `${record.scope || 'Application'}: ${record.message || 'Unknown error'}`, `${record.scope}:${record.message}`);
-        });
+        });        });
         controller.onDevLog(record => {
             if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mcbot:dev-log', record);
         });

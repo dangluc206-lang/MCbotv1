@@ -17,8 +17,7 @@ const SAFE_NOOP_CHANNELS = new Set([
     'mcbot:custom-mode:save', 'mcbot:custom-mode:delete', 'mcbot:config:backup', 'mcbot:gui:inspect',
     'mcbot:diagnostics:read', 'mcbot:support:export', 'mcbot:support:preview', 'mcbot:secrets:set', 'mcbot:secrets:clear', 'mcbot:secrets:reset', 'mcbot:preferences:set',
     'mcbot:shell:project', 'mcbot:shell:logs', 'mcbot:shell:backups', 'mcbot:shell:support',
-    'mcbot:update:local-select', 'mcbot:update:local-clear', 'mcbot:update:local-install', 'mcbot:update:rollback-config',
-    'mcbot:ai:workspace:select', 'mcbot:ai:workspace:inspect', 'mcbot:ai:chat'
+    'mcbot:update:local-select', 'mcbot:update:local-clear', 'mcbot:update:local-install', 'mcbot:update:rollback-config'
 ]);
 
 function clone(value) {
@@ -124,7 +123,6 @@ class FakeDesktopRuntime {
         case 'mcbot:update:migration-status': return { lastBackup: null };
         case 'mcbot:preferences:get': return { closeToTray: false, notifyErrors: true, snapshotIntervalMs: 900, startBackendOnLaunch: false, preventSystemSleepWhileActive: false, launchAtLogin: false, experienceLevel:'advanced', colorTheme:'dark', firstRun:{ status:'COMPLETED', step:6, startedAt:FIXED_TIME, completedAt:FIXED_TIME, durationMs:0 }, loginItem: { supported: false, openAtLogin: false } };
         case 'mcbot:secrets:status': return { state: 'NOT_CONFIGURED', encryptionAvailable: true, keys: [], recovery: null };
-        case 'mcbot:ai:status': return { models: [] };
         case 'mcbot:renderer:error': this.rendererErrors.push(clone(args[0])); return { recorded: true };
         default:
             if (SAFE_NOOP_CHANNELS.has(channel)) return { accepted: true };

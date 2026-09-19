@@ -772,125 +772,6 @@ async function refreshDiagnostics() {
   } catch (error) { toast(error.message, 'error'); }
 }
 
-
-function aiLocalConfig() {
-  return {
-    baseUrl: $('#aiBaseUrl')?.value?.trim() || localStorage.getItem('mcbot.ai.baseUrl') || 'http://127.0.0.1:11434/v1',
-    model: $('#aiModel')?.value || localStorage.getItem('mcbot.ai.model') || '',
-    permission: $('#aiPermission')?.value || localStorage.getItem('mcbot.ai.permission') || 'READ',
-    workspaceRoot: $('#aiWorkspace')?.value || localStorage.getItem('mcbot.ai.workspace') || ''
-  };
-}
-
-function persistAiLocalConfig() {
-  const config = aiLocalConfig();
-  localStorage.setItem('mcbot.ai.baseUrl', config.baseUrl);
-  localStorage.setItem('mcbot.ai.model', config.model);
-  localStorage.setItem('mcbot.ai.permission', config.permission);
-  if (config.workspaceRoot) localStorage.setItem('mcbot.ai.workspace', config.workspaceRoot);
-}
-
-function renderAiWorkspace() {
-  const workspace = state.ai.workspace;
-  $('#aiWorkspaceVersion').textContent = workspace?.version || '—';
-  $('#aiWorkspaceFiles').textContent = workspace?.fileCount ?? '—';
-  $('#aiWorkspaceAgents').textContent = workspace ? (workspace.hasAgents ? 'Có' : 'Không') : '—';
-}
-
-function renderAiMessages() {
-  const target = $('#aiMessages');
-  if (!target) return;
-  const messages = state.ai.messages || [];
-  target.innerHTML = messages.length ? messages.map(message => `<div class="ai-message ${esc(message.role)}"><span class="ai-message-role">${message.role === 'user' ? 'Bạn' : 'Local AI'}</span>${esc(message.content)}</div>`).join('') : '<div class="ai-empty">Chọn project + model rồi nhập yêu cầu. Ví dụ: “tìm nguyên nhân B5 bị timeout và sửa, sau đó chạy test liên quan”.</div>';
-  target.scrollTop = target.scrollHeight;
-}
-
-function renderAiTrace() {
-  const box = $('#aiTrace');
-  if (!box) return;
-  const trace = state.ai.trace || [];
-  box.classList.toggle('hidden', !trace.length);
-  box.textContent = trace.map((entry, index) => `${index + 1}. ${entry.success ? 'OK' : 'FAIL'} ${entry.name} · ${entry.elapsedMs}ms\n${entry.summary || ''}`).join('\n\n');
-}
-
-async function inspectAiWorkspace() {
-  const root = $('#aiWorkspace').value.trim();
-  if (!root) throw new Error('Chưa chọn thư mục project cho Local AI.');
-  state.ai.workspace = await api(window.mcbot.inspectAiWorkspace(root));
-  localStorage.setItem('mcbot.ai.workspace', state.ai.workspace.root);
-  $('#aiWorkspace').value = state.ai.workspace.root;
-  renderAiWorkspace();
-  return state.ai.workspace;
-}
-
-async function refreshAiModels() {
-  persistAiLocalConfig();
-  const statusTag = $('#aiStatusTag');
-  statusTag.textContent = 'ĐANG KIỂM TRA';
-  try {
-    const status = await api(window.mcbot.aiStatus({ baseUrl: $('#aiBaseUrl').value.trim() }));
-    state.ai.models = status.models || [];
-    const preferred = localStorage.getItem('mcbot.ai.model') || $('#aiModel').value;
-    syncSelect($('#aiModel'), state.ai.models.map(model => `<option value="${esc(model.id)}">${esc(model.id)}</option>`).join('') || '<option value="">Không có model</option>', preferred);
-    if (!$('#aiModel').value && state.ai.models[0]) $('#aiModel').value = state.ai.models[0].id;
-    statusTag.textContent = 'ĐÃ KẾT NỐI';
-    persistAiLocalConfig();
-    return status;
-  } catch (error) {
-    statusTag.textContent = 'MẤT KẾT NỐI';
-    throw error;
-  }
-}
-
-async function sendAiPrompt(promptOverride = null) {
-  if (state.ai.busy) return;
-  const prompt = String(promptOverride ?? $('#aiPrompt').value).trim();
-  if (!prompt) return;
-  const config = aiLocalConfig();
-  if (!config.workspaceRoot) throw new Error('Chưa chọn project workspace.');
-  if (!config.model) throw new Error('Chưa chọn model Local AI.');
-  persistAiLocalConfig();
-  state.ai.busy = true;
-  $('#aiSend').disabled = true;
-  $('#aiBusyText').textContent = 'Agent đang đọc project / chạy tool…';
-  const priorMessages = state.ai.messages.slice(-24).map(message => ({ role: message.role, content: message.content }));
-  state.ai.messages.push({ role: 'user', content: prompt });
-  $('#aiPrompt').value = '';
-  renderAiMessages();
-  try {
-    const result = await api(window.mcbot.aiChat({
-      workspaceRoot: config.workspaceRoot,
-      baseUrl: config.baseUrl,
-      model: config.model,
-      permission: config.permission,
-      messages: priorMessages,
-      prompt
-    }));
-    state.ai.messages.push({ role: 'assistant', content: result.content || '(AI không trả nội dung)' });
-    state.ai.trace = result.trace || [];
-    state.ai.workspace = { ...(state.ai.workspace || {}), ...(result.workspace || {}) };
-    renderAiMessages();
-    renderAiTrace();
-    renderAiWorkspace();
-    $('#aiBusyText').textContent = `Xong · ${result.toolRounds ?? 0} vòng tool · quyền ${result.permission || config.permission}`;
-    return result;
-  } finally {
-    state.ai.busy = false;
-    $('#aiSend').disabled = false;
-  }
-}
-
-function loadAiLocalSettings() {
-  $('#aiBaseUrl').value = localStorage.getItem('mcbot.ai.baseUrl') || 'http://127.0.0.1:11434/v1';
-  $('#aiPermission').value = localStorage.getItem('mcbot.ai.permission') || 'READ';
-  $('#aiWorkspace').value = localStorage.getItem('mcbot.ai.workspace') || '';
-  const savedModel = localStorage.getItem('mcbot.ai.model') || '';
-  if (savedModel) $('#aiModel').innerHTML = `<option value="${esc(savedModel)}">${esc(savedModel)}</option>`;
-  if ($('#aiWorkspace').value) inspectAiWorkspace().catch(error => reportRendererError(error, 'ai-workspace-auto-inspect'));
-  renderAiMessages();
-  renderAiTrace();
-}
-
 async function runAction({ key, button = null, success, fn, refresh = true }) {
   if (key && state.pending.has(key)) return;
   const originalText = button?.textContent;
@@ -1013,7 +894,6 @@ function switchPage(page) {
   if (page === 'settings') { loadBackupCatalog().catch(error => toast(error.message, 'error')); if (state.snapshot?.lifecycle === 'RUNNING' && state.configGroups.length) loadAdvancedConfig().catch(error => toast(error.message, 'error')); }
   if (page === 'logs') { state.logUnread = 0; renderLogs(); }
   if (page === 'diagnostics') refreshDiagnostics();
-  if (page === 'ai') { renderAiMessages(); renderAiTrace(); if (!state.ai.models.length) refreshAiModels().catch(error => reportRendererError(error, 'ai-model-auto-refresh')); }
   if (page === 'bot-detail') renderBotDetail();
   if (page === 'dev-overview') { renderDevOverview(); loadIncidents().catch(() => {}); }
   if (page === 'inspector') renderInspector().catch(error => toast(error.message, 'error'));
@@ -1732,29 +1612,6 @@ function bindEvents() {
     if (!await confirmInApp({ title:`Cập nhật lên ${version}?`, message:'MCbot sẽ sao lưu cấu hình, dừng bot/chế độ, thoát và áp dụng gói ZIP đã xác minh.', destructive:true })) return;
     runAction({ key: 'local-update-install', button: event.currentTarget, success: 'Đã giao gói cập nhật cho tiến trình updater.', refresh: false, fn: () => api(window.mcbot.installLocalUpdateZip()) }).catch(() => {});
   };
-
-
-  $('#aiBaseUrl').addEventListener('change', persistAiLocalConfig);
-  $('#aiModel').addEventListener('change', persistAiLocalConfig);
-  $('#aiPermission').addEventListener('change', persistAiLocalConfig);
-  $('#aiRefreshModels').onclick = event => runAction({ key: 'ai-models', button: event.currentTarget, success: 'Đã kết nối Local AI.', refresh: false, fn: refreshAiModels }).catch(() => {});
-  $('#aiSelectWorkspace').onclick = event => runAction({ key: 'ai-workspace-select', button: event.currentTarget, success: null, refresh: false, fn: async () => {
-    const selected = await api(window.mcbot.selectAiWorkspace());
-    if (selected?.canceled) return selected;
-    state.ai.workspace = selected.workspace;
-    $('#aiWorkspace').value = selected.workspace.root;
-    persistAiLocalConfig();
-    renderAiWorkspace();
-    toast(`Đã chọn project ${selected.workspace.name || selected.workspace.root}.`);
-    return selected;
-  }}).catch(() => {});
-  $('#aiInspectWorkspace').onclick = event => runAction({ key: 'ai-workspace-inspect', button: event.currentTarget, success: 'Đã quét lại project.', refresh: false, fn: inspectAiWorkspace }).catch(() => {});
-  $('#aiSend').onclick = () => sendAiPrompt().catch(error => { $('#aiBusyText').textContent = `Lỗi: ${error.message}`; toast(error.message, 'error'); });
-  $('#aiPrompt').addEventListener('keydown', event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); sendAiPrompt().catch(error => toast(error.message, 'error')); } });
-  $('#aiNewChat').onclick = () => { state.ai.messages = []; state.ai.trace = []; renderAiMessages(); renderAiTrace(); $('#aiBusyText').textContent = 'Sẵn sàng.'; };
-  $('#aiCopyLast').onclick = async () => { const last = [...state.ai.messages].reverse().find(message => message.role === 'assistant'); if (!last) return; await navigator.clipboard.writeText(last.content); toast('Đã sao chép trả lời AI.'); };
-  $$('.ai-quick-actions [data-ai-prompt]').forEach(button => button.onclick = () => sendAiPrompt(button.dataset.aiPrompt).catch(error => toast(error.message, 'error')));
-  $('#rollbackConfigMigration').onclick = async event => { if (!await confirmInApp({ title:'Khôi phục cấu hình trước migration?', message:'Hệ thống nền có thể được khởi động lại sau khi rollback được xác minh.', destructive:true })) return; runAction({ key: 'update-rollback-config', button: event.currentTarget, success: 'Đã khôi phục cấu hình trước migration.', refresh: false, fn: async () => { const result = await api(window.mcbot.rollbackConfigMigration()); await loadUpdateStatus(); return result; } }).catch(() => {}); };
 
   $('#savePreferences').onclick = event => runAction({ key: 'save-preferences', button: event.currentTarget, success: 'Đã lưu tùy chọn phần mềm.', refresh: false, fn: async () => {
     state.preferences = await api(window.mcbot.setPreferences({ closeToTray: $('#prefCloseToTray').checked, notifyErrors: $('#prefNotifyErrors').checked, startBackendOnLaunch: $('#prefAutoStart').checked, preventSystemSleepWhileActive: $('#prefPreventSleep').checked, launchAtLogin: $('#prefLaunchAtLogin').checked, snapshotIntervalMs: Number($('#prefSnapshotInterval').value), experienceLevel:$('#prefExperienceLevel').value, colorTheme:$('#prefColorTheme').value }));
