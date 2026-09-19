@@ -43,11 +43,6 @@
       "cleanupPolicy": "store-owned-files"
     },
     {
-      "file": "src/ai/knowledge/ProjectWorkspace.js",
-      "scope": "configured-project-workspace",
-      "cleanupPolicy": "workspace-guarded"
-    },
-    {
       "file": "src/gui/observation/GuiObservationStore.js",
       "scope": "runtime-gui-observations",
       "cleanupPolicy": "store-owned-files"

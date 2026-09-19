@@ -35,7 +35,6 @@ const state = {
   b5Journey: [],
   configWorkspace: null,
   backupCatalog: [],
-  ai: { workspace: null, models: [], messages: [], trace: [], busy: false },
   devLogs: [],
   devLogsLoaded: false,
   incidentDebugId: null,

@@ -59,11 +59,7 @@
       "classification": "CURRENT"
     },
     {
-      "area": "ai",
-      "files": 5,
-      "owner": "src/ai/",
-      "layer": "application-support",
-      "classification": "CURRENT"
+
     },
     {
       "area": "bootstrap",
@@ -228,8 +224,7 @@
       {
         "file": "src/desktop/main.js",
         "exists": true,
-        "directLocalDependencies": [
-          "src/ai/LocalAiService.js",
+        "directLocalDependencies": [ 
           "src/desktop/DesktopController.js",
           "src/desktop/DesktopFatalRecovery.js",
           "src/desktop/DesktopPreferenceStore.js",
@@ -338,11 +333,6 @@
       }
     ],
     "runtimeReachableSourceFiles": [
-      "src/ai/AgentSession.js",
-      "src/ai/LocalAiService.js",
-      "src/ai/knowledge/ProjectWorkspace.js",
-      "src/ai/providers/OllamaProvider.js",
-      "src/ai/tools/AiToolRegistry.js",
       "src/bootstrap/RuntimeEnvironment.js",
       "src/bootstrap/createApplication.js",
       "src/bootstrap/createBotRuntime.js",
@@ -702,11 +692,6 @@
       "src/shared/utils/object.js"
     ],
     "projectReachableSourceFiles": [
-      "src/ai/AgentSession.js",
-      "src/ai/LocalAiService.js",
-      "src/ai/knowledge/ProjectWorkspace.js",
-      "src/ai/providers/OllamaProvider.js",
-      "src/ai/tools/AiToolRegistry.js",
       "src/bootstrap/RuntimeEnvironment.js",
       "src/bootstrap/createApplication.js",
       "src/bootstrap/createBotRuntime.js",

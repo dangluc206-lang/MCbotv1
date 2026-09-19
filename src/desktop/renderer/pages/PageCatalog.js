@@ -24,6 +24,5 @@
     tools:Object.freeze({ title:'Dev · Công cụ', subtitle:'Trung tâm lệnh và kiểm tra GUI', group:'DEV' }),
     diagnostics:Object.freeze({ title:'Dev · Chẩn đoán', subtitle:'Lỗi khi chạy và gói hỗ trợ', group:'DEV' }),
     'config-debug':Object.freeze({ title:'Dev · Configuration Debug', subtitle:'Raw config, effective config và diff', group:'DEV' }),
-    ai:Object.freeze({ title:'Dev · AI Local', subtitle:'Development agent bị giới hạn permission và workspace', group:'DEV' })
-  });
+      });
 }));
