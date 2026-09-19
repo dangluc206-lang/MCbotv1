@@ -41,7 +41,6 @@
     "scripts/measure-operator-performance.js",
     "scripts/run-quality-gates.js",
     "scripts/validate-support-bundle.js",
-    "src/ai/knowledge/ProjectWorkspace.js",
     "src/bootstrap/RuntimeEnvironment.js",
     "src/bootstrap/registerBotServices.js",
     "src/desktop/BootFailureContract.js",

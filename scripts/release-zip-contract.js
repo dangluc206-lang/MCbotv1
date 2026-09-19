@@ -7,14 +7,6 @@ const VERSION = 1;
 
 const REQUIRED_FILES = Object.freeze([
     '.env.example',
-    'AGENTS.md',
-    'ARCHITECTURE.md',
-    'JS_RESPONSIBILITIES.md',
-    'README.md',
-    'RELEASE_NOTES.txt',
-    'RULES.md',
-    'SERVER_BEHAVIOR.md',
-    'START_HERE.txt',
     'architecture/baseline/current.json',
     'architecture/catalog.json',
     'docs/architecture-roadmap/15_WORK_PACKAGE_INDEX.md',

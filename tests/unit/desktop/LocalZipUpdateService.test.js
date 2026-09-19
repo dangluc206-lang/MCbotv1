@@ -118,7 +118,7 @@ test('LocalZipUpdateService allows deletion manifest for generated out root but 
 });
 
 test('LocalZipUpdateService rejects every delete manifest path outside exact generated out root', async t => {
-    for (const relative of ['src/a.js', 'package.json', 'RULES.md', 'config/storage/kho.json', 'data/runtime', '.env', 'config/modes/custom', 'out/generated']) {
+    for (const relative of ['src/a.js', 'package.json', 'config/storage/kho.json', 'data/runtime', '.env', 'config/modes/custom', 'out/generated']) {
         const fx = await fixture({ manifest: { delete: [relative] } });
         t.after(() => fs.rmSync(fx.root, { recursive: true, force: true }));
         await assert.rejects(fx.service.inspect(fx.zipPath), error => error?.code === 'LOCAL_UPDATE_DELETE_PATH');

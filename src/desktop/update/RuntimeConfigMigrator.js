@@ -442,7 +442,7 @@ class RuntimeConfigMigrator {
             report.migratedFiles = migration.files;
             report.migrationReports = migration.reports || [];
 
-            for (const file of ['.env.example', 'SERVER_BEHAVIOR.md']) {
+            for (const file of ['.env.example',]) {
                 const source = path.join(this.templateRoot, file);
                 const destination = path.join(this.runtimeRoot, file);
                 if (fs.existsSync(source) && !fs.existsSync(destination)) await this.fs.copyFile(source, destination);

@@ -25,7 +25,6 @@ const files = [
     'src/discord/panels/DiscordPanelStore.js',
     'src/discord/errors/DiscordErrorReporter.js',
     'src/modes/composable/CustomModeStore.js',
-    'src/ai/knowledge/ProjectWorkspace.js',
     'src/desktop/main.js',
     'scripts/create-local-update-package.js'
 ];
