@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "baselineVersion": 1,
   "workPackage": "WP-001",
-  "generatedAt": "2026-09-20T12:52:01.282Z",
+  "generatedAt": "2026-09-20T13:05:31.400Z",
   "releaseVersion": "2.7.67",
   "scope": {
     "root": ".",
@@ -39,7 +39,7 @@
       "inScopeChangedPaths": 0
     },
     "reason": "Standalone source tree; version-control metadata is intentionally not required.",
-    "sourceFingerprintSha256": "2703009469b73b09f1052b5c7324796c987bce3a8633d5759100450b4b92870d"
+    "sourceFingerprintSha256": "30a899443d3dc83d5403e8864d5a43fa477b4ce40be09da03c5b07b59e132c22"
   },
   "counts": {
     "files": 889,

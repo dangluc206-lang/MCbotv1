@@ -4,7 +4,7 @@
   "generatedAt": "2026-08-22",
   "profile": {
     "id": "default",
-    "revision": "r-1344d60a53f3",
+    "revision": "r-3c7ee9ff60eb",
     "implementation": "minerua",
     "endpointHost": "mc.minerua.com"
   },
@@ -819,6 +819,7 @@
         "targetId": "super_alloy",
         "policyKeys": [
           "b1SupplyMode",
+          "b2InputSource",
           "b3AllMinEmptySlots",
           "inventorySafetyEmptySlots",
           "personalVaultBackpressure",
@@ -897,9 +898,9 @@
           "emerald_block": "EMERALD_BLOCK"
         },
         "allowAll": false,
-        "openSettleMs": 250,
+        "openSettleMs": 300,
         "closeSettleMs": 180,
-        "updateTimeoutMs": 2500,
+        "updateTimeoutMs": 1500,
         "openAfterCloseSettleMs": 1000,
         "blockOnly": true,
         "reserveCoverage": 1.5,
