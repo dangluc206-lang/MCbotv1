@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "sourceTreeSha": "3f166038b2336bf2fa0a0941c397e8d76aadbf58",
+  "usage": "Use this file first. It maps task type to the smallest useful context set.",
+  "alwaysRead": [
+    ".clinerules/00-core.md",
+    ".clinerules/01-verification.md"
+  ],
+  "conditionalRules": {
+    "serverTasks": ".clinerules/02-server.md",
+    "craftingTasks": ".clinerules/03-crafting.md"
+  },
+  "taskMap": {
+    "bug": {
+      "start": [
+        ".cline/routing.json",
+        ".cline/ownership.json"
+      ],
+      "then": [
+        "direct caller/callee",
+        "targeted test",
+        "relevant config"
+      ]
+    },
+    "crafting": {
+      "read": [
+        ".cline/crafting-contract.json",
+        ".cline/routing.json#crafting",
+        ".cline/server-profile.json"
+      ]
+    },
+    "removeB5Center": {
+      "read": [
+        ".cline/crafting-contract.json",
+        ".cline/routing.json#crafting",
+        ".cline/routing.json#craftingB5Compatibility",
+        ".cline/architecture.json",
+        ".cline/ownership.json"
+      ],
+      "goal": "Move generic crafting authority away from B5-specific classes without changing verified server mechanics."
+    },
+    "serverGUI": {
+      "read": [
+        ".cline/server-profile.json",
+        ".cline/routing.json#gui",
+        ".cline/routing.json#storage"
+      ]
+    },
+    "reconnect": {
+      "read": [
+        ".cline/architecture.json",
+        ".cline/ownership.json",
+        ".cline/routing.json#connectionReconnect"
+      ]
+    },
+    "desktop": {
+      "read": [
+        ".cline/routing.json#desktop",
+        ".cline/architecture.json"
+      ]
+    },
+    "mode": {
+      "read": [
+        ".cline/architecture.json",
+        ".cline/routing.json#modePlatform"
+      ]
+    },
+    "configuration": {
+      "read": [
+        ".cline/routing.json#configuration",
+        ".cline/architecture.json"
+      ]
+    }
+  },
+  "neverStartByReadingEverything": true
+}

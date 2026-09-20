@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 1,
+  "sourceTreeSha": "3f166038b2336bf2fa0a0941c397e8d76aadbf58",
+  "layers": [
+    "bootstrap",
+    "core/bot",
+    "mode/workflow",
+    "service/capability",
+    "adapter/server-feature",
+    "Mineflayer/Minecraft"
+  ],
+  "runtimeScopes": {
+    "application": [
+      "configuration",
+      "logging",
+      "bot-registry",
+      "discord",
+      "fleet-scheduling"
+    ],
+    "bot": [
+      "runtime-state",
+      "mode-coordination",
+      "connection",
+      "operations",
+      "gui",
+      "movement",
+      "inventory",
+      "server-features"
+    ],
+    "connection": [
+      "raw-client-listeners",
+      "packet-observation",
+      "generation-owned-waiters"
+    ],
+    "operation": [
+      "cancellation",
+      "timeouts",
+      "locks",
+      "cleanup",
+      "side-effect-evidence"
+    ]
+  },
+  "exclusiveSideEffects": {
+    "server-command": {
+      "owner": "src/commands/CommandExecutor.js",
+      "operation": "bot.chat()"
+    },
+    "gui-click": {
+      "owner": "src/gui/click/ClickExecutor.js",
+      "operation": "clickWindow()"
+    },
+    "client-end": {
+      "owner": "src/connection/ConnectionManager.js",
+      "operation": "client.end()"
+    },
+    "fishing-raw-protocol": {
+      "owner": "src/modes/fishing/ConnectionPacketObserver.js",
+      "operation": "bot._client"
+    }
+  },
+  "purityBoundaries": {
+    "plannerGlob": "src/planning/**/*.js",
+    "forbidden": [
+      "clickWindow()",
+      "bot.chat()",
+      "client.end()",
+      "setTimeout()",
+      "setInterval()"
+    ]
+  },
+  "corePlatform": {
+    "capabilityRegistry": "src/core/registry/CapabilityRegistry.js",
+    "modeCatalog": "src/modes/ModeCatalog.js",
+    "runtimeModeRegistry": "src/modes/RuntimeModeRegistry.js",
+    "managedMode": "src/modes/ManagedMode.js",
+    "modeContext": "src/modes/ModeContext.js",
+    "modeControl": "src/modes/ModeControlService.js",
+    "taskSupervisor": "src/core/TaskSupervisor.js",
+    "modeCoordinator": "src/modes/ModeCoordinator.js"
+  },
+  "serverProfileBoundary": {
+    "profile": "src/server-profiles/ServerProfile.js",
+    "registry": "src/server-profiles/ServerProfileRegistry.js",
+    "factory": "src/server-profiles/createServerProfileRegistry.js",
+    "defaultImplementation": "minerua-compat"
+  },
+  "startup": {
+    "desktop": [
+      "src/desktop/main.js",
+      "src/desktop/use-cases/DesktopRuntimeBootstrap.js",
+      "src/desktop/DesktopController.js",
+      "src/bootstrap/createApplication.js"
+    ],
+    "core": [
+      "src/index.js",
+      "src/bootstrap/createApplication.js"
+    ]
+  },
+  "currentBuiltinModes": {
+    "b5-craft": {
+      "service": "b5CraftMode",
+      "requiredCapabilities": [
+        "island",
+        "storage",
+        "b1-materials",
+        "smelting",
+        "b5-planning",
+        "b5-automation",
+        "crafting",
+        "personal-vault"
+      ],
+      "requestedResources": [
+        "primary-mode"
+      ],
+      "currentMetadata": {
+        "kind": "builtin",
+        "recommended": true
+      }
+    },
+    "collector-b5": {
+      "service": "collectorB5Mode",
+      "requiredCapabilities": [
+        "island",
+        "movement",
+        "storage",
+        "crafting",
+        "personal-vault"
+      ],
+      "requestedResources": [
+        "primary-mode"
+      ],
+      "currentMetadata": {
+        "kind": "builtin",
+        "legacy": true
+      }
+    },
+    "fishing": {
+      "service": "fishingMode",
+      "requiredCapabilities": [
+        "afk",
+        "fishing",
+        "island",
+        "movement"
+      ],
+      "requestedResources": [
+        "primary-mode"
+      ],
+      "currentMetadata": {
+        "kind": "builtin"
+      }
+    },
+    "custom": {
+      "source": "config/modes/custom/*.json",
+      "registration": "src/bootstrap/createModeCatalog.js"
+    }
+  },
+  "configAuthority": {
+    "specModule": "src/configuration/ConfigSpecs.js",
+    "validation": [
+      "src/configuration/ConfigLoader.js",
+      "src/configuration/ConfigValidator.js",
+      "src/configuration/ConfigurationContractValidator.js"
+    ],
+    "botProfiles": "config/bots",
+    "customModes": "config/modes/custom"
+  }
+}

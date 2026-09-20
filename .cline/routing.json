@@ -1,0 +1,319 @@
+{
+  "schemaVersion": 1,
+  "sourceTreeSha": "3f166038b2336bf2fa0a0941c397e8d76aadbf58",
+  "rule": "Start with listed files, expand only when root cause is not explained.",
+  "tasks": {
+    "startup": {
+      "files": [
+        "src/index.js",
+        "src/bootstrap/createApplication.js",
+        "src/bootstrap/RuntimeEnvironment.js",
+        "src/bootstrap/loadConfiguration.js",
+        "src/bootstrap/registerSharedServices.js",
+        "src/bootstrap/registerBotServices.js",
+        "src/bootstrap/registerModules.js",
+        "src/desktop/main.js",
+        "src/desktop/use-cases/DesktopRuntimeBootstrap.js"
+      ],
+      "configs": [
+        "config/app.json",
+        "config/server.json"
+      ],
+      "tests": [
+        "tests/integration/bootstrap/createApplication.test.js"
+      ]
+    },
+    "multiBot": {
+      "files": [
+        "src/bot/BotRegistry.js",
+        "src/bot/BotRuntime.js",
+        "src/bot/BotContext.js",
+        "src/bot/BotState.js",
+        "src/connection/ConnectionManager.js",
+        "src/connection/ReconnectManager.js",
+        "src/bootstrap/createConnectionStateBinding.js",
+        "src/modes/ModeCoordinator.js",
+        "src/fleet/FleetScheduler.js"
+      ],
+      "configs": [
+        "config/bots/*.json",
+        "config/app.json"
+      ],
+      "tests": [
+        "tests/integration/multi-bot/isolation.test.js"
+      ]
+    },
+    "connectionReconnect": {
+      "files": [
+        "src/connection/ConnectionManager.js",
+        "src/connection/ReconnectManager.js",
+        "src/connection/ConnectionAttemptCoordinator.js",
+        "src/connection/ConnectionFailureSignalContract.js",
+        "src/connection/ConnectionSuccessResultContract.js",
+        "src/bootstrap/createConnectionStateBinding.js",
+        "src/core/events/EventEnvelope.js",
+        "src/core/events/EventScopeRegistry.js"
+      ],
+      "configs": [
+        "config/app.json",
+        "config/recovery/daily.json",
+        "config/server.json"
+      ],
+      "tests": [
+        "tests/unit/connection/ConnectionManager.test.js"
+      ]
+    },
+    "gui": {
+      "files": [
+        "src/gui/GuiManager.js",
+        "src/gui/GuiSession.js",
+        "src/gui/GuiState.js",
+        "src/gui/detection/GuiDetector.js",
+        "src/gui/knowledge/GuiKnowledgeRegistry.js",
+        "src/gui/slots/SlotResolver.js",
+        "src/gui/click/ClickQueue.js",
+        "src/gui/click/ClickGuard.js",
+        "src/gui/click/ClickExecutor.js",
+        "src/gui/click/ClickVerifier.js"
+      ],
+      "configs": [
+        "config/gui/windows.json",
+        "config/gui/identity.json",
+        "config/gui/observation.json",
+        "config/gui/slots.json"
+      ],
+      "tests": [
+        "tests/unit/gui/Gui.test.js"
+      ]
+    },
+    "itemsInventory": {
+      "files": [
+        "src/items/ItemIdentity.js",
+        "src/items/ItemNormalizer.js",
+        "src/items/ItemResolver.js",
+        "src/items/matching/IdentityMatcher.js",
+        "src/items/inventory/InventoryReader.js",
+        "src/items/inventory/InventoryScanner.js",
+        "src/items/inventory/InventoryCounter.js",
+        "src/items/inventory/InventorySnapshot.js"
+      ],
+      "configs": [
+        "config/items/items.json",
+        "config/inventory/observation.json"
+      ],
+      "tests": [
+        "tests/unit/items/Items.test.js"
+      ]
+    },
+    "storage": {
+      "files": [
+        "src/server-features/storage/KhoService.js",
+        "src/server-features/storage/KhoReader.js",
+        "src/server-features/storage/KhoCapacityReader.js",
+        "src/server-features/storage/StorageTextParser.js",
+        "src/server-features/storage/KhoSellOperation.js",
+        "src/server-features/storage/SellGuiReader.js",
+        "src/server-features/storage/B1StorageMaterialService.js",
+        "src/server-features/storage/KhoWithdrawOperation.js",
+        "src/planning/storage/B1WithdrawQuantityResolver.js",
+        "src/planning/storage/B1InventoryWithdrawalPlanner.js"
+      ],
+      "configs": [
+        "config/storage/kho.json",
+        "config/minerals/conversions.json",
+        "config/smelting/recipes.json"
+      ],
+      "tests": [
+        "tests/unit/server-features/Storage.test.js",
+        "tests/unit/server-features/KhoSellOperation.test.js",
+        "tests/unit/server-features/KhoWithdrawOperation.test.js",
+        "tests/unit/server-features/B1StorageMaterialService.test.js"
+      ]
+    },
+    "personalVault": {
+      "files": [
+        "src/server-features/personal-vault/PersonalVaultReader.js",
+        "src/server-features/personal-vault/PersonalVaultService.js",
+        "src/server-features/personal-vault/PersonalVaultSnapshot.js",
+        "src/server-features/personal-vault/PersonalVaultTransfer.js"
+      ],
+      "configs": [
+        "config/personal-vault/pv2.json"
+      ],
+      "tests": [
+        "tests/unit/server-features/PersonalVaultIdentityBinding.test.js",
+        "tests/unit/server-features/PersonalVaultServiceReuse.test.js"
+      ]
+    },
+    "crafting": {
+      "files": [
+        "src/planning/crafting/CraftingPlanner.js",
+        "src/planning/crafting/CraftingChainPlanner.js",
+        "src/planning/crafting/MaterialCalculator.js",
+        "src/planning/crafting/CraftingPlan.js",
+        "src/planning/crafting/CraftingStep.js",
+        "src/server-features/crafting/CraftPlanningService.js",
+        "src/server-features/crafting/CraftingRecipeRegistry.js",
+        "src/server-features/crafting/CraftingQuantityResolver.js",
+        "src/server-features/crafting/CraftingOperation.js",
+        "src/server-features/crafting/CraftingOutcomeClassifier.js",
+        "src/server-features/crafting/CraftingResultVerifier.js",
+        "src/server-features/crafting/CraftingVerificationCoordinator.js",
+        "src/server-features/crafting/CraftingVerificationService.js",
+        "src/server-features/crafting/verification/StageExecutionContract.js",
+        "src/server-features/crafting/CraftingService.js",
+        "src/server-features/crafting/CraftingGuiNavigator.js",
+        "src/server-features/crafting/CraftingExecutionSupport.js"
+      ],
+      "pendingWiringSource": "architecture/catalog.json#pendingWiringSources",
+      "configs": [
+        "config/server-data/recipes.json",
+        "config/server-data/crafting-tiers.json",
+        "config/minerals/menu.json",
+        "config/items/items.json"
+      ],
+      "tests": [
+        "tests/unit/planning/Planner.test.js",
+        "tests/unit/server-features/CraftingOutcomeClassifier.test.js",
+        "tests/unit/server-features/CraftingQuantityResolver.test.js",
+        "tests/unit/server-features/CraftingResultVerifierCustomIdentity.test.js",
+        "tests/unit/overlay/StageExecutionContract.test.js"
+      ]
+    },
+    "craftingB5Compatibility": {
+      "files": [
+        "src/modes/b5-craft/B5CraftModeService.js",
+        "src/server-features/crafting/B5PlanningService.js",
+        "src/server-features/crafting/B5AutomationService.js",
+        "src/server-features/crafting/B5AutomationRuntimeDecorator.js",
+        "src/planning/crafting/B5ExecutionPlanner.js",
+        "src/planning/crafting/B5Planner.js",
+        "src/server-features/crafting/b5/"
+      ],
+      "configs": [
+        "config/modes/b5-craft.json",
+        "config/server-data/b5.json"
+      ],
+      "tests": [
+        "tests/unit/server-features/B5AutomationService.test.js",
+        "tests/unit/server-features/B5PlanningService.test.js",
+        "tests/unit/server-features/B5CycleCoordinator.test.js",
+        "tests/unit/modes/B5CraftModeService.test.js"
+      ]
+    },
+    "movement": {
+      "files": [
+        "src/movement/MovementManager.js",
+        "src/movement/PositionService.js",
+        "src/movement/navigation/NavigationManager.js",
+        "src/movement/navigation/RouteExecutor.js",
+        "src/movement/navigation/ArrivalDetector.js",
+        "src/movement/safety/MovementGuard.js",
+        "src/movement/safety/PositionValidator.js"
+      ],
+      "configs": [
+        "config/movement/movement.json",
+        "config/movement/routes.json",
+        "config/movement/locations.json",
+        "config/island/island.json"
+      ],
+      "tests": [
+        "tests/unit/movement/SprintJumpCleanupVisibility.test.js"
+      ]
+    },
+    "modePlatform": {
+      "files": [
+        "src/modes/ModeCatalog.js",
+        "src/modes/RuntimeModeRegistry.js",
+        "src/modes/ManagedMode.js",
+        "src/modes/ModeContext.js",
+        "src/modes/ModeControlService.js",
+        "src/modes/ModeCoordinator.js",
+        "src/core/registry/CapabilityRegistry.js",
+        "src/core/TaskSupervisor.js",
+        "src/bootstrap/createModeCatalog.js"
+      ],
+      "configs": [
+        "config/modes/custom/*.json"
+      ],
+      "tests": [
+        "tests/unit/modes/ModePlatform.test.js",
+        "tests/unit/modes/ManagedModeLifecycleContract.test.js",
+        "tests/unit/modes/ModeScaffold.test.js"
+      ]
+    },
+    "desktop": {
+      "files": [
+        "src/desktop/main.js",
+        "src/desktop/DesktopController.js",
+        "src/desktop/contracts/DesktopApiContract.js",
+        "src/desktop/projection/OperatorSnapshotProjector.js",
+        "src/desktop/projection/SnapshotDeliveryCoordinator.js",
+        "src/desktop/use-cases/DesktopRuntimeBootstrap.js",
+        "src/desktop/use-cases/BotProfileUseCases.js",
+        "src/desktop/use-cases/FleetControlUseCases.js",
+        "src/desktop/use-cases/ModeConfigurationUseCases.js",
+        "src/desktop/renderer/app.js",
+        "src/desktop/renderer/core/RendererApiClient.js",
+        "src/desktop/renderer/pages/PageCatalog.js"
+      ],
+      "configs": [
+        "config/app.json",
+        "config/modes/b5-craft.json",
+        "config/modes/fishing.json"
+      ],
+      "tests": [
+        "tests/e2e/desktop/desktop-critical-flow.test.js"
+      ]
+    },
+    "discord": {
+      "files": [
+        "src/discord/DiscordService.js",
+        "src/discord/DiscordInteractionRouter.js",
+        "src/discord/panels/DiscordPanelManager.js",
+        "src/discord/panels/DiscordPanelStore.js",
+        "src/recovery/FleetControlService.js"
+      ],
+      "configs": [
+        "config/discord/discord.json",
+        "config/commands/sky-commands.json"
+      ],
+      "tests": [
+        "tests/unit/discord/DiscordService.test.js"
+      ]
+    },
+    "configuration": {
+      "files": [
+        "src/configuration/ConfigSpecs.js",
+        "src/configuration/ConfigLoader.js",
+        "src/configuration/ConfigValidator.js",
+        "src/configuration/ConfigurationContractValidator.js",
+        "src/configuration/ConfigurationService.js"
+      ],
+      "configs": [
+        "config/**/*.json"
+      ],
+      "tests": [
+        "tests/unit/configuration/Configuration.test.js"
+      ]
+    },
+    "recoveryDiagnostics": {
+      "files": [
+        "src/recovery/DurableIntentStore.js",
+        "src/recovery/FleetControlService.js",
+        "src/diagnostics/runtime/RuntimeFailureRecorder.js",
+        "src/diagnostics/runtime/RuntimeFailurePublisher.js",
+        "src/diagnostics/metrics/SloMetricContract.js",
+        "src/desktop/incidents/IncidentIndexStore.js"
+      ],
+      "configs": [
+        "config/app.json",
+        "config/recovery/daily.json"
+      ],
+      "tests": [
+        "tests/unit/recovery/FleetControlService.test.js",
+        "tests/unit/diagnostics/TraceSupportBundle.test.js"
+      ]
+    }
+  }
+}

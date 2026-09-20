@@ -1,0 +1,252 @@
+{
+  "schemaVersion": 1,
+  "sourceTreeSha": "3f166038b2336bf2fa0a0941c397e8d76aadbf58",
+  "criticalFiles": {
+    "src/index.js": {
+      "scope": "entrypoint",
+      "owns": [
+        "process entry",
+        "application start/shutdown wiring"
+      ],
+      "forbidden": [
+        "domain workflow logic"
+      ]
+    },
+    "src/bootstrap/createApplication.js": {
+      "scope": "application",
+      "owns": [
+        "composition root",
+        "configuration/application wiring",
+        "runtime assembly"
+      ],
+      "forbidden": [
+        "workflow implementation"
+      ]
+    },
+    "src/bot/BotContext.js": {
+      "scope": "bot",
+      "owns": [
+        "current Mineflayer client",
+        "connection generation"
+      ]
+    },
+    "src/bot/BotRuntime.js": {
+      "scope": "bot",
+      "owns": [
+        "bot composition root",
+        "public bot capability access"
+      ]
+    },
+    "src/bot/BotRegistry.js": {
+      "scope": "application",
+      "owns": [
+        "botId -> BotRuntime registry"
+      ]
+    },
+    "src/bot/BotState.js": {
+      "scope": "bot",
+      "owns": [
+        "bot-scoped state",
+        "immutable snapshots"
+      ]
+    },
+    "src/commands/CommandExecutor.js": {
+      "scope": "bot",
+      "owns": [
+        "raw bot.chat()"
+      ]
+    },
+    "src/gui/click/ClickExecutor.js": {
+      "scope": "bot",
+      "owns": [
+        "raw clickWindow()"
+      ]
+    },
+    "src/connection/ConnectionManager.js": {
+      "scope": "bot/connection",
+      "owns": [
+        "connection lifecycle",
+        "client shutdown"
+      ]
+    },
+    "src/connection/ReconnectManager.js": {
+      "scope": "bot",
+      "owns": [
+        "reconnect policy/timers"
+      ]
+    },
+    "src/core/EventBus.js": {
+      "scope": "application/bot",
+      "owns": [
+        "internal event dispatch"
+      ]
+    },
+    "src/core/events/EventScopeRegistry.js": {
+      "scope": "application",
+      "owns": [
+        "event scope declarations"
+      ]
+    },
+    "src/modes/ModeCoordinator.js": {
+      "scope": "bot",
+      "owns": [
+        "primary-mode lease",
+        "resource lease"
+      ]
+    },
+    "src/modes/ManagedMode.js": {
+      "scope": "bot/mode",
+      "owns": [
+        "mode lifecycle base behavior"
+      ]
+    },
+    "src/modes/ModeContext.js": {
+      "scope": "bot/mode",
+      "owns": [
+        "mode capability/event/operation boundary"
+      ]
+    },
+    "src/core/TaskSupervisor.js": {
+      "scope": "bot/mode",
+      "owns": [
+        "long-running task lifecycle",
+        "bounded restart/cancel"
+      ]
+    },
+    "src/gui/GuiManager.js": {
+      "scope": "bot",
+      "owns": [
+        "GUI session/transition/click orchestration"
+      ]
+    },
+    "src/gui/knowledge/GuiKnowledgeRegistry.js": {
+      "scope": "bot",
+      "owns": [
+        "learned GUI semantic mappings"
+      ]
+    },
+    "src/items/ItemNormalizer.js": {
+      "scope": "bot",
+      "owns": [
+        "normalization of item identity/representation"
+      ]
+    },
+    "src/items/ItemResolver.js": {
+      "scope": "bot",
+      "owns": [
+        "logical item resolution"
+      ]
+    },
+    "src/items/inventory/InventoryReader.js": {
+      "scope": "bot",
+      "owns": [
+        "inventory observation/read"
+      ]
+    },
+    "src/operations/OperationManager.js": {
+      "scope": "bot",
+      "owns": [
+        "multi-step operation lifecycle"
+      ]
+    },
+    "src/planning/crafting/CraftingChainPlanner.js": {
+      "scope": "planning",
+      "owns": [
+        "recipe-chain planning"
+      ]
+    },
+    "src/planning/crafting/CraftingPlanner.js": {
+      "scope": "planning",
+      "owns": [
+        "craft plan calculation"
+      ]
+    },
+    "src/server-features/crafting/CraftPlanningService.js": {
+      "scope": "bot/server-feature",
+      "owns": [
+        "crafting planning service integration"
+      ]
+    },
+    "src/server-features/crafting/CraftingRecipeRegistry.js": {
+      "scope": "bot/server-feature",
+      "owns": [
+        "recipe lookup/registry"
+      ]
+    },
+    "src/server-features/crafting/CraftingQuantityResolver.js": {
+      "scope": "bot/server-feature",
+      "owns": [
+        "live quantity action resolution"
+      ]
+    },
+    "src/server-features/crafting/CraftingOperation.js": {
+      "scope": "bot/operation",
+      "owns": [
+        "craft GUI action execution",
+        "craft-stage state"
+      ]
+    },
+    "src/server-features/crafting/CraftingVerificationCoordinator.js": {
+      "scope": "bot/verification",
+      "owns": [
+        "craft verification/reconciliation coordination"
+      ]
+    },
+    "src/server-features/crafting/CraftingResultVerifier.js": {
+      "scope": "bot/verification",
+      "owns": [
+        "craft result evidence verification"
+      ]
+    },
+    "src/server-features/crafting/CraftingService.js": {
+      "scope": "bot/server-feature",
+      "owns": [
+        "high-level crafting capability entry"
+      ]
+    },
+    "src/server-features/storage/KhoService.js": {
+      "scope": "bot/server-feature",
+      "owns": [
+        "/kho storage capability"
+      ]
+    },
+    "src/server-features/storage/B1StorageMaterialService.js": {
+      "scope": "bot/server-feature",
+      "owns": [
+        "B1 storage material preparation",
+        "current B5 protection coupling"
+      ]
+    },
+    "src/server-profiles/ServerProfile.js": {
+      "scope": "application/server-profile",
+      "owns": [
+        "immutable server profile contract",
+        "secret-free profile assertion"
+      ]
+    },
+    "src/server-profiles/createServerProfileRegistry.js": {
+      "scope": "application/server-profile",
+      "owns": [
+        "server profile construction/revision"
+      ]
+    },
+    "src/modes/b5-craft/B5CraftModeService.js": {
+      "scope": "bot/mode",
+      "owns": [
+        "current B5 craft mode orchestration"
+      ]
+    },
+    "src/server-features/crafting/B5PlanningService.js": {
+      "scope": "bot/server-feature",
+      "owns": [
+        "current B5-specific planning integration"
+      ]
+    },
+    "src/server-features/crafting/B5AutomationService.js": {
+      "scope": "bot/server-feature",
+      "owns": [
+        "current B5-specific automation compatibility"
+      ]
+    }
+  }
+}

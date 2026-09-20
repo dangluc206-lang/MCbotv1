@@ -8,7 +8,5 @@ coverage/
 .tmp/
 tmp-*/
 out/
-.clinerules/
-.cline
 ce
 .ux-review

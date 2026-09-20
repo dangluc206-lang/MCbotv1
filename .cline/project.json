@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "repository": "dangluc206-lang/MCbotv1",
+    "ref": "main",
+    "treeSha": "3f166038b2336bf2fa0a0941c397e8d76aadbf58",
+    "basis": "current Git tree only; counts verified against the working tree on 2026-09-20"
+  },
+  "project": {
+    "name": "mcbot-complete",
+    "version": "2.7.67",
+    "moduleSystem": "commonjs",
+    "node": ">=22",
+    "productName": "MCbot Desktop"
+  },
+  "entrypoints": {
+    "desktop": "src/desktop/main.js",
+    "core": "src/index.js",
+    "preload": "src/desktop/preload.js"
+  },
+  "commands": {
+    "start": "npm start",
+    "core": "npm run core:start",
+    "validate": "npm run validate",
+    "test": "npm test",
+    "coverage": "npm run test:coverage",
+    "architectureInspect": "npm run inspect:architecture",
+    "configInspect": "npm run inspect:config",
+    "b5Replay": "npm run replay:b5",
+    "scenarioReplay": "npm run replay",
+    "modeScaffold": "npm run mode:scaffold"
+  },
+  "dependencies": {
+    "mineflayer": "^4.37.1",
+    "mineflayer-pathfinder": "^2.4.5",
+    "discord.js": "^14.25.1",
+    "dotenv": "^17.4.2",
+    "extract-zip": "2.0.1",
+    "yauzl": "2.10.0",
+    "electron": "43.4.0"
+  },
+  "currentTreeCounts": {
+    "totalFiles": 889,
+    "productionOrSourceJs": 416,
+    "testJs": 246,
+    "scriptJs": 41,
+    "configJson": 35
+  },
+  "authoritativeCurrentFiles": [
+    "architecture/catalog.json",
+    "config/server.json",
+    "config/server-data/recipes.json",
+    "config/server-data/crafting-tiers.json",
+    "config/minerals/menu.json",
+    "config/minerals/conversions.json",
+    "config/smelting/recipes.json",
+    "config/storage/kho.json",
+    "config/personal-vault/pv2.json",
+    "config/items/items.json",
+    "config/skyblock/join.json",
+    "config/resource-pack/resource-pack.json",
+    "src/server-profiles/ServerProfile.js",
+    "src/server-profiles/createServerProfileRegistry.js",
+    "src/planning/crafting/CraftingChainPlanner.js",
+    "src/planning/crafting/CraftingPlanner.js",
+    "src/server-features/crafting/CraftPlanningService.js",
+    "src/server-features/crafting/CraftingOperation.js",
+    "src/server-features/crafting/CraftingQuantityResolver.js",
+    "src/server-features/crafting/CraftingResultVerifier.js",
+    "src/server-features/crafting/CraftingVerificationCoordinator.js",
+    "src/server-features/crafting/verification/StageExecutionContract.js",
+    "src/server-features/crafting/CraftingService.js",
+    "src/bootstrap/createModeCatalog.js",
+    "src/modes/ModeCatalog.js",
+    "src/modes/ManagedMode.js",
+    "src/modes/ModeContext.js",
+    "src/modes/ModeControlService.js",
+    "src/modes/RuntimeModeRegistry.js",
+    "src/core/registry/CapabilityRegistry.js",
+    "src/core/TaskSupervisor.js"
+  ]
+}

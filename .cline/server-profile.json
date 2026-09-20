@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 1,
+  "sourceTreeSha": "3f166038b2336bf2fa0a0941c397e8d76aadbf58",
+  "authority": {
+    "primaryConfig": [
+      "config/server.json",
+      "config/server-data/recipes.json",
+      "config/server-data/crafting-tiers.json",
+      "config/minerals/menu.json",
+      "config/minerals/conversions.json",
+      "config/smelting/recipes.json",
+      "config/storage/kho.json",
+      "config/personal-vault/pv2.json",
+      "config/items/items.json",
+      "config/skyblock/join.json",
+      "config/resource-pack/resource-pack.json"
+    ],
+    "profileCode": [
+      "src/server-profiles/ServerProfile.js",
+      "src/server-profiles/createServerProfileRegistry.js"
+    ]
+  },
+  "profile": {
+    "id": "default",
+    "implementation": "minerua-compat",
+    "endpoint": {
+      "host": "mc.minerua.com",
+      "port": 25565,
+      "version": "1.21.1",
+      "auth": "offline"
+    }
+  },
+  "commands": {
+    "storage": {
+      "command": "/kho",
+      "gui": true
+    },
+    "storageSell": {
+      "command": "/kho sell",
+      "gui": true
+    },
+    "personalVault2": {
+      "command": "/pv 2",
+      "gui": true
+    },
+    "minerals": {
+      "command": "/ks",
+      "gui": true
+    },
+    "smelting": {
+      "command": "/nung",
+      "gui": true
+    },
+    "islandHome": {
+      "command": "/is",
+      "gui": false
+    },
+    "skyblock": {
+      "command": "/sky",
+      "gui": true
+    },
+    "dungeon": {
+      "command": "/d",
+      "gui": true
+    },
+    "afk": {
+      "command": "/afk",
+      "gui": true
+    },
+    "login": {
+      "commandTemplate": "/login {password}",
+      "secretExternal": true
+    }
+  },
+  "gui": {
+    "sky": {
+      "id": "skyServerSelect",
+      "type": "minecraft:generic_9x3",
+      "selectionSlots": {
+        "sky1": 11,
+        "sky2": 13,
+        "joinSlot": 19
+      },
+      "timeoutMs": 5000,
+      "clickTimeoutMs": 3000
+    },
+    "storage": {
+      "id": "storage",
+      "type": "minecraft:generic_9x6",
+      "capacitySlot": 49,
+      "fallbackCapacity": 800000,
+      "timeoutMs": 5000
+    },
+    "personalVault2": {
+      "id": "personalVault2",
+      "type": "minecraft:generic_9x6",
+      "storageSlots": 54,
+      "timeoutMs": 5000
+    },
+    "minerals": {
+      "id": "minerals",
+      "type": "minecraft:generic_9x3",
+      "entrySlots": {
+        "conversion": 10,
+        "smelting": 12,
+        "crafting": 16
+      }
+    },
+    "craftingQuantity": {
+      "id": "craftingQuantity",
+      "quantitySlots": {
+        "1": 20,
+        "64": 22,
+        "ALL": 24
+      }
+    },
+    "smelting": {
+      "id": "smelting",
+      "type": "minecraft:generic_9x1"
+    }
+  },
+  "sellSemantics": {
+    "left": 1,
+    "right": 64,
+    "shiftLeft": "ALL",
+    "productionPolicy": {
+      "allowAll": false,
+      "allowSingle": false,
+      "blockOnly": true
+    }
+  },
+  "smelting": {
+    "recipes": {
+      "raw_iron_to_iron": {
+        "input": "raw_iron",
+        "output": "iron_ingot",
+        "menuItemId": "smelt_iron"
+      },
+      "raw_gold_to_gold": {
+        "input": "raw_gold",
+        "output": "gold_ingot",
+        "menuItemId": "smelt_gold"
+      }
+    }
+  },
+  "mineralConversion": {
+    "source": "config/minerals/conversions.json",
+    "currentMenu": "/ks",
+    "defaultRatio": 9
+  },
+  "resourcePack": {
+    "enabled": true,
+    "autoAccept": true,
+    "joinWaitForReady": false
+  },
+  "dailyRecovery": {
+    "enabled": true,
+    "timezoneOffsetMinutes": 420,
+    "sky": {
+      "hour": 3,
+      "minute": 0,
+      "waitMinutes": 5,
+      "retryWindowMinutes": 20
+    },
+    "server": {
+      "hour": 5,
+      "minute": 0,
+      "waitMinutes": 5,
+      "retryWindowMinutes": 20
+    }
+  },
+  "importantUnknowns": [
+    "Exact craft success/failure chat text is not authoritative.",
+    "Exact kick reason/type for daily windows is not canonicalized.",
+    "Shift-right, middle-click and number-key server semantics are unknown.",
+    "Not every recipe is assumed to expose every quantity action.",
+    "Server-side enforcement of the 30-minute post-B5 policy is not established."
+  ],
+  "notes": [
+    "`/kho` is the full storage observation source for storage flows.",
+    "`/kho sell` is an interaction surface, not a full storage snapshot.",
+    "Server GUI layout must not be treated as logical item identity.",
+    "Custom item identity can be stronger than vanilla material/display name."
+  ]
+}

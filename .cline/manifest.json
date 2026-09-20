@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "repository": "dangluc206-lang/MCbotv1",
+    "ref": "main",
+    "treeSha": "3f166038b2336bf2fa0a0941c397e8d76aadbf58",
+    "syncBasis": "Verified against the current working tree (AI module and all legacy product .md documents removed): paths, counts, recipes, GUI ids and mode descriptors were re-checked against src/, config/, tests/, scripts/ and architecture/."
+  },
+  "files": [
+    "project.json",
+    "architecture.json",
+    "ownership.json",
+    "routing.json",
+    "server-profile.json",
+    "crafting-contract.json",
+    "context-index.json"
+  ],
+  "refreshPolicy": "Regenerate from current Git source/config; do not hand-edit facts copied from source.",
+  "factsOwnedElsewhere": {
+    "unwiredModules": "architecture/catalog.json#pendingWiringSources",
+    "architectureBaseline": "architecture/baseline/current.json"
+  }
+}

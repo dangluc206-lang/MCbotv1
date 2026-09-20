@@ -1,0 +1,297 @@
+{
+  "schemaVersion": 1,
+  "sourceTreeSha": "3f166038b2336bf2fa0a0941c397e8d76aadbf58",
+  "purpose": "Generic crafting guidance derived from current implementation; B5 is a current consumer, not the generic contract.",
+  "genericLifecycle": [
+    "INPUT_READY",
+    "ACTION",
+    "OUTPUT_VERIFIED",
+    "SETTLED",
+    "HANDOFF_READY"
+  ],
+  "genericResponsibilities": {
+    "recipeDefinition": {
+      "owner": "config/server-data/recipes.json",
+      "registry": "src/server-features/crafting/CraftingRecipeRegistry.js"
+    },
+    "planning": {
+      "owners": [
+        "src/planning/crafting/CraftingPlanner.js",
+        "src/planning/crafting/CraftingChainPlanner.js",
+        "src/server-features/crafting/CraftPlanningService.js"
+      ],
+      "mustNot": [
+        "click",
+        "chat",
+        "movement",
+        "runtime timer"
+      ]
+    },
+    "execution": {
+      "owner": "src/server-features/crafting/CraftingOperation.js",
+      "entry": "src/server-features/crafting/CraftingService.js"
+    },
+    "quantity": {
+      "owner": "src/server-features/crafting/CraftingQuantityResolver.js",
+      "currentCapabilities": [
+        1,
+        64,
+        "ALL"
+      ],
+      "source": "config/minerals/menu.json"
+    },
+    "verification": {
+      "owners": [
+        "src/server-features/crafting/CraftingResultVerifier.js",
+        "src/server-features/crafting/CraftingVerificationCoordinator.js",
+        "src/server-features/crafting/CraftingVerificationService.js",
+        "src/server-features/crafting/CraftingOutcomeClassifier.js"
+      ]
+    }
+  },
+  "currentExecutionFlow": [
+    "capture BEFORE inventory state",
+    "open /ks",
+    "identify minerals GUI",
+    "resolve crafting entry",
+    "enter crafting menu",
+    "resolve recipe slot from logical recipe id",
+    "open quantity GUI",
+    "resolve live quantity action",
+    "click quantity once",
+    "close quantity GUI if still open",
+    "verify output/input evidence",
+    "reconcile before retrying uncertain mutations"
+  ],
+  "quantityPolicy": {
+    "serverCapability": [
+      1,
+      64,
+      "ALL"
+    ],
+    "workflowDecidesSafety": true,
+    "doNotAssumeAllSafe": true,
+    "doNotUseFixedSlotAsLogicalIdentity": true
+  },
+  "verificationRules": [
+    "click success is not craft success",
+    "craft() success is not completion",
+    "expected output must be observed",
+    "relevant state must settle",
+    "generation must remain valid",
+    "uncertain mutation requires reconciliation before repeat"
+  ],
+  "currentRecipeGraph": {
+    "tierConfig": "config/server-data/crafting-tiers.json",
+    "recipesConfig": "config/server-data/recipes.json",
+    "recipes": {
+      "super_cobblestone": {
+        "output": "super_cobblestone",
+        "outputAmount": 1,
+        "inputs": {
+          "cobblestone": 16
+        },
+        "menuItemId": "super_cobblestone",
+        "menuSlot": 10,
+        "inputSource": "inventory"
+      },
+      "refined_coal": {
+        "output": "refined_coal",
+        "outputAmount": 1,
+        "inputs": {
+          "coal": 16
+        },
+        "menuItemId": "refined_coal",
+        "menuSlot": 11,
+        "inputSource": "inventory"
+      },
+      "refined_redstone": {
+        "output": "refined_redstone",
+        "outputAmount": 1,
+        "inputs": {
+          "redstone": 64
+        },
+        "menuItemId": "refined_redstone",
+        "menuSlot": 12,
+        "inputSource": "inventory"
+      },
+      "refined_lapis": {
+        "output": "refined_lapis",
+        "outputAmount": 1,
+        "inputs": {
+          "lapis_lazuli": 64
+        },
+        "menuItemId": "refined_lapis",
+        "menuSlot": 13,
+        "inputSource": "inventory"
+      },
+      "refined_iron": {
+        "output": "refined_iron",
+        "outputAmount": 1,
+        "inputs": {
+          "iron_ingot": 64
+        },
+        "menuItemId": "refined_iron",
+        "menuSlot": 14,
+        "inputSource": "inventory"
+      },
+      "refined_gold": {
+        "output": "refined_gold",
+        "outputAmount": 1,
+        "inputs": {
+          "gold_ingot": 64
+        },
+        "menuItemId": "refined_gold",
+        "menuSlot": 15,
+        "inputSource": "inventory"
+      },
+      "refined_diamond": {
+        "output": "refined_diamond",
+        "outputAmount": 1,
+        "inputs": {
+          "diamond": 32
+        },
+        "menuItemId": "refined_diamond",
+        "menuSlot": 16,
+        "inputSource": "inventory"
+      },
+      "refined_emerald": {
+        "output": "refined_emerald",
+        "outputAmount": 1,
+        "inputs": {
+          "emerald": 32
+        },
+        "menuItemId": "refined_emerald",
+        "menuSlot": 19,
+        "inputSource": "inventory"
+      },
+      "super_cobblestone_block": {
+        "output": "super_cobblestone_block",
+        "outputAmount": 1,
+        "inputs": {
+          "super_cobblestone": 16
+        },
+        "menuItemId": "super_cobblestone_block",
+        "menuSlot": 20
+      },
+      "refined_coal_block": {
+        "output": "refined_coal_block",
+        "outputAmount": 1,
+        "inputs": {
+          "refined_coal": 16
+        },
+        "menuItemId": "refined_coal_block",
+        "menuSlot": 21
+      },
+      "refined_redstone_block": {
+        "output": "refined_redstone_block",
+        "outputAmount": 1,
+        "inputs": {
+          "refined_redstone": 16
+        },
+        "menuItemId": "refined_redstone_block",
+        "menuSlot": 22
+      },
+      "refined_lapis_block": {
+        "output": "refined_lapis_block",
+        "outputAmount": 1,
+        "inputs": {
+          "refined_lapis": 16
+        },
+        "menuItemId": "refined_lapis_block",
+        "menuSlot": 23
+      },
+      "refined_iron_block": {
+        "output": "refined_iron_block",
+        "outputAmount": 1,
+        "inputs": {
+          "refined_iron": 16
+        },
+        "menuItemId": "refined_iron_block",
+        "menuSlot": 24
+      },
+      "refined_gold_block": {
+        "output": "refined_gold_block",
+        "outputAmount": 1,
+        "inputs": {
+          "refined_gold": 16
+        },
+        "menuItemId": "refined_gold_block",
+        "menuSlot": 25
+      },
+      "refined_diamond_block": {
+        "output": "refined_diamond_block",
+        "outputAmount": 1,
+        "inputs": {
+          "refined_diamond": 16
+        },
+        "menuItemId": "refined_diamond_block",
+        "menuSlot": 28
+      },
+      "refined_emerald_block": {
+        "output": "refined_emerald_block",
+        "outputAmount": 1,
+        "inputs": {
+          "refined_emerald": 16
+        },
+        "menuItemId": "refined_emerald_block",
+        "menuSlot": 29
+      },
+      "carbon": {
+        "output": "carbon",
+        "outputAmount": 1,
+        "inputs": {
+          "refined_redstone_block": 8,
+          "super_cobblestone_block": 4,
+          "refined_coal_block": 16
+        },
+        "menuItemId": "carbon",
+        "menuSlot": 30
+      },
+      "titanium": {
+        "output": "titanium",
+        "outputAmount": 1,
+        "inputs": {
+          "refined_lapis_block": 4,
+          "refined_iron_block": 16,
+          "refined_gold_block": 8,
+          "refined_emerald_block": 2
+        },
+        "menuItemId": "titanium",
+        "menuSlot": 31
+      },
+      "tungsten": {
+        "output": "tungsten",
+        "outputAmount": 1,
+        "inputs": {
+          "super_cobblestone_block": 2,
+          "refined_diamond_block": 16,
+          "refined_emerald_block": 4,
+          "refined_iron_block": 8,
+          "refined_gold_block": 8
+        },
+        "menuItemId": "tungsten",
+        "menuSlot": 32
+      },
+      "super_alloy": {
+        "output": "super_alloy",
+        "outputAmount": 1,
+        "inputs": {
+          "tungsten": 8,
+          "titanium": 16,
+          "carbon": 32
+        },
+        "menuItemId": "super_alloy",
+        "menuSlot": 33
+      }
+    }
+  },
+  "currentB5Consumer": {
+    "mode": "src/modes/b5-craft/B5CraftModeService.js",
+    "planning": "src/server-features/crafting/B5PlanningService.js",
+    "automation": "src/server-features/crafting/B5AutomationService.js",
+    "executionPlanner": "src/planning/crafting/B5ExecutionPlanner.js",
+    "legacyPlanner": "src/planning/crafting/B5Planner.js",
+    "importantConstraint": "Do not propagate B5-specific policy into generic crafting classes when removing B5 as the center."
+  }
+}
