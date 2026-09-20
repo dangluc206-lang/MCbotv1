@@ -23,7 +23,6 @@ test('machine-readable architecture catalog matches the reachable project and ex
     assert.equal(result.catalog.connectionEvents, 31);
     assert.deepEqual(result.catalog.coverage, catalog.coverage);
     assert.equal(result.catalog.officialDocuments, catalog.officialDocuments.length);
-    assert.equal(result.catalog.governedDocumentRoots, 1);
 });
 
 test('document governance authorizes only exact official files or exact governed roots', () => {

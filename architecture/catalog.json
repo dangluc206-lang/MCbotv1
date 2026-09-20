@@ -147,7 +147,6 @@
   "architectureBaseline": {
     "manifest": "architecture/baseline/current.json",
     "schema": "architecture/baseline/schema.json",
-    "report": "docs/architecture-roadmap/baseline/WP-001_GAP_REPORT.md",
     "inspector": "scripts/inspect-architecture-baseline.js"
   },
   "artifactOwnershipManifest": "architecture/artifact-ownership.json"
