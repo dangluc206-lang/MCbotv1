@@ -7,6 +7,27 @@ const fs = require('node:fs');
 const path = require('node:path');
 const DesktopController = require('../../../src/desktop/DesktopController');
 const BotContext = require('../../../src/bot/BotContext');
+const ItemRegistry = require('../../../src/items/ItemRegistry');
+const CraftingRecipeRegistry = require('../../../src/server-features/crafting/CraftingRecipeRegistry');
+const CraftingItemRegistry = require('../../../src/items/CraftingItemRegistry');
+const CraftingTargetRegistry = require('../../../src/items/CraftingTargetRegistry');
+
+const ITEMS = require('../../../config/items/items.json');
+const RECIPES = require('../../../config/server-data/recipes.json');
+const TIERS = require('../../../config/server-data/crafting-tiers.json');
+const TARGET_POLICY = require('../../../config/server-data/crafting-targets.json');
+
+function realCraftingRegistries() {
+    const craftingItemRegistry = new CraftingItemRegistry({
+        itemRegistry: new ItemRegistry(ITEMS),
+        recipeRegistry: new CraftingRecipeRegistry(RECIPES),
+        tiers: TIERS
+    });
+    return {
+        craftingItemRegistry,
+        craftingTargetRegistry: new CraftingTargetRegistry({ craftingItemRegistry, policy: TARGET_POLICY })
+    };
+}
 
 function ok(status, data = null) {
     return { success: true, status, data };
@@ -113,8 +134,7 @@ test('DesktopController routes guarded B5 recovery through the mode use case wit
 
 test('DesktopController passes a dynamic B5 craft request straight to the mode service', async () => {
     const calls = { set: [], clear: [] };
-    const items = [{ id: 'titanium', displayName: 'Titanium', recipe: { output: 'titanium', inputs: {} } }];
-    const expectedItems = [{ id: 'titanium', displayName: 'Titanium' }];
+    const registries = realCraftingRegistries();
     const controller = new DesktopController({ baseDir: process.cwd() });
     controller.lifecycle = 'RUNNING';
     controller.bundle = {
@@ -127,13 +147,19 @@ test('DesktopController passes a dynamic B5 craft request straight to the mode s
                             clearCraftRequest(reason) { calls.clear.push(reason); return { state: 'COMPLETED', completedUnits: 2 }; }
                         };
                     }
-                    if (name === 'craftingItemRegistry') return { items: () => items };
+                    if (name === 'craftingTargetRegistry') return registries.craftingTargetRegistry;
+                    if (name === 'craftingItemRegistry') return registries.craftingItemRegistry;
                     return null;
                 }
             })
         }
     };
-    assert.deepEqual(controller.b5CraftItems('bot-01'), { items: expectedItems });
+    // The offerable list comes from the target registry (config policy), not
+    // from the legacy item registry, and the dynamic request goes through
+    // untouched — never re-planned to a B5 default.
+    const listed = controller.b5CraftItems('bot-01').items;
+    assert.ok(listed.some(entry => entry.id === 'titanium' && entry.displayName === 'Titanium'));
+    assert.ok(listed.every(entry => registries.craftingTargetRegistry.isTarget(entry.id)));
     const setResult = await controller.setB5CraftRequest('bot-01', { targetItemId: 'titanium', quantity: 10 });
     assert.equal(setResult.success, true);
     assert.deepEqual(calls.set, [{ targetItemId: 'titanium', quantity: 10 }]);

@@ -46,6 +46,15 @@ function createService({ loose = 0, blocks = 0, inventoryB1 = 0, existingB5 = 0,
     });
 }
 
+test('B5Planner never hard-codes a target: targetId must come from config, per-request target wins', () => {
+    const inner = { plan: (targetId, amount) => ({ targetId, amount }) };
+    assert.throws(() => new B5Planner({ planner: inner }), /targetId is required/);
+    const fromConfig = new B5Planner({ planner: inner, targetId: 'configured_item' });
+    assert.equal(fromConfig.targetId, 'configured_item');
+    assert.equal(fromConfig.plan('requested_item', 2).targetId, 'requested_item');
+    assert.equal(fromConfig.plan(null, 1).targetId, 'configured_item');
+});
+
 test('planning counts compacted B1 blocks as effective material without selling B1 after B2', async () => {
     const result = await createService({ loose: 12, blocks: 32 }).inspectAdditional(1);
     assert.equal(result.success, true);

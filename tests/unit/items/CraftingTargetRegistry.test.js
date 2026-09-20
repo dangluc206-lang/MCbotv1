@@ -70,6 +70,16 @@ test('target entries carry the required identity and recipe contract', () => {
     }
 });
 
+test('every current craft product resolves as a generic target', () => {
+    const registry = createRegistry();
+    for (const id of ['titanium', 'carbon', 'tungsten', 'super_alloy', 'refined_iron_block']) {
+        const entry = registry.requireById(id);
+        assert.equal(entry.id, id);
+        assert.ok(entry.recipe, `${id} resolves with a producing recipe`);
+        assert.ok(TIERS[entry.tier].includes(id), `${id} is a config tier member`);
+    }
+});
+
 test('display names are the real in-game names', () => {
     const registry = createRegistry();
     assert.equal(registry.requireById('super_alloy').displayName, 'Siêu hợp kim');
