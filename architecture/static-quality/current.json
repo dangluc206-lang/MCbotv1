@@ -33,7 +33,6 @@
     "scripts/build-windows.js",
     "scripts/build/PackagingFootprintContract.js",
     "scripts/check-error-vocabulary.js",
-    "scripts/check-product-docs.js",
     "scripts/check-release-canary-policy.js",
     "scripts/check-slo-contract.js",
     "scripts/check-static-quality.js",

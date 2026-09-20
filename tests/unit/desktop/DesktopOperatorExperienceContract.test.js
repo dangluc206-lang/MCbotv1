@@ -14,7 +14,7 @@ const dialog = fs.readFileSync(path.join(root, 'src/desktop/renderer/components/
 
 test('XP-100 navigation keeps every product surface reachable under four progressive groups', () => {
     for (const label of ['Vận hành', 'Xây dựng', 'Bảo trì', 'Nâng cao']) assert.match(html, new RegExp(`>${label}<`));
-    for (const page of ['dashboard','bots','modes','builder','incidents','logs','settings','tools','diagnostics','ai']) assert.match(html, new RegExp(`data-page="${page}"`));
+    for (const page of ['dashboard','bots','modes','builder','incidents','logs','settings','tools','diagnostics']) assert.match(html, new RegExp(`data-page="${page}"`));
     assert.match(router, /overview:'dashboard'/);
     assert.match(app, /MCbotRendererRouter\.apply/);
     assert.match(app, /experienceLevel/);

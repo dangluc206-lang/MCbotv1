@@ -16,11 +16,9 @@ const EXCLUDED_SEGMENTS = new Set(['.git', '.tmp', 'coverage', 'data', 'node_mod
 const EXCLUDED_BASENAMES = [/^\.env(?:\.|$)/i, /\.log$/i];
 const CONTENT_SCAN_EXCLUSIONS = ['config/bots'];
 const SELF_OUTPUT_PATHS = new Set([
-    'architecture/baseline/current.json',
-    'docs/architecture-roadmap/baseline/WP-001_GAP_REPORT.md'
+    'architecture/baseline/current.json'
 ]);
 const SOURCE_AREAS = Object.freeze({
-    ai: 'application-support',
     bootstrap: 'composition-root',
     bot: 'bot-runtime',
     commands: 'command-capability',
@@ -449,7 +447,7 @@ function buildBaseline({ root = DEFAULT_ROOT, generatedAt = new Date().toISOStri
             contentScanAdditionalExclusions: ['config/bots/**'],
             selfOutputsExcludedFromCounts: [...SELF_OUTPUT_PATHS].sort(),
             reproducibleCommands: [
-                "rg --files --hidden -g '!.env*' -g '!.git/**' -g '!.tmp/**' -g '!coverage/**' -g '!data/**' -g '!node_modules/**' -g '!out/**' -g '!*.log' -g '!architecture/baseline/current.json' -g '!docs/architecture-roadmap/baseline/WP-001_GAP_REPORT.md'",
+                "rg --files --hidden -g '!.env*' -g '!.git/**' -g '!.tmp/**' -g '!coverage/**' -g '!data/**' -g '!node_modules/**' -g '!out/**' -g '!*.log' -g '!architecture/baseline/current.json'",
                 'node scripts/inspect-architecture-baseline.js',
                 'node scripts/inspect-architecture-baseline.js --check',
                 'node scripts/validate-architecture.js --json',
@@ -597,7 +595,7 @@ function renderGapReport(baseline) {
         `- Source tree: standalone; worktree metadata: ${baseline.revision.worktree.state}.`,
         `- Safe-scope source fingerprint: \`${baseline.revision.sourceFingerprintSha256}\` (bot-profile payload bytes excluded).`,
         '- Excluded from inventory/content capture: `.env*`, `data/**`, `node_modules/**`, `**/*.log`; bot profile payloads are not content-scanned.',
-        '- The manifest and generated gap report are excluded from `counts.files` to avoid self-referential count drift.', '',
+        '- The manifest is excluded from `counts.files` to avoid self-referential count drift; the gap report is rendered on demand (`--report`) and is not a committed artifact.', '',
         '## Current evidence', '',
         `- Architecture validator: ${baseline.architectureInspection.valid ? 'PASS' : 'FAIL'} with ${baseline.architectureInspection.findings.length} finding(s).`,
         `- Project source reachability: ${baseline.reachability.projectReachableSourceFiles.length}/${baseline.counts.source}; runtime reachability: ${baseline.reachability.runtimeReachableSourceFiles.length}/${baseline.counts.source}.`,

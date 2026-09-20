@@ -13,9 +13,7 @@ test('renderer action failures are reported centrally before terminal UI catches
     assert.doesNotMatch(source, /reportRendererError\?\.\([^\n]+\)\.catch\(\(\) => \{\}\)/);
 });
 
-test('renderer startup diagnostics do not silently discard logs, app-info or AI auto-refresh failures', () => {
+test('renderer startup diagnostics do not silently discard log or app-info failures', () => {
     assert.match(source, /catch \(error\) \{ reportRendererError\(error, 'initial-log-load'\); \}/);
     assert.match(source, /catch\(error => reportRendererError\(error, 'app-info-load'\)\)/);
-    assert.match(source, /catch\(error => reportRendererError\(error, 'ai-workspace-auto-inspect'\)\)/);
-    assert.match(source, /catch\(error => reportRendererError\(error, 'ai-model-auto-refresh'\)\)/);
 });

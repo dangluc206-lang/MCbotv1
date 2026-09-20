@@ -5,7 +5,7 @@
 }(typeof globalThis !== 'undefined' ? globalThis : this, function create() {
   'use strict';
   // Dev navigation is a fixed 9-page set. Pages outside this set (builder,
-  // tools, ai) remain in the DEV group but are not part of the Dev nav.
+  // tools) remain in the DEV group but are not part of the Dev nav.
   const DEV_NAV = Object.freeze([
     'dev-overview', 'inspector', 'events', 'logs',
     'incident-debug', 'runtime-state', 'b5-debug', 'diagnostics', 'config-debug'

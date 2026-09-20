@@ -74,8 +74,6 @@ function createForgeIgnore({ baseDir = process.cwd() } = {}) {
         ];
         if (excludedRoots.some(root => lower === root || lower.startsWith(`${root}/`))) return true;
         if (/^patch_(?:info|summary)/i.test(relative)) return true;
-        if (/^(?:agents|architecture|js_responsibilities|readme|rules)\.md$/i.test(relative)) return true;
-        if (/^(?:start_here|user_guide|release_notes)\.txt$/i.test(relative)) return true;
         if (/^forge\.config\.js$/i.test(relative)) return true;
         if (/^\.env$/i.test(relative)) return true;
 

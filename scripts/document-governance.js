@@ -154,6 +154,60 @@ function validateGovernedDocumentRoots(configuredRoots, repoRoot) {
     return { failures, roots };
 }
 
+function validateDocumentScanExclusions(configuredExclusions, repoRoot) {
+    const failures = [];
+    const exclusions = [];
+    if (configuredExclusions === undefined) return { failures, exclusions };
+    if (!Array.isArray(configuredExclusions)) {
+        failures.push({
+            code: 'DOCUMENT_SCAN_EXCLUSIONS_INVALID',
+            message: 'documentScanExclusions must be an array of repository-relative paths.',
+            file: 'architecture/catalog.json'
+        });
+        return { failures, exclusions };
+    }
+
+    const seen = new Set();
+    for (const configuredExclusion of configuredExclusions) {
+        const normalized = normalizeRepositoryRelativePath(configuredExclusion);
+        if (!normalized) {
+            failures.push({
+                code: 'DOCUMENT_SCAN_EXCLUSION_INVALID',
+                message: `Invalid document scan exclusion: ${String(configuredExclusion)}`,
+                file: 'architecture/catalog.json'
+            });
+            continue;
+        }
+        if (seen.has(normalized)) {
+            failures.push({
+                code: 'DOCUMENT_SCAN_EXCLUSION_DUPLICATE',
+                message: `Duplicate document scan exclusion: ${normalized}`,
+                file: 'architecture/catalog.json'
+            });
+            continue;
+        }
+        seen.add(normalized);
+        if (!isInsidePath(repoRoot, path.resolve(repoRoot, normalized))) {
+            failures.push({
+                code: 'DOCUMENT_SCAN_EXCLUSION_ESCAPE',
+                message: `Document scan exclusion escapes repository: ${normalized}`,
+                file: normalized
+            });
+            continue;
+        }
+        // An exclusion is local agent context (git-ignored), so it is allowed to
+        // be absent from a clean checkout. Only the path shape is validated.
+        exclusions.push(normalized);
+    }
+    return { failures, exclusions };
+}
+
+function isDocumentScanExcluded(file, exclusions = []) {
+    const normalized = normalizeRepositoryRelativePath(file);
+    if (!normalized) return false;
+    return exclusions.some(exclusion => normalized === exclusion || normalized.startsWith(`${exclusion}/`));
+}
+
 function isDocumentPathAuthorized(file, officialDocuments = [], governedRoots = []) {
     const normalized = normalizeRepositoryRelativePath(file);
     if (!normalized) return false;
@@ -165,5 +219,7 @@ function isDocumentPathAuthorized(file, officialDocuments = [], governedRoots = 
 module.exports = Object.freeze({
     normalizeRepositoryRelativePath,
     isDocumentPathAuthorized,
-    validateGovernedDocumentRoots
+    isDocumentScanExcluded,
+    validateGovernedDocumentRoots,
+    validateDocumentScanExclusions
 });

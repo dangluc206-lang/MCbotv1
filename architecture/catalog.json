@@ -4,6 +4,10 @@
   ],
   "governedDocumentRoots": [
   ],
+  "documentScanExclusions": [
+    ".cline",
+    ".clinerules"
+  ],
   "runtimeEntrypoints": [
     "src/index.js",
     "src/desktop/main.js",
@@ -11,6 +15,7 @@
     "src/desktop/renderer/core/RendererApiClient.js",
     "src/desktop/renderer/core/Html.js",
     "src/desktop/renderer/core/RendererRouter.js",
+    "src/desktop/renderer/core/DevRouter.js",
     "src/desktop/renderer/core/KeyedDom.js",
     "src/desktop/renderer/components/AccessibleDialog.js",
     "src/desktop/renderer/pages/PageCatalog.js",
@@ -135,6 +140,48 @@
         "setTimeout\\s*\\(",
         "setInterval\\s*\\("
       ]
+    }
+  ],
+  "pendingWiringSources": [
+    {
+      "file": "src/server-features/crafting/b1-b3/B1B3CraftingModule.js",
+      "owner": "crafting",
+      "reason": "B1-B3 stage module extracted by the generic crafting refactor; the composition root still wires the B5 coordinators, and only tests/unit/overlay/B1B3Boundary.test.js consumes this module today."
+    },
+    {
+      "file": "src/server-features/crafting/b1-b3/B1B3InputCoordinator.js",
+      "owner": "crafting",
+      "reason": "Input acquisition slice of the unwired B1-B3 module; it reuses verification/StageExecutionContract and no runtime or script entrypoint requires it yet."
+    },
+    {
+      "file": "src/server-features/crafting/b1-b3/B1B3ReadService.js",
+      "owner": "crafting",
+      "reason": "Read slice of the unwired B1-B3 module; the runtime currently reads inventory/pv2/kho through the inventory, personal-vault and storage capabilities directly."
+    },
+    {
+      "file": "src/server-features/crafting/b1-b3/B1B3ReserveCoordinator.js",
+      "owner": "crafting",
+      "reason": "Reserve loop of the unwired B1-B3 module; B5 reserve handling still runs through server-features/crafting/b5/B5ReserveChainCoordinator.js."
+    },
+    {
+      "file": "src/server-features/crafting/b5/flows/B5DepositFlow.js",
+      "owner": "crafting",
+      "reason": "Thin personal-vault deposit adapter kept for the pending generic craft wiring; nothing requires it at runtime or from scripts."
+    },
+    {
+      "file": "src/server-features/crafting/b5/flows/B5InventoryReadFlow.js",
+      "owner": "crafting",
+      "reason": "Thin inventory read adapter kept for the pending generic craft wiring; the runtime reads inventory through src/items/inventory/InventoryReader.js."
+    },
+    {
+      "file": "src/server-features/crafting/b5/flows/B5Pv2ReadFlow.js",
+      "owner": "crafting",
+      "reason": "Thin personal-vault read adapter kept for the pending generic craft wiring; the runtime reads /pv 2 through the personal-vault capability."
+    },
+    {
+      "file": "src/server-features/crafting/b5/support/B5StageContract.js",
+      "owner": "crafting",
+      "reason": "Stage contract consumed by the crafting test harnesses (B5CraftModeService, overlay and server-features suites); the runtime composition root injects server-features/crafting/verification/StageExecutionContract.js instead."
     }
   ],
   "staleManifest": "scripts/cleanup-stale.js",

@@ -95,7 +95,7 @@ test('baseline semantic validator rejects a committed historical pending finding
     baseline.findings[1] = {
         code: 'COMMON_CONTRACT_ADR_PENDING',
         category: 'TARGET',
-        file: 'docs/architecture-roadmap/work-packages/WP-002_COMMON_CONTRACTS_ADR.md',
+        file: 'architecture/catalog.json',
         summary: 'stale historical finding',
         workPackages: ['WP-002']
     };

@@ -531,7 +531,12 @@ if (hasSingleInstanceLock) {
             send: snapshot => {
                 if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) mainWindow.webContents.send('mcbot:operator-snapshot', snapshot);
             }
-        });        });
+        });
+        registerIpc();
+        controller.onLog(record => {
+            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mcbot:log', record);
+            if (record?.level === 'error') notify('MCbot error', `${record.scope || 'Application'}: ${record.message || 'Unknown error'}`, `${record.scope}:${record.message}`);
+        });
         controller.onDevLog(record => {
             if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mcbot:dev-log', record);
         });

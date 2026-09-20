@@ -9,7 +9,6 @@ const REQUIRED_FILES = Object.freeze([
     '.env.example',
     'architecture/baseline/current.json',
     'architecture/catalog.json',
-    'docs/architecture-roadmap/15_WORK_PACKAGE_INDEX.md',
     'forge.config.js',
     'package-lock.json',
     'package.json',

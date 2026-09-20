@@ -12,7 +12,9 @@ const { STALE_PATHS } = require('./cleanup-stale');
 const {
     normalizeRepositoryRelativePath,
     isDocumentPathAuthorized,
-    validateGovernedDocumentRoots
+    isDocumentScanExcluded,
+    validateGovernedDocumentRoots,
+    validateDocumentScanExclusions
 } = require('./document-governance');
 
 function relative(file) {
@@ -106,6 +108,54 @@ function findCycles(graph) {
     return cycles;
 }
 
+function validatePendingWiringSources(configuredSources, root, sourceFiles, allReachable) {
+    const failures = [];
+    const files = new Map();
+    if (configuredSources === undefined) return { failures, files };
+    if (!Array.isArray(configuredSources)) {
+        failures.push({
+            code: 'PENDING_WIRING_INVALID',
+            message: 'pendingWiringSources must be an array of { file, owner, reason } entries.',
+            file: 'architecture/catalog.json'
+        });
+        return { failures, files };
+    }
+
+    const sourceSet = new Set(sourceFiles);
+    const seen = new Set();
+    for (const entry of configuredSources) {
+        const normalized = normalizeRepositoryRelativePath(entry?.file);
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry) || !normalized) {
+            failures.push({
+                code: 'PENDING_WIRING_ENTRY_INVALID',
+                message: `Invalid pending wiring entry: ${JSON.stringify(entry ?? null)}`,
+                file: 'architecture/catalog.json'
+            });
+            continue;
+        }
+        if (seen.has(normalized)) {
+            failures.push({ code: 'PENDING_WIRING_DUPLICATE', message: `Duplicate pending wiring declaration: ${normalized}`, file: normalized });
+            continue;
+        }
+        seen.add(normalized);
+        const full = path.resolve(root, normalized);
+        if (!sourceSet.has(full)) {
+            failures.push({ code: 'PENDING_WIRING_SOURCE_MISSING', message: `Pending wiring declaration is not an existing source file: ${normalized}`, file: normalized });
+            continue;
+        }
+        if (typeof entry.owner !== 'string' || !entry.owner.trim() || typeof entry.reason !== 'string' || !entry.reason.trim()) {
+            failures.push({ code: 'PENDING_WIRING_EVIDENCE_MISSING', message: `Pending wiring declaration needs a non-empty owner and reason: ${normalized}`, file: normalized });
+            continue;
+        }
+        if (allReachable.has(full)) {
+            failures.push({ code: 'PENDING_WIRING_SOURCE_REACHABLE', message: `Declared pending wiring source is reachable again; remove the declaration: ${normalized}`, file: normalized });
+            continue;
+        }
+        files.set(full, { file: normalized, owner: entry.owner.trim(), reason: entry.reason.trim() });
+    }
+    return { failures, files };
+}
+
 function audit() {
     const failures = [];
     const warnings = [];
@@ -128,7 +178,11 @@ function audit() {
     }
     const documentGovernance = validateGovernedDocumentRoots(catalog.governedDocumentRoots, root);
     failures.push(...documentGovernance.failures);
-    const markdown = walk(root, file => file.endsWith('.md')).map(relative);
+    const documentScan = validateDocumentScanExclusions(catalog.documentScanExclusions, root);
+    failures.push(...documentScan.failures);
+    const markdown = walk(root, file => file.endsWith('.md'))
+        .map(relative)
+        .filter(file => !isDocumentScanExcluded(file, documentScan.exclusions));
     for (const file of markdown) {
         if (!isDocumentPathAuthorized(file, officialDocuments, documentGovernance.roots)) {
             add('MARKDOWN_UNAUTHORIZED', `Unauthorized Markdown file: ${file}`, file);
@@ -171,8 +225,20 @@ function audit() {
     }
     const runtimeReachable = reachableFrom(runtimeRoots, graph);
     const allReachable = reachableFrom([...runtimeRoots, ...scriptRoots], graph);
+    const pendingWiring = validatePendingWiringSources(catalog.pendingWiringSources, root, sourceFiles, allReachable);
+    failures.push(...pendingWiring.failures);
     for (const file of sourceFiles) {
-        if (!allReachable.has(file)) add('SOURCE_ORPHAN', 'Source file is unreachable from runtime or script entrypoints.', relative(file));
+        if (allReachable.has(file)) continue;
+        const declared = pendingWiring.files.get(file);
+        if (declared) {
+            warnings.push({
+                code: 'SOURCE_PENDING_WIRING',
+                message: `Unwired module is declared as pending wiring (owner: ${declared.owner}): ${declared.reason}`,
+                file: relative(file)
+            });
+            continue;
+        }
+        add('SOURCE_ORPHAN', 'Source file is unreachable from runtime or script entrypoints.', relative(file));
     }
 
     const sourceText = new Map(sourceFiles.map(file => [file, stripComments(fs.readFileSync(file, 'utf8'))]));
@@ -259,6 +325,8 @@ function audit() {
             stalePaths: STALE_PATHS.length,
             officialDocuments: officialDocuments.length,
             governedDocumentRoots: documentGovernance.roots.length,
+            documentScanExclusions: documentScan.exclusions.length,
+            pendingWiringSources: pendingWiring.files.size,
             coverage: catalog.coverage
         }
     };
@@ -293,5 +361,8 @@ module.exports = Object.freeze({
     print,
     normalizeRepositoryRelativePath,
     isDocumentPathAuthorized,
-    validateGovernedDocumentRoots
+    isDocumentScanExcluded,
+    validateGovernedDocumentRoots,
+    validateDocumentScanExclusions,
+    validatePendingWiringSources
 });

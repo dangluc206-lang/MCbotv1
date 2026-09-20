@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const catalog = require('../architecture/catalog.json');
-const { isDocumentPathAuthorized, validateGovernedDocumentRoots } = require('./document-governance');
+const { isDocumentPathAuthorized, isDocumentScanExcluded, validateGovernedDocumentRoots, validateDocumentScanExclusions } = require('./document-governance');
 
 const root = path.resolve(__dirname, '..');
 const required = [
@@ -32,7 +32,6 @@ const required = [
     'scripts/inspect-architecture-baseline.js',
     'architecture/baseline/schema.json',
     'architecture/baseline/current.json',
-    'docs/architecture-roadmap/baseline/WP-001_GAP_REPORT.md',
     'config/app.json',
     'config/server.json',
     'config/commands/commands.json',
@@ -69,7 +68,13 @@ for (const failure of documentGovernance.failures) {
     console.error(`[FAIL] ${failure.code}${failure.file ? ` ${failure.file}` : ''}: ${failure.message}`);
     failures += 1;
 }
+const documentScan = validateDocumentScanExclusions(catalog.documentScanExclusions, root);
+for (const failure of documentScan.failures) {
+    console.error(`[FAIL] ${failure.code}${failure.file ? ` ${failure.file}` : ''}: ${failure.message}`);
+    failures += 1;
+}
 for (const file of markdown) {
+    if (isDocumentScanExcluded(file, documentScan.exclusions)) continue;
     if (!isDocumentPathAuthorized(file, catalog.officialDocuments || [], documentGovernance.roots)) {
         console.error(`[FAIL] Unauthorized Markdown file: ${file}`);
         failures += 1;

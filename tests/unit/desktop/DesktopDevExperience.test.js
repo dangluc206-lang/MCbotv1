@@ -32,7 +32,7 @@ test('page catalog exposes USER and DEV groups and every page is grouped', () =>
     for (const page of ['dashboard', 'bots', 'bot-detail', 'modes', 'incidents', 'settings']) {
         assert.equal(Catalog[page].group, 'USER', `${page} must stay in USER experience`);
     }
-    for (const page of ['dev-overview', 'inspector', 'events', 'logs', 'incident-debug', 'runtime-state', 'b5-debug', 'diagnostics', 'config-debug', 'builder', 'tools', 'ai']) {
+    for (const page of ['dev-overview', 'inspector', 'events', 'logs', 'incident-debug', 'runtime-state', 'b5-debug', 'diagnostics', 'config-debug', 'builder', 'tools']) {
         assert.equal(Catalog[page].group, 'DEV', `${page} must stay in DEV experience`);
     }
 });
@@ -43,10 +43,9 @@ test('dev router exposes exactly 9 nav pages and blocks non-nav pages', () => {
         'dev-overview', 'inspector', 'events', 'logs',
         'incident-debug', 'runtime-state', 'b5-debug', 'diagnostics', 'config-debug'
     ]);
-    // builder/tools/ai are DEV group but not in Dev nav.
+    // builder/tools are DEV group but not in Dev nav.
     assert.equal(DevRouter.isDevNavPage('builder'), false);
     assert.equal(DevRouter.isDevNavPage('tools'), false);
-    assert.equal(DevRouter.isDevNavPage('ai'), false);
     assert.equal(DevRouter.isDevNavPage('dev-overview'), true);
     assert.equal(DevRouter.isDevNavPage('config-debug'), true);
 });
