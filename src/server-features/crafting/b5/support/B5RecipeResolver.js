@@ -37,7 +37,10 @@ class B5RecipeResolver {
     }
 
     isB5DirectlyReady(data, amount = 1) {
-        const targetId = data?.fullPlan?.targetId || this.config?.targetId || 'super_alloy';
+        // No hard-coded target default: without a requested or configured
+        // target this check fails closed instead of assuming one item.
+        const targetId = data?.fullPlan?.targetId || this.config?.targetId || null;
+        if (!targetId) return false;
         const targetRecipe = this.recipeForOutput(targetId, data?.finalSteps || []);
         if (!targetRecipe?.recipe) return false;
         const available = data?.nonStorageAvailable || {};

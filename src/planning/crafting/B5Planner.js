@@ -1,20 +1,21 @@
 'use strict';
 
+const CraftStageClassifier = require('./CraftStageClassifier');
+
 class B5Planner {
     // No hard-coded target: the default target is configuration data injected
     // by the bootstrap layer. A missing targetId fails closed instead of
     // silently picking any item (e.g. super_alloy) for the operator.
-    constructor({ planner, targetId, tiers = {} }) {
+    constructor({ planner, targetId, tiers = {}, stageClassifier = null, reserveTiers = ['B2', 'B3'] }) {
         if (!planner || typeof planner.plan !== 'function') throw new TypeError('B5Planner planner.plan is required.');
         const configured = String(targetId || '').trim();
         if (!configured) throw new TypeError('B5Planner targetId is required: it must come from configuration, never a code default.');
         this.planner = planner;
         this.targetId = configured;
         this.tiers = tiers;
-        this.tierByItem = new Map();
-        for (const [tier, ids] of Object.entries(tiers || {})) {
-            for (const id of ids || []) this.tierByItem.set(id, tier);
-        }
+        // Stage classification belongs to the generic tier-driven classifier;
+        // which tiers are "reserve" is B5 boundary policy, not planner logic.
+        this.stageClassifier = stageClassifier || new CraftStageClassifier({ tiers, reserveTiers });
     }
 
     /**
@@ -29,17 +30,7 @@ class B5Planner {
     }
 
     partition(plan) {
-        const reserveSteps = [];
-        const finalSteps = [];
-        for (const step of plan.steps) {
-            const tier = this.tierByItem.get(step.outputId) || null;
-            if (tier === 'B2' || tier === 'B3') reserveSteps.push(step);
-            else finalSteps.push(step);
-        }
-        return Object.freeze({
-            reserveSteps: Object.freeze(reserveSteps),
-            finalSteps: Object.freeze(finalSteps)
-        });
+        return this.stageClassifier.partition(plan);
     }
 }
 

@@ -129,6 +129,7 @@ function fastGateDefinitions() {
             'tests/unit/planning/B1StorageProtectionPlanner.test.js',
             'tests/unit/simulation/B5PlannerReplay.test.js',
             'tests/unit/modes/B5ReferenceConformance.test.js',
+            'tests/unit/planning/CraftTargetPlanningPipeline.test.js',
             'tests/unit/server-features/B5PlanningService.test.js'
         ]),
         () => runNodeTests('event-generation', 'WP-005', 'Event scope/generation/stale callback contracts', [

@@ -24,7 +24,7 @@ class B5ExecutionPlanner {
     compile(inspection = {}) {
         const replayInput = this.capture(inspection);
         const progress = replayInput.progress || {};
-        const targetId = progress.targetId || replayInput.fullPlan?.targetId || 'super_alloy';
+        const targetId = progress.targetId || replayInput.fullPlan?.targetId || null;
         const amount = Math.max(1, Number(progress.amount || replayInput.amount || 1));
         const nextStep = progress.nextStep ? cloneStable(progress.nextStep) : null;
         const blockers = this.#blockers(replayInput);
@@ -59,7 +59,7 @@ class B5ExecutionPlanner {
             snapshotDigest: digest,
             state: progress.state || (progress.feasible ? 'READY' : 'WAITING_MATERIALS'),
             feasible: Boolean(progress.feasible),
-            priority: Array.isArray(progress.priority) ? [...progress.priority] : ['B5', 'B4', 'B3', 'B2'],
+            priority: Array.isArray(progress.priority) ? [...progress.priority] : [],
             decision,
             nextStep,
             blockers,
@@ -90,7 +90,7 @@ class B5ExecutionPlanner {
             personalVaultPressure: cloneStable(inspection.personalVaultPressure || null),
             inventoryTotals: cloneStable(inspection.inventoryTotals || {}),
             fullPlan: {
-                targetId: fullPlan.targetId || progress.targetId || 'super_alloy',
+                targetId: fullPlan.targetId || progress.targetId || null,
                 feasible: Boolean(fullPlan.feasible),
                 missing: cloneStable(fullPlan.missing || {}),
                 steps: Array.isArray(fullPlan.steps) ? fullPlan.steps.map(step => ({
@@ -111,7 +111,7 @@ class B5ExecutionPlanner {
             })) : [],
             progress: cloneStable({
                 ...progress,
-                targetId: progress.targetId || fullPlan.targetId || 'super_alloy',
+                targetId: progress.targetId || fullPlan.targetId || null,
                 amount: Math.max(1, Number(progress.amount || inspection.amount || 1)),
                 feasible: Boolean(progress.feasible),
                 nextStep: progress.nextStep ? cloneStable(progress.nextStep) : null

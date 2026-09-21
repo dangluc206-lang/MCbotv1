@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "baselineVersion": 1,
   "workPackage": "WP-001",
-  "generatedAt": "2026-09-20T13:05:31.400Z",
+  "generatedAt": "2026-09-21T13:40:21.189Z",
   "releaseVersion": "2.7.67",
   "scope": {
     "root": ".",
@@ -39,12 +39,12 @@
       "inScopeChangedPaths": 0
     },
     "reason": "Standalone source tree; version-control metadata is intentionally not required.",
-    "sourceFingerprintSha256": "30a899443d3dc83d5403e8864d5a43fa477b4ce40be09da03c5b07b59e132c22"
+    "sourceFingerprintSha256": "ec9ded0f3afb700f5ceb5e3010db0b8c9a2fc660f6c0c6f8812d994428eb90fd"
   },
   "counts": {
-    "files": 889,
-    "source": 416,
-    "tests": 246,
+    "files": 892,
+    "source": 418,
+    "tests": 247,
     "scripts": 41,
     "configJson": 35,
     "routes": 1
@@ -164,7 +164,7 @@
     },
     {
       "area": "planning",
-      "files": 10,
+      "files": 11,
       "owner": "src/planning/",
       "layer": "pure-planning",
       "classification": "CURRENT"
@@ -178,7 +178,7 @@
     },
     {
       "area": "server-features",
-      "files": 83,
+      "files": 84,
       "owner": "src/server-features/",
       "layer": "server-domain-features",
       "classification": "CURRENT"
@@ -215,7 +215,7 @@
           "src/bootstrap/createApplication.js",
           "src/bootstrap/shutdown.js"
         ],
-        "reachableSourceFiles": 336
+        "reachableSourceFiles": 338
       },
       {
         "file": "src/desktop/main.js",
@@ -235,7 +235,7 @@
           "src/desktop/update/local-update-helper.js",
           "src/desktop/use-cases/DesktopRuntimeBootstrap.js"
         ],
-        "reachableSourceFiles": 382
+        "reachableSourceFiles": 384
       },
       {
         "file": "src/desktop/preload.js",
@@ -631,6 +631,7 @@
       "src/operations/OperationTimeoutPolicy.js",
       "src/planning/crafting/B5ExecutionPlanner.js",
       "src/planning/crafting/B5Planner.js",
+      "src/planning/crafting/CraftStageClassifier.js",
       "src/planning/crafting/CraftingChainPlanner.js",
       "src/planning/crafting/CraftingPlan.js",
       "src/planning/crafting/CraftingPlanner.js",
@@ -651,6 +652,7 @@
       "src/server-features/crafting/B5AutomationRuntimeDecorator.js",
       "src/server-features/crafting/B5AutomationService.js",
       "src/server-features/crafting/B5PlanningService.js",
+      "src/server-features/crafting/CraftInputAvailability.js",
       "src/server-features/crafting/CraftPlanningService.js",
       "src/server-features/crafting/CraftingExecutionSupport.js",
       "src/server-features/crafting/CraftingGuiNavigator.js",
@@ -1037,6 +1039,7 @@
       "src/operations/OperationTimeoutPolicy.js",
       "src/planning/crafting/B5ExecutionPlanner.js",
       "src/planning/crafting/B5Planner.js",
+      "src/planning/crafting/CraftStageClassifier.js",
       "src/planning/crafting/CraftingChainPlanner.js",
       "src/planning/crafting/CraftingPlan.js",
       "src/planning/crafting/CraftingPlanner.js",
@@ -1057,6 +1060,7 @@
       "src/server-features/crafting/B5AutomationRuntimeDecorator.js",
       "src/server-features/crafting/B5AutomationService.js",
       "src/server-features/crafting/B5PlanningService.js",
+      "src/server-features/crafting/CraftInputAvailability.js",
       "src/server-features/crafting/CraftPlanningService.js",
       "src/server-features/crafting/CraftingExecutionSupport.js",
       "src/server-features/crafting/CraftingGuiNavigator.js",
@@ -1688,6 +1692,7 @@
         "src/server-features/crafting/B5AutomationRuntimeDecorator.js",
         "src/server-features/crafting/B5AutomationService.js",
         "src/server-features/crafting/B5PlanningService.js",
+        "src/server-features/crafting/CraftInputAvailability.js",
         "src/server-features/crafting/CraftPlanningService.js",
         "src/server-features/crafting/CraftingExecutionSupport.js",
         "src/server-features/crafting/CraftingGuiNavigator.js",
@@ -1797,6 +1802,7 @@
       "sourceLocations": [
         "src/planning/crafting/B5ExecutionPlanner.js",
         "src/planning/crafting/B5Planner.js",
+        "src/planning/crafting/CraftStageClassifier.js",
         "src/planning/crafting/CraftingChainPlanner.js",
         "src/planning/crafting/CraftingPlan.js",
         "src/planning/crafting/CraftingPlanner.js",
@@ -1805,6 +1811,7 @@
         "src/server-features/crafting/B5AutomationRuntimeDecorator.js",
         "src/server-features/crafting/B5AutomationService.js",
         "src/server-features/crafting/B5PlanningService.js",
+        "src/server-features/crafting/CraftInputAvailability.js",
         "src/server-features/crafting/CraftPlanningService.js",
         "src/server-features/crafting/CraftingExecutionSupport.js",
         "src/server-features/crafting/CraftingGuiNavigator.js",
@@ -2422,11 +2429,11 @@
     "valid": true,
     "catalog": {
       "schemaVersion": 3,
-      "sourceFiles": 416,
-      "testFiles": 246,
+      "sourceFiles": 418,
+      "testFiles": 247,
       "scriptFiles": 41,
-      "sourceReachable": 408,
-      "runtimeReachable": 402,
+      "sourceReachable": 410,
+      "runtimeReachable": 404,
       "configGroups": 33,
       "connectionEvents": 31,
       "stalePaths": 42,

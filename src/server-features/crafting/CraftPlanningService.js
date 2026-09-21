@@ -1,42 +1,29 @@
 'use strict';
 
+/**
+ * Generic craft planning entry point: plan(targetId, amount, available).
+ * The target is always explicit per request. This service holds no default or
+ * ambient target, so no generic path can silently plan one particular item.
+ * Which items may be requested is target policy data (crafting-targets.json),
+ * never a constant in planning code.
+ */
 class CraftPlanningService {
-    constructor({ planner, config = {} } = {}) {
+    constructor({ planner } = {}) {
         if (!planner?.plan) {
             throw new TypeError('CraftPlanningService planner.plan is required.');
         }
 
         this.planner = planner;
-        this.config = Object.freeze({
-            defaultTargetId: config.defaultTargetId || null
-        });
-    }
-
-    reconfigure(config = {}) {
-        const next = config || {};
-
-        this.config = Object.freeze({
-            ...this.config,
-            ...(Object.prototype.hasOwnProperty.call(next, 'defaultTargetId')
-                ? { defaultTargetId: next.defaultTargetId || null }
-                : {})
-        });
-
-        return this;
     }
 
     plan(targetId, amount, available = {}) {
-        const resolvedTarget = String(targetId || this.config.defaultTargetId || '').trim();
+        const resolvedTarget = String(targetId ?? '').trim();
 
         if (!resolvedTarget) {
             throw new TypeError('CraftPlanningService targetId is required.');
         }
 
         return this.planner.plan(resolvedTarget, amount, available);
-    }
-
-    planConfigured(amount, available = {}) {
-        return this.plan(this.config.defaultTargetId, amount, available);
     }
 }
 

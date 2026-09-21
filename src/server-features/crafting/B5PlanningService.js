@@ -8,6 +8,7 @@ const B5KhoReadFlow = require('./b5/flows/B5KhoReadFlow');
 const PersonalVaultReadFlow = require('../personal-vault/PersonalVaultReadFlow');
 const InventoryReadFlow = require('../inventory/InventoryReadFlow');
 const CraftPlanningService = require('./CraftPlanningService');
+const { personalVaultPressure } = require('./CraftInputAvailability');
 
 class B5PlanningService {
     constructor({
@@ -44,10 +45,7 @@ class B5PlanningService {
             pv2: readFlows.pv2 || new PersonalVaultReadFlow({ personalVault, config: { preferData: true, maxAgeMs: guiDataMaxAgeMs } }),
             inventory: readFlows.inventory || new InventoryReadFlow({ inventoryReader })
         });
-        this.craftPlanningService = new CraftPlanningService({
-            planner: this.b5Planner,
-            config: { defaultTargetId: this.config.targetId }
-        });
+        this.craftPlanningService = new CraftPlanningService({ planner: this.b5Planner });
     }
 
     inspect(amount = 1, options = {}) {
@@ -107,7 +105,7 @@ class B5PlanningService {
                 if (best > 0) inventoryTotals[id] = best;
             }
 
-            const personalVaultPressure = this.#personalVaultPressure(vaultResult.data);
+            const vaultPressure = personalVaultPressure(vaultResult.data, this.config?.personalVaultBackpressure);
             const vaultTotals = { ...(vaultResult.data?.totals || {}) };
             const effectiveInventoryTotals = { ...inventoryTotals };
             if (additional) {
@@ -158,7 +156,7 @@ class B5PlanningService {
                 effectiveStorageItems,
                 craftableStorageItems,
                 personalVault: vaultResult.data,
-                personalVaultPressure,
+                personalVaultPressure: vaultPressure,
                 b1Supply: Object.freeze({ mode: String(this.config?.b1SupplyMode || 'finite').toLowerCase() }),
                 inventory: inventorySnapshot,
                 inventoryViews,
@@ -184,25 +182,6 @@ class B5PlanningService {
             });
             return Result.fail(Operation.statusForError(wrapped), wrapped.message, wrapped, wrapped.toDiagnostic());
         }
-    }
-
-    #personalVaultPressure(snapshot) {
-        const policy = this.config?.personalVaultBackpressure || {};
-        const minEmptySlots = Math.max(0, Number(policy.minEmptySlots ?? 3));
-        const hardMinEmptySlots = Math.max(0, Math.min(minEmptySlots, Number(policy.hardMinEmptySlots ?? 1)));
-        const emptySlotCount = Number(snapshot?.emptySlotCount);
-        const slotCount = Number(snapshot?.slotCount);
-        const known = Number.isInteger(emptySlotCount) && emptySlotCount >= 0;
-        return Object.freeze({
-            known,
-            emptySlotCount: known ? emptySlotCount : null,
-            slotCount: Number.isInteger(slotCount) && slotCount >= 0 ? slotCount : null,
-            minEmptySlots,
-            hardMinEmptySlots,
-            backpressure: known ? emptySlotCount <= minEmptySlots : false,
-            critical: known ? emptySlotCount <= hardMinEmptySlots : false,
-            allowNewIntermediates: known ? emptySlotCount > minEmptySlots : true
-        });
     }
 
     #contextualize(result, context) {
@@ -430,7 +409,6 @@ class B5PlanningService {
             additional: Boolean(additional),
             feasible: Boolean(fullPlan?.feasible),
             state,
-            priority: Object.freeze(['B5', 'B4', 'B3', 'B2']),
             b5DirectReady,
             b3: Object.freeze(b3),
             b3MissingTotal,
