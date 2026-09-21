@@ -55,7 +55,7 @@ function createCoordinator({ availability, reserveCalls, preparationFailure = nu
             allowsNewIntermediates: () => true,
             vaultCanAccept: () => true
         },
-        recipeResolver: { isB5DirectlyReady: () => false },
+        recipeResolver: { isTargetDirectlyReady: () => false },
         progressTracker: { sync() {}, set() {}, advance() {} },
         intermediate: {
             async promoteOwned(current) { return { actions: [], inspection: current }; },
@@ -84,7 +84,7 @@ async function execute(coordinator) {
     return coordinator.execute(1, context(), {
         additional: 0,
         mode: 'production',
-        allowFinalB5: false,
+        craftFinalTarget: false,
         allowNewB2: true,
         recoveryOnly: false
     });

@@ -54,7 +54,7 @@ function makeFinal({ settleCounts = [] } = {}) {
 
 test('craft verifies output but does not perform stage settlement per craft', async () => {
     const final = makeFinal();
-    const result = await final.coordinator.craft('b4', 1, context(), 'b4out', { stage: 'B4' });
+    const result = await final.coordinator.craft('b4', 1, context(), 'b4out', { stage: 'INTERMEDIATE' });
     assert.equal(result.actualCrafts, 1);
     assert.equal(final.settleCalls, 0);
     assert.equal(result.stageContract.settled, false);

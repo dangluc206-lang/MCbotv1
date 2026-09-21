@@ -44,12 +44,12 @@ test('B5RecipeResolver prefers configured final step and verifies direct B5 read
     const resolved = resolver.recipeForOutput('super_alloy', [{ outputId: 'super_alloy', recipeId: 'super_alloy' }]);
     assert.equal(resolved.recipeId, 'super_alloy');
     assert.equal(resolved.recipe, recipes.super_alloy);
-    assert.equal(resolver.isB5DirectlyReady({
+    assert.equal(resolver.isTargetDirectlyReady({
         fullPlan: { targetId: 'super_alloy' },
         finalSteps: [{ outputId: 'super_alloy', recipeId: 'super_alloy' }],
         nonStorageAvailable: { tungsten: 8, titanium: 16, carbon: 32 }
     }, 1), true);
-    assert.equal(resolver.isB5DirectlyReady({
+    assert.equal(resolver.isTargetDirectlyReady({
         fullPlan: { targetId: 'super_alloy' },
         finalSteps: [{ outputId: 'super_alloy', recipeId: 'super_alloy' }],
         nonStorageAvailable: { tungsten: 8, titanium: 15, carbon: 32 }

@@ -29,7 +29,14 @@
     },
     "execution": {
       "owner": "src/server-features/crafting/CraftingOperation.js",
-      "entry": "src/server-features/crafting/CraftingService.js"
+      "entry": "src/server-features/crafting/CraftingService.js",
+      "cycleExecutor": "src/server-features/crafting/b5/B5CycleCoordinator.js (generic target cycle; B5 is only the current consumer)",
+      "finalChainExecutor": "src/server-features/crafting/b5/B5FinalCraftCoordinator.js (stages TARGET/INTERMEDIATE derived from planner output identity)",
+      "completionModel": {
+        "fields": ["targetId", "completedTarget", "completedAmount"],
+        "forbidden": ["completedB5", "completedNewB5", "allowFinalB5", "stopAtB5Ready", "isB5DirectlyReady", "super_alloy fallback"],
+        "readinessHelper": "isTargetDirectlyReady (recipe/output metadata; fails closed without a planner target)"
+      }
     },
     "quantity": {
       "owner": "src/server-features/crafting/CraftingQuantityResolver.js",

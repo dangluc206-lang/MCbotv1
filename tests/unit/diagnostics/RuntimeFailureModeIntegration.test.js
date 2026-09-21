@@ -51,7 +51,7 @@ function collector({ eventBus, publisher, preprocess, policy = failurePolicy, de
         b1Materials: { protectForB5Batch: preprocess, ...b1Materials },
         b5Planning: { inspectAdditional: async () => ({ success: true, data: { fullPlan: { feasible: false }, finalSteps: [], chains: [] } }) },
         b5Automation: {
-            runNext: async () => ({ success: true, data: { completedNewB5: false } }),
+            runNext: async () => ({ success: true, data: { completedTarget: false } }),
             runMaintenance: async () => ({ success: true, data: { waitingForMaterials: true } })
         },
         modeCoordinator,
@@ -311,7 +311,7 @@ test('verified collector automation success resets retryable failure streak', as
         }
     });
     mode.b5Planning.inspectAdditional = async () => ({ success: true, data: { fullPlan: { feasible: true }, finalSteps: [{ recipeId: 'b5' }], chains: [] } });
-    mode.b5Automation.runNext = async () => ({ success: true, data: { completedNewB5: true, waitingForMaterials: false } });
+    mode.b5Automation.runNext = async () => ({ success: true, data: { completedTarget: true, waitingForMaterials: false } });
     await publisher.initialize();
     await mode.initialize();
     await mode.enable();

@@ -26,7 +26,7 @@ class B5CycleCoordinator {
         }, inspect);
         state.afterReserve = afterReserve;
         this.progressTracker.sync(afterReserve.data, state.targetId, {
-            state: this.recipeResolver.isB5DirectlyReady(afterReserve.data, amount) ? 'B5_READY' : (afterReserve.data.fullPlan.feasible ? 'FINAL_READY' : 'WAITING_MATERIALS')
+            state: this.recipeResolver.isTargetDirectlyReady(afterReserve.data, amount) ? 'TARGET_READY' : (afterReserve.data.fullPlan.feasible ? 'FINAL_READY' : 'WAITING_MATERIALS')
         });
         await this.#finishCycle(state, inspect, context, options, amount);
         return this.#result(state, options, amount);
@@ -51,7 +51,7 @@ class B5CycleCoordinator {
             targetVaultBefore: Number(first.data.personalVault?.totals?.[targetId] || 0),
             chainCatalog: Array.isArray(first.data?.chains) ? first.data.chains : [],
             createNewB2: options.allowNewB2 === true && this.inventoryState.allowsNewIntermediates(first.data),
-            completedNewB5: false, targetCapacityBlocked: false, earlyResult: null
+            completedTarget: false, targetCapacityBlocked: false, earlyResult: null
         };
         this.progressTracker.sync(first.data, targetId);
         const orphaned = Math.max(0, Number(first.data?.inventoryTotals?.[targetId] || 0));
@@ -92,13 +92,13 @@ class B5CycleCoordinator {
     }
 
     #earlyResult(state, amount, options, extra) {
-        return { amount, additional: options.additional, mode: options.mode, allowFinalB5: options.allowFinalB5, allowNewB2: false, actions: state.actions,
-            complete: false, completedNewB5: false, targetId: state.targetId, b5Ready: false, plan: state.first.data?.executionPlan || null,
+        return { amount, additional: options.additional, mode: options.mode, craftFinalTarget: options.craftFinalTarget, allowNewB2: false, actions: state.actions,
+            complete: false, completedTarget: false, completedAmount: 0, targetId: state.targetId, plan: state.first.data?.executionPlan || null,
             pv2Backpressure: state.first.data?.personalVaultPressure || null, progress: this.status(), ...extra };
     }
 
     #recoveryOnlyResult(state, amount, options) {
-        return this.#earlyResult(state, amount, { ...options, allowFinalB5: false }, {
+        return this.#earlyResult(state, amount, { ...options, craftFinalTarget: false }, {
             recoveredExistingB5: false, recoveryOnly: true, waitingForMaterials: true, productive: false
         });
     }
@@ -117,7 +117,7 @@ class B5CycleCoordinator {
         const chainOrder = [...(state.workingInspection.data?.chains || [])].map(chain => chain.b3Id);
         for (const chainId of chainOrder) {
             context.cancellation.token.throwIfCancelled();
-            if (this.recipeResolver.isB5DirectlyReady(state.workingInspection.data, amount)) break;
+            if (this.recipeResolver.isTargetDirectlyReady(state.workingInspection.data, amount)) break;
             const outcome = await this.#processMaterial(chainId, state, inspect, context, options, amount);
             if (outcome === 'break') break;
         }
@@ -137,7 +137,7 @@ class B5CycleCoordinator {
         if (plan.plannedB2 <= 0 && plan.plannedB3 <= 0) return 'continue';
         const reserveResult = await this.#executeReserve(chain, reserveChain, plan, state, context);
         await this.#finalizeMaterial(chain, reserveResult, state, inspect, context, options);
-        if (reserveResult?.waitingForMaterial || this.recipeResolver.isB5DirectlyReady(state.workingInspection.data, amount)) return 'break';
+        if (reserveResult?.waitingForMaterial || this.recipeResolver.isTargetDirectlyReady(state.workingInspection.data, amount)) return 'break';
         return 'continue';
     }
 
@@ -237,13 +237,13 @@ class B5CycleCoordinator {
     async #finishCycle(state, inspect, context, options, amount) {
         const data = state.afterReserve.data;
         const capacity = this.inventoryState.vaultCanAccept(data?.personalVault, state.targetId, amount);
-        const feasible = data.fullPlan.feasible || this.recipeResolver.isB5DirectlyReady(data, amount);
-        state.targetCapacityBlocked = options.allowFinalB5 && !capacity && feasible;
+        const feasible = data.fullPlan.feasible || this.recipeResolver.isTargetDirectlyReady(data, amount);
+        state.targetCapacityBlocked = options.craftFinalTarget && !capacity && feasible;
         if (state.targetCapacityBlocked) {
             state.actions.push({ status: 'waiting', reason: 'pv2-target-capacity', targetId: state.targetId, amount });
             this.progressTracker.set({ running: false, state: 'WAITING_PV2_TARGET_CAPACITY', currentStep: { kind: 'DEPOSIT', id: state.targetId } });
         }
-        if (options.allowFinalB5 && capacity && feasible) {
+        if (options.craftFinalTarget && capacity && feasible) {
             await this.#craftAndStoreTarget(state, inspect, context, amount);
         } else {
             await this.#finishWithoutTarget(state, context, options);
@@ -253,7 +253,7 @@ class B5CycleCoordinator {
     async #craftAndStoreTarget(state, inspect, context, amount) {
         const { targetId, targetVaultBefore } = state;
         let finalSteps = state.afterReserve.data.finalSteps || [];
-        if (this.recipeResolver.isB5DirectlyReady(state.afterReserve.data, amount)) {
+        if (this.recipeResolver.isTargetDirectlyReady(state.afterReserve.data, amount)) {
             const targetRecipe = this.recipeResolver.recipeForOutput(targetId, finalSteps);
             if (!targetRecipe) throw new FlowError(`B5 recipe not found for ${targetId}.`, {
                 code: 'B5_TARGET_RECIPE_NOT_FOUND', subsystem: 'b5', step: 'craft-final-chain', action: 'resolve B5 recipe', resource: targetId, trace: context.trace
@@ -267,7 +267,7 @@ class B5CycleCoordinator {
             throw FlowError.wrap(error, { details: { b5CompletionContext: { finalChain: true, targetId, targetVaultBefore } } });
         }
         const targetVaultAfter = await this.#depositAndVerifyTarget(state, context, amount);
-        state.completedNewB5 = true;
+        state.completedTarget = true;
         state.actions.push({ status: 'final-crafted-and-deposited', targetId, amount, targetVaultBefore, targetVaultAfter });
         await this.#postB5(state, inspect, context, amount);
     }
@@ -297,7 +297,7 @@ class B5CycleCoordinator {
             const post = await this.runStep(context, { subsystem: 'b5', step: 'inspect-post-b5', action: 'refresh lower tiers after B5 consumption', resource: 'B2-B4' }, inspect);
             this.progressTracker.set({ running: true, state: 'COMPACTING', currentStep: { kind: 'CONVERT_BLOCKS', id: 'B2-B4' } });
             const promotion = await this.runStep(context, { subsystem: 'b5', step: 'post-b5-compaction', action: 'compress leftover B2/B3 into B3/B4 for next cycle', resource: 'B2-B4' },
-                () => this.intermediate.promoteOwned(post, inspect, context, { stopAtB5Ready: false }));
+                () => this.intermediate.promoteOwned(post, inspect, context, { stopAtTargetReady: false }));
             if (promotion?.actions?.length) state.actions.push(...promotion.actions);
             data = promotion?.inspection?.data || post.data;
         }
@@ -327,14 +327,14 @@ class B5CycleCoordinator {
 
     #result(state, options, amount) {
         const blockingReasons = B5ActionDiagnostics.blockingReasons(state.actions);
-        const productive = state.completedNewB5 || state.actions.some(action => B5ActionDiagnostics.isProductiveAction(action));
+        const productive = state.completedTarget || state.actions.some(action => B5ActionDiagnostics.isProductiveAction(action));
         return {
-            amount, additional: options.additional, mode: options.mode, allowFinalB5: options.allowFinalB5, allowNewB2: state.createNewB2, actions: state.actions,
-            complete: state.completedNewB5, completedNewB5: state.completedNewB5, completedAmount: state.completedNewB5 ? amount : 0, targetId: state.targetId,
+            amount, additional: options.additional, mode: options.mode, craftFinalTarget: options.craftFinalTarget, allowNewB2: state.createNewB2, actions: state.actions,
+            complete: state.completedTarget, completedTarget: state.completedTarget, completedAmount: state.completedTarget ? amount : 0, targetId: state.targetId,
             plan: state.afterReserve.data?.executionPlan || state.workingInspection.data?.executionPlan || state.first.data?.executionPlan || null,
-            b5Ready: this.recipeResolver.isB5DirectlyReady(state.afterReserve.data, amount),
+            targetReady: this.recipeResolver.isTargetDirectlyReady(state.afterReserve.data, amount),
             pv2Backpressure: state.afterReserve.data?.personalVaultPressure || state.first.data?.personalVaultPressure || null,
-            waitingForMaterials: !state.completedNewB5 && blockingReasons.length > 0, productive, blockingReasons,
+            waitingForMaterials: !state.completedTarget && blockingReasons.length > 0, productive, blockingReasons,
             actionSummary: B5ActionDiagnostics.summarizeActions(state.actions), progress: this.status()
         };
     }

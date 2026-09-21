@@ -163,7 +163,7 @@ test('completed B5 deposits to /pv 2 and compacts B1 without selling during the 
 
     const result = await service.runNext();
     assert.equal(result.success, true);
-    assert.equal(result.data.completedNewB5, true);
+    assert.equal(result.data.completedTarget, true);
     assert.equal(inspectCall, 2);
     assert.deepEqual(calls, [
         'craft:super_alloy:1',
@@ -219,7 +219,7 @@ test('partial reserve cycle crafts planned B2 before compacting B1 and returning
 
     const result = await service.runNext();
     assert.equal(result.success, true);
-    assert.equal(result.data.completedNewB5, false);
+    assert.equal(result.data.completedTarget, false);
     assert.equal(calls.includes('craft-b2'), true, 'a B2-only reserve plan must execute the planned B2 craft');
     assert.equal(calls.includes('compact-coal'), true);
     assert.equal(calls.includes('compact-all'), false, 'normal production must preserve unrelated loose B1 until pressure requires maintenance');
@@ -878,8 +878,8 @@ test('maintenance mode never crafts B5 even when the final plan is already feasi
 
     const result = await service.runMaintenance({ allowNewB2: true });
     assert.equal(result.success, true);
-    assert.equal(result.data.completedNewB5, false);
-    assert.equal(result.data.b5Ready, false);
+    assert.equal(result.data.completedTarget, false);
+    assert.equal(result.data.targetReady, false);
     assert.equal(calls.includes('craft'), false);
     assert.equal(calls.includes('deposit:super_alloy'), false);
     assert.equal(calls.includes('compact-all'), true);
@@ -1171,7 +1171,7 @@ test('transient prepare-b1 NOT_READY is a normal material wait instead of an aut
 
     const result = await service.runNext();
     assert.equal(result.success, true);
-    assert.equal(result.data.completedNewB5, false);
+    assert.equal(result.data.completedTarget, false);
     assert.equal(result.data.waitingForMaterials, true);
     assert.equal(result.data.actions.some(action => action.status === 'waiting' && action.reason === 'b1-not-ready'), true);
     assert.equal(result.data.blockingReasons.some(action => action.reason === 'b1-not-ready'), true);
@@ -1286,7 +1286,7 @@ test('existing B5 in inventory is recovered to PV2 before any new craft', async 
     const result = await service.runNext();
     assert.equal(result.success, true);
     assert.equal(result.data.recoveredExistingB5, true);
-    assert.equal(result.data.completedNewB5, false);
+    assert.equal(result.data.completedTarget, false);
     assert.deepEqual(calls, ['deposit:super_alloy', 'pv-read']);
 });
 
@@ -1329,7 +1329,7 @@ test('known-full PV2 blocks the final B5 craft when no target stack has capacity
 
     const result = await service.runNext();
     assert.equal(result.success, true);
-    assert.equal(result.data.completedNewB5, false);
+    assert.equal(result.data.completedTarget, false);
     assert.equal(result.data.waitingForMaterials, true);
     assert.equal(result.data.actions.some(action => action.reason === 'pv2-target-capacity'), true);
     assert.equal(result.data.blockingReasons.some(action => action.reason === 'pv2-target-capacity'), true);
@@ -1449,7 +1449,7 @@ test('runNext freshInspection uses planningService.inspectAdditionalFresh inside
 
     const result = await service.runNext({ freshInspection: true });
     assert.equal(result.success, true);
-    assert.equal(result.data.completedNewB5, true);
+    assert.equal(result.data.completedTarget, true);
     assert.equal(normalReads, 0);
     assert.ok(freshReads >= 2);
     assert.equal(result.data.productive, true);

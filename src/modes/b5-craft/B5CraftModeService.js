@@ -670,7 +670,7 @@ class B5CraftModeService extends ManagedMode {
                 await Timeout.delay(this.config.reconciliation.unresolvedPollMs, { cancellationToken });
                 continue;
             }
-            if (data.completedNewB5 === true) {
+            if (data.completedTarget === true) {
                 const completedAmount = Math.max(1, Number(data.completedAmount || 1));
                 this.completedB5 += completedAmount;
                 this.#armBatchProtection('post-b5-complete');
@@ -726,7 +726,7 @@ class B5CraftModeService extends ManagedMode {
             // a fresh re-plan immediately. Treating productive partial B2/B3/B4
             // work as "no progress" caused the mode to back off and restart the
             // full B1 normalization loop before returning to crafting.
-            if (data.completedNewB5 !== true && data.productive === true) {
+            if (data.completedTarget !== true && data.productive === true) {
                 this.#resetNoProgress();
                 this.waitingReason = null;
                         this.setPhase('RUNNING');
@@ -735,7 +735,7 @@ class B5CraftModeService extends ManagedMode {
                 continue;
             }
 
-            if (data.completedNewB5 !== true && (data.waitingForMaterials === true || data.productive === false || blocker)) {
+            if (data.completedTarget !== true && (data.waitingForMaterials === true || data.productive === false || blocker)) {
                 this.waitingReason = blocker?.category || (data.pv2Backpressure?.hardBlocked ? 'pv2-backpressure' : 'materials');
 
 
@@ -759,7 +759,7 @@ class B5CraftModeService extends ManagedMode {
             } else {
                 this.#resetNoProgress();
                 this.waitingReason = null;
-                        this.setPhase(data.completedNewB5 === true ? 'B5_COMPLETED' : 'RUNNING');
+                        this.setPhase(data.completedTarget === true ? 'B5_COMPLETED' : 'RUNNING');
                 this.lastCycleDelayMs = this.config.craftLoopDelayMs;
                 await Timeout.delay(this.config.craftLoopDelayMs, { cancellationToken });
             }
@@ -1623,7 +1623,7 @@ class B5CraftModeService extends ManagedMode {
             requiresReconciliation: Boolean(result.error?.details?.outcome?.requiresReconciliation || result.meta?.details?.outcome?.requiresReconciliation),
             data: result.data ? {
                 complete: result.data.complete ?? null,
-                completedNewB5: result.data.completedNewB5 ?? null,
+                completedTarget: result.data.completedTarget ?? null,
                 completedAmount: result.data.completedAmount ?? null,
                 waitingForMaterials: result.data.waitingForMaterials ?? null,
                 recoveredExistingB5: result.data.recoveredExistingB5 ?? null,

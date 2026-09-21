@@ -50,7 +50,7 @@ test('ALL stops on initial verified material exhaustion, not on a productive par
 for (const amount of [undefined, 0, -1, 1.5, 2, Infinity, NaN]) {
     test(`invalid one-unit completion amount ${amount} fails without credit`, () => {
         const request = execution(1);
-        request.record({ success: true, data: { targetId: 'titanium', completedNewB5: true, completedAmount: amount } });
+        request.record({ success: true, data: { targetId: 'titanium', completedTarget: true, completedAmount: amount } });
         assert.equal(request.snapshot().state, 'FAILED');
         assert.equal(request.snapshot().completedUnits, 0);
     });
@@ -60,7 +60,7 @@ test('reconciliation gates further cycles and cannot credit ordinary results', (
     const request = execution(1);
     request.record({ success: false, meta: { requiresReconciliation: true } });
     assert.equal(request.nextCycle().action, 'WAIT');
-    request.record({ success: true, data: { targetId: 'titanium', completedNewB5: true, completedAmount: 1 } });
+    request.record({ success: true, data: { targetId: 'titanium', completedTarget: true, completedAmount: 1 } });
     assert.equal(request.snapshot().completedUnits, 0);
 });
 
@@ -91,7 +91,7 @@ test('verified no-effect reconciliation releases the gate without resetting boun
 
 test('reconciliation flag wins over apparent success or cancellation', () => {
     for (const result of [
-        { success: true, data: { requiresReconciliation: true, completedNewB5: true, targetId: 'titanium', completedAmount: 1 } },
+        { success: true, data: { requiresReconciliation: true, completedTarget: true, targetId: 'titanium', completedAmount: 1 } },
         { success: false, status: 'CANCELLED', meta: { requiresReconciliation: true } }
     ]) {
         const request = execution(1);
@@ -112,7 +112,7 @@ for (const options of [
 
 test('only matching current-generation completion credits one additional unit', () => {
     const request = execution(1);
-    const result = { success: true, data: { targetId: 'titanium', completedNewB5: true, completedAmount: 1 } };
+    const result = { success: true, data: { targetId: 'titanium', completedTarget: true, completedAmount: 1 } };
     request.record(result, { generation: 2, expectedGeneration: 1 });
     request.record({ success: true, data: { recoveredExistingB5: true, targetId: 'titanium', recoveredAmount: 10 } });
     assert.equal(request.snapshot().completedUnits, 0);

@@ -179,11 +179,11 @@ class B5AutomationService {
     }
 
     run(amount = 1, { cancellationToken = null, operationContext = null, expectedGeneration = null, decompressionPolicy = 'unbounded', decompressionMaxUsageRatio = null, requireKnownCapacity = false } = {}) {
-        return this.#runOperation(amount, { additional: false, cancellationToken, operationContext, expectedGeneration, mode: 'production', allowFinalB5: true, allowNewB2: true, decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity });
+        return this.#runOperation(amount, { additional: false, cancellationToken, operationContext, expectedGeneration, mode: 'production', craftFinalTarget: true, allowNewB2: true, decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity });
     }
 
     runNext({ cancellationToken = null, operationContext = null, expectedGeneration = null, freshInspection = false, recoveryOnly = false, decompressionPolicy = 'unbounded', decompressionMaxUsageRatio = null, requireKnownCapacity = false } = {}) {
-        return this.#runOperation(1, { additional: true, cancellationToken, operationContext, expectedGeneration, mode: 'production', allowFinalB5: true, allowNewB2: true, freshInspection, recoveryOnly: recoveryOnly === true, decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity });
+        return this.#runOperation(1, { additional: true, cancellationToken, operationContext, expectedGeneration, mode: 'production', craftFinalTarget: true, allowNewB2: true, freshInspection, recoveryOnly: recoveryOnly === true, decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity });
     }
 
     /**
@@ -195,7 +195,7 @@ class B5AutomationService {
     runTarget({ targetId = null, cancellationToken = null, operationContext = null, expectedGeneration = null, freshInspection = false, recoveryOnly = false, decompressionPolicy = 'unbounded', decompressionMaxUsageRatio = null, requireKnownCapacity = false } = {}) {
         return this.#runOperation(1, {
             additional: true, targetId, cancellationToken, operationContext, expectedGeneration, mode: 'production',
-            allowFinalB5: true, allowNewB2: true, freshInspection, recoveryOnly: recoveryOnly === true,
+            craftFinalTarget: true, allowNewB2: true, freshInspection, recoveryOnly: recoveryOnly === true,
             decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity
         });
     }
@@ -203,7 +203,7 @@ class B5AutomationService {
     runMaintenance({ cancellationToken = null, operationContext = null, expectedGeneration = null, allowNewB2 = false, decompressionPolicy = 'unbounded', decompressionMaxUsageRatio = null, requireKnownCapacity = false } = {}) {
         return this.#runOperation(1, {
             additional: true, cancellationToken, operationContext, expectedGeneration,
-            mode: 'maintenance', allowFinalB5: false, allowNewB2: allowNewB2 === true,
+            mode: 'maintenance', craftFinalTarget: false, allowNewB2: allowNewB2 === true,
             decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity
         });
     }
@@ -214,7 +214,7 @@ class B5AutomationService {
         operationContext = null,
         expectedGeneration = null,
         mode = 'production',
-        allowFinalB5 = true,
+        craftFinalTarget = true,
         allowNewB2 = true,
         freshInspection = false,
         recoveryOnly = false,
@@ -228,13 +228,13 @@ class B5AutomationService {
         const operation = new Operation({
             name: operationName,
             lockKeys: ['gui', 'server-command', 'inventory', 'crafting', 'storage'],
-            execute: context => this.cycle.execute(amount, context, { additional, mode, allowFinalB5, allowNewB2, freshInspection, recoveryOnly, decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity, targetId })
+            execute: context => this.cycle.execute(amount, context, { additional, mode, craftFinalTarget, allowNewB2, freshInspection, recoveryOnly, decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity, targetId })
         });
         const result = await this.operationManager.run(operation, {
             operationContext,
             connectionGeneration: expectedGeneration ?? operationContext?.connectionGeneration ?? this.context?.getGeneration?.() ?? null,
             timeoutMs: this.config.timeoutMs,
-            metadata: { operation: operationName, target: metadataTarget, targetId: metadataTarget, amount, additional, mode, allowFinalB5, allowNewB2, freshInspection, recoveryOnly, decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity },
+            metadata: { operation: operationName, target: metadataTarget, targetId: metadataTarget, amount, additional, mode, craftFinalTarget, allowNewB2, freshInspection, recoveryOnly, decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity },
             cancellationToken
         });
         this.traceRecorder?.recordResult?.(result, { mode, amount, targetId: metadataTarget });

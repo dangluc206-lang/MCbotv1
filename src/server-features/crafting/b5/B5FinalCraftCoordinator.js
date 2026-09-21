@@ -15,18 +15,26 @@ class B5FinalCraftCoordinator {
     reconfigure(config = {}) { this.config = config || {}; }
 
     async execute(steps, context, { targetId = null } = {}) {
-        // A per-request target overrides the configured default so a non-B5 target
-        // (e.g. titanium) still reaches its own final stage and handoff contract.
-        const executionTarget = String(targetId || this.config?.targetId || '').trim() || 'super_alloy';
+        // The execution target comes from the planner/request only. Without one
+        // the final chain fails closed instead of assuming any default item.
+        const executionTarget = String(targetId || this.config?.targetId || '').trim();
+        if (!executionTarget) {
+            throw new FlowError('Final craft chain requires a planner-provided target id.', {
+                code: 'B5_FINAL_TARGET_REQUIRED', subsystem: 'b5', step: 'craft-final-chain',
+                action: 'resolve execution target', resource: null, retryable: false, trace: context.trace
+            });
+        }
         for (let index = 0; index < steps.length; index += 1) {
             const step = steps[index];
             const recipe = this.recipeRegistry.require(step.recipeId);
             const outputId = step.outputId || recipe.output;
             const plannedCrafts = Number(step.crafts || 0);
-            const stage = outputId === executionTarget ? 'B5' : 'B4';
+            // Stage metadata is generic: the planned target step and every
+            // intermediate step are distinguished by output identity only.
+            const stage = outputId === executionTarget ? 'TARGET' : 'INTERMEDIATE';
             this.progressTracker.set({
                 running: true,
-                state: stage === 'B5' ? 'CRAFTING_B5' : 'CRAFTING_B4',
+                state: stage === 'TARGET' ? 'CRAFTING_TARGET' : 'CRAFTING_INTERMEDIATE',
                 currentStep: { kind: stage, id: outputId, crafts: plannedCrafts }
             });
             let remaining = plannedCrafts;
@@ -60,8 +68,8 @@ class B5FinalCraftCoordinator {
                 });
                 const nextStageForHandoff = outputId === executionTarget
                     ? 'COMPLETE'
-                    : (steps[index + 1]?.outputId === executionTarget ? 'B5' : 'B4');
-                if (nextStageForHandoff !== 'B4' || stage !== 'B4') {
+                    : (steps[index + 1]?.outputId === executionTarget ? 'TARGET' : 'INTERMEDIATE');
+                if (nextStageForHandoff !== 'INTERMEDIATE' || stage !== 'INTERMEDIATE') {
                     this.stageContract.handoff({
                         from: stage,
                         to: nextStageForHandoff,
@@ -81,8 +89,8 @@ class B5FinalCraftCoordinator {
         if (typeof this.inventoryState.countFromSource !== 'function') return null;
         const current = this.inventoryState.countFromSource(outputId, 'bot-inventory');
         if (!Number.isFinite(Number(current))) return null;
-        const finalTarget = executionTarget || this.config?.targetId || 'super_alloy';
-        return { stage: outputId === finalTarget ? 'B5' : 'B4', logicalId: outputId, after: Number(current), source: 'fresh-before-stage-settlement' };
+        const finalTarget = executionTarget || this.config?.targetId || null;
+        return { stage: finalTarget && outputId === finalTarget ? 'TARGET' : 'INTERMEDIATE', logicalId: outputId, after: Number(current), source: 'fresh-before-stage-settlement' };
     }
 
     async settleStage({ stage, logicalId, minimumCount, context }) {
@@ -124,7 +132,7 @@ class B5FinalCraftCoordinator {
 
     async craft(recipeId, amount, context, outputId = null, options = {}) {
         const recipe = this.recipeRegistry.require(recipeId);
-        const stage = String(options.stage || 'B4').trim() || 'B4';
+        const stage = String(options.stage || 'INTERMEDIATE').trim() || 'INTERMEDIATE';
         const beforeOutput = this.inventoryState.count(outputId || recipe.output);
         const result = await this.runStep(context, {
             subsystem: 'crafting', step: 'craft-recipe', action: `craft quantity ${amount}`, resource: outputId || recipeId,

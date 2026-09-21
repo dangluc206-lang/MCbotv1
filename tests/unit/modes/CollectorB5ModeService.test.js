@@ -51,8 +51,8 @@ function createMode(overrides = {}) {
         ...(overrides.b5Planning || {})
     };
     const b5Automation = {
-        async runNext(options) { calls.push(['automation', options]); return { success: true, data: { completedNewB5: false } }; },
-        async runMaintenance(options) { calls.push(['maintenance', options]); return { success: true, data: { completedNewB5: false } }; },
+        async runNext(options) { calls.push(['automation', options]); return { success: true, data: { completedTarget: false } }; },
+        async runMaintenance(options) { calls.push(['maintenance', options]); return { success: true, data: { completedTarget: false } }; },
         ...(overrides.b5Automation || {})
     };
 
@@ -155,7 +155,7 @@ test('storage protection runs once for a batch and runs again only after a new B
     b5Automation.runNext = async options => {
         automationCalls += 1;
         calls.push(['automation', options]);
-        return { success: true, data: { completedNewB5: automationCalls === 1 } };
+        return { success: true, data: { completedTarget: automationCalls === 1 } };
     };
 
     await mode.initialize();
@@ -187,7 +187,7 @@ test('Collector+B5 passes only its own decompression headroom policy into active
     b5Planning.inspectAdditional = async () => inspection({ actionable: true });
     b5Automation.runNext = async options => {
         observed.push(options);
-        return { success: true, data: { completedNewB5: false, waitingForMaterials: true } };
+        return { success: true, data: { completedTarget: false, waitingForMaterials: true } };
     };
     await mode.initialize();
     await mode.enable();
@@ -237,7 +237,7 @@ test('collector propagates one exact generation and cancellation token through S
     const { mode, b1Materials, b5Planning, b5Automation } = createMode({ config: { pollIntervalMs: 30, craftLoopDelayMs: 30 } });
     b1Materials.protectForB5Batch = async options => { observations.push(['protect', options]); return { success: true, data: {} }; };
     b5Planning.inspectAdditional = async (_amount, options) => { observations.push(['planning', options]); return inspection({ actionable: true }); };
-    b5Automation.runNext = async options => { observations.push(['automation', options]); return { success: true, data: { completedNewB5: false, waitingForMaterials: true } }; };
+    b5Automation.runNext = async options => { observations.push(['automation', options]); return { success: true, data: { completedTarget: false, waitingForMaterials: true } }; };
     await mode.initialize();
     await mode.enable();
     await sleep(12);

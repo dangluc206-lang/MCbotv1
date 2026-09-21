@@ -66,7 +66,8 @@ class B5ProgressTracker {
         if (kind === 'PREPARE_B1' || state === 'PREPARING_B1') return 'B5: Đang chuẩn bị B1.';
         if (kind === 'B2' || state === 'CRAFTING_B2') return 'B5: Đang chế B2.';
         if (kind === 'B3' || state === 'CRAFTING_B3') return 'B5: Đang chế B3.';
-        if (kind === 'B2/B3' || state === 'CRAFTING_INTERMEDIATE') return 'B5: Đang chuẩn bị B2/B3.';
+        if (kind === 'TARGET' || state === 'CRAFTING_TARGET') return 'B5: Đang chế mục tiêu.';
+        if (kind === 'INTERMEDIATE' || state === 'CRAFTING_INTERMEDIATE') return 'B5: Đang chuẩn bị B2/B3.';
         if (kind === 'B4' || state === 'CRAFTING_B4') return 'B5: Đang chế B4.';
         if (kind === 'B5' || state === 'CRAFTING_B5') return 'B5: Đang chế B5.';
         if (kind === 'DEPOSIT' || state === 'DEPOSITING') return 'B5: Đang cất B5.';

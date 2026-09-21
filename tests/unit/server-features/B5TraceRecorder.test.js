@@ -10,7 +10,7 @@ test('B5 trace recorder keeps a compact replayable cycle summary', () => {
         status: 'SUCCESS',
         data: {
             productive: false,
-            completedNewB5: false,
+            completedTarget: false,
             blockingReasons: [{ reason: 'waiting-for-complete-b2-batch', baseId: 'diamond' }],
             actionSummary: { waiting: 1 },
             plan: { version: 2, snapshotDigest: 'abc', state: 'WAITING_MATERIALS', decision: { kind: 'B2/B3', resource: 'diamond' }, blockers: [], replayInput: { amount: 1, fullPlan: { targetId: 'b5', feasible: false, missing: {}, steps: [] }, chains: [], progress: { targetId: 'b5', amount: 1, feasible: false, nextStep: { kind: 'B2/B3', id: 'diamond' } } } }

@@ -579,7 +579,7 @@ class CollectorB5ModeService {
             this.lastError = null;
             if (!automated.data?.waitingForMaterials) this.failureBreaker.recordSuccess({ verified: true });
             await this.#refreshB3ShortagesAfterAutomation(token, generation);
-            if (automated.data?.completedNewB5) {
+            if (automated.data?.completedTarget) {
                 this.cycles += 1;
                 this.batchProtectionRequired = true;
                 this.phase = 'CHECKING';

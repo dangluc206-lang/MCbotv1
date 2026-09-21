@@ -18,31 +18,31 @@ class B5IntermediateCoordinator {
         return this;
     }
 
-    async promoteOwned(initialInspection, inspect, context, { stopAtB5Ready = true } = {}) {
+    async promoteOwned(initialInspection, inspect, context, { stopAtTargetReady = true } = {}) {
         let inspection = this.#requireInspection(initialInspection, 'B5 promotion inspection failed.');
         const actions = [];
         for (let guard = 0; guard < 8; guard += 1) {
             context.cancellation.token.throwIfCancelled();
-            if (stopAtB5Ready && this.recipeResolver.isB5DirectlyReady(inspection.data, 1)) break;
+            if (stopAtTargetReady && this.recipeResolver.isTargetDirectlyReady(inspection.data, 1)) break;
             let changed = false;
-            const b4Compacted = await this.compactReadyB4(inspection, inspect, context, { stopAtB5Ready });
+            const b4Compacted = await this.compactReadyB4(inspection, inspect, context, { stopAtTargetReady });
             if (b4Compacted.length > 0) {
                 changed = true;
                 actions.push({ status: 'b3-promoted-to-b4', data: b4Compacted });
                 inspection = this.#requireInspection(await inspect(), 'B5 promotion re-inspection failed.');
-                if (stopAtB5Ready && this.recipeResolver.isB5DirectlyReady(inspection.data, 1)) break;
+                if (stopAtTargetReady && this.recipeResolver.isTargetDirectlyReady(inspection.data, 1)) break;
             }
-            const b2Promotion = await this.#promoteB2Pass(inspection, inspect, context, { stopAtB5Ready });
+            const b2Promotion = await this.#promoteB2Pass(inspection, inspect, context, { stopAtTargetReady });
             inspection = b2Promotion.inspection;
             actions.push(...b2Promotion.actions);
             changed = changed || b2Promotion.changed;
-            if (stopAtB5Ready && this.recipeResolver.isB5DirectlyReady(inspection.data, 1)) break;
+            if (stopAtTargetReady && this.recipeResolver.isTargetDirectlyReady(inspection.data, 1)) break;
             if (!changed || !b2Promotion.promoted) break;
         }
         return { inspection, actions };
     }
 
-    async #promoteB2Pass(initialInspection, inspect, context, { stopAtB5Ready }) {
+    async #promoteB2Pass(initialInspection, inspect, context, { stopAtTargetReady }) {
         let inspection = initialInspection;
         const actions = [];
         let promoted = false;
@@ -66,10 +66,10 @@ class B5IntermediateCoordinator {
             }
             promoted = true;
             actions.push({ status: 'b2-promoted-to-b3', b2Id: chain.b2Id, b3Id: chain.b3Id, crafts });
-            const immediateB4 = await this.compactReadyB4(inspection, inspect, context, { stopAtB5Ready });
+            const immediateB4 = await this.compactReadyB4(inspection, inspect, context, { stopAtTargetReady });
             if (immediateB4.length > 0) actions.push({ status: 'b4-compacted-immediately', data: immediateB4 });
             inspection = this.#requireInspection(await inspect(), 'B5 promotion re-inspection failed.');
-            if (stopAtB5Ready && this.recipeResolver.isB5DirectlyReady(inspection.data, 1)) break;
+            if (stopAtTargetReady && this.recipeResolver.isTargetDirectlyReady(inspection.data, 1)) break;
         }
         return { inspection, actions, promoted, changed: promoted || actions.some(action => action.status === 'b2-pv2-parked-for-space') };
     }
@@ -92,25 +92,25 @@ class B5IntermediateCoordinator {
         actions.push({ status: id === details?.b2Id ? 'b2-remainder-stored' : (step.includes('b2') ? 'b2-remainder-stored' : 'b3-remainder-stored'), id, data: result?.data });
     }
 
-    async compactReadyB4(initialInspection, inspect, context, { stopAtB5Ready = true } = {}) {
+    async compactReadyB4(initialInspection, inspect, context, { stopAtTargetReady = true } = {}) {
         let inspection = this.#requireInspection(initialInspection, 'B5 inspection failed during B4 compaction.');
         const compacted = [];
-        const targetId = inspection.data?.fullPlan?.targetId || this.config?.targetId || 'super_alloy';
-        const targetRecipe = this.recipeResolver.recipeForOutput(targetId, inspection.data?.finalSteps || []);
+        const targetId = inspection.data?.fullPlan?.targetId || this.config?.targetId || null;
+        const targetRecipe = targetId ? this.recipeResolver.recipeForOutput(targetId, inspection.data?.finalSteps || []) : null;
         if (!targetRecipe?.recipe) return compacted;
         const b4Ids = Object.keys(targetRecipe.recipe.inputs || {});
         for (const outputId of b4Ids) {
-            inspection = await this.#fillPriorityShortage(outputId, inspection, inspect, context, targetRecipe, compacted, stopAtB5Ready);
-            if (stopAtB5Ready && this.recipeResolver.isB5DirectlyReady(inspection.data, 1)) return compacted;
+            inspection = await this.#fillPriorityShortage(outputId, inspection, inspect, context, targetRecipe, compacted, stopAtTargetReady);
+            if (stopAtTargetReady && this.recipeResolver.isTargetDirectlyReady(inspection.data, 1)) return compacted;
         }
-        await this.#compactBalancedSurplus(b4Ids, inspection, inspect, context, targetRecipe, compacted, stopAtB5Ready);
+        await this.#compactBalancedSurplus(b4Ids, inspection, inspect, context, targetRecipe, compacted, stopAtTargetReady);
         return compacted;
     }
 
-    async #fillPriorityShortage(outputId, inspection, inspect, context, targetRecipe, compacted, stopAtB5Ready) {
+    async #fillPriorityShortage(outputId, inspection, inspect, context, targetRecipe, compacted, stopAtTargetReady) {
         for (let guard = 0; guard < 128; guard += 1) {
             context.cancellation.token.throwIfCancelled();
-            if (stopAtB5Ready && this.recipeResolver.isB5DirectlyReady(inspection.data, 1)) return inspection;
+            if (stopAtTargetReady && this.recipeResolver.isTargetDirectlyReady(inspection.data, 1)) return inspection;
             const candidate = this.#b4Candidate(outputId, inspection, targetRecipe);
             if (!candidate || candidate.craftableNow <= 0) return inspection;
             const crafts = Math.floor(Math.min(candidate.craftableNow, Math.max(0, candidate.perTarget - candidate.existingB4)));
@@ -120,11 +120,11 @@ class B5IntermediateCoordinator {
         return inspection;
     }
 
-    async #compactBalancedSurplus(b4Ids, initialInspection, inspect, context, targetRecipe, compacted, stopAtB5Ready) {
+    async #compactBalancedSurplus(b4Ids, initialInspection, inspect, context, targetRecipe, compacted, stopAtTargetReady) {
         let inspection = initialInspection;
         for (let guard = 0; guard < 512; guard += 1) {
             context.cancellation.token.throwIfCancelled();
-            if (stopAtB5Ready && this.recipeResolver.isB5DirectlyReady(inspection.data, 1)) break;
+            if (stopAtTargetReady && this.recipeResolver.isTargetDirectlyReady(inspection.data, 1)) break;
             const candidates = b4Ids.map(id => this.#b4Candidate(id, inspection, targetRecipe))
                 .filter(candidate => candidate && candidate.craftableNow > 0 && candidate.perTarget > 0)
                 .sort((a, b) => a.normalizedCoverage - b.normalizedCoverage || b.perTarget - a.perTarget || a.outputId.localeCompare(b.outputId));
@@ -208,8 +208,10 @@ class B5IntermediateCoordinator {
     #spaceReleaseCandidates(chain, allChains, { preserveAtLeastB2 = 0, targetId = null } = {}) {
         const candidates = [];
         const push = id => { const value = String(id || '').trim(); if (value && !candidates.includes(value)) candidates.push(value); };
-        const activeTarget = String(targetId || '').trim() || this.config?.targetId || 'super_alloy';
-        const targetRecipe = this.recipeResolver.recipeForOutput(activeTarget);
+        const activeTarget = String(targetId || '').trim() || this.config?.targetId || null;
+        // Fail closed: without a resolved target only generic chain candidates
+        // are used; no item is hard-coded as the space-release preference.
+        const targetRecipe = activeTarget ? this.recipeResolver.recipeForOutput(activeTarget) : null;
         for (const b4Id of Object.keys(targetRecipe?.recipe?.inputs || {})) push(b4Id);
         push(chain.b3Id);
         for (const candidate of allChains || []) if (candidate?.b3Id !== chain.b3Id) push(candidate?.b3Id);

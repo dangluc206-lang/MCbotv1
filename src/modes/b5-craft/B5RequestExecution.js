@@ -7,7 +7,7 @@
  * reads /kho or /pv 2, never computes recipes and never imports Mineflayer.
  * Each cycle is a bounded "one unit" request that the mode executes through
  * B5AutomationService.runTarget(); unit completion is only credited from
- * verified cycle results (completedNewB5 for the request target).
+ * verified cycle results (completedTarget/completedAmount for the request target).
  *
  * Loop guards:
  * - FIXED stops exactly at `quantity` verified units (no unbounded loop).
@@ -101,7 +101,7 @@ class B5RequestExecution {
         }
 
         const targetMatch = String(data.targetId || '') === this.targetItemId;
-        if (data.completedNewB5 === true) {
+        if (data.completedTarget === true) {
             if (result?.success !== true || !targetMatch || data.completedAmount !== 1) {
                 this.state = 'FAILED';
                 this.lastError = 'invalid-target-completion-evidence';
@@ -136,7 +136,7 @@ class B5RequestExecution {
         if (completedAmount !== 0 && (completedAmount !== 1 || targetId !== this.targetItemId)) return this.snapshot();
         this.awaitingReconciliation = false;
         if (completedAmount === 1) {
-            return this.record({ success: true, data: { targetId, completedNewB5: true, completedAmount } }, { generation, expectedGeneration });
+            return this.record({ success: true, data: { targetId, completedTarget: true, completedAmount } }, { generation, expectedGeneration });
         }
         this.#applyGuards();
         return this.snapshot();

@@ -29,12 +29,12 @@ function coordinator(inv, craftData = { actualCrafts: 1 }) {
     return new B5FinalCraftCoordinator({ recipeRegistry, inventoryState: inv, progressTracker, withdrawFlow: {}, craftFlow, config: { targetId: 'b5', stageSettlementTimeoutMs: 200 }, runStep, childOptions: () => ({}), quantityTrace: () => {}, verificationService: new B5StageContract() });
 }
 
-test('B2/B3/B4/B5 craft gate verifies the output delta before returning', async () => {
+test('craft verifies the output delta for any generic stage before returning', async () => {
     const inv = new InventoryStateMock([10, 11, 11, 11]);
     const c = coordinator(inv);
     const ctx = { connectionGeneration: 7, cancellation: { token: { throwIfCancelled() {} } }, trace: [] };
-    const data = await c.craft('r', 1, ctx, 'b4', { stage: 'B4', nextStage: 'B5' });
-    assert.equal(data.stageContract.stage, 'B4');
+    const data = await c.craft('r', 1, ctx, 'b4', { stage: 'INTERMEDIATE', nextStage: 'TARGET' });
+    assert.equal(data.stageContract.stage, 'INTERMEDIATE');
     // Per-craft crafts only verify the output; settlement happens once at the
     // stage boundary (see B5StageHandoffBoundary).
     assert.equal(data.stageContract.settled, false);
@@ -45,12 +45,12 @@ test('craft gate fails closed when relevant output never reaches expected count'
     const inv = new InventoryStateMock([10, 10, 10]);
     const c = coordinator(inv);
     const ctx = { connectionGeneration: 7, cancellation: { token: { throwIfCancelled() {} } }, trace: [] };
-    await assert.rejects(() => c.craft('r', 1, ctx, 'b4', { stage: 'B4', nextStage: 'B5' }), /output was not verified|did not settle/);
+    await assert.rejects(() => c.craft('r', 1, ctx, 'b4', { stage: 'INTERMEDIATE', nextStage: 'TARGET' }), /output was not verified|did not settle/);
 });
 
 test('stage gate rejects stale generation handoff', async () => {
     const inv = new InventoryStateMock([10, 11, 11, 11]);
     const c = coordinator(inv);
     const ctx = { connectionGeneration: 8, cancellation: { token: { throwIfCancelled() {} } }, trace: [] };
-    await assert.rejects(() => c.craft('r', 1, ctx, 'b4', { stage: 'B4', nextStage: 'B5', expectedGeneration: 7 }), /generation/);
+    await assert.rejects(() => c.craft('r', 1, ctx, 'b4', { stage: 'INTERMEDIATE', nextStage: 'TARGET', expectedGeneration: 7 }), /generation/);
 });

@@ -36,9 +36,10 @@ class B5RecipeResolver {
         return null;
     }
 
-    isB5DirectlyReady(data, amount = 1) {
-        // No hard-coded target default: without a requested or configured
-        // target this check fails closed instead of assuming one item.
+    isTargetDirectlyReady(data, amount = 1) {
+        // Target readiness is recipe/output metadata, never a fixed tier name:
+        // without a requested or configured target this check fails closed
+        // instead of assuming one item.
         const targetId = data?.fullPlan?.targetId || this.config?.targetId || null;
         if (!targetId) return false;
         const targetRecipe = this.recipeForOutput(targetId, data?.finalSteps || []);

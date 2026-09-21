@@ -277,7 +277,7 @@ test('B5 craft mode discards stale cycle results when connection generation chan
         generationRef,
         craftImplementation: async () => {
             generationRef.value += 1;
-            return { success: true, data: { completedNewB5: true, completedAmount: 99, productive: true } };
+            return { success: true, data: { completedTarget: true, completedAmount: 99, productive: true } };
         }
     });
     await coordinator.initialize(); await coordinator.start();
@@ -499,7 +499,7 @@ test('B5 craft mode runs storage protection again before the campaign after a co
         craftImplementation: () => {
             if (!completed) {
                 completed = true;
-                return { success: true, data: { complete: true, completedNewB5: true, completedAmount: 1, productive: true, blockingReasons: [] } };
+                return { success: true, data: { complete: true, completedTarget: true, completedAmount: 1, productive: true, blockingReasons: [] } };
             }
             return { success: true, data: { complete: false, waitingForMaterials: true, productive: false, blockingReasons: [{ status: 'waiting', reason: 'materials' }] } };
         }
@@ -670,7 +670,7 @@ test('B5 craft arms exactly one post-B5 protection boundary before the next batc
         craftImplementation: async () => {
             if (!completed) {
                 completed = true;
-                return { success: true, data: { completedNewB5: true, completedAmount: 1, productive: true } };
+                return { success: true, data: { completedTarget: true, completedAmount: 1, productive: true } };
             }
             return { success: true, data: { complete: false, waitingForMaterials: true, productive: false } };
         }

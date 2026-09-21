@@ -54,7 +54,7 @@ class B5TraceRecorder {
             traceId, botId: this.botId, connectionGeneration: result?.meta?.connectionGeneration ?? null,
             operationId: result?.meta?.operationId || null, correlationId: result?.meta?.correlationId || result?.meta?.operationId || null,
             decisionDigest: replayEnvelope?.digest || null, kind: 'b5-cycle', code: result?.success === false ? (result?.error?.code || result?.status || 'FAILED') : 'SUCCESS',
-            details: { mode, amount: Number(amount || 1), productive: Boolean(data?.productive), complete: Boolean(data?.completedNewB5 || data?.complete) }
+            details: { mode, amount: Number(amount || 1), productive: Boolean(data?.productive), complete: Boolean(data?.completedTarget || data?.complete) }
         });
         const record = Object.freeze({
             traceId,
@@ -66,8 +66,8 @@ class B5TraceRecorder {
             amount: Number(amount || 1),
             success: result?.success !== false,
             status: result?.status || null,
-            productive: Boolean(data?.productive || data?.completedNewB5 || data?.recoveredExistingB5),
-            complete: Boolean(data?.completedNewB5 || data?.complete),
+            productive: Boolean(data?.productive || data?.completedTarget || data?.recoveredExistingB5),
+            complete: Boolean(data?.completedTarget || data?.complete),
             plan: plan ? {
                 version: plan.version || null,
                 snapshotDigest: plan.snapshotDigest || null,
