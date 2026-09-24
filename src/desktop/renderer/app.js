@@ -1678,7 +1678,6 @@ function restoreLocalPreferences() {
 async function initialize() {
   bindEvents();
   restoreLocalPreferences();
-  loadAiLocalSettings();
   switchPage(state.page);
   switchDevPage(state.devPage);
   window.mcbot.onSnapshot(acceptSnapshot);

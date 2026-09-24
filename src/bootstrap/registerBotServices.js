@@ -93,8 +93,8 @@ const CraftingService = require("../server-features/crafting/CraftingService");
 const MaterialCalculator = require("../planning/crafting/MaterialCalculator");
 const CraftingPlanner = require("../planning/crafting/CraftingPlanner");
 const CraftingChainPlanner = require("../planning/crafting/CraftingChainPlanner");
-const B5Planner = require("../planning/crafting/B5Planner");
 const B5ExecutionPlanner = require("../planning/crafting/B5ExecutionPlanner");
+const CraftPlanningService = require("../server-features/crafting/CraftPlanningService");
 const B5PlanningService = require("../server-features/crafting/B5PlanningService");
 const B5TraceRecorder = require("../server-features/crafting/b5/trace/B5TraceRecorder");
 const B5AutomationService = require("../server-features/crafting/B5AutomationService");
@@ -552,11 +552,6 @@ function registerBotServices({ profile, configuration, shared }) {
     policy: serverProfile.requireCatalog("craftingTargets"),
   });
   const b5Config = configuration.registry.require("b5");
-  const b5Planner = new B5Planner({
-    planner: craftingPlanner,
-    targetId: b5Config.targetId,
-    tiers: craftingTiers,
-  });
   const craftingChainPlanner = new CraftingChainPlanner({
     craftingPlanner,
     craftingItemRegistry,
@@ -568,19 +563,34 @@ function registerBotServices({ profile, configuration, shared }) {
     historyLimit: 100,
     logger,
   });
-  const b5Planning = new B5PlanningService({
+  // Generic crafting planning authority: every request carries its own target, the
+  // service reads /kho + /pv 2 + inventory and classifies stages from tier data.
+  // Config keys are the profile's crafting policy mapped to generic policy names.
+  const craftPlanning = new CraftPlanningService({
+    planner: craftingPlanner,
+    materialCalculator,
+    recipeRegistry,
+    tiers: craftingTiers,
     storage,
     personalVault,
     inventoryReader,
     inventoryCounter,
-    b5Planner,
-    executionPlanner: b5ExecutionPlanner,
-    materialCalculator,
-    recipeRegistry,
+    storageMaterials: b1Materials,
+    config: {
+      supplyMode: b5Config.b1SupplyMode,
+      inputSource: b5Config.b2InputSource,
+      vaultBackpressure: b5Config.personalVaultBackpressure,
+    },
+    dataMaxAgeMs: Number(observationConfig.semanticCacheMs || 5000),
+  });
+  // B5 stays a compatibility boundary for its own consumers only (B5 automation,
+  // collector-B5, replay/trace); it is no longer the implementation behind
+  // "crafting-planning".
+  const b5Planning = new B5PlanningService({
+    planning: craftPlanning,
     tiers: craftingTiers,
-    b1Materials,
-    config: b5Config,
-    guiDataMaxAgeMs: Number(observationConfig.semanticCacheMs || 5000),
+    targetId: b5Config.targetId,
+    executionPlanner: b5ExecutionPlanner,
   });
   const b5AutomationCore = new B5AutomationService({
     planningService: b5Planning,
@@ -870,7 +880,7 @@ function registerBotServices({ profile, configuration, shared }) {
     "b5-automation": b5Automation,
     "b5-trace": b5TraceRecorder,
     // Generic crafting capability names (B5 names kept as legacy aliases).
-    "crafting-planning": b5Planning,
+    "crafting-planning": craftPlanning,
     "crafting-automation": b5Automation,
     "crafting-trace": b5TraceRecorder,
   };
@@ -907,7 +917,7 @@ function registerBotServices({ profile, configuration, shared }) {
     skyblockReadiness: skyblockAutoJoin,
     skyTarget,
     b1Materials,
-    craftingPlanning: b5Planning,
+    craftingPlanning: craftPlanning,
     automation: b5Automation,
     craftingItemRegistry,
     craftingChainPlanner,
