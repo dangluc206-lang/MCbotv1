@@ -50,7 +50,7 @@ test('V5 rejects storage-backed B2 acquisition contract', async () => {
     const { coordinator, chain, context } = createHarness({ source: 'storage' });
     await assert.rejects(
         coordinator.acquire(chain, context, { b2Remaining: 2 }),
-        error => error?.code === 'B5_B1_INVENTORY_TRANSFER_UNAVAILABLE'
+        error => error?.code === 'CRAFT_B1_INVENTORY_TRANSFER_UNAVAILABLE'
     );
 });
 

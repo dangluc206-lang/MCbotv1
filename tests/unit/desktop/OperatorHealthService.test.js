@@ -11,7 +11,7 @@ test('OperatorHealthService differentiates intentional disconnect and B5 blocked
         calls += 1;
         return { lifecycle: 'RUNNING', system: {}, bots: [
             { botId: 'off', profile: { enabled: false }, intent: { desiredConnection: 'DISCONNECTED' }, state: { connectionState: 'DISCONNECTED' } },
-            { botId: 'b5', profile: { enabled: true }, intent: { desiredConnection: 'CONNECTED' }, state: { connectionState: 'CONNECTED' }, modeOwner: { modeId: 'b5-craft' }, operation: { operations: [] }, modes: { b5Craft: { details: { protectionEpisode: { state: 'WAITING_BLOCKED', lastAttemptAt: new Date(now - 70000).toISOString() } } } } }
+            { botId: 'b5', profile: { enabled: true }, intent: { desiredConnection: 'CONNECTED' }, state: { connectionState: 'CONNECTED' }, modeOwner: { modeId: 'crafting' }, operation: { operations: [] }, modes: { crafting: { details: { protectionEpisode: { state: 'WAITING_BLOCKED', lastAttemptAt: new Date(now - 70000).toISOString() } } } } }
         ] };
     } });
     const result = await service.sample();

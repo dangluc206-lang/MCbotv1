@@ -53,7 +53,7 @@
   }
 
   // UI-boundary validation only. The authoritative request validation stays in
-  // B5CraftModeService.setCraftRequest / CraftingRequest.
+  // CraftingModeService.setCraftRequest / CraftingRequest.
   function readForm(container) {
     const root = container?.closest?.('[data-b5-request-bot]') || container;
     const itemId = String(root?.querySelector?.('[data-b5-request-item]')?.value || '').trim();

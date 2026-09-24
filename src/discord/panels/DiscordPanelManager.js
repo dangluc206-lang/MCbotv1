@@ -68,7 +68,7 @@ class DiscordPanelManager {
         // registered bot. Keep the selected control bot separate from the panel
         // owner/default bot so bot-02, bot-03, ... are first-class controls.
         this.selectedControlBotId = this.botId;
-        this.selectedControlModeId = 'b5-craft';
+        this.selectedControlModeId = 'crafting';
         this.selectedAdminBotId = this.botId;
         this.selectedControlBotPage = 0;
         this.selectedAdminBotPage = 0;

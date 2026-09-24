@@ -1,8 +1,8 @@
 'use strict';
 
-class B5CampaignSession {
+class CraftCampaignSession {
     constructor({ botId, clock = () => Date.now() } = {}) {
-        if (!botId) throw new TypeError('B5CampaignSession botId is required.');
+        if (!botId) throw new TypeError('CraftCampaignSession botId is required.');
         this.botId = String(botId);
         this.clock = clock;
         this.sequence = 0;
@@ -12,7 +12,7 @@ class B5CampaignSession {
     open({ generation, trigger = 'enable' } = {}) {
         this.sequence += 1;
         this.current = Object.freeze({
-            campaignId: `${this.botId}:b5-campaign:${this.sequence}`,
+            campaignId: `${this.botId}:craft-campaign:${this.sequence}`,
             botId: this.botId,
             generation: Number.isFinite(Number(generation)) ? Number(generation) : null,
             trigger: String(trigger),
@@ -25,4 +25,4 @@ class B5CampaignSession {
     snapshot() { return this.current ? { ...this.current } : null; }
 }
 
-module.exports = B5CampaignSession;
+module.exports = CraftCampaignSession;

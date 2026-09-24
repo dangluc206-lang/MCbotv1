@@ -376,9 +376,9 @@ class DesktopController {
             result = await this.supportBundlePreview();
         } else if (normalizedAction === 'retry-storage-protection') {
             const runtime = this.#runtime(incident.botId);
-            const mode = runtime.getService?.('b5CraftMode')?.status?.();
+            const mode = runtime.getService?.('craftingMode')?.status?.();
             const episode = mode?.details?.protectionEpisode;
-            if (!episode) throw Object.assign(new Error('Current B5 storage-protection episode no longer exists.'), { code: 'B5_RETRY_STALE_EPISODE' });
+            if (!episode) throw Object.assign(new Error('Current storage-protection episode no longer exists.'), { code: 'CRAFT_RETRY_STALE_EPISODE' });
             result = await this.retryB5StorageProtection(incident.botId, {
                 expectedGeneration: request.expectedGeneration,
                 episodeId: episode.episodeId,
@@ -429,7 +429,7 @@ class DesktopController {
 
     async retryB5StorageProtection(botId, request = {}) {
         const runtime = this.#runtime(botId);
-        const service = runtime.getService?.('b5CraftMode');
+        const service = runtime.getService?.('craftingMode');
         if (!service?.requestStorageProtectionRetry) throw new Error(`B5 craft mode recovery is unavailable for ${botId}.`);
         return resultPayload(service.requestStorageProtectionRetry({
             expectedBotId: botId,
@@ -659,7 +659,7 @@ class DesktopController {
         return Redactor.sanitize({ key, file: spec.file, backup, appliedLive: applied, restartRequired: !applied, value });
     }
 
-    b5CraftConfig() { return this.configGroup('b5CraftMode'); }
+    b5CraftConfig() { return this.configGroup('craftingMode'); }
 
     b5RulesConfig() { return this.configGroup('b5'); }
 
@@ -681,7 +681,7 @@ class DesktopController {
     updateB5CraftConfig(fields = {}) { return this.#configMutation(() => this.#updateB5CraftConfig(fields)); }
 
     async #updateB5CraftConfig(fields = {}) {
-        const current = this.bundle.configuration.registry.require('b5CraftMode');
+        const current = this.bundle.configuration.registry.require('craftingMode');
         const next = {
             ...current,
             ...pick(fields, ['enabled','teleportHomeOnEnable','autoResumeOnReconnect','pollIntervalMs','disconnectedPollMs','errorRetryMs','errorRetryMaxMs','craftLoopDelayMs','postB5CooldownMs']),
@@ -694,7 +694,7 @@ class DesktopController {
                 ...(fields.reconciliation || {})
             }
         };
-        return this.#saveConfigGroup('b5CraftMode', next);
+        return this.#saveConfigGroup('craftingMode', next);
     }
 
     storageProtectionConfig() {
@@ -982,7 +982,7 @@ class DesktopController {
             readiness: entry.readiness
         }]));
         const collector = modesById['collector-b5'] || runtime.getService('collectorB5Mode')?.status?.() || null;
-        const b5Craft = modesById['b5-craft'] || runtime.getService('b5CraftMode')?.status?.() || null;
+        const b5Craft = modesById['crafting'] || runtime.getService('craftingMode')?.status?.() || null;
         const fishing = modesById.fishing || runtime.getService('fishingMode')?.status?.() || null;
         const skyAutoJoin = runtime.getService('skyblockAutoJoin')?.status?.() || null;
         const skyCommands = runtime.getService('skyCommandService')?.status?.() || null;

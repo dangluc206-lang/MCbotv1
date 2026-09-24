@@ -203,8 +203,8 @@ function emittedEvents(root, sourceFiles) {
 function modeInventory(root) {
     const modeCatalog = createModeCatalog({ baseDir: root });
     return modeCatalog.list().map(definition => {
-        const serviceFile = definition.serviceName === 'b5CraftMode'
-            ? 'src/modes/b5-craft/B5CraftModeService.js'
+        const serviceFile = definition.serviceName === 'craftingMode'
+            ? 'src/modes/crafting/CraftingModeService.js'
             : definition.serviceName === 'collectorB5Mode'
                 ? 'src/modes/collector-b5/CollectorB5ModeService.js'
                 : definition.serviceName === 'fishingMode'
@@ -253,7 +253,7 @@ function capabilityInventory(root) {
 
 function configInventory(root, sourceFiles) {
     const genericReloadFile = 'src/configuration/ConfigurationService.js';
-    const explicitLiveApply = new Set(['skyblock', 'skyCommands', 'b5CraftMode', 'collectorB5Mode']);
+    const explicitLiveApply = new Set(['skyblock', 'skyCommands', 'craftingMode', 'collectorB5Mode']);
     return ConfigSpecs.map(spec => {
         const consumers = [];
         const escaped = spec.key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

@@ -1,6 +1,6 @@
 'use strict';
 
-class B5SharedStorageLease {
+class CraftSharedStorageLease {
     constructor({ registry = null, resourceKey = null, botId }) {
         this.registry = registry;
         this.resourceKey = resourceKey;
@@ -11,7 +11,7 @@ class B5SharedStorageLease {
     async acquire({ batchId, generation, cancellationToken }) {
         if (!this.registry || !this.resourceKey || this.lease) return this.lease;
         this.lease = await this.registry.acquire(this.resourceKey, {
-            owner: `${this.botId}:b5:${batchId}:g${generation}`,
+            owner: `${this.botId}:craft:${batchId}:g${generation}`,
             cancellationToken
         });
         return this.lease;
@@ -30,4 +30,4 @@ class B5SharedStorageLease {
     }
 }
 
-module.exports = B5SharedStorageLease;
+module.exports = CraftSharedStorageLease;

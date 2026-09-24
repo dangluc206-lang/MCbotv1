@@ -935,7 +935,7 @@ test('PV2 backpressure suppresses new B1->B2 work during maintenance', async () 
     assert.equal(result.data.actions.some(action => action.status === 'new-b2-suppressed' && action.reason === 'pv2-backpressure'), true);
 });
 
-test('zero-slot emergency parks the last current B2 stack in PV2 and replans instead of throwing B5_INTERMEDIATE_NO_SPACE', async () => {
+test('zero-slot emergency parks the last current B2 stack in PV2 and replans instead of throwing CRAFT_INTERMEDIATE_NO_SPACE', async () => {
     const calls = [];
     const counts = { b2: 64, b3: 0 };
     let inspectCall = 0;
@@ -1510,7 +1510,7 @@ test('B5 automation preserves uncertain-craft reconciliation metadata through ma
     assert.equal(result.error.details.outcome.requiresReconciliation, true);
     assert.equal(result.error.details.outcome.safeToBlindRetry, false);
     assert.equal(result.error.details.reconciliationBaseline.inputCountsBefore.tungsten, 8);
-    assert.deepEqual(result.error.details.b5CompletionContext, {
+    assert.deepEqual(result.error.details.completionContext, {
         finalChain: true,
         targetId: 'super_alloy',
         targetVaultBefore: 4

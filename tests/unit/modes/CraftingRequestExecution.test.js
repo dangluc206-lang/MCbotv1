@@ -1,10 +1,10 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const B5RequestExecution = require('../../../src/modes/b5-craft/B5RequestExecution');
+const CraftingRequestExecution = require('../../../src/modes/crafting/CraftingRequestExecution');
 
 function execution(quantity = 10, options = {}) {
-    return new B5RequestExecution({
+    return new CraftingRequestExecution({
         request: { targetItemId: 'titanium', quantityMode: quantity === 'ALL' ? 'ALL' : 'FIXED', quantity: quantity === 'ALL' ? null : quantity },
         ...options
     });

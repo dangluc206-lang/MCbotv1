@@ -72,5 +72,88 @@
       ]
     }
   },
+  "skillRouting": {
+  "systematic-debugging": {
+    "trigger": [
+      "bug",
+      "runtime error",
+      "test failure",
+      "build failure",
+      "unexpected behavior",
+      "regression",
+      "performance regression",
+      "race condition",
+      "reconnect failure",
+      "GUI/inventory/crafting failure"
+    ],
+    "beforeEdit": true,
+    "skill": ".cline/skills/systematic-debugging/SKILL.md"
+  },
+
+  "verification-before-completion": {
+    "trigger": [
+      "claiming complete",
+      "claiming fixed",
+      "claiming tests pass",
+      "commit",
+      "PR",
+      "task closure",
+      "release"
+    ],
+    "beforeClaim": true,
+    "skill": ".cline/skills/verification-before-completion/SKILL.md"
+  },
+
+  "code-review": {
+    "trigger": [
+      "review branch",
+      "review PR",
+      "review changes",
+      "review since commit",
+      "review WIP",
+      "before merge"
+    ],
+    "afterImplementation": true,
+    "skill": ".cline/skills/code-review/SKILL.md"
+  },
+
+  "doubt-review": {
+    "trigger": [
+      "non-trivial decision",
+      "architecture decision",
+      "uncertain server behavior",
+      "uncertain GUI semantics",
+      "inventory uncertainty",
+      "reconnect uncertainty",
+      "legacy removal",
+      "irreversible migration",
+      "high blast radius"
+    ],
+    "beforeStandingDecision": true,
+    "skill": ".cline/skills/doubt-review/SKILL.md"
+  },
+
+  "change-spec": {
+    "trigger": [
+      "cross-cutting change",
+      "architecture migration",
+      "multi-module refactor",
+      "B5 decoupling/removal",
+      "new subsystem",
+      "change spanning ownership boundaries",
+      "contract migration"
+    ],
+    "beforeImplementation": true,
+    "skill": ".cline/skills/change-spec/SKILL.md"
+  }
+},
+
+"routingOrder": [
+  "doubt-review",
+  "change-spec",
+  "systematic-debugging",
+  "code-review",
+  "verification-before-completion"
+],
   "neverStartByReadingEverything": true
 }

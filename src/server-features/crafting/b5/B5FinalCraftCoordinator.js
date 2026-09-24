@@ -17,10 +17,10 @@ class B5FinalCraftCoordinator {
     async execute(steps, context, { targetId = null } = {}) {
         // The execution target comes from the planner/request only. Without one
         // the final chain fails closed instead of assuming any default item.
-        const executionTarget = String(targetId || this.config?.targetId || '').trim();
+        const executionTarget = String(targetId || '').trim();
         if (!executionTarget) {
             throw new FlowError('Final craft chain requires a planner-provided target id.', {
-                code: 'B5_FINAL_TARGET_REQUIRED', subsystem: 'b5', step: 'craft-final-chain',
+                code: 'CRAFT_FINAL_TARGET_REQUIRED', subsystem: 'crafting', step: 'craft-final-chain',
                 action: 'resolve execution target', resource: null, retryable: false, trace: context.trace
             });
         }
@@ -43,7 +43,7 @@ class B5FinalCraftCoordinator {
                 await this.ensureInputs(recipe.inputs || {}, remaining, context, step.recipeId);
                 const maxCraftable = this.inventoryState.maxCraftable(recipe.inputs || {});
                 const decision = this.#quantity(step, recipe, remaining, maxCraftable, executionTarget);
-                this.quantityTrace('B5 QUANTITY DECISION', {
+                this.quantityTrace('CRAFT QUANTITY DECISION', {
                     step: 'craft-final-chain', resource: outputId, recipeId: step.recipeId,
                     quantity: decision.quantity, reason: decision.reason, remaining, maxCraftable
                 });
@@ -51,7 +51,7 @@ class B5FinalCraftCoordinator {
                 const actualCrafts = this.inventoryState.actualCrafts(crafted, decision.quantity);
                 if (actualCrafts <= 0) {
                     throw new FlowError(`Craft ${outputId} reported no completed crafts.`, {
-                        code: 'B5_FINAL_CRAFT_ZERO', subsystem: 'b5', step: 'craft-final-chain',
+                        code: 'CRAFT_FINAL_CRAFT_ZERO', subsystem: 'crafting', step: 'craft-final-chain',
                         action: `craft quantity ${decision.quantity}`, resource: outputId,
                         details: { quantity: decision.quantity, remaining, maxCraftable, crafted }, trace: context.trace
                     });
@@ -116,7 +116,7 @@ class B5FinalCraftCoordinator {
                 attempts += 1;
                 const maxStacks = Math.max(1, Math.ceil(shortage / 64));
                 const withdrawn = await this.runStep(context, {
-                    subsystem: 'b5', step: 'withdraw-final-input', action: 'withdraw from /pv 2', resource: logicalId,
+                    subsystem: 'crafting', step: 'withdraw-final-input', action: 'withdraw from /pv 2', resource: logicalId,
                     details: { recipeId, needed, inInventory, shortage, maxStacks, attempt: attempts }
                 }, () => this.withdrawFlow.withdraw(logicalId, this.childOptions(context, { maxStacks })));
                 lastWithdrawal = withdrawn?.data || null;
@@ -142,7 +142,7 @@ class B5FinalCraftCoordinator {
         const actualCrafts = this.inventoryState.actualCrafts(data, amount);
         if (actualCrafts <= 0) {
             throw new FlowError(`Craft ${outputId || recipeId} did not expose a completed craft count.`, {
-                code: 'B5_STAGE_OUTPUT_QUANTITY_UNCERTAIN', subsystem: 'b5', step: 'stage-output-verified',
+                code: 'CRAFT_STAGE_OUTPUT_QUANTITY_UNCERTAIN', subsystem: 'crafting', step: 'stage-output-verified',
                 action: `verify completed crafts for ${recipeId}`, resource: outputId || recipeId, retryable: true,
                 details: { recipeId, amount, stage, data }, trace: context.trace
             });
@@ -196,7 +196,7 @@ class B5FinalCraftCoordinator {
             ? `/pv 2 moved ${logicalId}, but the player inventory did not expose the item in time (${inInventory}/${needed}).`
             : `Not enough ${logicalId} in inventory after /pv 2 withdrawal (${inInventory}/${needed}).`, {
             code: vaultMoved ? 'PV_WITHDRAW_INVENTORY_SYNC_TIMEOUT' : 'PV_WITHDRAW_VERIFICATION_FAILED',
-            subsystem: 'b5', step: 'withdraw-final-input', action: 'verify inventory after withdrawal',
+            subsystem: 'crafting', step: 'withdraw-final-input', action: 'verify inventory after withdrawal',
             resource: logicalId, retryable: true,
             details: { recipeId, needed, after: inInventory, attempts, withdrawalVerification: verification, movedStacks: lastWithdrawal?.movedStacks ?? null },
             trace: context.trace

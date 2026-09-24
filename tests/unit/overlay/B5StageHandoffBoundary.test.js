@@ -62,7 +62,7 @@ test('craft verifies output but does not perform stage settlement per craft', as
 
 test('final-chain executes multiple B4 crafts then settles once at stage boundary', async () => {
     const final = makeFinal();
-    await final.coordinator.execute([{ recipeId: 'b4', outputId: 'b4out', crafts: 2 }], context());
+    await final.coordinator.execute([{ recipeId: 'b4', outputId: 'b4out', crafts: 2 }], context(), { targetId: 'b5out' });
     assert.equal(final.settleCalls, 1);
 });
 

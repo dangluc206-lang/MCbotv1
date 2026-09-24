@@ -97,21 +97,24 @@
     ]
   },
   "currentBuiltinModes": {
-    "b5-craft": {
-      "service": "b5CraftMode",
+    "crafting": {
+      "service": "craftingMode",
+      "label": "Chế tạo",
+      "owner": "src/modes/crafting/CraftingModeService.js",
       "requiredCapabilities": [
         "island",
         "storage",
         "b1-materials",
         "smelting",
-        "b5-planning",
-        "b5-automation",
+        "crafting-planning",
+        "crafting-automation",
         "crafting",
         "personal-vault"
       ],
       "requestedResources": [
         "primary-mode"
       ],
+      "requestContract": "CraftingRequest (operator-selected targetItemId + quantity); the mode never infers a target and waits when no request exists",
       "currentMetadata": {
         "kind": "builtin",
         "recommended": true
@@ -119,6 +122,8 @@
     },
     "collector-b5": {
       "service": "collectorB5Mode",
+      "label": "Collector + B5 (cũ)",
+      "owner": "src/modes/collector-b5/CollectorB5ModeService.js",
       "requiredCapabilities": [
         "island",
         "movement",

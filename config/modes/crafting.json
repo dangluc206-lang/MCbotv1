@@ -20,5 +20,5 @@
     "sameBlockerThreshold": 2,
     "logEveryNthRepeat": 5
   },
-  "postB5CooldownMs": 1800000
+  "postCycleCooldownMs": 1800000
 }

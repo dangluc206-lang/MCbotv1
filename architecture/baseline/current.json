@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "baselineVersion": 1,
   "workPackage": "WP-001",
-  "generatedAt": "2026-09-21T13:40:21.189Z",
+  "generatedAt": "2026-09-23T15:24:37.793Z",
   "releaseVersion": "2.7.67",
   "scope": {
     "root": ".",
@@ -39,12 +39,12 @@
       "inScopeChangedPaths": 0
     },
     "reason": "Standalone source tree; version-control metadata is intentionally not required.",
-    "sourceFingerprintSha256": "ec9ded0f3afb700f5ceb5e3010db0b8c9a2fc660f6c0c6f8812d994428eb90fd"
+    "sourceFingerprintSha256": "3b883955b3f61fb64918a4edd5dda4ebb9a56b12682fa32dbe92d37c11caab9f"
   },
   "counts": {
-    "files": 892,
+    "files": 907,
     "source": 418,
-    "tests": 247,
+    "tests": 248,
     "scripts": 41,
     "configJson": 35,
     "routes": 1
@@ -571,16 +571,6 @@
       "src/modes/ModePresentationService.js",
       "src/modes/ModeSdk.js",
       "src/modes/RuntimeModeRegistry.js",
-      "src/modes/b5-craft/B5CraftModeService.js",
-      "src/modes/b5-craft/B5CycleConfigBoundary.js",
-      "src/modes/b5-craft/B5GenerationPreparer.js",
-      "src/modes/b5-craft/B5RequestExecution.js",
-      "src/modes/b5-craft/campaign/B5BatchCoordinator.js",
-      "src/modes/b5-craft/campaign/B5CampaignSession.js",
-      "src/modes/b5-craft/fault/B5FaultPolicyAdapter.js",
-      "src/modes/b5-craft/status/B5StatusProjection.js",
-      "src/modes/b5-craft/storage/B5SharedStorageLease.js",
-      "src/modes/b5-craft/storage/StorageProtectionEpisode.js",
       "src/modes/collector-b5/CollectorB5ModeService.js",
       "src/modes/collector-b5/CollectorB5StatusPresenter.js",
       "src/modes/collector-b5/CollectorB5WorkPolicy.js",
@@ -599,6 +589,16 @@
       "src/modes/composable/WorkflowSchemaMigrator.js",
       "src/modes/composable/WorkflowStepExecutor.js",
       "src/modes/composable/WorkflowStepNormalizer.js",
+      "src/modes/crafting/CraftingCycleConfigBoundary.js",
+      "src/modes/crafting/CraftingGenerationPreparer.js",
+      "src/modes/crafting/CraftingModeService.js",
+      "src/modes/crafting/CraftingRequestExecution.js",
+      "src/modes/crafting/campaign/CraftBatchCoordinator.js",
+      "src/modes/crafting/campaign/CraftCampaignSession.js",
+      "src/modes/crafting/fault/CraftFaultPolicyAdapter.js",
+      "src/modes/crafting/status/CraftingStatusProjection.js",
+      "src/modes/crafting/storage/CraftSharedStorageLease.js",
+      "src/modes/crafting/storage/StorageProtectionEpisode.js",
       "src/modes/fishing/ConnectionPacketObserver.js",
       "src/modes/fishing/ConnectionStateView.js",
       "src/modes/fishing/FishingModeService.js",
@@ -979,16 +979,6 @@
       "src/modes/ModePresentationService.js",
       "src/modes/ModeSdk.js",
       "src/modes/RuntimeModeRegistry.js",
-      "src/modes/b5-craft/B5CraftModeService.js",
-      "src/modes/b5-craft/B5CycleConfigBoundary.js",
-      "src/modes/b5-craft/B5GenerationPreparer.js",
-      "src/modes/b5-craft/B5RequestExecution.js",
-      "src/modes/b5-craft/campaign/B5BatchCoordinator.js",
-      "src/modes/b5-craft/campaign/B5CampaignSession.js",
-      "src/modes/b5-craft/fault/B5FaultPolicyAdapter.js",
-      "src/modes/b5-craft/status/B5StatusProjection.js",
-      "src/modes/b5-craft/storage/B5SharedStorageLease.js",
-      "src/modes/b5-craft/storage/StorageProtectionEpisode.js",
       "src/modes/collector-b5/CollectorB5ModeService.js",
       "src/modes/collector-b5/CollectorB5StatusPresenter.js",
       "src/modes/collector-b5/CollectorB5WorkPolicy.js",
@@ -1007,6 +997,16 @@
       "src/modes/composable/WorkflowSchemaMigrator.js",
       "src/modes/composable/WorkflowStepExecutor.js",
       "src/modes/composable/WorkflowStepNormalizer.js",
+      "src/modes/crafting/CraftingCycleConfigBoundary.js",
+      "src/modes/crafting/CraftingGenerationPreparer.js",
+      "src/modes/crafting/CraftingModeService.js",
+      "src/modes/crafting/CraftingRequestExecution.js",
+      "src/modes/crafting/campaign/CraftBatchCoordinator.js",
+      "src/modes/crafting/campaign/CraftCampaignSession.js",
+      "src/modes/crafting/fault/CraftFaultPolicyAdapter.js",
+      "src/modes/crafting/status/CraftingStatusProjection.js",
+      "src/modes/crafting/storage/CraftSharedStorageLease.js",
+      "src/modes/crafting/storage/StorageProtectionEpisode.js",
       "src/modes/fishing/ConnectionPacketObserver.js",
       "src/modes/fishing/ConnectionStateView.js",
       "src/modes/fishing/FishingModeService.js",
@@ -1473,8 +1473,8 @@
       "src/items/inventory/observation/InventoryObservationService.js",
       "src/items/inventory/sync/InventorySyncService.js",
       "src/modes/ModeContext.js",
-      "src/modes/b5-craft/B5CraftModeService.js",
       "src/modes/collector-b5/CollectorB5ModeService.js",
+      "src/modes/crafting/CraftingModeService.js",
       "src/modes/fishing/ConnectionPacketObserver.js",
       "src/modes/fishing/ConnectionStateView.js",
       "src/modes/fishing/FishingModeService.js",
@@ -1535,26 +1535,6 @@
   },
   "modes": [
     {
-      "id": "b5-craft",
-      "serviceName": "b5CraftMode",
-      "kind": "builtin",
-      "lifecycle": "MANAGED_MODE",
-      "requiredCapabilities": [
-        "b1-materials",
-        "b5-automation",
-        "b5-planning",
-        "crafting",
-        "island",
-        "personal-vault",
-        "smelting",
-        "storage"
-      ],
-      "requestedResources": [
-        "primary-mode"
-      ],
-      "sourceFile": "src/modes/b5-craft/B5CraftModeService.js"
-    },
-    {
       "id": "collector-b5",
       "serviceName": "collectorB5Mode",
       "kind": "builtin",
@@ -1570,6 +1550,26 @@
         "primary-mode"
       ],
       "sourceFile": "src/modes/collector-b5/CollectorB5ModeService.js"
+    },
+    {
+      "id": "crafting",
+      "serviceName": "craftingMode",
+      "kind": "builtin",
+      "lifecycle": "MANAGED_MODE",
+      "requiredCapabilities": [
+        "b1-materials",
+        "crafting",
+        "crafting-automation",
+        "crafting-planning",
+        "island",
+        "personal-vault",
+        "smelting",
+        "storage"
+      ],
+      "requestedResources": [
+        "primary-mode"
+      ],
+      "sourceFile": "src/modes/crafting/CraftingModeService.js"
     },
     {
       "id": "fishing",
@@ -1599,6 +1599,8 @@
       "commands",
       "connection",
       "crafting",
+      "crafting-automation",
+      "crafting-trace",
       "dungeon",
       "fishing",
       "gui",
@@ -2349,9 +2351,9 @@
       }
     },
     {
-      "key": "b5CraftMode",
+      "key": "craftingMode",
       "file": "config/modes/b5-craft.json",
-      "schema": "b5CraftMode",
+      "schema": "craftingMode",
       "consumers": [
         "src/bootstrap/registerBotServices.js",
         "src/bootstrap/registerSharedServices.js",
@@ -2426,11 +2428,11 @@
     }
   ],
   "architectureInspection": {
-    "valid": true,
+    "valid": false,
     "catalog": {
       "schemaVersion": 3,
       "sourceFiles": 418,
-      "testFiles": 247,
+      "testFiles": 248,
       "scriptFiles": 41,
       "sourceReachable": 410,
       "runtimeReachable": 404,
@@ -2448,14 +2450,27 @@
         "functions": 80
       }
     },
-    "findings": []
+    "findings": [
+      {
+        "code": "CONFIG_UNREGISTERED",
+        "category": "CURRENT",
+        "file": "config/modes/crafting.json",
+        "message": "JSON config is not registered by ConfigSpecs."
+      },
+      {
+        "code": "CONFIG_SPEC_MISSING",
+        "category": "CURRENT",
+        "file": "config/modes/b5-craft.json",
+        "message": "Registered config is missing: config/modes/b5-craft.json"
+      }
+    ]
   },
   "findings": [
     {
       "code": "BASELINE_ARCHITECTURE_VALIDATOR",
       "category": "CURRENT",
       "file": "scripts/validate-architecture.js",
-      "summary": "Architecture validator is clean at capture time.",
+      "summary": "Architecture validator reports current failures.",
       "workPackages": [
         "WP-001"
       ]
@@ -2527,6 +2542,24 @@
       "summary": "Release ZIP completeness/safety policy and real-ZIP verifier are present; source-only fast quality includes the pure contract test.",
       "workPackages": [
         "WP-402"
+      ]
+    },
+    {
+      "code": "CONFIG_UNREGISTERED",
+      "category": "CURRENT",
+      "file": "config/modes/crafting.json",
+      "summary": "JSON config is not registered by ConfigSpecs.",
+      "workPackages": [
+        "WP-001"
+      ]
+    },
+    {
+      "code": "CONFIG_SPEC_MISSING",
+      "category": "CURRENT",
+      "file": "config/modes/b5-craft.json",
+      "summary": "Registered config is missing: config/modes/b5-craft.json",
+      "workPackages": [
+        "WP-001"
       ]
     }
   ]

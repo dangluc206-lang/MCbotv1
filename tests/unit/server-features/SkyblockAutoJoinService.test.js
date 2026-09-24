@@ -48,7 +48,7 @@ test('HUB login/spawn never enters Sky when no mode owns a target demand', async
 test('mode demand enters its configured target and marks only that target ready', async () => {
     const { eventBus, calls, service } = create();
     await service.initialize();
-    service.requireTarget('sky1', { owner: 'b5-craft' });
+    service.requireTarget('sky1', { owner: 'crafting' });
     eventBus.emit('connection:spawned', { botId: 'bot-01', connectionGeneration: 2 });
     await waitFor(() => calls.length === 1);
     assert.equal(calls[0].target, 'sky1');
@@ -60,7 +60,7 @@ test('mode demand enters its configured target and marks only that target ready'
 test('target is profile/mode data, so sky2 or skyOP is not forced through sky1', async () => {
     const { eventBus, calls, service } = create();
     await service.initialize();
-    service.requireTarget('skyOP', { owner: 'b5-craft' });
+    service.requireTarget('skyOP', { owner: 'crafting' });
     eventBus.emit('server-login:disabled', { botId: 'bot-01', connectionGeneration: 3 });
     await waitFor(() => calls.length === 1);
     assert.equal(calls[0].target, 'skyOP');
@@ -97,7 +97,7 @@ test('join failure retries without a max-attempt limit while demand remains', as
     });
     eventBus.on('skyblock:gateway:failed', event => events.push(event));
     await service.initialize();
-    service.requireTarget('sky1', { owner: 'b5-craft' });
+    service.requireTarget('sky1', { owner: 'crafting' });
     eventBus.emit('connection:spawned', { botId: 'bot-01', connectionGeneration: 5 });
     await waitFor(() => calls.length === 4, 800);
     assert.equal(service.isGenerationReady(5, 'sky1'), true);
@@ -110,7 +110,7 @@ test('join failure retries without a max-attempt limit while demand remains', as
 test('returning from Sky to HUB on the same generation re-enters the demanded target', async () => {
     const { eventBus, calls, service } = create();
     await service.initialize();
-    service.requireTarget('sky2', { owner: 'b5-craft' });
+    service.requireTarget('sky2', { owner: 'crafting' });
     eventBus.emit('connection:spawned', { botId: 'bot-01', connectionGeneration: 6 });
     await waitFor(() => calls.length === 1);
     assert.equal(service.isGenerationReady(6, 'sky2'), true);
@@ -159,7 +159,7 @@ test('manual HUB hold suppresses mode rejoin until a managed join is explicitly 
     const context = new BotContext('bot-01'); context.attach({});
     const { eventBus, calls, service } = create({ context });
     await service.initialize();
-    service.requireTarget('sky1', { owner: 'b5-craft' });
+    service.requireTarget('sky1', { owner: 'crafting' });
     eventBus.emit('connection:spawned', { botId: 'bot-01', connectionGeneration: 1 });
     await waitFor(() => calls.length === 1);
     service.holdAtHub({ reason: 'operator' });

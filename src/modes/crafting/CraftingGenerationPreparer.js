@@ -2,7 +2,7 @@
 
 const Timeout = require('../../shared/time/Timeout');
 
-class B5GenerationPreparer {
+class CraftingGenerationPreparer {
     constructor({ modeId, modeContext, island, skyblockReadiness = null, skyTarget = null, sharedStorageLease = null }) {
         Object.assign(this, { modeId, modeContext, island, skyblockReadiness, skyTarget, sharedStorageLease });
     }
@@ -12,7 +12,7 @@ class B5GenerationPreparer {
             this.sharedStorageLease.release('connection-generation-changed');
         }
         setPhase('WAITING_SKYBLOCK', 'skyblock');
-        this.skyblockReadiness?.requireTarget?.(this.skyTarget, { owner: this.modeId, trigger: 'b5-prepare-generation' });
+        this.skyblockReadiness?.requireTarget?.(this.skyTarget, { owner: this.modeId, trigger: 'crafting-prepare-generation' });
         if (this.skyblockReadiness?.isGenerationReady) {
             while (!this.skyblockReadiness.isGenerationReady(generation, this.skyTarget)) {
                 cancellationToken.throwIfCancelled();
@@ -24,8 +24,8 @@ class B5GenerationPreparer {
             setPhase('GOING_HOME', null);
             const home = await this.island.goHome({ cancellationToken, expectedGeneration: generation });
             if (home?.success === false) {
-                const error = home.error || new Error(home.message || 'Không thể /is trước khi chế B5.');
-                error.code ||= 'B5_CRAFT_HOME_FAILED';
+                const error = home.error || new Error(home.message || 'Không thể /is trước khi chế tạo.');
+                error.code ||= 'CRAFT_HOME_FAILED';
                 throw error;
             }
         }
@@ -34,4 +34,4 @@ class B5GenerationPreparer {
     }
 }
 
-module.exports = B5GenerationPreparer;
+module.exports = CraftingGenerationPreparer;

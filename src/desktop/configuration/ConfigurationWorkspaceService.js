@@ -24,7 +24,7 @@ function semanticDiff(before, after, path = '') {
 }
 
 function impactFor(key, changes) {
-    const liveGroups = new Set(['skyblock', 'skyCommands', 'b5CraftMode']);
+    const liveGroups = new Set(['skyblock', 'skyCommands', 'craftingMode']);
     const reconnectPatterns = /(?:server|host|port|auth|username|version)/i;
     const reconnect = changes.some(change => reconnectPatterns.test(change.path));
     return reconnect ? 'RECONNECT' : liveGroups.has(key) ? 'LIVE_RECONFIGURE' : 'BACKEND_RESTART';

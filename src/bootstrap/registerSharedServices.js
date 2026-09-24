@@ -64,7 +64,7 @@ function registerSharedServices({
       smelting: configuration.registry.require("smelting"),
       serverTimings: {
         postB5CooldownMs:
-          configuration.registry.require("b5CraftMode").postB5CooldownMs,
+          configuration.registry.require("craftingMode").postCycleCooldownMs,
       },
     },
   );

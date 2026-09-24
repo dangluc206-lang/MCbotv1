@@ -31,7 +31,7 @@ const SPECS = [
     ['craftingTargets', 'config/server-data/crafting-targets.json', 'craftingTargets'],
     ['b5', 'config/server-data/b5.json', 'b5'],
     ['collectorB5Mode', 'config/modes/collector-b5.json', 'collectorB5Mode'],
-    ['b5CraftMode', 'config/modes/b5-craft.json', 'b5CraftMode'],
+    ['craftingMode', 'config/modes/crafting.json', 'craftingMode'],
     ['fishingMode', 'config/modes/fishing.json', 'fishing'],
     ['dailyRecovery', 'config/recovery/daily.json', 'dailyRecovery']
 ].map(([key, file, schema]) => Object.freeze({ key, file, schema }));

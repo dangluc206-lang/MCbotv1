@@ -25,11 +25,11 @@ function createModeCatalog({ baseDir = process.cwd() } = {}) {
 
     return new ModeCatalog([
         {
-            id: 'b5-craft',
-            serviceName: 'b5CraftMode',
-            label: 'Chế B5 thuần',
-            description: 'Chỉ /is, đọc kho, nung raw khi cần bảo vệ, nén phôi thành khối, bảo vệ kho và chế B5; không di chuyển.',
-            requiredCapabilities: ['island', 'storage', 'b1-materials', 'smelting', 'b5-planning', 'b5-automation', 'crafting', 'personal-vault'],
+            id: 'crafting',
+            serviceName: 'craftingMode',
+            label: 'Chế tạo',
+            description: 'Nhận yêu cầu chế tạo theo mục tiêu/số lượng do operator chọn, đọc kho, bảo vệ kho, nén phôi thành khối và chế mục tiêu; không di chuyển.',
+            requiredCapabilities: ['island', 'storage', 'b1-materials', 'smelting', 'crafting-planning', 'crafting-automation', 'crafting', 'personal-vault'],
             requestedResources: ['primary-mode'],
             metadata: { kind: 'builtin', recommended: true }
         },

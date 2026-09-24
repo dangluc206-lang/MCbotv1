@@ -15,8 +15,8 @@ function snapshot(count, tick) {
         system:{ startedAt:'2026-01-01T00:00:00.000Z', uptimeMs:tick, memoryMb:256 },
         bots:Array.from({ length:count }, (_, index) => ({
             botId:`perf-bot-${index + 1}`, profile:{ displayName:`Bot ${index + 1}`, enabled:true }, connectionGeneration:1,
-            state:{ connectionState:'CONNECTED', lastError:null }, intent:{ desiredConnection:'CONNECTED', desiredMode:'b5-craft', modeState:'RUNNING' },
-            modeOwner:{ modeId:'b5-craft' }, modes:{ byId:{ 'b5-craft':{ phase:'CRAFTING', paused:false, details:{ waitingReason:null } } }, b5Craft:{ details:{ batchId:`batch-${tick}`, protectionEpisode:{ state:'COMPLETED' }, recovery:{ safeState:'SAFE' } } } },
+            state:{ connectionState:'CONNECTED', lastError:null }, intent:{ desiredConnection:'CONNECTED', desiredMode:'crafting', modeState:'RUNNING' },
+            modeOwner:{ modeId:'crafting' }, modes:{ byId:{ 'crafting':{ phase:'CRAFTING', paused:false, details:{ waitingReason:null } } }, b5Craft:{ details:{ batchId:`batch-${tick}`, protectionEpisode:{ state:'COMPLETED' }, recovery:{ safeState:'SAFE' } } } },
             operation:{ operations:[{ operationId:`op-${tick}`, operationName:'B5Automation', status:'RUNNING', ageMs:tick % 1000, metadata:{ step:'craft' } }] }
         }))
     };

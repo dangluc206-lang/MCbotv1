@@ -56,7 +56,7 @@ test('final B4 stage settlement happens once after all repeated crafts', async (
         craftFlow: { async craft() { crafts += 1; return { actualCrafts: 1, verification: { before: crafts - 1, after: crafts } }; } },
         config: { targetId: 'b5out' }, runStep: async (_c, _m, fn) => ({ data: await fn() }), childOptions: (_c, o={}) => o, quantityTrace() {}, verificationService: new B5StageContract()
     });
-    await final.execute([{ recipeId: 'b4', outputId: 'b4out', crafts: 4 }], ctx());
+    await final.execute([{ recipeId: 'b4', outputId: 'b4out', crafts: 4 }], ctx(), { targetId: 'b5out' });
     assert.equal(crafts, 4);
     assert.equal(settleCalls, 1);
 });
@@ -75,7 +75,7 @@ test('stage timeout blocks handoff after output is verified', async () => {
         craftFlow: { async craft() { crafts += 1; return { actualCrafts: 1, verification: { before: crafts - 1, after: crafts } }; } },
         config: { targetId: 'b5out' }, runStep: async (_c, _m, fn) => ({ data: await fn() }), childOptions: (_c, o={}) => o, quantityTrace() {}, verificationService: new B5StageContract()
     });
-    await assert.rejects(final.execute([{ recipeId: 'b4', outputId: 'b4out', crafts: 1 }], ctx()), /did not settle/);
+    await assert.rejects(final.execute([{ recipeId: 'b4', outputId: 'b4out', crafts: 1 }], ctx(), { targetId: 'b5out' }), /did not settle/);
     assert.equal(crafts, 1);
     assert.equal(settleCalls, 1);
 });

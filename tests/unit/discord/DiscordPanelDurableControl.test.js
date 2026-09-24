@@ -23,16 +23,16 @@ function createFixture() {
     const collector = modeState();
     const fishing = modeState();
     const services = {
-        eventBus: new EventBus(), b5CraftMode: b5, collectorB5Mode: collector, fishingMode: fishing,
+        eventBus: new EventBus(), craftingMode: b5, collectorB5Mode: collector, fishingMode: fishing,
         modeRegistry: {
-            has: id => ['b5-craft', 'collector-b5', 'fishing'].includes(id),
+            has: id => ['crafting', 'collector-b5', 'fishing'].includes(id),
             active() {
-                if (b5.status().enabled) return [{ definition: { id: 'b5-craft' }, status: b5.status() }];
+                if (b5.status().enabled) return [{ definition: { id: 'crafting' }, status: b5.status() }];
                 if (collector.status().enabled) return [{ definition: { id: 'collector-b5' }, status: collector.status() }];
                 if (fishing.status().enabled) return [{ definition: { id: 'fishing' }, status: fishing.status() }];
                 return [];
             },
-            require(id) { return id === 'b5-craft' ? b5 : id === 'collector-b5' ? collector : fishing; }
+            require(id) { return id === 'crafting' ? b5 : id === 'collector-b5' ? collector : fishing; }
         },
         operationManager: { cancelAll() { return 1; } }, movementManager: { async stop() {} }, guiManager: { describeCurrent: () => null, async closeCurrentWindow() {} },
         connectionManager: { async connect() { throw new Error('direct connect must not run'); } },
@@ -50,7 +50,7 @@ function createFixture() {
         async requestConnection(botId, desiredConnection, options) { requests.push({ type: 'connection', botId, desiredConnection, options }); return { success: true }; },
         async requestMode(botId, desiredMode, options = {}) {
             requests.push({ type: 'mode', botId, desiredMode, options });
-            b5.set(desiredMode === 'b5-craft', desiredMode === 'b5-craft' && options.state === 'PAUSED');
+            b5.set(desiredMode === 'crafting', desiredMode === 'crafting' && options.state === 'PAUSED');
             collector.set(desiredMode === 'collector-b5', desiredMode === 'collector-b5' && options.state === 'PAUSED');
             fishing.set(desiredMode === 'fishing', desiredMode === 'fishing' && options.state === 'PAUSED');
             return { success: true };
@@ -73,6 +73,6 @@ test('Discord remote persists per-bot connection and generic mode lifecycle thro
     const f = createFixture();
     for (const action of ['join', 'start-selected-mode', 'pause', 'resume', 'restart-mode', 'stop-mode', 'disconnect']) assert.equal(await f.manager.handleInteraction(button(action)), true);
     assert.deepEqual(f.requests.map(r => r.type === 'connection' ? `${r.type}:${r.desiredConnection}` : `${r.type}:${r.desiredMode}:${r.options.state || '-'}`), [
-        'connection:CONNECTED', 'mode:b5-craft:ACTIVE', 'mode:b5-craft:PAUSED', 'mode:b5-craft:ACTIVE', 'restart:b5-craft:-', 'mode:null:-', 'connection:DISCONNECTED'
+        'connection:CONNECTED', 'mode:crafting:ACTIVE', 'mode:crafting:PAUSED', 'mode:crafting:ACTIVE', 'restart:crafting:-', 'mode:null:-', 'connection:DISCONNECTED'
     ]);
 });

@@ -15,10 +15,10 @@ function interaction(name, values) {
 
 test('remote /mode controls any registered mode through FleetControl', async () => {
     const requests = [];
-    const registry = { has: id => ['b5-craft','custom-x'].includes(id), active: () => [], status: id => id ? { definition: { id }, status: { enabled: false } } : { modes: [] } };
+    const registry = { has: id => ['crafting','custom-x'].includes(id), active: () => [], status: id => id ? { definition: { id }, status: { enabled: false } } : { modes: [] } };
     const runtime = { requireService: name => name === 'modeRegistry' ? registry : { } };
     const command = new RemoteModeCommand({
-        botRegistry: { require: () => runtime }, modeCatalog: { list: () => [{ id:'b5-craft',label:'B5' },{ id:'custom-x',label:'Custom' }] },
+        botRegistry: { require: () => runtime }, modeCatalog: { list: () => [{ id:'crafting',label:'B5' },{ id:'custom-x',label:'Custom' }] },
         config: { modeCommandName:'mode', defaultBotId:'bot-01', ephemeral:true }, allowedUserIds:['operator'],
         fleetControl: { async requestMode(botId, modeId, options) { requests.push({ botId, modeId, options }); return { success:true }; } }
     });

@@ -1,6 +1,6 @@
 'use strict';
 
-class B5CycleConfigBoundary {
+class CraftingCycleConfigBoundary {
     constructor({ planning, automation }) {
         this.planning = planning;
         this.automation = automation;
@@ -38,4 +38,4 @@ class B5CycleConfigBoundary {
     }
 }
 
-module.exports = B5CycleConfigBoundary;
+module.exports = CraftingCycleConfigBoundary;

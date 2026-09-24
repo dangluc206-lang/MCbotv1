@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const B5FinalCraftCoordinator = require('../../../src/server-features/crafting/b5/B5FinalCraftCoordinator');
 const B5CycleCoordinator = require('../../../src/server-features/crafting/b5/B5CycleCoordinator');
-const B5RequestExecution = require('../../../src/modes/b5-craft/B5RequestExecution');
+const CraftingRequestExecution = require('../../../src/modes/crafting/CraftingRequestExecution');
 const B5StageContract = require('../../../src/server-features/crafting/b5/support/B5StageContract');
 
 function token() { return { throwIfCancelled() {} }; }
@@ -146,7 +146,7 @@ test('cycle result credits the completed target generically (no B5 completion fi
 });
 
 test('request layer credits a verified non-super_alloy completion by targetId/amount', () => {
-    const request = new B5RequestExecution({
+    const request = new CraftingRequestExecution({
         request: { targetItemId: 'titanium', quantityMode: 'FIXED', quantity: 1 }
     });
     assert.equal(request.nextCycle().action, 'CYCLE');
@@ -158,7 +158,7 @@ test('request layer credits a verified non-super_alloy completion by targetId/am
     assert.equal(snapshot.completedUnits, 1);
 
     // A completion of a different target is never credited to this request.
-    const other = new B5RequestExecution({
+    const other = new CraftingRequestExecution({
         request: { targetItemId: 'titanium', quantityMode: 'FIXED', quantity: 1 }
     });
     other.nextCycle();

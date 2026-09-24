@@ -27,7 +27,7 @@ class StageExecutionContract {
         const delta = Number.isFinite(a) && Number.isFinite(b) ? Math.max(0, a - b) : 0;
         if (!Number.isFinite(a) || !Number.isFinite(b) || delta < expected) {
             throw new FlowError(`${stage} output was not verified for ${logicalId}.`, {
-                code: 'CRAFT_STAGE_OUTPUT_UNVERIFIED', subsystem: 'b5', step: 'stage-output-verified', action: 'verify stage output delta', resource: logicalId,
+                code: 'CRAFT_STAGE_OUTPUT_UNVERIFIED', subsystem: 'crafting', step: 'stage-output-verified', action: 'verify stage output delta', resource: logicalId,
                 retryable: true, details: { stage, logicalId, before: Number.isFinite(b) ? b : null, after: Number.isFinite(a) ? a : null, expectedDelta: expected, actualDelta: delta }, trace: context?.trace
             });
         }
@@ -38,7 +38,7 @@ class StageExecutionContract {
     requireSettled({ stage, logicalId, settlement, context = null }) {
         if (!settlement?.settled) {
             throw new FlowError(`${stage} inventory did not settle for ${logicalId}.`, {
-                code: 'CRAFT_STAGE_SETTLEMENT_TIMEOUT', subsystem: 'b5', step: 'stage-settlement', action: 'wait for relevant inventory settlement', resource: logicalId,
+                code: 'CRAFT_STAGE_SETTLEMENT_TIMEOUT', subsystem: 'crafting', step: 'stage-settlement', action: 'wait for relevant inventory settlement', resource: logicalId,
                 retryable: true, details: { stage, logicalId, settlement: settlement || null }, trace: context?.trace
             });
         }
@@ -50,7 +50,7 @@ class StageExecutionContract {
         if (context?.connectionGeneration != null && generation != null
             && Number(context.connectionGeneration) !== Number(generation)) {
             throw new FlowError(`Cannot hand off ${from} to ${to} across connection generations.`, {
-                code: 'CRAFT_STAGE_STALE_GENERATION', subsystem: 'b5', step: 'stage-handoff', action: 'validate generation before next stage', resource: from,
+                code: 'CRAFT_STAGE_STALE_GENERATION', subsystem: 'crafting', step: 'stage-handoff', action: 'validate generation before next stage', resource: from,
                 retryable: true, details: { from, to, expectedGeneration: generation, actualGeneration: context.connectionGeneration }, trace: context?.trace
             });
         }

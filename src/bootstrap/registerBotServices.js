@@ -132,7 +132,7 @@ const ModeControlService = require("../modes/ModeControlService");
 const ModeContext = require("../modes/ModeContext");
 const ModeSdk = require("../modes/ModeSdk");
 const CollectorB5ModeService = require("../modes/collector-b5/CollectorB5ModeService");
-const B5CraftModeService = require("../modes/b5-craft/B5CraftModeService");
+const CraftingModeService = require("../modes/crafting/CraftingModeService");
 const ComposableModeService = require("../modes/composable/ComposableModeService");
 const FishingModeService = require("../modes/fishing/FishingModeService");
 const resolveFishingConfig = require("../modes/fishing/resolveFishingConfig");
@@ -869,6 +869,10 @@ function registerBotServices({ profile, configuration, shared }) {
     "b5-planning": b5Planning,
     "b5-automation": b5Automation,
     "b5-trace": b5TraceRecorder,
+    // Generic crafting capability names (B5 names kept as legacy aliases).
+    "crafting-planning": b5Planning,
+    "crafting-automation": b5Automation,
+    "crafting-trace": b5TraceRecorder,
   };
   new CapabilityInstaller({ registry: capabilityRegistry }).install(
     capabilities,
@@ -893,11 +897,11 @@ function registerBotServices({ profile, configuration, shared }) {
     operationManager,
     logger,
   });
-  const b5CraftConfig = {
-    ...configuration.registry.require("b5CraftMode"),
+  const craftingConfig = {
+    ...configuration.registry.require("craftingMode"),
     ...serverProfile.requireCatalog("serverTimings"),
   };
-  const b5CraftMode = new B5CraftModeService({
+  const craftingMode = new CraftingModeService({
     botId,
     modeContext,
     modeCoordinator,
@@ -906,15 +910,15 @@ function registerBotServices({ profile, configuration, shared }) {
     skyblockReadiness: skyblockAutoJoin,
     skyTarget,
     b1Materials,
-    b5Planning,
-    b5Automation,
+    craftingPlanning: b5Planning,
+    automation: b5Automation,
     craftingItemRegistry,
     craftingChainPlanner,
     sharedStorageLeases: shared.sharedResourceLeases,
     storageLeaseKey: `storage:${profile.serverProfile || "default"}`,
     failurePublisher: runtimeFailurePublisher,
     failurePolicy,
-    config: b5CraftConfig,
+    config: craftingConfig,
     logger,
   });
   const customModes = {};
@@ -948,7 +952,7 @@ function registerBotServices({ profile, configuration, shared }) {
   const servicesByName = {
     collectorB5Mode: collectorB5ModeAdapter,
     fishingMode: fishingModeAdapter,
-    b5CraftMode,
+    craftingMode,
     ...customModes,
   };
   const modeRegistry = new RuntimeModeRegistry({
@@ -1040,7 +1044,7 @@ function registerBotServices({ profile, configuration, shared }) {
       fishingMovement,
       modeCoordinator,
       collectorB5Mode,
-      b5CraftMode,
+      craftingMode,
       fishingMode,
     ],
     customModes,
@@ -1091,7 +1095,7 @@ function registerBotServices({ profile, configuration, shared }) {
       b5ExecutionPlanner,
       b5TraceRecorder,
       collectorB5Mode: collectorB5ModeAdapter,
-      b5CraftMode,
+      craftingMode,
       fishingMode: fishingModeAdapter,
       ...customModes,
       afkAreas,

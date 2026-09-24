@@ -8,11 +8,11 @@ test('ConfigurationWorkspaceService previews semantic impact, saves and undoes',
     let current = { enabled: true, pollIntervalMs: 1000 };
     const service = new ConfigurationWorkspaceService({
         idFactory: () => '1',
-        loadGroup: async key => ({ key, file: 'config/modes/b5-craft.json', schema: 'b5CraftMode', value: structuredClone(current) }),
+        loadGroup: async key => ({ key, file: 'config/modes/b5-craft.json', schema: 'craftingMode', value: structuredClone(current) }),
         validateGroup: async (_key, value) => ({ valid: value.pollIntervalMs >= 500, errors: value.pollIntervalMs >= 500 ? [] : ['poll too low'] }),
         saveGroup: async (_key, value) => { current = structuredClone(value); return { backup: 'backup.json' }; }
     });
-    const opened = await service.open('b5CraftMode');
+    const opened = await service.open('craftingMode');
     const draft = { enabled: true, pollIntervalMs: 1500 };
     const preview = await service.preview(opened.sessionId, draft);
     assert.equal(preview.dirty, true);

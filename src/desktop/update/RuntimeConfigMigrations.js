@@ -806,6 +806,46 @@ async function migrateB5Sell64OnlyPolicy({ runtimeRoot, fromVersion }) {
     };
 }
 
+async function migrateLegacyB5CraftModeToCraftingConfig({ runtimeRoot, fromVersion }) {
+    // The generic crafting mode replaces b5-craft: existing runtimes keep their
+    // operator overrides in config/modes/b5-craft.json. Copy the schema-accepted
+    // subset into config/modes/crafting.json (renaming postB5CooldownMs) so no
+    // operator setting is lost; the legacy file is left in place for older app
+    // versions that may still read it.
+    if (!shouldRunBefore(fromVersion, '2.8.0')) return { changed: false, files: [] };
+
+    const legacyRelative = path.join('config', 'modes', 'b5-craft.json');
+    const nextRelative = path.join('config', 'modes', 'crafting.json');
+    const legacyPath = path.join(runtimeRoot, legacyRelative);
+    const nextPath = path.join(runtimeRoot, nextRelative);
+    if (!fs.existsSync(legacyPath) || fs.existsSync(nextPath)) return { changed: false, files: [] };
+
+    const legacy = JSON.parse(await fsp.readFile(legacyPath, 'utf8'));
+    const accepted = new Set([
+        'enabled', 'teleportHomeOnEnable', 'autoResumeOnReconnect', 'pollIntervalMs',
+        'disconnectedPollMs', 'errorRetryMs', 'errorRetryMaxMs', 'craftLoopDelayMs',
+        'stability', 'reconciliation'
+    ]);
+    const next = {};
+    for (const [key, value] of Object.entries(legacy || {})) {
+        if (!accepted.has(key)) continue;
+        next[key] = value;
+    }
+    if (Number(legacy?.postB5CooldownMs) > 0) next.postCycleCooldownMs = Number(legacy.postB5CooldownMs);
+    await writeJsonAtomic(nextPath, next);
+    return {
+        changed: true,
+        files: [nextRelative.replace(/\\/g, '/')],
+        changes: [{
+            file: nextRelative.replace(/\\/g, '/'),
+            field: '*',
+            action: 'migrated-legacy-b5-craft-mode-config',
+            previous: legacyRelative.replace(/\\/g, '/')
+        }],
+        migrationId: '2.8.0-generic-crafting-mode-config'
+    };
+}
+
 async function applyRuntimeConfigMigrations(context) {
     const migrations = [
         { target: '2.6.1', run: migrateGuiIdentityWindowDefaults },
@@ -817,7 +857,8 @@ async function applyRuntimeConfigMigrations(context) {
         { target: '2.6.11', run: migrateB5SingleSourceStoragePolicyAndTungstenIdentity },
         { target: '2.6.14', run: migrateDiscordRemoteAndStrongSmeltingIdentity },
         { target: '2.6.16', run: migrateB5StorageProtectionAndModeSkyGateway },
-        { target: '2.6.26', run: migrateB5Sell64OnlyPolicy }
+        { target: '2.6.26', run: migrateB5Sell64OnlyPolicy },
+        { target: '2.8.0', run: migrateLegacyB5CraftModeToCraftingConfig }
     ];
     const applied = [];
     const files = new Set();
@@ -846,5 +887,6 @@ module.exports = {
     migrateB5SingleSourceStoragePolicyAndTungstenIdentity,
     migrateDiscordRemoteAndStrongSmeltingIdentity,
     migrateB5StorageProtectionAndModeSkyGateway,
-    migrateB5Sell64OnlyPolicy
+    migrateB5Sell64OnlyPolicy,
+    migrateLegacyB5CraftModeToCraftingConfig
 };

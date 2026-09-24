@@ -59,10 +59,10 @@ class OperatorSnapshotProjector {
                     ageMs: Number(current.ageMs || 0)
                 } : null,
                 lastErrorCode: bot.state?.lastError?.code || null,
-                b5: bot.modes?.b5Craft ? {
-                    batchId: bot.modes.b5Craft.details?.batchId || null,
-                    protectionState: bot.modes.b5Craft.details?.protectionEpisode?.state || null,
-                    safeState: bot.modes.b5Craft.details?.recovery?.safeState || null
+                b5: bot.modes?.crafting ? {
+                    batchId: bot.modes.crafting.details?.batchId || null,
+                    protectionState: bot.modes.crafting.details?.protectionEpisode?.state || null,
+                    safeState: bot.modes.crafting.details?.recovery?.safeState || null
                 } : null
             });
         });

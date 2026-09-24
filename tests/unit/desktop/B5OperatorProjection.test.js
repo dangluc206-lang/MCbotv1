@@ -7,7 +7,7 @@ const B5OperatorProjection = require('../../../src/desktop/b5/B5OperatorProjecti
 test('B5OperatorProjection exposes exact immutable reserve and sell contract', () => {
     const output = B5OperatorProjection.projectBot({
         botId: 'bot-01', connectionGeneration: 8,
-        modes: { b5Craft: { phase: 'WAITING_BLOCKED', enabled: true, details: {
+        modes: { crafting: { phase: 'WAITING_BLOCKED', enabled: true, details: {
             batchId: 'batch-1', batchProtectionCompleted: false,
             recovery: { safeState: 'CRAFT_NOT_STARTED', allowedActions: ['retry-storage-protection', 'inspect-diagnostic'] },
             protectionEpisode: { state: 'WAITING_BLOCKED', episodeId: 'episode-1', correlationId: 'incident-1', baselineDigest: 'abc', retainedRemainderItems: 63, remainingSellStacks: 2, blocker: { step: 'sell', backoffMs: 5000 } }
@@ -26,7 +26,7 @@ test('B5OperatorProjection exposes exact immutable reserve and sell contract', (
 test('B5OperatorProjection exposes reserve-input progress and keeps total per-family remainders above 63', () => {
     const item = B5OperatorProjection.projectBot({
         botId: 'b5',
-        modes: { b5Craft: { enabled: true, phase: 'STORAGE_PROTECTION_CONTINUE', details: {
+        modes: { crafting: { enabled: true, phase: 'STORAGE_PROTECTION_CONTINUE', details: {
             protectionEpisode: { state: 'WAITING_CONTINUE', baselineDigest: 'digest', lastProgress: {
                 step: 'reserve-input-checkpoint', remainingSellStacks: 2481, retainedRemainderItems: 178,
                 verifiedCoverage: 1.25,

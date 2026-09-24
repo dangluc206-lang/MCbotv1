@@ -68,7 +68,7 @@ class FakeDesktopRuntime {
             operation: { active: 0, operations: [] },
             modes: {
                 available: [
-                    { definition: { id: 'b5-craft', label: 'Chế B5 thuần' } },
+                    { definition: { id: 'crafting', label: 'Chế B5 thuần' } },
                     { definition: { id: 'fishing', label: 'Câu cá' } }
                 ],
                 byId: {}
@@ -109,7 +109,7 @@ class FakeDesktopRuntime {
         case 'mcbot:custom-mode:modules': return [];
         case 'mcbot:custom-mode:templates': return [];
         case 'mcbot:custom-mode:list': return [];
-        case 'mcbot:config:b5-craft:get': return this.configGroup('b5CraftMode');
+        case 'mcbot:config:b5-craft:get': return this.configGroup('craftingMode');
         case 'mcbot:config:b5-rules:get': return this.configGroup('b5');
         case 'mcbot:config:storage-protection:get': return { value: { sellBlockOnly: true, collectorB1Decompression: { maxUsageRatio: 0.8, requireKnownCapacity: true } } };
         case 'mcbot:config:sky-auto-join:get': return { value: clone(this.configByKey.get('skyblock')) };

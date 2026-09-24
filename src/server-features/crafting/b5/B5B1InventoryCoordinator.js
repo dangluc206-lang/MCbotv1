@@ -55,7 +55,7 @@ class B5B1InventoryCoordinator {
         const returned = await this.#returnAll(chain, context, 'return-b1-after-reserve');
         const remaining = this.inventoryState.count(chain.baseId);
         if (remaining > 0) throw new FlowError(`B1 return to /kho left ${remaining} ${chain.baseId} in inventory.`, {
-            code: 'B5_B1_RETURN_INCOMPLETE', subsystem: 'b5', step: 'return-b1-after-reserve', action: 'verify B1 player-inventory section after /kho deposit',
+            code: 'CRAFT_B1_RETURN_INCOMPLETE', subsystem: 'crafting', step: 'return-b1-after-reserve', action: 'verify B1 player-inventory section after /kho deposit',
             resource: chain.baseId, retryable: true, details: { before, returned, remaining }, trace: context.trace
         });
         return { baseId: chain.baseId, before, returned, remaining, skipped: false };
@@ -63,10 +63,10 @@ class B5B1InventoryCoordinator {
 
     #assertContract(chain, context) {
         if (typeof this.b2Input?.acquire !== 'function' || !['inventory', 'storage'].includes(this.b2Input?.source)) throw new FlowError('B5 requires a canonical B2 input acquisition flow.', {
-            code: 'B5_B1_INPUT_FLOW_UNAVAILABLE', subsystem: 'b5', step: 'acquire-b1-for-b2', action: 'require B2InputAcquisitionFlow', resource: chain.baseId, retryable: false, trace: context.trace
+            code: 'CRAFT_B1_INPUT_FLOW_UNAVAILABLE', subsystem: 'crafting', step: 'acquire-b1-for-b2', action: 'require B2InputAcquisitionFlow', resource: chain.baseId, retryable: false, trace: context.trace
         });
         if (this.config?.b2InputSource === 'inventory' && this.b2Input.source !== 'inventory') throw new FlowError('B5 V5 requires canonical B1 inventory withdrawal before B2.', {
-            code: 'B5_B1_INVENTORY_TRANSFER_UNAVAILABLE', subsystem: 'b5', step: 'acquire-b1-for-b2', action: 'require B2InputAcquisitionFlow source=inventory', resource: chain.baseId, retryable: false, trace: context.trace
+            code: 'CRAFT_B1_INVENTORY_TRANSFER_UNAVAILABLE', subsystem: 'crafting', step: 'acquire-b1-for-b2', action: 'require B2InputAcquisitionFlow source=inventory', resource: chain.baseId, retryable: false, trace: context.trace
         });
         if (this.b2Input.source === 'inventory') this.#assertReturnCapability(chain, context);
     }
@@ -74,7 +74,7 @@ class B5B1InventoryCoordinator {
     #assertReturnCapability(chain, context) {
         if (typeof this.storageFlow?.returnBaseInventory === 'function') return;
         throw new FlowError('B5 V5 requires verified B1 return through the storage flow.', {
-            code: 'B5_B1_RETURN_UNAVAILABLE', subsystem: 'b5', step: 'return-b1-after-reserve', action: 'return B1 remainder to /kho', resource: chain.baseId, retryable: false, trace: context.trace
+            code: 'CRAFT_B1_RETURN_UNAVAILABLE', subsystem: 'crafting', step: 'return-b1-after-reserve', action: 'return B1 remainder to /kho', resource: chain.baseId, retryable: false, trace: context.trace
         });
     }
 
@@ -98,7 +98,7 @@ class B5B1InventoryCoordinator {
         await this.#returnAll(chain, context, 'rebalance-stale-b1-before-b2');
         const after = this.#state(chain, request.reserveSlots);
         this.logger?.info?.('B5 B1 STALE INVENTORY REBALANCED', {
-            operation: 'B5Automation', step: 'rebalance-stale-b1-before-b2', phase: 'OK', resource: chain.baseId,
+            operation: 'CraftingAutomation', step: 'rebalance-stale-b1-before-b2', phase: 'OK', resource: chain.baseId,
             before, after: after.available, returned: Math.max(0, before - after.available), emptySlotCount: after.emptySlots, reserveSlots: request.reserveSlots
         });
         return after;
@@ -111,7 +111,7 @@ class B5B1InventoryCoordinator {
         if (maxAmount <= 0) return { transfer: null, maxAmount };
         const targetAmount = state.available + maxAmount;
         const result = await this.runStep(context, {
-            subsystem: 'b5', step: 'acquire-b1-for-b2', action: 'withdraw prepared B1 into inventory before B2', resource: chain.baseId,
+            subsystem: 'crafting', step: 'acquire-b1-for-b2', action: 'withdraw prepared B1 into inventory before B2', resource: chain.baseId,
             details: { b2Id: chain.b2Id, b2RecipeId: chain.b2RecipeId, b2Remaining: request.plannedCrafts, basePerB2: request.basePerB2, before: state.available, targetAmount, maxAmount, reserveSlots: request.reserveSlots }
         }, () => this.b2Input.acquire(chain.baseId, targetAmount, this.childOptions(context, {
             outputId: chain.b2Id, expectedOutputAmount: Math.max(1, Math.min(request.plannedCrafts, 64)), minimumFreeSlots: request.reserveSlots
@@ -121,11 +121,11 @@ class B5B1InventoryCoordinator {
 
     async #returnAll(chain, context, step) {
         const result = await this.runStep(context, {
-            subsystem: 'b5', step, action: 'return B1 inventory to /kho through storage transaction', resource: chain.baseId
+            subsystem: 'crafting', step, action: 'return B1 inventory to /kho through storage transaction', resource: chain.baseId
         }, () => this.storageFlow.returnBaseInventory(chain.baseId, this.childOptions(context)));
         const data = result?.data || {};
         if (data.ready === false) throw new FlowError(`B1 return is not ready for ${chain.baseId}.`, {
-            code: 'B5_B1_RETURN_NOT_READY', subsystem: 'b5', step, action: 'return B1 inventory to /kho', resource: chain.baseId, retryable: true, details: data, trace: context.trace
+            code: 'CRAFT_B1_RETURN_NOT_READY', subsystem: 'crafting', step, action: 'return B1 inventory to /kho', resource: chain.baseId, retryable: true, details: data, trace: context.trace
         });
         return Math.max(0, Number(data.moved ?? data.transfer?.moved ?? 0));
     }

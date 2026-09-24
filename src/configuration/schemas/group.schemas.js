@@ -301,39 +301,39 @@ const collectorB5Mode = validator('collectorB5Mode', (value, errors) => {
     }
 });
 
-const b5CraftMode = validator('b5CraftMode', (value, errors) => {
-    const keys = ['enabled','teleportHomeOnEnable','autoResumeOnReconnect','pollIntervalMs','disconnectedPollMs','errorRetryMs','errorRetryMaxMs','craftLoopDelayMs','postB5CooldownMs','stability','reconciliation'];
-    unknown(value, keys, 'b5CraftMode', errors);
-    for (const key of ['enabled','teleportHomeOnEnable','autoResumeOnReconnect']) requiredBoolean(value[key], `b5CraftMode.${key}`, errors);
-    for (const key of ['pollIntervalMs','disconnectedPollMs','errorRetryMs','errorRetryMaxMs','craftLoopDelayMs','postB5CooldownMs']) numberField(value[key], `b5CraftMode.${key}`, errors, { positiveOnly: true });
+const craftingMode = validator('craftingMode', (value, errors) => {
+    const keys = ['enabled','teleportHomeOnEnable','autoResumeOnReconnect','pollIntervalMs','disconnectedPollMs','errorRetryMs','errorRetryMaxMs','craftLoopDelayMs','postCycleCooldownMs','stability','reconciliation'];
+    unknown(value, keys, 'craftingMode', errors);
+    for (const key of ['enabled','teleportHomeOnEnable','autoResumeOnReconnect']) requiredBoolean(value[key], `craftingMode.${key}`, errors);
+    for (const key of ['pollIntervalMs','disconnectedPollMs','errorRetryMs','errorRetryMaxMs','craftLoopDelayMs','postCycleCooldownMs']) numberField(value[key], `craftingMode.${key}`, errors, { positiveOnly: true });
     const stability = value.stability;
-    if (requiredObject(stability, 'b5CraftMode.stability', errors)) {
-        unknown(stability, ['noProgressBackoffEnabled','noProgressBaseDelayMs','noProgressMaxDelayMs','sameBlockerThreshold','logEveryNthRepeat'], 'b5CraftMode.stability', errors);
-        requiredBoolean(stability.noProgressBackoffEnabled, 'b5CraftMode.stability.noProgressBackoffEnabled', errors);
+    if (requiredObject(stability, 'craftingMode.stability', errors)) {
+        unknown(stability, ['noProgressBackoffEnabled','noProgressBaseDelayMs','noProgressMaxDelayMs','sameBlockerThreshold','logEveryNthRepeat'], 'craftingMode.stability', errors);
+        requiredBoolean(stability.noProgressBackoffEnabled, 'craftingMode.stability.noProgressBackoffEnabled', errors);
         for (const key of ['noProgressBaseDelayMs','noProgressMaxDelayMs','sameBlockerThreshold','logEveryNthRepeat']) {
-            numberField(stability[key], `b5CraftMode.stability.${key}`, errors, { positiveOnly: true });
+            numberField(stability[key], `craftingMode.stability.${key}`, errors, { positiveOnly: true });
         }
         if (Number.isFinite(stability.noProgressBaseDelayMs) && Number.isFinite(stability.noProgressMaxDelayMs)
             && stability.noProgressMaxDelayMs < stability.noProgressBaseDelayMs) {
-            errors.push('b5CraftMode.stability.noProgressMaxDelayMs must be >= noProgressBaseDelayMs');
+            errors.push('craftingMode.stability.noProgressMaxDelayMs must be >= noProgressBaseDelayMs');
         }
         if (Number.isFinite(stability.sameBlockerThreshold) && !Number.isInteger(stability.sameBlockerThreshold)) {
-            errors.push('b5CraftMode.stability.sameBlockerThreshold must be an integer');
+            errors.push('craftingMode.stability.sameBlockerThreshold must be an integer');
         }
         if (Number.isFinite(stability.logEveryNthRepeat) && !Number.isInteger(stability.logEveryNthRepeat)) {
-            errors.push('b5CraftMode.stability.logEveryNthRepeat must be an integer');
+            errors.push('craftingMode.stability.logEveryNthRepeat must be an integer');
         }
     }
     const reconciliation = value.reconciliation;
-    if (requiredObject(reconciliation, 'b5CraftMode.reconciliation', errors)) {
-        unknown(reconciliation, ['maxFreshReads','retryMs','unresolvedPollMs','allowRetryAfterVerifiedNoEffect'], 'b5CraftMode.reconciliation', errors);
-        requiredBoolean(reconciliation.allowRetryAfterVerifiedNoEffect, 'b5CraftMode.reconciliation.allowRetryAfterVerifiedNoEffect', errors);
-        numberField(reconciliation.maxFreshReads, 'b5CraftMode.reconciliation.maxFreshReads', errors, { integerOnly: true, positiveOnly: true });
-        numberField(reconciliation.retryMs, 'b5CraftMode.reconciliation.retryMs', errors, { positiveOnly: true });
-        numberField(reconciliation.unresolvedPollMs, 'b5CraftMode.reconciliation.unresolvedPollMs', errors, { positiveOnly: true });
+    if (requiredObject(reconciliation, 'craftingMode.reconciliation', errors)) {
+        unknown(reconciliation, ['maxFreshReads','retryMs','unresolvedPollMs','allowRetryAfterVerifiedNoEffect'], 'craftingMode.reconciliation', errors);
+        requiredBoolean(reconciliation.allowRetryAfterVerifiedNoEffect, 'craftingMode.reconciliation.allowRetryAfterVerifiedNoEffect', errors);
+        numberField(reconciliation.maxFreshReads, 'craftingMode.reconciliation.maxFreshReads', errors, { integerOnly: true, positiveOnly: true });
+        numberField(reconciliation.retryMs, 'craftingMode.reconciliation.retryMs', errors, { positiveOnly: true });
+        numberField(reconciliation.unresolvedPollMs, 'craftingMode.reconciliation.unresolvedPollMs', errors, { positiveOnly: true });
         if (Number.isFinite(reconciliation.retryMs) && Number.isFinite(reconciliation.unresolvedPollMs)
             && reconciliation.unresolvedPollMs < reconciliation.retryMs) {
-            errors.push('b5CraftMode.reconciliation.unresolvedPollMs must be >= retryMs');
+            errors.push('craftingMode.reconciliation.unresolvedPollMs must be >= retryMs');
         }
     }
 
@@ -630,6 +630,6 @@ module.exports = Object.freeze({
     craftingTargets,
     b5,
     collectorB5Mode,
-    b5CraftMode,
+    craftingMode,
     dailyRecovery
 });

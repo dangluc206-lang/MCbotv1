@@ -45,7 +45,7 @@ const state = {
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const configLabels = Object.freeze({
-  app:'Ứng dụng & vận hành', server:'Máy chủ Minecraft', commands:'Danh sách lệnh', skyCommands:'Lệnh riêng theo Sky', commandResponses:'Phản hồi lệnh', serverLogin:'Đăng nhập server', resourcePack:'Gói tài nguyên', discord:'Discord', guiWindows:'Nhận diện cửa sổ GUI', guiSlots:'Vai trò ô GUI', guiObservation:'Quan sát GUI', inventoryObservation:'Quan sát túi đồ', movement:'Di chuyển', locations:'Vị trí', routes:'Tuyến đường', items:'Nhận diện vật phẩm', storage:'Kho /kho', personalVault:'Kho cá nhân /pv 2', minerals:'Menu khoáng sản', mineralConversions:'Đổi phôi/khối & bảo vệ kho', smelting:'Nung', island:'Đảo /is', dungeon:'Hầm ngục', skyblock:'Vào Skyblock', recipes:'Công thức chế tạo', craftingTiers:'Tầng chế tạo', b5:'Quy tắc B5', collectorB5Mode:'Collector+B5 cũ', b5CraftMode:'Chế B5 thuần', fishingMode:'Câu cá', dailyRecovery:'Khung phục hồi theo giờ', craftingTargets:'Mục tiêu chế tạo'
+  app:'Ứng dụng & vận hành', server:'Máy chủ Minecraft', commands:'Danh sách lệnh', skyCommands:'Lệnh riêng theo Sky', commandResponses:'Phản hồi lệnh', serverLogin:'Đăng nhập server', resourcePack:'Gói tài nguyên', discord:'Discord', guiWindows:'Nhận diện cửa sổ GUI', guiSlots:'Vai trò ô GUI', guiObservation:'Quan sát GUI', inventoryObservation:'Quan sát túi đồ', movement:'Di chuyển', locations:'Vị trí', routes:'Tuyến đường', items:'Nhận diện vật phẩm', storage:'Kho /kho', personalVault:'Kho cá nhân /pv 2', minerals:'Menu khoáng sản', mineralConversions:'Đổi phôi/khối & bảo vệ kho', smelting:'Nung', island:'Đảo /is', dungeon:'Hầm ngục', skyblock:'Vào Skyblock', recipes:'Công thức chế tạo', craftingTiers:'Tầng chế tạo', b5:'Quy tắc B5', collectorB5Mode:'Collector+B5 cũ', craftingMode:'Chế B5 thuần', fishingMode:'Câu cá', dailyRecovery:'Khung phục hồi theo giờ', craftingTargets:'Mục tiêu chế tạo'
 });
 
 const pageTitles = window.MCbotPageCatalog;
@@ -133,12 +133,12 @@ function viPressure(level) {
 }
 
 function viPhase(phase) {
-  const map = { OFF:'Tắt', STOPPED:'Tắt', STARTING:'Đang khởi động', RUNNING:'Đang chạy', PAUSED:'Tạm dừng', PAUSING:'Đang tạm dừng', RESUMING:'Đang tiếp tục', STOPPING:'Đang dừng', PREPARING:'Đang chuẩn bị', WAITING_CONNECTION:'Chờ kết nối', WAITING_SKYBLOCK:'Chờ Skyblock', B1_NORMALIZATION:'Đang nung / đổi khối B1', B5_COOLDOWN:'Đang nghỉ sau B5', GOING_HOME:'Đang /is', STORAGE_CHECK:'Đang kiểm tra kho', STORAGE_PROTECTION:'Đang bảo vệ kho', READING_B5:'Đang đọc vật liệu B5', CRAFTING:'Đang chế tạo', WAITING_STORAGE:'Chờ giảm áp lực kho', WAITING_HEADROOM:'Chờ chỗ trống để bung khối', WAITING_MATERIALS:'Chờ vật liệu', WAITING_PV2:'Chờ PV2', B5_COMPLETED:'Đã chế xong B5', WAITING_REQUEST:'Chờ yêu cầu chế tạo', WAITING_RETRY:'Chờ thử lại', WAITING_MANUAL_RESUME:'Chờ bấm Tiếp tục sau reconnect', ERROR:'Lỗi' };
+  const map = { OFF:'Tắt', STOPPED:'Tắt', STARTING:'Đang khởi động', RUNNING:'Đang chạy', PAUSED:'Tạm dừng', PAUSING:'Đang tạm dừng', RESUMING:'Đang tiếp tục', STOPPING:'Đang dừng', PREPARING:'Đang chuẩn bị', WAITING_CONNECTION:'Chờ kết nối', WAITING_SKYBLOCK:'Chờ Skyblock', B1_NORMALIZATION:'Đang nung / đổi khối B1', COOLDOWN:'Đang nghỉ sau chu kỳ', GOING_HOME:'Đang /is', STORAGE_CHECK:'Đang kiểm tra kho', STORAGE_PROTECTION:'Đang bảo vệ kho', READING_B5:'Đang đọc vật liệu B5', CRAFTING:'Đang chế tạo', WAITING_STORAGE:'Chờ giảm áp lực kho', WAITING_HEADROOM:'Chờ chỗ trống để bung khối', WAITING_MATERIALS:'Chờ vật liệu', WAITING_PV2:'Chờ PV2', COMPLETED:'Đã chế xong mục tiêu', WAITING_REQUEST:'Chờ yêu cầu chế tạo', WAITING_RETRY:'Chờ thử lại', WAITING_MANUAL_RESUME:'Chờ bấm Tiếp tục sau reconnect', ERROR:'Lỗi' };
   return map[String(phase || '').toUpperCase()] || String(phase || '—').replaceAll('_',' ');
 }
 
 function viWaitingReason(reason) {
-  return ({ connection:'kết nối', skyblock:'Skyblock', 'storage-pressure':'giảm áp lực kho', materials:'vật liệu', 'pv2-backpressure':'chỗ trống PV2', 'decompression-headroom':'chỗ trống để bung khối', paused:'tiếp tục thủ công', timeout:'thử lại sau timeout', 'not_ready':'hệ thống sẵn sàng', 'manual-resume-after-reconnect':'bấm Tiếp tục sau reconnect', 'b5-cooldown':'hết thời gian nghỉ sau B5' })[String(reason || '').toLowerCase()] || String(reason || '');
+  return ({ connection:'kết nối', skyblock:'Skyblock', 'storage-pressure':'giảm áp lực kho', materials:'vật liệu', 'pv2-backpressure':'chỗ trống PV2', 'decompression-headroom':'chỗ trống để bung khối', paused:'tiếp tục thủ công', timeout:'thử lại sau timeout', 'not_ready':'hệ thống sẵn sàng', 'manual-resume-after-reconnect':'bấm Tiếp tục sau reconnect', cooldown:'hết thời gian nghỉ sau chu kỳ', 'no-craft-request':'chưa có yêu cầu chế tạo' })[String(reason || '').toLowerCase()] || String(reason || '');
 }
 
 function modeInfo(bot) {
@@ -205,9 +205,9 @@ function botCard(bot, fullActions = false) {
   const operation = activeOperation(bot);
   const id = bot.botId;
   const showTech = document.body.dataset.experience === 'advanced';
-  const b5Details = bot.modes?.b5Craft?.details || {};
+  const b5Details = bot.modes?.crafting?.details || {};
   const b5Episode = b5Details.protectionEpisode || null;
-  const b5CanRetry = mode.id === 'b5-craft' && b5Details.recovery?.allowedActions?.includes('retry-storage-protection') && b5Episode;
+  const b5CanRetry = mode.id === 'crafting' && b5Details.recovery?.allowedActions?.includes('retry-storage-protection') && b5Episode;
   const b5RecoveryButton = b5CanRetry ? `<div class="actions"><button class="button warn" data-action="b5-retry-storage" data-bot="${esc(id)}">Thử lại bảo vệ kho</button></div>` : '';
   const held = player?.heldItem?.displayName || player?.heldItem?.name || '—';
   const mainActions = `<div class="actions">
@@ -216,7 +216,7 @@ function botCard(bot, fullActions = false) {
     ${buttonHtml({ label: 'Ngắt riêng bot này', action: 'disconnect', bot: id, kind: 'danger', disabled: !connectionView.canDisconnect, key: `disconnect:${id}` })}
   </div>`;
   const availableModes = bot.modes?.available || [
-    { definition: { id: 'b5-craft', label: 'Chế B5 thuần' }, readiness: { ready: true } },
+    { definition: { id: 'crafting', label: 'Chế tạo' }, readiness: { ready: true } },
     { definition: { id: 'collector-b5', label: 'Collector+B5 (cũ)' }, readiness: { ready: true } },
     { definition: { id: 'fishing', label: 'Câu cá' }, readiness: { ready: true } }
   ];
@@ -263,9 +263,9 @@ function botCard(bot, fullActions = false) {
         <div class="status-detail"><span>Lần thử vào Sky</span><strong>${esc(bot.skyAutoJoin?.pending?.attempt ?? (bot.skyAutoJoin?.ready ? 'Hoàn tất' : '—'))}</strong></div>
         <div class="status-detail"><span>Lỗi gần nhất</span><strong title="${esc(bot.state?.lastError?.message || bot.state?.lastError || '')}">${esc(bot.state?.lastError?.message || bot.state?.lastError || 'Không có')}</strong></div>
       </div>` : ''}
-      ${showTech && mode.id === 'b5-craft' ? (() => { const d = bot.modes?.b5Craft?.details || {}; const blocker = d.lastAutomationBlockers?.[0] || null; const blockerText = blocker ? `${blocker.baseId ? `${blocker.baseId}: ` : ''}${blocker.reason || blocker.status || 'đang chờ'}` : ''; const protection = d.protectionEpisode || null; const protectionBlocker = protection?.blocker || null; const protectionText = protection ? `${protection.state || 'PENDING'} · attempt ${protection.totalAttempts ?? 0}${protectionBlocker ? ` · ${protectionBlocker.resource ? `${protectionBlocker.resource}: ` : ''}${protectionBlocker.reason || protectionBlocker.code || 'blocked'} · backoff ${protectionBlocker.backoffMs ?? 0}ms${Number.isFinite(protection.nextEligibleAt) ? ` · retry ${Math.max(0, protection.nextEligibleAt - Date.now())}ms` : ''}` : ''}` : ''; const trace = d.b5Automation?.trace || null; const decision = trace?.plan?.decision; const traceText = trace ? `${trace.traceId || ''}${decision?.kind ? ` · ${decision.kind}${decision.resource ? ` ${decision.resource}` : ''}` : ''}` : ''; const batchText = d.batchId ? `${d.batchId}${d.batchProtectionRequired ? ' · chờ bảo vệ kho' : ' · đã bảo vệ kho'}` : 'chưa có batch'; return `<div class="operation-line"><span>B5 thuần</span><strong>Đã hoàn tất: ${esc(d.completedB5 ?? 0)} · Engine: ${esc(d.automationRuns ?? 0)} lượt / ${esc(d.productiveCycles ?? 0)} có tiến triển · ${esc(batchText)} · ${esc(d.waitingReason ? `Đang chờ: ${viWaitingReason(d.waitingReason)}` : 'Đang xử lý')}</strong></div>${protectionText ? `<div class="operation-line"><span>Gate bảo vệ kho</span><strong title="${esc(protectionText)}">${esc(protectionText)}</strong></div>` : ''}${traceText ? `<div class="operation-line"><span>Trace B5 gần nhất</span><strong title="${esc(traceText)}">${esc(traceText)}</strong></div>` : ''}${blockerText ? `<div class="operation-line"><span>Điểm chặn B5</span><strong title="${esc(blockerText)}">${esc(blockerText)}</strong></div>` : ''}`; })() : ''}
+      ${showTech && mode.id === 'crafting' ? (() => { const d = bot.modes?.crafting?.details || {}; const blocker = d.lastAutomationBlockers?.[0] || null; const blockerText = blocker ? `${blocker.baseId ? `${blocker.baseId}: ` : ''}${blocker.reason || blocker.status || 'đang chờ'}` : ''; const protection = d.protectionEpisode || null; const protectionBlocker = protection?.blocker || null; const protectionText = protection ? `${protection.state || 'PENDING'} · attempt ${protection.totalAttempts ?? 0}${protectionBlocker ? ` · ${protectionBlocker.resource ? `${protectionBlocker.resource}: ` : ''}${protectionBlocker.reason || protectionBlocker.code || 'blocked'} · backoff ${protectionBlocker.backoffMs ?? 0}ms${Number.isFinite(protection.nextEligibleAt) ? ` · retry ${Math.max(0, protection.nextEligibleAt - Date.now())}ms` : ''}` : ''}` : ''; const trace = d.automation?.trace || null; const decision = trace?.plan?.decision; const traceText = trace ? `${trace.traceId || ''}${decision?.kind ? ` · ${decision.kind}${decision.resource ? ` ${decision.resource}` : ''}` : ''}` : ''; const batchText = d.batchId ? `${d.batchId}${d.batchProtectionRequired ? ' · chờ bảo vệ kho' : ' · đã bảo vệ kho'}` : 'chưa có batch'; return `<div class="operation-line"><span>B5 thuần</span><strong>Đã hoàn tất: ${esc(d.completedB5 ?? 0)} · Engine: ${esc(d.automationRuns ?? 0)} lượt / ${esc(d.productiveCycles ?? 0)} có tiến triển · ${esc(batchText)} · ${esc(d.waitingReason ? `Đang chờ: ${viWaitingReason(d.waitingReason)}` : 'Đang xử lý')}</strong></div>${protectionText ? `<div class="operation-line"><span>Gate bảo vệ kho</span><strong title="${esc(protectionText)}">${esc(protectionText)}</strong></div>` : ''}${traceText ? `<div class="operation-line"><span>Trace B5 gần nhất</span><strong title="${esc(traceText)}">${esc(traceText)}</strong></div>` : ''}${blockerText ? `<div class="operation-line"><span>Điểm chặn B5</span><strong title="${esc(blockerText)}">${esc(blockerText)}</strong></div>` : ''}`; })() : ''}
     </div>
-    ${mainActions}${b5RecoveryButton}${modeActions}${mode.id === 'b5-craft' ? window.MCbotB5CraftRequestPanel.render({ botId: id, items: b5CraftItemsCache[id] || [], request: bot.modes?.b5Craft?.details?.craftRequest || null, phase: bot.modes?.b5Craft?.phase || '', draft: b5CraftDraft(id), esc }) : ''}
+    ${mainActions}${b5RecoveryButton}${modeActions}${mode.id === 'crafting' ? window.MCbotB5CraftRequestPanel.render({ botId: id, items: b5CraftItemsCache[id] || [], request: bot.modes?.crafting?.details?.craftRequest || null, phase: bot.modes?.crafting?.phase || '', draft: b5CraftDraft(id), esc }) : ''}
   </article>`;
 }
 
@@ -808,7 +808,7 @@ async function handleBotAction(button) {
   if (action === 'mode-restart') return runAction({ key: `mode:${bot}`, button, success: 'Đã khởi động lại chế độ.', fn: () => api(window.mcbot.restartMode(bot)) });
   if (action === 'b5-retry-storage') {
     const current = (state.snapshot?.bots || []).find(entry => entry.botId === bot);
-    const episode = current?.modes?.b5Craft?.details?.protectionEpisode;
+    const episode = current?.modes?.crafting?.details?.protectionEpisode;
     if (!episode) throw new Error('Episode bảo vệ kho không còn tồn tại; hãy tải lại trạng thái.');
     const idempotencyKey = `desktop-b5-retry:${bot}:${episode.episodeId}:${crypto.randomUUID()}`;
     return runAction({

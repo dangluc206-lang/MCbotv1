@@ -259,7 +259,7 @@
       ],
       "configs": [
         "config/app.json",
-        "config/modes/b5-craft.json",
+        "config/modes/crafting.json",
         "config/modes/fishing.json"
       ],
       "tests": [

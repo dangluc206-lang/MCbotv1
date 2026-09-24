@@ -25,7 +25,7 @@ class B5IntermediateCoordinator {
             context.cancellation.token.throwIfCancelled();
             if (stopAtTargetReady && this.recipeResolver.isTargetDirectlyReady(inspection.data, 1)) break;
             let changed = false;
-            const b4Compacted = await this.compactReadyB4(inspection, inspect, context, { stopAtTargetReady });
+            const b4Compacted = await this.compactReadyB4(inspection, inspect, context, { stopAtTargetReady, targetId: inspection.data?.fullPlan?.targetId || null });
             if (b4Compacted.length > 0) {
                 changed = true;
                 actions.push({ status: 'b3-promoted-to-b4', data: b4Compacted });
@@ -87,7 +87,7 @@ class B5IntermediateCoordinator {
 
     async #depositRemainder(id, step, action, context, actions, details) {
         if (Number(details.count || 0) <= 0) return;
-        const result = await this.runStep(context, { subsystem: 'b5', step, action, resource: id, details },
+        const result = await this.runStep(context, { subsystem: 'crafting', step, action, resource: id, details },
             () => this.flows.deposit.deposit(id, this.childOptions(context)));
         actions.push({ status: id === details?.b2Id ? 'b2-remainder-stored' : (step.includes('b2') ? 'b2-remainder-stored' : 'b3-remainder-stored'), id, data: result?.data });
     }
@@ -95,19 +95,19 @@ class B5IntermediateCoordinator {
     async compactReadyB4(initialInspection, inspect, context, { stopAtTargetReady = true } = {}) {
         let inspection = this.#requireInspection(initialInspection, 'B5 inspection failed during B4 compaction.');
         const compacted = [];
-        const targetId = inspection.data?.fullPlan?.targetId || this.config?.targetId || null;
+        const targetId = inspection.data?.fullPlan?.targetId || null;
         const targetRecipe = targetId ? this.recipeResolver.recipeForOutput(targetId, inspection.data?.finalSteps || []) : null;
         if (!targetRecipe?.recipe) return compacted;
         const b4Ids = Object.keys(targetRecipe.recipe.inputs || {});
         for (const outputId of b4Ids) {
-            inspection = await this.#fillPriorityShortage(outputId, inspection, inspect, context, targetRecipe, compacted, stopAtTargetReady);
+            inspection = await this.#fillPriorityShortage(outputId, inspection, inspect, context, targetRecipe, compacted, stopAtTargetReady, targetId);
             if (stopAtTargetReady && this.recipeResolver.isTargetDirectlyReady(inspection.data, 1)) return compacted;
         }
-        await this.#compactBalancedSurplus(b4Ids, inspection, inspect, context, targetRecipe, compacted, stopAtTargetReady);
+        await this.#compactBalancedSurplus(b4Ids, inspection, inspect, context, targetRecipe, compacted, stopAtTargetReady, targetId);
         return compacted;
     }
 
-    async #fillPriorityShortage(outputId, inspection, inspect, context, targetRecipe, compacted, stopAtTargetReady) {
+    async #fillPriorityShortage(outputId, inspection, inspect, context, targetRecipe, compacted, stopAtTargetReady, targetId = null) {
         for (let guard = 0; guard < 128; guard += 1) {
             context.cancellation.token.throwIfCancelled();
             if (stopAtTargetReady && this.recipeResolver.isTargetDirectlyReady(inspection.data, 1)) return inspection;
@@ -115,12 +115,12 @@ class B5IntermediateCoordinator {
             if (!candidate || candidate.craftableNow <= 0) return inspection;
             const crafts = Math.floor(Math.min(candidate.craftableNow, Math.max(0, candidate.perTarget - candidate.existingB4)));
             if (crafts <= 0) return inspection;
-            inspection = await this.#craftB4(candidate, crafts, 'b5-priority', inspect, context, compacted);
+            inspection = await this.#craftB4(candidate, crafts, 'b5-priority', inspect, context, compacted, targetId);
         }
         return inspection;
     }
 
-    async #compactBalancedSurplus(b4Ids, initialInspection, inspect, context, targetRecipe, compacted, stopAtTargetReady) {
+    async #compactBalancedSurplus(b4Ids, initialInspection, inspect, context, targetRecipe, compacted, stopAtTargetReady, targetId = null) {
         let inspection = initialInspection;
         for (let guard = 0; guard < 512; guard += 1) {
             context.cancellation.token.throwIfCancelled();
@@ -132,7 +132,7 @@ class B5IntermediateCoordinator {
             if (!candidate) break;
             const crafts = Math.floor(Math.min(candidate.craftableNow, Math.max(1, Math.min(32, candidate.perTarget))));
             if (crafts <= 0) break;
-            inspection = await this.#craftB4(candidate, crafts, 'storage-compaction-balanced', inspect, context, compacted);
+            inspection = await this.#craftB4(candidate, crafts, 'storage-compaction-balanced', inspect, context, compacted, targetId);
         }
         return inspection;
     }
@@ -151,8 +151,8 @@ class B5IntermediateCoordinator {
             normalizedCoverage: perTarget > 0 ? existingB4 / perTarget : Number.POSITIVE_INFINITY };
     }
 
-    async #craftB4(candidate, crafts, phase, inspect, context, compacted) {
-        await this.finalCraft.execute([{ recipeId: candidate.recipeEntry.recipeId, outputId: candidate.outputId, crafts }], context);
+    async #craftB4(candidate, crafts, phase, inspect, context, compacted, targetId = null) {
+        await this.finalCraft.execute([{ recipeId: candidate.recipeEntry.recipeId, outputId: candidate.outputId, crafts }], context, { targetId });
         await this.flows.deposit.deposit(candidate.outputId, this.childOptions(context));
         compacted.push({ outputId: candidate.outputId, recipeId: candidate.recipeEntry.recipeId, crafts, phase });
         return this.#requireInspection(await inspect(), 'B5 inspection failed after B4 compaction.');
@@ -208,9 +208,10 @@ class B5IntermediateCoordinator {
     #spaceReleaseCandidates(chain, allChains, { preserveAtLeastB2 = 0, targetId = null } = {}) {
         const candidates = [];
         const push = id => { const value = String(id || '').trim(); if (value && !candidates.includes(value)) candidates.push(value); };
-        const activeTarget = String(targetId || '').trim() || this.config?.targetId || null;
-        // Fail closed: without a resolved target only generic chain candidates
-        // are used; no item is hard-coded as the space-release preference.
+        const activeTarget = String(targetId || '').trim() || null;
+        // Fail closed: without a planner-provided target only generic chain
+        // candidates are used; no item is assumed as the space-release
+        // preference (execution receives its step/target from planning).
         const targetRecipe = activeTarget ? this.recipeResolver.recipeForOutput(activeTarget) : null;
         for (const b4Id of Object.keys(targetRecipe?.recipe?.inputs || {})) push(b4Id);
         push(chain.b3Id);
@@ -222,7 +223,7 @@ class B5IntermediateCoordinator {
 
     #throwNoSpace(chain, context, minFreeSlots, reason, preserveAtLeastB2, snapshot, state) {
         throw new FlowError(`Cannot reserve ${minFreeSlots} empty inventory slot(s) for ${chain.b3Id}.`, {
-            code: 'B5_INTERMEDIATE_NO_SPACE', subsystem: 'b5', step: 'free-intermediate-slot', action: reason || 'reserve inventory output slot',
+            code: 'CRAFT_INTERMEDIATE_NO_SPACE', subsystem: 'crafting', step: 'free-intermediate-slot', action: reason || 'reserve inventory output slot',
             resource: chain.b3Id, retryable: true, trace: context.trace,
             details: { minFreeSlots, emptySlotCount: snapshot.emptySlotCount, b2Count: this.inventoryState.count(chain.b2Id), b3Count: this.inventoryState.count(chain.b3Id),
                 preserveAtLeastB2, attemptedIds: [...state.attemptedIds], attempts: state.attempts, emergencyParkedCurrentB2: state.emergencyParkedCurrentB2 }

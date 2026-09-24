@@ -29,7 +29,7 @@ function currentStage(mode) {
     const blocker = episode.blocker || {};
     const step = String(blocker.step || episode.lastProgress?.step || '').toUpperCase();
     const signal = `${step} ${String(blocker.code || '')} ${String(blocker.reason || '')}`.toUpperCase();
-    if (/CRAFT|B5_COMPLETED/.test(phase)) return 'CRAFT_B5';
+    if (/CRAFT|COMPLETED/.test(phase)) return 'CRAFT_B5';
     if (/RESERVE|VERIFY/.test(signal)) return 'VERIFY_RESERVE';
     if (/BASELINE[-_ ]?(PREFLIGHT|PLAN)/.test(signal)) return 'LOCK_SELL_BASELINE';
     if (/SELL/.test(signal)) return 'SELL_64_ONLY';
@@ -40,7 +40,7 @@ function currentStage(mode) {
 }
 
 function projectBot(bot = {}, { now = Date.now() } = {}) {
-    const mode = bot.modes?.b5Craft || null;
+    const mode = bot.modes?.crafting || null;
     const details = mode?.details || {};
     const episode = details.protectionEpisode || null;
     const progress = episode?.lastProgress || {};
@@ -50,8 +50,8 @@ function projectBot(bot = {}, { now = Date.now() } = {}) {
     const remainingStacks = Number(progress.remainingSellStacks ?? episode?.remainingSellStacks);
     const retained = Number(progress.retainedRemainderItems ?? episode?.retainedRemainderItems);
     const baseline = progress.sellBaselineDigest || episode?.baselineDigest || null;
-    const lastVerified = details.pendingB5CompletionProvenance?.verifiedAt
-        ? { kind: 'B5_COMPLETION', at: details.pendingB5CompletionProvenance.verifiedAt }
+    const lastVerified = details.pendingCompletionProvenance?.verifiedAt
+        ? { kind: 'B5_COMPLETION', at: details.pendingCompletionProvenance.verifiedAt }
         : details.batchProtectionCompleted
             ? { kind: 'STORAGE_PROTECTION', at: episode?.completedAt || null }
             : null;
@@ -95,7 +95,7 @@ function projectBot(bot = {}, { now = Date.now() } = {}) {
         },
         links: {
             incident: episode?.correlationId ? `incidents:${episode.correlationId}` : null,
-            replay: details.b5Automation?.trace?.replay?.digest ? `replay:${details.b5Automation.trace.replay.digest}` : null
+            replay: details.automation?.trace?.replay?.digest ? `replay:${details.automation.trace.replay.digest}` : null
         },
         eta: null,
         etaLabel: 'Chưa đủ dữ liệu',

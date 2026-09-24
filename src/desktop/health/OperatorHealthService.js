@@ -66,10 +66,10 @@ class OperatorHealthService {
         else if (['CONNECTING', 'RECONNECTING'].includes(connection)) probes.push(probe('reconnect', 'DEGRADED', 'Bot đang kết nối lại.', { botId, evidenceRef: 'state.connectionState' }));
         else probes.push(probe('reconnect', 'UNHEALTHY', 'Bot cần kết nối nhưng hiện không kết nối.', { botId, evidenceRef: 'state.connectionState', remediation: 'Kiểm tra incident kết nối và dùng action được cho phép.' }));
 
-        const mode = bot.modes?.b5Craft;
+        const mode = bot.modes?.crafting;
         if (!bot.modeOwner) probes.push(probe('mode-progress', 'NOT_APPLICABLE', 'Không có mode đang chạy.', { botId }));
-        else if (mode?.details?.fault?.state === 'OPEN') probes.push(probe('mode-progress', 'UNHEALTHY', 'Circuit của mode B5 đang mở.', { botId, evidenceRef: 'modes.b5Craft.details.fault', remediation: 'Xử lý incident trước khi retry có guard.' }));
-        else if (mode?.details?.waitingReason) probes.push(probe('mode-progress', 'DEGRADED', `Mode đang chờ: ${mode.details.waitingReason}.`, { botId, evidenceRef: 'modes.b5Craft.details.waitingReason' }));
+        else if (mode?.details?.fault?.state === 'OPEN') probes.push(probe('mode-progress', 'UNHEALTHY', 'Circuit của mode đang mở.', { botId, evidenceRef: 'modes.crafting.details.fault', remediation: 'Xử lý incident trước khi retry có guard.' }));
+        else if (mode?.details?.waitingReason) probes.push(probe('mode-progress', 'DEGRADED', `Mode đang chờ: ${mode.details.waitingReason}.`, { botId, evidenceRef: 'modes.crafting.details.waitingReason' }));
         else probes.push(probe('mode-progress', 'HEALTHY', 'Mode đang tiến triển hoặc sẵn sàng.', { botId }));
 
         const operations = bot.operation?.operations || [];
@@ -82,7 +82,7 @@ class OperatorHealthService {
         else {
             const dwell = Math.max(0, this.now() - Date.parse(episode.lastAttemptAt || episode.startedAt || new Date(this.now()).toISOString()));
             const blocked = episode.state === 'WAITING_BLOCKED';
-            probes.push(probe('b5-blocker-dwell', blocked && dwell > 60000 ? 'UNHEALTHY' : blocked ? 'DEGRADED' : 'HEALTHY', blocked ? 'Bảo vệ kho đang dừng an toàn chờ điều kiện.' : 'Bảo vệ kho đang tiến triển.', { botId, ageMs: dwell, evidenceRef: 'modes.b5Craft.details.protectionEpisode', remediation: blocked ? 'Chỉ dùng action retry được DTO cho phép.' : null }));
+            probes.push(probe('b5-blocker-dwell', blocked && dwell > 60000 ? 'UNHEALTHY' : blocked ? 'DEGRADED' : 'HEALTHY', blocked ? 'Bảo vệ kho đang dừng an toàn chờ điều kiện.' : 'Bảo vệ kho đang tiến triển.', { botId, ageMs: dwell, evidenceRef: 'modes.crafting.details.protectionEpisode', remediation: blocked ? 'Chỉ dùng action retry được DTO cho phép.' : null }));
         }
     }
 

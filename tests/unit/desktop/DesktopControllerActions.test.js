@@ -39,7 +39,7 @@ function createRunningController() {
         botId: 'bot-01',
         context: { getGeneration: () => 7, has: () => true },
         getService(name) {
-            if (name === 'b5CraftMode') return {
+            if (name === 'craftingMode') return {
                 requestStorageProtectionRetry(request) {
                     calls.push(['b5-retry', request]);
                     return ok('SUCCESS', { accepted: true });
@@ -141,7 +141,7 @@ test('DesktopController passes a dynamic B5 craft request straight to the mode s
         application: {
             getRuntime: () => ({
                 getService(name) {
-                    if (name === 'b5CraftMode') {
+                    if (name === 'craftingMode') {
                         return {
                             setCraftRequest(request) { calls.set.push(request); return ok('SUCCESS', { appliedAt: 'next-cycle' }); },
                             clearCraftRequest(reason) { calls.clear.push(reason); return { state: 'COMPLETED', completedUnits: 2 }; }

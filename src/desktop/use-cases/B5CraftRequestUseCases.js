@@ -5,7 +5,7 @@ const { plainError, resultPayload } = require('../contracts/DesktopResult');
 /**
  * Desktop control path for dynamic B5 craft requests (Task 5 UI integration).
  * The renderer only names a real in-game item and a quantity; every validation,
- * planning and execution decision stays inside B5CraftModeService.setCraftRequest.
+ * planning and execution decision stays inside CraftingModeService.setCraftRequest.
  */
 class B5CraftRequestUseCases {
     constructor({ bundleProvider, requireRunning } = {}) {
@@ -47,7 +47,7 @@ class B5CraftRequestUseCases {
     }
 
     #mode(botId) {
-        const service = this.#runtime(botId).getService?.('b5CraftMode');
+        const service = this.#runtime(botId).getService?.('craftingMode');
         if (!service?.setCraftRequest) throw new Error(`B5 craft mode is unavailable for ${botId}.`);
         return service;
     }

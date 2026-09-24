@@ -22,7 +22,7 @@ class B5CycleCoordinator {
         await this.#processMaterials(state, inspect, context, options, amount);
         await this.#finalPromotion(state, inspect, context);
         const afterReserve = await this.runStep(context, {
-            subsystem: 'b5', step: 'inspect-after-reserve', action: 'recalculate B5 feasibility', resource: state.targetId
+            subsystem: 'crafting', step: 'inspect-after-reserve', action: 'recalculate B5 feasibility', resource: state.targetId
         }, inspect);
         state.afterReserve = afterReserve;
         this.progressTracker.sync(afterReserve.data, state.targetId, {
@@ -43,7 +43,7 @@ class B5CycleCoordinator {
 
     async #initialize(amount, context, options, inspect) {
         const first = await this.runStep(context, {
-            subsystem: 'b5', step: 'inspect-initial', action: 'read /kho + /pv 2 + inventory', resource: options?.targetId || 'target'
+            subsystem: 'crafting', step: 'inspect-initial', action: 'read /kho + /pv 2 + inventory', resource: options?.targetId || 'target'
         }, inspect);
         const targetId = first.data.fullPlan.targetId;
         const state = {
@@ -69,12 +69,12 @@ class B5CycleCoordinator {
         }
         this.progressTracker.set({ running: true, state: 'RECOVERING_TARGET', currentStep: { kind: 'DEPOSIT', id: targetId } });
         await this.runStep(context, {
-            subsystem: 'b5', step: 'recover-existing-b5', action: 'deposit existing B5 before any new craft', resource: targetId,
+            subsystem: 'crafting', step: 'recover-existing-b5', action: 'deposit existing B5 before any new craft', resource: targetId,
             details: { orphanedTargetCount: orphaned, targetVaultBefore }
         }, () => this.flows.deposit.deposit(targetId, this.childOptions(context)));
         const inventoryAfter = await this.inventoryState.waitForAtMost(targetId, 0, context.cancellation.token);
         const vault = await this.runStep(context, {
-            subsystem: 'b5', step: 'verify-recovered-b5', action: 'verify recovered B5 in /pv 2', resource: targetId
+            subsystem: 'crafting', step: 'verify-recovered-b5', action: 'verify recovered B5 in /pv 2', resource: targetId
         }, () => this.flows.read.readPv2(this.childOptions(context)));
         const targetVaultAfter = Number(vault.data?.totals?.[targetId] || 0);
         if (targetVaultAfter < targetVaultBefore + orphaned || inventoryAfter > 0) this.#throwRecovery(state, orphaned, targetVaultAfter, inventoryAfter, context);
@@ -85,7 +85,7 @@ class B5CycleCoordinator {
 
     #throwRecovery(state, orphaned, targetVaultAfter, inventoryAfter, context) {
         throw new FlowError('Existing B5 recovery could not be verified.', {
-            code: 'B5_RECOVERY_VERIFICATION_FAILED', subsystem: 'b5', operation: 'B5Automation', step: 'verify-recovered-b5',
+            code: 'CRAFT_RECOVERY_VERIFICATION_FAILED', subsystem: 'crafting', operation: 'CraftingAutomation', step: 'verify-recovered-b5',
             action: 'verify inventory and /pv 2 deltas', resource: state.targetId, retryable: true, trace: context.trace,
             details: { orphanedTargetCount: orphaned, targetVaultBefore: state.targetVaultBefore, targetVaultAfter, targetInventoryAfter: inventoryAfter }
         });
@@ -105,7 +105,7 @@ class B5CycleCoordinator {
 
     async #promoteInitial(state, inspect, context, options) {
         const promotion = await this.runStep(context, {
-            subsystem: 'b5', step: 'promote-owned-intermediates', action: 'prioritize B5/B4 and compress owned B2/B3 before creating more B2', resource: state.targetId
+            subsystem: 'crafting', step: 'promote-owned-intermediates', action: 'prioritize B5/B4 and compress owned B2/B3 before creating more B2', resource: state.targetId
         }, () => this.intermediate.promoteOwned(state.first, inspect, context));
         if (promotion?.actions?.length) state.actions.push(...promotion.actions);
         if (promotion?.inspection?.success) state.workingInspection = promotion.inspection;
@@ -158,7 +158,7 @@ class B5CycleCoordinator {
         }
         this.progressTracker.set({ running: true, state: 'PREPARING_B1', currentStep: { kind: 'PREPARE_B1', id: chain.baseId, b2Id: chain.b2Id, required: requiredRawForStart, blocked: plan.decompressionBlocked } });
         const prepared = await this.runStep(context, {
-            subsystem: 'b5', step: 'prepare-b1', action: useAllForB2 ? 'ensure B1 is ready for guarded B2 ALL' : 'ensure enough B1 for complete B2 batches', resource: chain.baseId,
+            subsystem: 'crafting', step: 'prepare-b1', action: useAllForB2 ? 'ensure B1 is ready for guarded B2 ALL' : 'ensure enough B1 for complete B2 batches', resource: chain.baseId,
             details: { required: requiredRawForStart, plannedB2Exact, plannedB2, b2BatchSize, basePerB2, useAllForB2, storedEffective: storageKnown ? totalEffective : null, availableB2Crafts: totalB2Crafts, b2RecipeId: chain.b2RecipeId }
         }, () => this.flows.storage.prepareBase(chain.baseId, requiredRawForStart, this.childOptions(context, {
             decompressionPolicy: options.decompressionPolicy, decompressionMaxRatioOverride: options.decompressionMaxUsageRatio,
@@ -174,14 +174,14 @@ class B5CycleCoordinator {
                 state.actions.push({ baseId: chain.baseId, status: 'waiting', reason: 'b1-not-ready', message: prepared.message, data: prepared.meta || null });
                 return { outcome: 'continue' };
             }
-            throw FlowError.fromResult(prepared, { subsystem: 'b5', operation: 'B5Automation', step: 'prepare-b1',
+            throw FlowError.fromResult(prepared, { subsystem: 'crafting', operation: 'CraftingAutomation', step: 'prepare-b1',
                 action: plan.useAllForB2 ? 'ensure B1 is ready for guarded B2 ALL' : 'ensure enough B1 for complete B2 batches', resource: chain.baseId,
                 details: { required: plan.requiredRawForStart, plannedB2Exact: plan.plannedB2Exact, plannedB2: plan.plannedB2, b2BatchSize: plan.b2BatchSize, basePerB2: plan.basePerB2, useAllForB2: plan.useAllForB2 } });
         }
         if (prepared.data?.ready === false) {
             const reason = prepared.data.reason || 'base-form-unavailable';
             state.actions.push({ baseId: chain.baseId, status: 'waiting', reason, data: prepared.data });
-            this.logger?.info?.('B5 B1 PREP WAIT.', { operation: 'B5Automation', step: 'prepare-b1', resource: chain.baseId, reason,
+            this.logger?.info?.('B5 B1 PREP WAIT.', { operation: 'CraftingAutomation', step: 'prepare-b1', resource: chain.baseId, reason,
                 required: plan.requiredRawForStart, available: prepared.data.available ?? null, blocks: prepared.data.blocks ?? null, expansion: prepared.data.expansion || null });
             return { outcome: 'continue' };
         }
@@ -198,7 +198,7 @@ class B5CycleCoordinator {
             kind: plan.plannedB2 > 0 ? 'B2/B3' : 'B3', id: chain.b3Id, b2Crafts: plan.plannedB2, b3Crafts: plan.plannedB3
         } });
         const result = await this.runStep(context, {
-            subsystem: 'b5', step: 'reserve-b3-chain', action: 'craft B2/B3 then immediately promote upward', resource: chain.baseId,
+            subsystem: 'crafting', step: 'reserve-b3-chain', action: 'craft B2/B3 then immediately promote upward', resource: chain.baseId,
             details: { b2Id: chain.b2Id, b3Id: chain.b3Id, b2Crafts: plan.plannedB2, b3Crafts: plan.plannedB3 }
         }, () => this.reserveChain.prepare(reserveChain, context, { deferIntermediateDeposit: true, allChains: state.workingInspection.data?.chains || state.chainCatalog, targetId: state.targetId }));
         state.actions.push({ baseId: chain.baseId, status: result?.waitingForMaterial ? 'waiting-current-material'
@@ -210,16 +210,16 @@ class B5CycleCoordinator {
 
     async #finalizeMaterial(chain, reserveResult, state, inspect, context, options) {
         const returned = await this.runStep(context, {
-            subsystem: 'b5', step: 'return-b1-after-reserve', action: 'deposit B1 remainder to /kho before block compaction', resource: chain.baseId
+            subsystem: 'crafting', step: 'return-b1-after-reserve', action: 'deposit B1 remainder to /kho before block compaction', resource: chain.baseId
         }, () => this.b1Inventory.returnToStorage(chain, context));
         state.actions.push({ baseId: chain.baseId, status: 'b1-returned-before-compaction', data: returned });
         this.progressTracker.set({ running: true, state: 'COMPACTING', currentStep: { kind: 'CONVERT_BLOCKS', id: chain.baseId } });
         const compacted = await this.runStep(context, {
-            subsystem: 'b5', step: 'compact-b1-after-reserve', action: 'finalize current B1 transaction and convert loose B1 back to block', resource: chain.baseId
+            subsystem: 'crafting', step: 'compact-b1-after-reserve', action: 'finalize current B1 transaction and convert loose B1 back to block', resource: chain.baseId
         }, () => typeof this.flows.storage.finalizeBase === 'function' ? this.flows.storage.finalizeBase(chain.baseId, this.childOptions(context)) : this.flows.storage.compact(chain.baseId, this.childOptions(context)));
         state.actions.push({ baseId: chain.baseId, status: 'compacted-after-b3', data: compacted.data });
-        const refreshed = await this.runStep(context, { subsystem: 'b5', step: 'inspect-after-reserve-chain', action: 'refresh after B2/B3 mutation', resource: chain.b3Id }, inspect);
-        const higher = await this.runStep(context, { subsystem: 'b5', step: 'promote-after-reserve-chain', action: 'compress all possible B2->B3->B4 after this material', resource: chain.b3Id },
+        const refreshed = await this.runStep(context, { subsystem: 'crafting', step: 'inspect-after-reserve-chain', action: 'refresh after B2/B3 mutation', resource: chain.b3Id }, inspect);
+        const higher = await this.runStep(context, { subsystem: 'crafting', step: 'promote-after-reserve-chain', action: 'compress all possible B2->B3->B4 after this material', resource: chain.b3Id },
             () => this.intermediate.promoteOwned(refreshed, inspect, context));
         if (higher?.actions?.length) state.actions.push(...higher.actions);
         state.workingInspection = higher?.inspection?.success ? higher.inspection : refreshed;
@@ -228,7 +228,7 @@ class B5CycleCoordinator {
     }
 
     async #finalPromotion(state, inspect, context) {
-        const promotion = await this.runStep(context, { subsystem: 'b5', step: 'final-intermediate-promotion', action: 'final B5>B4>B3>B2 compaction sweep', resource: state.targetId },
+        const promotion = await this.runStep(context, { subsystem: 'crafting', step: 'final-intermediate-promotion', action: 'final B5>B4>B3>B2 compaction sweep', resource: state.targetId },
             () => this.intermediate.promoteOwned(state.workingInspection, inspect, context));
         if (promotion?.actions?.length) state.actions.push(...promotion.actions);
         if (promotion?.inspection?.success) state.workingInspection = promotion.inspection;
@@ -256,15 +256,15 @@ class B5CycleCoordinator {
         if (this.recipeResolver.isTargetDirectlyReady(state.afterReserve.data, amount)) {
             const targetRecipe = this.recipeResolver.recipeForOutput(targetId, finalSteps);
             if (!targetRecipe) throw new FlowError(`B5 recipe not found for ${targetId}.`, {
-                code: 'B5_TARGET_RECIPE_NOT_FOUND', subsystem: 'b5', step: 'craft-final-chain', action: 'resolve B5 recipe', resource: targetId, trace: context.trace
+                code: 'CRAFT_TARGET_RECIPE_NOT_FOUND', subsystem: 'crafting', step: 'craft-final-chain', action: 'resolve B5 recipe', resource: targetId, trace: context.trace
             });
             finalSteps = [{ recipeId: targetRecipe.recipeId, outputId: targetId, crafts: amount }];
         }
         try {
-            await this.runStep(context, { subsystem: 'b5', step: 'craft-final-chain', action: 'craft highest-priority B4/B5 final steps', resource: targetId,
+            await this.runStep(context, { subsystem: 'crafting', step: 'craft-final-chain', action: 'craft highest-priority B4/B5 final steps', resource: targetId,
                 details: { steps: finalSteps, targetId, targetVaultBefore } }, () => this.finalCraft.execute(finalSteps, context, { targetId }));
         } catch (error) {
-            throw FlowError.wrap(error, { details: { b5CompletionContext: { finalChain: true, targetId, targetVaultBefore } } });
+            throw FlowError.wrap(error, { details: { completionContext: { finalChain: true, targetId, targetVaultBefore } } });
         }
         const targetVaultAfter = await this.#depositAndVerifyTarget(state, context, amount);
         state.completedTarget = true;
@@ -275,15 +275,15 @@ class B5CycleCoordinator {
     async #depositAndVerifyTarget(state, context, amount) {
         const { targetId, targetVaultBefore } = state;
         this.progressTracker.set({ running: true, state: 'DEPOSITING', currentStep: { kind: 'DEPOSIT', id: targetId } });
-        await this.runStep(context, { subsystem: 'b5', step: 'deposit-b5', action: 'deposit final B5 to /pv 2', resource: targetId },
+        await this.runStep(context, { subsystem: 'crafting', step: 'deposit-b5', action: 'deposit final B5 to /pv 2', resource: targetId },
             () => this.flows.deposit.deposit(targetId, this.childOptions(context)));
         this.progressTracker.advance(1);
         this.progressTracker.set({ running: true, state: 'VERIFYING', currentStep: { kind: 'VERIFY', id: targetId } });
-        const vault = await this.runStep(context, { subsystem: 'b5', step: 'verify-b5-deposit', action: 'read /pv 2 after deposit', resource: targetId },
+        const vault = await this.runStep(context, { subsystem: 'crafting', step: 'verify-b5-deposit', action: 'read /pv 2 after deposit', resource: targetId },
             () => this.flows.read.readPv2(this.childOptions(context)));
         const after = Number(vault.data?.totals?.[targetId] || 0);
         if (after < targetVaultBefore + amount) throw new FlowError(`B5 deposit verification failed: expected at least ${targetVaultBefore + amount}, got ${after}.`, {
-            code: 'B5_DEPOSIT_VERIFICATION_FAILED', subsystem: 'b5', operation: 'B5Automation', step: 'verify-b5-deposit', action: 'compare /pv 2 total', resource: targetId,
+            code: 'CRAFT_DEPOSIT_VERIFICATION_FAILED', subsystem: 'crafting', operation: 'CraftingAutomation', step: 'verify-b5-deposit', action: 'compare /pv 2 total', resource: targetId,
             retryable: true, details: { targetVaultBefore, targetVaultAfter: after, amount }, trace: context.trace
         });
         this.progressTracker.advance(1);
@@ -294,16 +294,16 @@ class B5CycleCoordinator {
     async #postB5(state, inspect, context, amount) {
         let data = state.afterReserve.data;
         if (state.chainCatalog.length > 0) {
-            const post = await this.runStep(context, { subsystem: 'b5', step: 'inspect-post-b5', action: 'refresh lower tiers after B5 consumption', resource: 'B2-B4' }, inspect);
+            const post = await this.runStep(context, { subsystem: 'crafting', step: 'inspect-post-b5', action: 'refresh lower tiers after B5 consumption', resource: 'B2-B4' }, inspect);
             this.progressTracker.set({ running: true, state: 'COMPACTING', currentStep: { kind: 'CONVERT_BLOCKS', id: 'B2-B4' } });
-            const promotion = await this.runStep(context, { subsystem: 'b5', step: 'post-b5-compaction', action: 'compress leftover B2/B3 into B3/B4 for next cycle', resource: 'B2-B4' },
+            const promotion = await this.runStep(context, { subsystem: 'crafting', step: 'post-b5-compaction', action: 'compress leftover B2/B3 into B3/B4 for next cycle', resource: 'B2-B4' },
                 () => this.intermediate.promoteOwned(post, inspect, context, { stopAtTargetReady: false }));
             if (promotion?.actions?.length) state.actions.push(...promotion.actions);
             data = promotion?.inspection?.data || post.data;
         }
         await this.intermediate.depositRemainders({ ...data, chains: state.chainCatalog.length > 0 ? state.chainCatalog : (data?.chains || []) }, context, state.actions);
         this.progressTracker.set({ running: true, state: 'COMPACTING', currentStep: { kind: 'CONVERT_BLOCKS', id: 'B1' } });
-        const compacted = await this.runStep(context, { subsystem: 'b5', step: 'compact-all-b1', action: 'convert remaining B1 to blocks', resource: 'B1' },
+        const compacted = await this.runStep(context, { subsystem: 'crafting', step: 'compact-all-b1', action: 'convert remaining B1 to blocks', resource: 'B1' },
             () => this.flows.storage.compactAll(this.childOptions(context)));
         state.actions.push({ status: 'all-b1-compacted', data: compacted.data });
         this.progressTracker.set({ running: false, state: 'SUCCESS', currentStep: { kind: 'DONE', id: state.targetId }, remainingStages: 0, remainingCrafts: 0, completedAmount: amount, stored: 'PV2' });
@@ -314,7 +314,7 @@ class B5CycleCoordinator {
         if (!state.targetCapacityBlocked) await this.intermediate.depositRemainders({ ...data, chains: state.chainCatalog.length > 0 ? state.chainCatalog : (data?.chains || []) }, context, state.actions);
         if (options.mode === 'maintenance') {
             this.progressTracker.set({ running: true, state: 'COMPACTING', currentStep: { kind: 'CONVERT_BLOCKS', id: 'B1' } });
-            const compacted = await this.runStep(context, { subsystem: 'b5', step: 'maintenance-compact-b1', action: 'compact B1 during storage maintenance', resource: 'B1' },
+            const compacted = await this.runStep(context, { subsystem: 'crafting', step: 'maintenance-compact-b1', action: 'compact B1 during storage maintenance', resource: 'B1' },
                 () => this.flows.storage.compactAll(this.childOptions(context)));
             state.actions.push({ status: 'maintenance-b1-compacted', data: compacted.data });
             this.progressTracker.set({ running: false, state: 'MAINTENANCE_COMPLETE', currentStep: { kind: 'DONE', id: 'STORAGE' },

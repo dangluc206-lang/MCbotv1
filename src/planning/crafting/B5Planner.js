@@ -5,7 +5,7 @@ const CraftStageClassifier = require('./CraftStageClassifier');
 class B5Planner {
     // No hard-coded target: the default target is configuration data injected
     // by the bootstrap layer. A missing targetId fails closed instead of
-    // silently picking any item (e.g. super_alloy) for the operator.
+    // silently picking any item for the operator.
     constructor({ planner, targetId, tiers = {}, stageClassifier = null, reserveTiers = ['B2', 'B3'] }) {
         if (!planner || typeof planner.plan !== 'function') throw new TypeError('B5Planner planner.plan is required.');
         const configured = String(targetId || '').trim();

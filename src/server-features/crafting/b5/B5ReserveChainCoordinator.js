@@ -57,7 +57,7 @@ class B5ReserveChainCoordinator {
         state.guard += 1;
         if (state.guard <= 512) return;
         throw new FlowError(`B3 reserve chain exceeded safety iteration limit for ${chain.baseId}.`, {
-            code: 'B5_RESERVE_LOOP_GUARD', subsystem: 'b5', step: 'reserve-b3-chain', action: 'optimize B2/B3 ALL chain',
+            code: 'CRAFT_RESERVE_LOOP_GUARD', subsystem: 'crafting', step: 'reserve-b3-chain', action: 'optimize B2/B3 ALL chain',
             resource: chain.baseId, details: { b2Remaining: state.b2Remaining, b3Remaining: state.b3Remaining, vaultB2Remaining: state.vaultB2Remaining, chain }, trace: context.trace
         });
     }
@@ -94,7 +94,7 @@ class B5ReserveChainCoordinator {
         if (b2Count < chain.b3InputPerCraft) return { done: true };
         const quantity = this.inventoryState.allEnabled('useAllForB3') ? 'ALL'
             : (state.b3Remaining >= 64 && b2Count >= chain.b3InputPerCraft * 64 ? 64 : 1);
-        this.quantityTrace('B5 QUANTITY DECISION', {
+        this.quantityTrace('CRAFT QUANTITY DECISION', {
             step: 'reserve-b3-chain', resource: chain.b3Id, recipeId: chain.b3RecipeId, quantity,
             reason: quantity === 'ALL' ? 'b2-accumulated-then-b3-all' : 'exact-fallback', b2Count,
             b2Remaining: state.b2Remaining, b3Remaining: state.b3Remaining,
@@ -147,7 +147,7 @@ class B5ReserveChainCoordinator {
         const maxStacks = Math.max(1, Math.min(freeStackSlots, wantedStacks));
         const before = view.b2Count;
         const withdrawn = await this.runStep(context, {
-            subsystem: 'b5', step: 'withdraw-existing-b2', action: 'withdraw B2 from /pv 2 while reserving one empty slot', resource: chain.b2Id,
+            subsystem: 'crafting', step: 'withdraw-existing-b2', action: 'withdraw B2 from /pv 2 while reserving one empty slot', resource: chain.b2Id,
             details: { vaultB2Remaining: state.vaultB2Remaining, b2Count: view.b2Count, b3Remaining: state.b3Remaining, maxStacks,
                 emptySlotCount: view.inventory.emptySlotCount, minFreeForB3All: state.minFreeForB3All }
         }, () => this.flows.withdraw.withdraw(chain.b2Id, this.childOptions(context, { maxStacks })));
@@ -173,14 +173,14 @@ class B5ReserveChainCoordinator {
         const craftableByBase = Math.floor(baseCount / Math.max(1, acquired.basePerB2));
         if (craftableByBase <= 0) this.#throwZeroCraftable(chain, state, acquired, baseCount, context);
         const decision = this.#b2Quantity(chain, state, craftableByBase);
-        this.quantityTrace('B5 QUANTITY DECISION', {
+        this.quantityTrace('CRAFT QUANTITY DECISION', {
             step: 'reserve-b3-chain', resource: chain.b2Id, recipeId: chain.b2RecipeId, ...decision,
             b2Count, b2Remaining: state.b2Remaining, b3Remaining: state.b3Remaining, baseId: chain.baseId, baseCount,
             basePerB2: acquired.basePerB2, craftableByBase, emptySlotCount: inventory.emptySlotCount, minFreeAfterCraft: state.minFreeForB3All
         });
         this.progressTracker.set({ running: true, state: 'CRAFTING_B2', currentStep: { kind: 'B2', id: chain.b2Id, crafts: state.b2Remaining } });
         const inputSource = acquired.source || this.b1Inventory?.b2Input?.source || 'inventory';
-        this.logger?.info?.('B5 B1 SOURCE CONTRACT', { operation: 'B5Automation', step: 'craft-b2-source-contract', phase: 'OK',
+        this.logger?.info?.('B5 B1 SOURCE CONTRACT', { operation: 'CraftingAutomation', step: 'craft-b2-source-contract', phase: 'OK',
             resource: chain.baseId, b2Id: chain.b2Id, sourceMode: inputSource === 'inventory' ? 'INVENTORY_WITHDRAW' : 'STORAGE',
             quantity: decision.quantity, baseCount, emptySlotCount: inventory.emptySlotCount });
         const crafted = await this.finalCraft.craft(chain.b2RecipeId, decision.quantity, context, chain.b2Id, {
@@ -227,15 +227,15 @@ class B5ReserveChainCoordinator {
 
     async #depositIfRequired(chain, context, defer) {
         if (defer) return;
-        await this.runStep(context, { subsystem: 'b5', step: 'deposit-b3-reserve', action: 'deposit completed B3 reserve to /pv 2 before next material', resource: chain.b3Id },
+        await this.runStep(context, { subsystem: 'crafting', step: 'deposit-b3-reserve', action: 'deposit completed B3 reserve to /pv 2 before next material', resource: chain.b3Id },
             () => this.flows.deposit.deposit(chain.b3Id, this.childOptions(context)));
-        await this.runStep(context, { subsystem: 'b5', step: 'deposit-b2-leftover', action: 'deposit B2 leftover to /pv 2 before next material', resource: chain.b2Id },
+        await this.runStep(context, { subsystem: 'crafting', step: 'deposit-b2-leftover', action: 'deposit B2 leftover to /pv 2 before next material', resource: chain.b2Id },
             () => this.flows.deposit.deposit(chain.b2Id, this.childOptions(context)));
     }
 
     #throwStalled(chain, state, view, context) {
         throw new FlowError(`Cannot continue B3 reserve chain for ${chain.baseId}; insufficient ${chain.b2Id}.`, {
-            code: 'B5_RESERVE_INPUT_STALLED', subsystem: 'b5', step: 'reserve-b3-chain', action: 'choose next B2/B3 ALL action', resource: chain.b2Id,
+            code: 'CRAFT_RESERVE_INPUT_STALLED', subsystem: 'crafting', step: 'reserve-b3-chain', action: 'choose next B2/B3 ALL action', resource: chain.b2Id,
             details: { b2Count: view.b2Count, b2Remaining: state.b2Remaining, b3Remaining: state.b3Remaining, vaultB2Remaining: state.vaultB2Remaining,
                 emptySlotCount: view.inventory.emptySlotCount, chain }, trace: context.trace
         });
@@ -243,21 +243,21 @@ class B5ReserveChainCoordinator {
 
     #throwZeroB3(chain, state, quantity, crafted, b2Count, context) {
         throw new FlowError(`Craft ${chain.b3Id} reported no completed crafts.`, {
-            code: 'B5_ALL_CRAFT_ZERO', subsystem: 'b5', step: 'reserve-b3-chain', action: `craft quantity ${quantity}`, resource: chain.b3Id,
+            code: 'CRAFT_ALL_CRAFT_ZERO', subsystem: 'crafting', step: 'reserve-b3-chain', action: `craft quantity ${quantity}`, resource: chain.b3Id,
             details: { quantity, crafted, b2Count, b2Remaining: state.b2Remaining, b3Remaining: state.b3Remaining }, trace: context.trace
         });
     }
 
     #throwZeroCraftable(chain, state, acquired, baseCount, context) {
         throw new FlowError(`B1 transfer for ${chain.baseId} produced no craftable B2 input.`, {
-            code: 'B5_B1_TRANSFER_ZERO_CRAFTABLE', subsystem: 'b5', step: 'acquire-b1-for-b2', action: 'verify withdrawn B1 before B2', resource: chain.baseId,
+            code: 'CRAFT_B1_TRANSFER_ZERO_CRAFTABLE', subsystem: 'crafting', step: 'acquire-b1-for-b2', action: 'verify withdrawn B1 before B2', resource: chain.baseId,
             retryable: true, details: { baseCount, basePerB2: acquired.basePerB2, b2Remaining: state.b2Remaining, acquisition: acquired }, trace: context.trace
         });
     }
 
     #throwZeroB2(chain, state, quantity, crafted, baseCount, craftableByBase, b2Count, context) {
         throw new FlowError(`Craft ${chain.b2Id} reported no completed crafts.`, {
-            code: 'B5_B2_CRAFT_ZERO', subsystem: 'b5', step: 'reserve-b3-chain', action: `craft quantity ${quantity}`, resource: chain.b2Id,
+            code: 'CRAFT_B2_CRAFT_ZERO', subsystem: 'crafting', step: 'reserve-b3-chain', action: `craft quantity ${quantity}`, resource: chain.b2Id,
             details: { quantity, crafted, baseCount, craftableByBase, b2Count, b2Remaining: state.b2Remaining, b3Remaining: state.b3Remaining }, trace: context.trace
         });
     }

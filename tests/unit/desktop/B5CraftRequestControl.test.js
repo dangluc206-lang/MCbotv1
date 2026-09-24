@@ -24,7 +24,7 @@ function createRegistry() {
     });
 }
 
-// The stub mode mirrors B5CraftModeService.setCraftRequest validation through the
+// The stub mode mirrors CraftingModeService.setCraftRequest validation through the
 // real CraftingRequest so the control plane is exercised against real contracts.
 function harness({ withMode = true, withRegistry = true } = {}) {
     const registry = createRegistry();
@@ -50,7 +50,7 @@ function harness({ withMode = true, withRegistry = true } = {}) {
             application: {
                 getRuntime: () => ({
                     getService: name => {
-                        if (name === 'b5CraftMode') return withMode ? mode : null;
+                        if (name === 'craftingMode') return withMode ? mode : null;
                         if (name === 'craftingTargetRegistry') return withRegistry ? targetRegistry : null;
                         if (name === 'craftingItemRegistry') return withRegistry ? registry : null;
                         return null;

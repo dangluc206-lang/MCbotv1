@@ -11,7 +11,7 @@ class DiscordControlPanelBuilder {
         this.defaultBotId = defaultBotId;
     }
 
-    build({ selectedBotId, selectedModeId = 'b5-craft', selectedPage = 0 } = {}) {
+    build({ selectedBotId, selectedModeId = 'crafting', selectedPage = 0 } = {}) {
         const botIds = this.#botIds();
         if (!botIds.length) throw new Error('Không có bot runtime nào được đăng ký.');
         let botId = botIds.includes(selectedBotId) ? selectedBotId : (botIds.includes(this.defaultBotId) ? this.defaultBotId : botIds[0]);

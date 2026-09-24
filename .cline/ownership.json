@@ -230,10 +230,12 @@
         "server profile construction/revision"
       ]
     },
-    "src/modes/b5-craft/B5CraftModeService.js": {
+    "src/modes/crafting/CraftingModeService.js": {
       "scope": "bot/mode",
       "owns": [
-        "current B5 craft mode orchestration"
+        "generic crafting mode orchestration",
+        "operator CraftingRequest lifecycle (target/quantity)",
+        "craft campaign boundary (storage protection, smelt, compact, deposit)"
       ]
     },
     "src/server-features/crafting/B5PlanningService.js": {

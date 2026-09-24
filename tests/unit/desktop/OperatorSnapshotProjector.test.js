@@ -6,7 +6,7 @@ const OperatorSnapshotProjector = require('../../../src/desktop/projection/Opera
 const SnapshotDeliveryCoordinator = require('../../../src/desktop/projection/SnapshotDeliveryCoordinator');
 
 function snapshot(count, updatedAt = '2026-08-25T00:00:00.000Z') {
-    return { lifecycle:'RUNNING', updatedAt, system:{ uptimeMs:100, memoryMb:64 }, bots:Array.from({ length:count }, (_, index) => ({ botId:`bot-${index}`, profile:{ displayName:`Bot ${index}`, enabled:true }, connectionOnline:index % 2 === 1, state:{ connectionState:index % 2 ? 'AUTHENTICATING' : 'RECONNECTING' }, connectionGeneration:1, intent:{ desiredConnection:'CONNECTED', desiredMode:index % 3 ? null : 'b5-craft' }, modeOwner:null, modes:{ byId:{}, b5Craft:null }, operation:{ operations:[] } })) };
+    return { lifecycle:'RUNNING', updatedAt, system:{ uptimeMs:100, memoryMb:64 }, bots:Array.from({ length:count }, (_, index) => ({ botId:`bot-${index}`, profile:{ displayName:`Bot ${index}`, enabled:true }, connectionOnline:index % 2 === 1, state:{ connectionState:index % 2 ? 'AUTHENTICATING' : 'RECONNECTING' }, connectionGeneration:1, intent:{ desiredConnection:'CONNECTED', desiredMode:index % 3 ? null : 'crafting' }, modeOwner:null, modes:{ byId:{}, b5Craft:null }, operation:{ operations:[] } })) };
 }
 
 test('OperatorSnapshotProjector emits compact stable revisions and on-demand-safe summaries', () => {

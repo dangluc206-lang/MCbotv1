@@ -21,6 +21,31 @@ test('stage handoff rejects generation mismatch', () => {
 });
 
 
+test('stage contract is generic: errors carry crafting subsystem and any target id', () => {
+    const c = new StageExecutionContract();
+    for (const fn of [
+        () => c.requireInputReady({ stage: 'INTERMEDIATE', logicalId: 'titanium', available: 0, required: 1 }),
+        () => c.verifyOutput({ stage: 'TARGET', logicalId: 'titanium', before: 0, after: 0, expectedDelta: 1 }),
+        () => c.requireSettled({ stage: 'TARGET', logicalId: 'carbon', settlement: { settled: false } }),
+        () => c.handoff({ from: 'INTERMEDIATE', to: 'TARGET', generation: 3, context: { connectionGeneration: 4 } })
+    ]) {
+        try { fn(); assert.fail('expected stage contract to throw'); }
+        catch (error) {
+            assert.equal(error.details?.subsystem || error.subsystem, 'crafting');
+            assert.match(error.code || error.details?.code || '', /^CRAFT_STAGE_/);
+        }
+    }
+    // Same contract drives any target through identical boundaries.
+    const generation = 21;
+    c.requireInputReady({ stage: 'INTERMEDIATE', logicalId: 'titanium', available: 2, required: 1, context: { connectionGeneration: generation } });
+    c.verifyOutput({ stage: 'TARGET', logicalId: 'titanium', before: 0, after: 1, expectedDelta: 1, context: { connectionGeneration: generation } });
+    c.requireSettled({ stage: 'TARGET', logicalId: 'titanium', settlement: { settled: true, count: 1 }, context: { connectionGeneration: generation } });
+    assert.deepEqual(
+        c.handoff({ from: 'TARGET', to: 'COMPLETE', generation, context: { connectionGeneration: generation } }),
+        { ready: true, from: 'TARGET', to: 'COMPLETE', generation }
+    );
+});
+
 test('complete B1 -> B5 handoff sequence enforces every boundary', () => {
     const c = new StageExecutionContract();
     const generation = 11;

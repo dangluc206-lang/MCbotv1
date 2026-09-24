@@ -14,16 +14,16 @@ class LiveConfigApplier {
             for (const runtime of targets) runtime.getService('skyCommandService')?.reconfigure?.(value);
             return true;
         }
-        if (key === 'b5CraftMode') {
+        if (key === 'craftingMode') {
             for (const runtime of targets) {
-                const mode = runtime.getService('b5CraftMode');
+                const mode = runtime.getService('craftingMode');
                 mode?.reconfigure?.(value);
-                if (value.enabled === false && mode?.status?.().enabled) await mode.disable('Chế B5 thuần đã bị tắt trong cấu hình.');
+                if (value.enabled === false && mode?.status?.().enabled) await mode.disable('Chế tạo đã bị tắt trong cấu hình.');
             }
             return true;
         }
         if (key === 'b5') {
-            for (const runtime of targets) runtime.getService('b5CraftMode')?.queueRulesConfig?.(value);
+            for (const runtime of targets) runtime.getService('craftingMode')?.queueRulesConfig?.(value);
             return true;
         }
         return false;

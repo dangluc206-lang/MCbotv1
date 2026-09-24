@@ -1,12 +1,12 @@
 'use strict';
 
 /**
- * Request-level orchestration seam for B5CraftModeService (Task 5).
+ * Request-level orchestration seam for CraftingModeService (Task 5).
  *
  * Pure counting/decision logic: it never clicks a GUI, never crafts, never
  * reads /kho or /pv 2, never computes recipes and never imports Mineflayer.
  * Each cycle is a bounded "one unit" request that the mode executes through
- * B5AutomationService.runTarget(); unit completion is only credited from
+ * CraftingAutomationService.runTarget(); unit completion is only credited from
  * verified cycle results (completedTarget/completedAmount for the request target).
  *
  * Loop guards:
@@ -21,9 +21,9 @@ const DEFAULTS = Object.freeze({
     maxBlockedStreakForAll: 3
 });
 
-class B5RequestExecution {
+class CraftingRequestExecution {
     constructor({ request, maxCyclesWithoutTargetUnit = DEFAULTS.maxCyclesWithoutTargetUnit, maxBlockedStreakForAll = DEFAULTS.maxBlockedStreakForAll } = {}) {
-        if (!request?.targetItemId) throw new TypeError('B5RequestExecution requires a CraftingRequest.');
+        if (!request?.targetItemId) throw new TypeError('CraftingRequestExecution requires a CraftingRequest.');
         this.request = request;
         this.targetItemId = request.targetItemId;
         this.quantityMode = request.quantityMode;
@@ -173,7 +173,7 @@ class B5RequestExecution {
             return this.snapshot();
         }
         this.state = 'FAILED';
-        this.lastError = code || result?.message || 'B5 request cycle failed';
+        this.lastError = code || result?.message || 'crafting request cycle failed';
         return this.snapshot();
     }
 
@@ -216,6 +216,6 @@ class B5RequestExecution {
     }
 }
 
-B5RequestExecution.STATES = STATES;
-B5RequestExecution.DEFAULTS = DEFAULTS;
-module.exports = B5RequestExecution;
+CraftingRequestExecution.STATES = STATES;
+CraftingRequestExecution.DEFAULTS = DEFAULTS;
+module.exports = CraftingRequestExecution;

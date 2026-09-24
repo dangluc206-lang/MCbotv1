@@ -38,9 +38,10 @@ class B5RecipeResolver {
 
     isTargetDirectlyReady(data, amount = 1) {
         // Target readiness is recipe/output metadata, never a fixed tier name:
-        // without a requested or configured target this check fails closed
-        // instead of assuming one item.
-        const targetId = data?.fullPlan?.targetId || this.config?.targetId || null;
+        // without a planner-provided target this check fails closed
+        // instead of assuming one item (no config-target fallback: execution
+        // must receive its step/target from planning).
+        const targetId = data?.fullPlan?.targetId || null;
         if (!targetId) return false;
         const targetRecipe = this.recipeForOutput(targetId, data?.finalSteps || []);
         if (!targetRecipe?.recipe) return false;

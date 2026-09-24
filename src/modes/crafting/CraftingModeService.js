@@ -6,15 +6,15 @@ const Status = require('../../shared/result/Status');
 const Result = require('../../shared/result/Result');
 const ReconciliationBarrier = require('../../shared/reconciliation/ReconciliationBarrier');
 const ModeFaultPolicy = require('../ModeFaultPolicy');
-const B5CampaignSession = require('./campaign/B5CampaignSession');
-const B5BatchCoordinator = require('./campaign/B5BatchCoordinator');
+const CraftCampaignSession = require('./campaign/CraftCampaignSession');
+const CraftBatchCoordinator = require('./campaign/CraftBatchCoordinator');
 const StorageProtectionEpisode = require('./storage/StorageProtectionEpisode');
-const B5FaultPolicyAdapter = require('./fault/B5FaultPolicyAdapter');
-const B5StatusProjection = require('./status/B5StatusProjection');
-const B5CycleConfigBoundary = require('./B5CycleConfigBoundary');
-const B5SharedStorageLease = require('./storage/B5SharedStorageLease');
-const B5GenerationPreparer = require('./B5GenerationPreparer');
-const B5RequestExecution = require('./B5RequestExecution');
+const CraftFaultPolicyAdapter = require('./fault/CraftFaultPolicyAdapter');
+const CraftingStatusProjection = require('./status/CraftingStatusProjection');
+const CraftingCycleConfigBoundary = require('./CraftingCycleConfigBoundary');
+const CraftSharedStorageLease = require('./storage/CraftSharedStorageLease');
+const CraftingGenerationPreparer = require('./CraftingGenerationPreparer');
+const CraftingRequestExecution = require('./CraftingRequestExecution');
 const CraftingRequest = require('../../items/CraftingRequest');
 const { createB1MaterialOperation } = require('../../server-features/storage/b1/B1MaterialOperation');
 
@@ -22,7 +22,7 @@ const PROTECTION_SAME_BLOCKER_LIMIT = 3;
 const PROTECTION_TOTAL_AUTO_ATTEMPT_LIMIT = 6;
 const PROTECTION_RETRY_CACHE_TTL_MS = 5 * 60 * 1000;
 
-class B5CraftModeService extends ManagedMode {
+class CraftingModeService extends ManagedMode {
     constructor({
         botId,
         modeContext,
@@ -32,8 +32,8 @@ class B5CraftModeService extends ManagedMode {
         skyblockReadiness = null,
         skyTarget = null,
         b1Materials,
-        b5Planning,
-        b5Automation,
+        craftingPlanning,
+        automation,
         craftingItemRegistry = null,
         craftingChainPlanner = null,
         sharedStorageLeases = null,
@@ -43,12 +43,14 @@ class B5CraftModeService extends ManagedMode {
         config = {},
         logger = null
     } = {}) {
-        super({ modeId: 'b5-craft', botId, modeContext, modeCoordinator, catalog, logger });
-        if (!island?.goHome) throw new TypeError('B5CraftModeService island service is required.');
-        if (!b1Materials?.protectForB5Batch) throw new TypeError('B5CraftModeService B1 storage protection service is required.');
-        if (!b5Planning?.inspectAdditionalFresh) throw new TypeError('B5CraftModeService B5 planning service is required.');
-        if (!b5Automation?.runNext) throw new TypeError('B5CraftModeService B5 automation service is required.');
-        Object.assign(this, { island, skyblockReadiness, skyTarget, b1Materials, b5Planning, b5Automation, craftingItemRegistry, craftingChainPlanner });
+        super({ modeId: 'crafting', botId, modeContext, modeCoordinator, catalog, logger });
+        if (!island?.goHome) throw new TypeError('CraftingModeService island service is required.');
+        // ponytail: `protectForB5Batch` is the legacy service-owned action name (B1StorageMaterialService owns
+        // the mechanics); mode core keeps the call for compat and must not assume B5/super_alloy semantics from it.
+        if (!b1Materials?.protectForB5Batch) throw new TypeError('CraftingModeService B1 storage protection service is required.');
+        if (!craftingPlanning?.inspectAdditionalFresh) throw new TypeError('CraftingModeService crafting planning service is required.');
+        if (!automation?.runNext) throw new TypeError('CraftingModeService crafting automation service is required.');
+        Object.assign(this, { island, skyblockReadiness, skyTarget, b1Materials, craftingPlanning, automation, craftingItemRegistry, craftingChainPlanner });
         this.config = this.#normalizeConfig(config);
         this.activeRequest = null;
         this.requestExecution = null;
@@ -58,7 +60,7 @@ class B5CraftModeService extends ManagedMode {
         this.lastCycleAt = null;
         this.lastResult = null;
         this.waitingReason = null;
-        this.completedB5 = 0;
+        this.completedTargets = 0;
         this.cycles = 0;
         this.storageProtectionRuns = 0;
         this.manualResumeGeneration = null;
@@ -71,13 +73,13 @@ class B5CraftModeService extends ManagedMode {
         this.lastCycleDelayMs = 0;
         this.staleGenerationAborts = 0;
         this.pendingCraftReconciliation = null;
-        this.pendingB5CompletionProvenance = null;
-        this.lastAccountedB5ProvenanceId = null;
+        this.pendingCompletionProvenance = null;
+        this.lastAccountedProvenanceId = null;
         this.reconciliationRuns = 0;
         this.unresolvedReconciliations = 0;
-        this.nextB5CycleAt = null;
-        this.campaignSession = new B5CampaignSession({ botId });
-        this.batchCoordinator = new B5BatchCoordinator({ botId });
+        this.nextCycleAt = null;
+        this.campaignSession = new CraftCampaignSession({ botId });
+        this.batchCoordinator = new CraftBatchCoordinator({ botId });
         this.batchSequence = 0;
         this.batchId = null;
         this.batchTrigger = null;
@@ -86,11 +88,11 @@ class B5CraftModeService extends ManagedMode {
         this.protectionInFlight = null;
         this.protectionEpisode = null;
         this.reconciliationBarrier = new ReconciliationBarrier({ maxFreshReads: this.config.reconciliation.maxFreshReads, logger: this.logger });
-        this.faultPolicy = new B5FaultPolicyAdapter(new ModeFaultPolicy({ botId, modeId: 'b5-craft', policy: failurePolicy || undefined, publisher: failurePublisher, logger }));
+        this.faultPolicy = new CraftFaultPolicyAdapter(new ModeFaultPolicy({ botId, modeId: 'crafting', policy: failurePolicy || undefined, publisher: failurePublisher, logger }));
         this.protectionRetryRequests = new Map();
-        this.configBoundary = new B5CycleConfigBoundary({ planning: b5Planning, automation: b5Automation });
-        this.sharedStorageLease = new B5SharedStorageLease({ registry: sharedStorageLeases, resourceKey: storageLeaseKey, botId });
-        this.generationPreparer = new B5GenerationPreparer({ modeId: this.modeId, modeContext, island, skyblockReadiness, skyTarget, sharedStorageLease: this.sharedStorageLease });
+        this.configBoundary = new CraftingCycleConfigBoundary({ planning: craftingPlanning, automation: automation });
+        this.sharedStorageLease = new CraftSharedStorageLease({ registry: sharedStorageLeases, resourceKey: storageLeaseKey, botId });
+        this.generationPreparer = new CraftingGenerationPreparer({ modeId: this.modeId, modeContext, island, skyblockReadiness, skyTarget, sharedStorageLease: this.sharedStorageLease });
     }
 
     publicConfig() {
@@ -99,7 +101,7 @@ class B5CraftModeService extends ManagedMode {
 
     async enable() {
         if (this.config.enabled === false) {
-            return Result.fail(Status.NOT_READY, 'Chế B5 thuần đang bị tắt trong cấu hình.');
+            return Result.fail(Status.NOT_READY, 'Chế tạo đang bị tắt trong cấu hình.');
         }
         return super.enable();
     }
@@ -120,7 +122,7 @@ class B5CraftModeService extends ManagedMode {
      */
     setCraftRequest(input) {
         if (!this.craftingItemRegistry) {
-            return Result.fail(Status.NOT_READY, 'B5CraftModeService yêu cầu CraftingItemRegistry để nhận yêu cầu chế tạo.');
+            return Result.fail(Status.NOT_READY, 'CraftingModeService yêu cầu CraftingItemRegistry để nhận yêu cầu chế tạo.');
         }
         let request;
         try {
@@ -128,26 +130,26 @@ class B5CraftModeService extends ManagedMode {
                 ? input
                 : CraftingRequest.create({ targetItemId: input?.targetItemId, quantity: input?.quantity, itemRegistry: this.craftingItemRegistry });
         } catch (error) {
-            const code = String(error?.code || 'B5_REQUEST_INVALID');
+            const code = String(error?.code || 'CRAFT_REQUEST_INVALID');
             return Result.fail(Status.NOT_READY, error?.message || 'Yêu cầu chế tạo không hợp lệ.', error, { errorCode: code });
         }
         const recipeEntry = this.craftingItemRegistry.getRecipe
             ? this.craftingItemRegistry.getRecipe(request.targetItemId)
             : null;
         if (!recipeEntry) {
-            return Result.fail(Status.NOT_READY, `Mục tiêu '${request.targetItemId}' không có công thức chế tạo.`, null, { errorCode: 'B5_REQUEST_TARGET_NOT_CRAFTABLE' });
+            return Result.fail(Status.NOT_READY, `Mục tiêu '${request.targetItemId}' không có công thức chế tạo.`, null, { errorCode: 'CRAFT_REQUEST_TARGET_NOT_CRAFTABLE' });
         }
         if (this.craftingChainPlanner && request.quantityMode === 'FIXED') {
             try {
                 this.craftingChainPlanner.plan({ request, available: {} });
             } catch (error) {
-                return Result.fail(Status.NOT_READY, error?.message || 'Không lập được kế hoạch cho yêu cầu chế tạo.', error, { errorCode: 'B5_REQUEST_TARGET_NOT_CRAFTABLE' });
+                return Result.fail(Status.NOT_READY, error?.message || 'Không lập được kế hoạch cho yêu cầu chế tạo.', error, { errorCode: 'CRAFT_REQUEST_TARGET_NOT_CRAFTABLE' });
             }
         }
         this.activeRequest = request;
-        this.requestExecution = new B5RequestExecution({ request });
-        this.logger?.info?.('B5 REQUEST SET.', {
-            botId: this.botId, operation: 'B5CraftMode', step: 'craft-request-set',
+        this.requestExecution = new CraftingRequestExecution({ request });
+        this.logger?.info?.('CRAFT REQUEST SET.', {
+            botId: this.botId, operation: 'CraftingMode', step: 'craft-request-set',
             targetId: request.targetItemId, quantityMode: request.quantityMode, quantity: request.quantity
         });
         return Result.ok({ request: { targetItemId: request.targetItemId, targetDisplayName: request.targetDisplayName, quantityMode: request.quantityMode, quantity: request.quantity }, appliedAt: 'next-cycle' });
@@ -157,8 +159,8 @@ class B5CraftModeService extends ManagedMode {
         const snapshot = this.requestExecution?.snapshot() || null;
         this.requestExecution = null;
         this.activeRequest = null;
-        this.logger?.info?.('B5 REQUEST CLEARED.', {
-            botId: this.botId, operation: 'B5CraftMode', step: 'craft-request-clear', reason: reason || null,
+        this.logger?.info?.('CRAFT REQUEST CLEARED.', {
+            botId: this.botId, operation: 'CraftingMode', step: 'craft-request-clear', reason: reason || null,
             finalState: snapshot?.state || null, completedUnits: snapshot?.completedUnits ?? 0
         });
         if (this.waitingReason === 'craft-request-terminal') this.waitingReason = null;
@@ -172,32 +174,32 @@ class B5CraftModeService extends ManagedMode {
     async onEnable() {
         this.faultPolicy.reset('enable');
         this.campaignSession.open({ generation: this.modeContext.generation(), trigger: 'explicit-enable' });
-        this.skyblockReadiness?.requireTarget?.(this.skyTarget, { owner: this.modeId, trigger: 'b5-mode-enabled' });
+        this.skyblockReadiness?.requireTarget?.(this.skyTarget, { owner: this.modeId, trigger: 'crafting-mode-enabled' });
         this.#armBatchProtection('explicit-enable');
         this.supervisor = this.createTaskSupervisor('loop', { historyLimit: 8 });
         this.#startLoop();
     }
 
     async onPause(reason) {
-        await this.supervisor?.stop('main-loop', reason || 'B5 craft paused.');
+        await this.supervisor?.stop('main-loop', reason || 'crafting paused.');
         this.waitingReason = 'paused';
     }
 
     async onResume() {
-        this.skyblockReadiness?.requireTarget?.(this.skyTarget, { owner: this.modeId, trigger: 'b5-mode-resumed' });
+        this.skyblockReadiness?.requireTarget?.(this.skyTarget, { owner: this.modeId, trigger: 'crafting-mode-resumed' });
         this.waitingReason = null;
         this.#startLoop();
     }
 
     async onDisable(reason) {
-        await this.supervisor?.stopAll(reason || 'B5 craft disabled.');
+        await this.supervisor?.stopAll(reason || 'crafting mode disabled.');
         this.b1Materials.discardProtectionEpisode?.(this.protectionEpisode?.episodeId);
         this.supervisor = null;
         this.preparedGeneration = null;
         this.waitingReason = null;
         this.manualResumeGeneration = null;
         this.pendingCraftReconciliation = null;
-        this.pendingB5CompletionProvenance = null;
+        this.pendingCompletionProvenance = null;
         this.reconciliationRequest = null;
         this.requestExecution = null;
         this.activeRequest = null;
@@ -225,7 +227,7 @@ class B5CraftModeService extends ManagedMode {
     }
 
     statusDetails() {
-        return B5StatusProjection.create({
+        return CraftingStatusProjection.create({
             policy: {
                 movement: false,
                 smelting: true,
@@ -240,7 +242,7 @@ class B5CraftModeService extends ManagedMode {
             lastCycleAt: this.lastCycleAt,
             waitingReason: this.waitingReason,
             cycles: this.cycles,
-            completedB5: this.completedB5,
+            completedTargets: this.completedTargets,
             storageProtectionRuns: this.storageProtectionRuns,
             lastAutomationBlockers: this.lastAutomationBlockers,
             automationRuns: this.automationRuns,
@@ -253,7 +255,7 @@ class B5CraftModeService extends ManagedMode {
             manualResumeGeneration: this.manualResumeGeneration,
             reconciliationRuns: this.reconciliationRuns,
             unresolvedReconciliations: this.unresolvedReconciliations,
-            nextB5CycleAt: this.nextB5CycleAt,
+            nextCycleAt: this.nextCycleAt,
             campaign: this.campaignSession.snapshot(),
             batchId: this.batchId,
             batchTrigger: this.batchTrigger,
@@ -264,10 +266,10 @@ class B5CraftModeService extends ManagedMode {
             fault: this.faultPolicy.snapshot(),
             recovery: this.#recoverySurface(),
             pendingCraftReconciliation: this.#compactReconciliation(this.pendingCraftReconciliation),
-            pendingB5CompletionProvenance: this.pendingB5CompletionProvenance ? { ...this.pendingB5CompletionProvenance } : null,
+            pendingCompletionProvenance: this.pendingCompletionProvenance ? { ...this.pendingCompletionProvenance } : null,
             reconciliationAction: this.#reconciliationAction(),
             lastResult: this.lastResult,
-            b5Automation: this.b5Automation.status?.() || null,
+            automation: this.automation.status?.() || null,
             configApply: this.configBoundary.status(),
             sharedStorageLease: this.sharedStorageLease.status(),
             storage: this.b1Materials.status?.() || null,
@@ -277,11 +279,11 @@ class B5CraftModeService extends ManagedMode {
 
     #reconciliationAction() {
         if (this.pendingCraftReconciliation) return 'fresh-reconcile-quarantined-craft';
-        if (this.pendingB5CompletionProvenance) {
-            if (Number(this.pendingB5CompletionProvenance.recoveryGeneration) === Number(this.modeContext.generation())) {
-                return 'recover-proven-b5-only';
+        if (this.pendingCompletionProvenance) {
+            if (Number(this.pendingCompletionProvenance.recoveryGeneration) === Number(this.modeContext.generation())) {
+                return 'recover-proven-target-only';
             }
-            return 'fresh-reconcile-proven-b5-on-current-generation';
+            return 'fresh-reconcile-proven-target-on-current-generation';
         }
         return null;
     }
@@ -292,14 +294,14 @@ class B5CraftModeService extends ManagedMode {
         const handle = this.supervisor.start('main-loop', async task => {
             const attempt = this.faultPolicy.beforeAttempt();
             if (!attempt.allowed) {
-                const error = Object.assign(new Error('B5 mode fault circuit is open.'), { code: 'MODE_CIRCUIT_OPEN', retryable: false });
+                const error = Object.assign(new Error('Crafting mode fault circuit is open.'), { code: 'MODE_CIRCUIT_OPEN', retryable: false });
                 throw error;
             }
             try {
                 return await this.#loop(task.cancellationToken);
             } catch (error) {
                 this.faultPolicy.record(error, {
-                    operation: 'B5CraftMode', step: 'main-loop', phase: this.phase,
+                    operation: 'CraftingMode', step: 'main-loop', phase: this.phase,
                     cancelled: error?.code === 'CANCELLED'
                 });
                 throw error;
@@ -318,18 +320,18 @@ class B5CraftModeService extends ManagedMode {
         });
     }
     #requestIdleTerminal(cycleRequest) {
-        return Boolean(cycleRequest?.isTerminal() && !this.pendingCraftReconciliation && !this.pendingB5CompletionProvenance);
+        return Boolean(cycleRequest?.isTerminal() && !this.pendingCraftReconciliation && !this.pendingCompletionProvenance);
     }
 
     #planRequestCycle(cycleRequest, generation, cancellationToken) {
-        const recoveryTarget = this.pendingB5CompletionProvenance?.outputId;
+        const recoveryTarget = this.pendingCompletionProvenance?.outputId;
         const decision = cycleRequest?.nextCycle();
         if (decision?.action === 'WAIT' && !recoveryTarget) return { wait: true };
         const cycleOptions = {
             cancellationToken,
             expectedGeneration: generation,
             freshInspection: true,
-            recoveryOnly: Boolean(this.pendingB5CompletionProvenance),
+            recoveryOnly: Boolean(this.pendingCompletionProvenance),
             decompressionPolicy: 'unbounded'
         };
         return { wait: false, cycleOptions, targetId: recoveryTarget || cycleRequest?.targetItemId || null, recoveryTarget };
@@ -349,8 +351,8 @@ class B5CraftModeService extends ManagedMode {
             return { wait: true };
         }
         const result = plan.targetId
-            ? await (this.b5Automation.runTarget || this.b5Automation.runNext).call(this.b5Automation, { ...plan.cycleOptions, targetId: plan.targetId })
-            : await this.b5Automation.runNext(plan.cycleOptions);
+            ? await (this.automation.runTarget || this.automation.runNext).call(this.automation, { ...plan.cycleOptions, targetId: plan.targetId })
+            : await this.automation.runNext(plan.cycleOptions);
         this.#recordRequestCycle(cycleRequest, result, generation, plan.recoveryTarget);
         return { wait: false, result };
     }
@@ -373,6 +375,14 @@ class B5CraftModeService extends ManagedMode {
                 continue;
             }
             const cycleRequest = this.requestExecution;
+            // Generic crafting mode never infers a target: without an operator
+            // request it waits instead of crafting any configured default.
+            if (!cycleRequest) {
+                this.waitingReason = 'no-craft-request';
+                this.setPhase('WAITING_REQUEST');
+                await Timeout.delay(this.config.pollIntervalMs, { cancellationToken });
+                continue;
+            }
             if (await this.#idleForTerminalRequest(cycleRequest, cancellationToken)) continue;
             const generation = this.modeContext.generation();
             if (this.preparedGeneration !== null
@@ -401,24 +411,24 @@ class B5CraftModeService extends ManagedMode {
                 }
             }
 
-            if (this.pendingB5CompletionProvenance) {
-                const completionReady = await this.#reconcilePendingB5CompletionProvenance(generation, cancellationToken);
+            if (this.pendingCompletionProvenance) {
+                const completionReady = await this.#reconcilePendingCompletionProvenance(generation, cancellationToken);
                 if (!completionReady) continue;
                 if (!this.#generationCurrent(generation)) {
-                    await this.#waitForFreshGeneration(cancellationToken, 'generation-changed-after-b5-completion-reconciliation');
+                    await this.#waitForFreshGeneration(cancellationToken, 'generation-changed-after-completion-reconciliation');
                     continue;
                 }
             }
 
-            if (Number.isFinite(this.nextB5CycleAt) && Date.now() < this.nextB5CycleAt) {
-                const remainingMs = Math.max(1, this.nextB5CycleAt - Date.now());
-                this.waitingReason = 'b5-cooldown';
-                this.setPhase('B5_COOLDOWN');
+            if (Number.isFinite(this.nextCycleAt) && Date.now() < this.nextCycleAt) {
+                const remainingMs = Math.max(1, this.nextCycleAt - Date.now());
+                this.waitingReason = 'cooldown';
+                this.setPhase('COOLDOWN');
                 this.lastCycleDelayMs = Math.min(this.config.pollIntervalMs, remainingMs);
                 await Timeout.delay(this.lastCycleDelayMs, { cancellationToken });
                 continue;
             }
-            if (Number.isFinite(this.nextB5CycleAt) && Date.now() >= this.nextB5CycleAt) this.nextB5CycleAt = null;
+            if (Number.isFinite(this.nextCycleAt) && Date.now() >= this.nextCycleAt) this.nextCycleAt = null;
 
             this.#beginCycle();
 
@@ -457,7 +467,7 @@ class B5CraftModeService extends ManagedMode {
                     startedAt: new Date().toISOString()
                 };
                 const protectionOperation = createB1MaterialOperation({
-                    name: 'B5StorageProtectionBoundary',
+                    name: 'CraftStorageProtectionBoundary',
                     b1Materials: this.b1Materials,
                     action: 'protectForB5Batch',
                     args: {
@@ -476,7 +486,7 @@ class B5CraftModeService extends ManagedMode {
                     connectionGeneration: generation,
                     correlationId: episode?.correlationId || episode?.episodeId || protectionBatchId,
                     metadata: {
-                        subsystem: 'b5-craft',
+                        subsystem: 'crafting',
                         step: 'storage-protection-boundary',
                         batchId: protectionBatchId,
                         episodeId: episode?.episodeId || null,
@@ -560,10 +570,10 @@ class B5CraftModeService extends ManagedMode {
                         || Number(episode?.continuationSlices || 0) % 10 === 0;
                     const log = shouldSummarize ? this.logger?.info : this.logger?.debug;
                     log?.call(this.logger, waitingForReserveInput
-                        ? 'B5 PURE: immutable sell baseline is complete; waiting for reserve input without repeating protection.'
-                        : 'B5 PURE: verified 64-only storage sale will continue from the same immutable baseline.', {
+                        ? 'CRAFT: immutable sell baseline is complete; waiting for reserve input without repeating protection.'
+                        : 'CRAFT: verified 64-only storage sale will continue from the same immutable baseline.', {
                         botId: this.botId,
-                        operation: 'B5CraftMode',
+                        operation: 'CraftingMode',
                         step: 'storage-protection-continue',
                         batchId: protectionBatchId,
                         episodeId: episode?.episodeId || null,
@@ -593,9 +603,9 @@ class B5CraftModeService extends ManagedMode {
                         completedAt: episode.completedAt
                     });
                 }
-                this.logger?.info?.('B5 PURE: storage protection completed before craft campaign.', {
+                this.logger?.info?.('CRAFT: storage protection completed before craft campaign.', {
                     botId: this.botId,
-                    operation: 'B5CraftMode',
+                    operation: 'CraftingMode',
                     step: 'protect-before-batch',
                     batchId: protectionBatchId,
                     episodeId: episode?.episodeId || null,
@@ -608,7 +618,7 @@ class B5CraftModeService extends ManagedMode {
             // owns a single fresh /kho + /pv2 + inventory snapshot inside the
             // same managed operation as the craft. The old extra pre-read could
             // fail or leave GUI state between protection and crafting, causing a
-            // cycle to stop before B5Automation was ever called.
+            // cycle to stop before the automation service was ever called.
             if (!this.#generationCurrent(generation)) {
                 await this.#waitForFreshGeneration(cancellationToken, 'generation-changed-before-craft');
                 continue;
@@ -636,8 +646,8 @@ class B5CraftModeService extends ManagedMode {
 
             const data = result?.data || {};
             if (data.productive === true) this.productiveCycles += 1;
-            if (data.recoveredExistingB5 === true && this.pendingB5CompletionProvenance) {
-                const provenance = this.pendingB5CompletionProvenance;
+            if (data.recoveredExistingB5 === true && this.pendingCompletionProvenance) {
+                const provenance = this.pendingCompletionProvenance;
                 const recoveredAmount = Math.max(0, Number(data.recoveredAmount || 0));
                 const provenAmount = Math.max(1, Number(provenance.amount || 1));
                 const provenanceMatches = provenance.batchId === this.batchId
@@ -645,72 +655,72 @@ class B5CraftModeService extends ManagedMode {
                     && String(data.targetId || '') === String(provenance.outputId || '')
                     && recoveredAmount >= provenAmount;
                 if (!provenanceMatches) {
-                    this.waitingReason = 'b5-recovery-provenance-mismatch';
+                    this.waitingReason = 'recovery-provenance-mismatch';
                     this.setPhase('WAITING_RECONCILE');
                     await Timeout.delay(this.config.reconciliation.unresolvedPollMs, { cancellationToken });
                     continue;
                 }
-                this.#accountProvenB5Completion(provenance, provenAmount, 'verified-recovery-pv2', generation);
+                this.#accountProvenCompletion(provenance, provenAmount, 'verified-recovery-pv2', generation);
                 if (recoveredAmount > provenAmount) {
-                    this.logger?.info?.('B5 PURE: recovery also moved orphan/pre-existing B5; only proven provenance amount is accounted as production.', {
+                    this.logger?.info?.('CRAFT: recovery also moved orphan/pre-existing targets; only proven provenance amount is accounted as production.', {
                         botId: this.botId,
-                        operation: 'B5CraftMode',
-                        step: 'account-recovered-b5',
+                        operation: 'CraftingMode',
+                        step: 'account-recovered-target',
                         markerId: provenance.markerId,
                         provenAmount,
                         orphanRecoveredAmount: recoveredAmount - provenAmount
                     });
                 }
-                this.pendingB5CompletionProvenance = null;
+                this.pendingCompletionProvenance = null;
             }
-            if (data.recoveryOnly === true && this.pendingB5CompletionProvenance) {
-                this.pendingB5CompletionProvenance.recoveryGeneration = null;
-                this.waitingReason = 'b5-completion-recovery-not-observed';
+            if (data.recoveryOnly === true && this.pendingCompletionProvenance) {
+                this.pendingCompletionProvenance.recoveryGeneration = null;
+                this.waitingReason = 'completion-recovery-not-observed';
                 this.setPhase('WAITING_RECONCILE');
                 await Timeout.delay(this.config.reconciliation.unresolvedPollMs, { cancellationToken });
                 continue;
             }
             if (data.completedTarget === true) {
                 const completedAmount = Math.max(1, Number(data.completedAmount || 1));
-                this.completedB5 += completedAmount;
-                this.#armBatchProtection('post-b5-complete');
-                this.nextB5CycleAt = Date.now() + this.config.postB5CooldownMs;
-                this.logger?.info?.('B5 thuần: đã chế và cất B5.', {
+                this.completedTargets += completedAmount;
+                this.#armBatchProtection('post-target-complete');
+                this.nextCycleAt = Date.now() + this.config.postCycleCooldownMs;
+                this.logger?.info?.('Crafting: đã chế và cất mục tiêu.', {
                     botId: this.botId,
                     completedAmount,
-                    completedB5Total: this.completedB5,
+                    completedTargetsTotal: this.completedTargets,
                     cycle: this.cycles
                 });
 
                 // Raw iron/gold received while crafting belongs to the next
-                // batch. Smelt it immediately after the completed B5 is
+                // batch. Smelt it immediately after the completed target is
                 // verified and stored. Failure is non-destructive: the already
                 // armed next-batch protection boundary will retry smelting
                 // before any later craft.
                 if (typeof this.b1Materials.preprocessForCraft === 'function'
                     && this.#generationCurrent(generation)) {
-                    this.setPhase('POST_B5_SMELTING');
-                    const postB5Smelting = createB1MaterialOperation({
-                        name: 'B5PostCraftSmelting',
+                    this.setPhase('POST_CRAFT_SMELTING');
+                    const postCraftSmelting = createB1MaterialOperation({
+                        name: 'PostCraftSmelting',
                         b1Materials: this.b1Materials,
                         action: 'preprocessForCraft'
                     });
-                    const smeltResult = await this.modeContext.run(postB5Smelting, {
+                    const smeltResult = await this.modeContext.run(postCraftSmelting, {
                         timeoutMs: null,
                         cancellationToken,
                         connectionGeneration: generation,
                         correlationId: this.batchId,
                         metadata: {
-                            subsystem: 'b5-craft',
-                            step: 'post-b5-smelting',
+                            subsystem: 'crafting',
+                            step: 'post-craft-smelting',
                             batchId: this.batchId
                         }
                     });
                     if (this.#generationCurrent(generation) && smeltResult?.success === false) {
-                        this.logger?.warn?.('B5 PURE: post-craft iron/gold smelting did not complete; next batch protection will retry it.', {
+                        this.logger?.warn?.('CRAFT: post-craft iron/gold smelting did not complete; next batch protection will retry it.', {
                             botId: this.botId,
-                            operation: 'B5CraftMode',
-                            step: 'post-b5-smelting',
+                            operation: 'CraftingMode',
+                            step: 'post-craft-smelting',
                             batchId: this.batchId,
                             errorCode: smeltResult?.error?.code || null,
                             reason: smeltResult?.message || null
@@ -744,9 +754,9 @@ class B5CraftModeService extends ManagedMode {
                         : 'WAITING_MATERIALS');
                 const wait = this.#recordNoProgress(blocker, data);
                 const log = wait.shouldAnnounce ? this.logger?.info : this.logger?.debug;
-                log?.call(this.logger, 'B5 PURE: cycle is waiting for a concrete prerequisite.', {
+                log?.call(this.logger, 'CRAFT: cycle is waiting for a concrete prerequisite.', {
                     botId: this.botId,
-                    operation: 'B5CraftMode',
+                    operation: 'CraftingMode',
                     step: 'cycle-result',
                     waitingReason: this.waitingReason,
                     blocker: blocker || null,
@@ -759,7 +769,7 @@ class B5CraftModeService extends ManagedMode {
             } else {
                 this.#resetNoProgress();
                 this.waitingReason = null;
-                        this.setPhase(data.completedTarget === true ? 'B5_COMPLETED' : 'RUNNING');
+                        this.setPhase(data.completedTarget === true ? 'COMPLETED' : 'RUNNING');
                 this.lastCycleDelayMs = this.config.craftLoopDelayMs;
                 await Timeout.delay(this.config.craftLoopDelayMs, { cancellationToken });
             }
@@ -797,7 +807,7 @@ class B5CraftModeService extends ManagedMode {
         reason = 'operator'
     } = {}) {
         const key = String(idempotencyKey || '').trim();
-        if (!/^[a-z0-9][a-z0-9:._-]{0,127}$/i.test(key)) return this.#retryRejected(Status.INVALID_INPUT, 'B5_RETRY_IDEMPOTENCY_KEY_INVALID', 'Khóa idempotency không hợp lệ.');
+        if (!/^[a-z0-9][a-z0-9:._-]{0,127}$/i.test(key)) return this.#retryRejected(Status.INVALID_INPUT, 'CRAFT_RETRY_IDEMPOTENCY_KEY_INVALID', 'Khóa idempotency không hợp lệ.');
         const fingerprint = JSON.stringify({
             expectedBotId: String(expectedBotId || ''),
             expectedGeneration: Number(expectedGeneration),
@@ -807,19 +817,19 @@ class B5CraftModeService extends ManagedMode {
         this.#trimRetryCache();
         const cached = this.protectionRetryRequests.get(key);
         if (cached) {
-            if (cached.fingerprint !== fingerprint) return this.#retryRejected(Status.INVALID_INPUT, 'B5_RETRY_IDEMPOTENCY_CONFLICT', 'Khóa idempotency đã được dùng cho một yêu cầu khác.');
+            if (cached.fingerprint !== fingerprint) return this.#retryRejected(Status.INVALID_INPUT, 'CRAFT_RETRY_IDEMPOTENCY_CONFLICT', 'Khóa idempotency đã được dùng cho một yêu cầu khác.');
             return cached.result;
         }
         const episode = this.protectionEpisode;
-        if (String(expectedBotId || '') !== this.botId) return this.#cacheRetry(key, fingerprint, this.#retryRejected(Status.INVALID_INPUT, 'B5_RETRY_WRONG_BOT', 'Yêu cầu thử lại không thuộc bot hiện tại.'));
+        if (String(expectedBotId || '') !== this.botId) return this.#cacheRetry(key, fingerprint, this.#retryRejected(Status.INVALID_INPUT, 'CRAFT_RETRY_WRONG_BOT', 'Yêu cầu thử lại không thuộc bot hiện tại.'));
         if (!this.enabled || this.paused || this.phase !== 'WAITING_BLOCKED' || !this.batchProtectionRequired || !episode || episode.state !== 'WAITING_BLOCKED') {
-            return this.#cacheRetry(key, fingerprint, this.#retryRejected(Status.NOT_READY, 'B5_RETRY_UNSAFE_PHASE', 'Bảo vệ kho hiện không ở trạng thái chờ bị chặn.'));
+            return this.#cacheRetry(key, fingerprint, this.#retryRejected(Status.NOT_READY, 'CRAFT_RETRY_UNSAFE_PHASE', 'Bảo vệ kho hiện không ở trạng thái chờ bị chặn.'));
         }
-        if (Number(expectedGeneration) !== Number(this.modeContext.generation())) return this.#cacheRetry(key, fingerprint, this.#retryRejected(Status.DISCONNECTED, 'B5_RETRY_STALE_GENERATION', 'Kết nối đã thay đổi; hãy tải trạng thái mới.'));
+        if (Number(expectedGeneration) !== Number(this.modeContext.generation())) return this.#cacheRetry(key, fingerprint, this.#retryRejected(Status.DISCONNECTED, 'CRAFT_RETRY_STALE_GENERATION', 'Kết nối đã thay đổi; hãy tải trạng thái mới.'));
         if (String(episodeId || '') !== episode.episodeId || String(incidentId || '') !== episode.correlationId) {
-            return this.#cacheRetry(key, fingerprint, this.#retryRejected(Status.INVALID_INPUT, 'B5_RETRY_STALE_EPISODE', 'Episode bảo vệ kho đã thay đổi; hãy tải trạng thái mới.'));
+            return this.#cacheRetry(key, fingerprint, this.#retryRejected(Status.INVALID_INPUT, 'CRAFT_RETRY_STALE_EPISODE', 'Episode bảo vệ kho đã thay đổi; hãy tải trạng thái mới.'));
         }
-        if (episode.operatorRetryRequested) return this.#cacheRetry(key, fingerprint, this.#retryRejected(Status.BUSY, 'B5_RETRY_ALREADY_REQUESTED', 'Một yêu cầu thử lại đang chờ xử lý.'));
+        if (episode.operatorRetryRequested) return this.#cacheRetry(key, fingerprint, this.#retryRejected(Status.BUSY, 'CRAFT_RETRY_ALREADY_REQUESTED', 'Một yêu cầu thử lại đang chờ xử lý.'));
         this.#requestProtectionRetry(reason);
         return this.#cacheRetry(key, fingerprint, Result.ok({
             accepted: true,
@@ -989,7 +999,7 @@ class B5CraftModeService extends ManagedMode {
             this.faultPolicy.recordBlocker(error, {
                 episodeId: episode.episodeId,
                 correlationId: episode.correlationId,
-                operation: 'B5CraftMode',
+                operation: 'CraftingMode',
                 step: blocker.step || 'storage-protection-boundary',
                 phase: 'WAITING_BLOCKED',
                 resource: blocker.resource,
@@ -999,8 +1009,8 @@ class B5CraftModeService extends ManagedMode {
         }
 
         const log = !same || exhausted ? this.logger?.warn : this.logger?.debug;
-        log?.call(this.logger, 'B5 PURE: storage protection is blocked; retry is bounded across loop cycles.', {
-            botId: this.botId, operation: 'B5CraftMode', step: 'storage-protection-blocked',
+        log?.call(this.logger, 'CRAFT: storage protection is blocked; retry is bounded across loop cycles.', {
+            botId: this.botId, operation: 'CraftingMode', step: 'storage-protection-blocked',
             batchId: this.batchId, episodeId: episode.episodeId,
             blocker: episode.blocker, state: episode.state
         });
@@ -1092,7 +1102,7 @@ class B5CraftModeService extends ManagedMode {
             await Timeout.delay(this.config.errorRetryMs, { cancellationToken });
             return;
         }
-        const error = result?.error || new Error(result?.message || 'B5 craft cycle failed.');
+        const error = result?.error || new Error(result?.message || 'crafting cycle failed.');
         throw error;
     }
 
@@ -1128,7 +1138,7 @@ class B5CraftModeService extends ManagedMode {
         const explicitOutputCount = Number(baseline?.output?.count);
         const legacyOutputCount = Number(baseline?.outputCountBefore ?? details?.before ?? 0);
         const outputId = details?.outputId || outcome?.outputId || null;
-        const completionContext = this.#b5CompletionContext(details);
+        const completionContext = this.#completionContext(details);
         const targetId = completionContext?.targetId || result?.data?.targetId || null;
         const targetVaultBeforeRaw = Number(completionContext?.targetVaultBefore);
         const operationId = details?.operationId || result?.meta?.operationId || null;
@@ -1180,9 +1190,9 @@ class B5CraftModeService extends ManagedMode {
             unresolvedPolls: 0,
             lastObserved: null
         };
-        this.logger?.warn?.('B5 PURE: craft outcome is uncertain; identical mutation is quarantined until fresh reconciliation.', {
+        this.logger?.warn?.('CRAFT: craft outcome is uncertain; identical mutation is quarantined until fresh reconciliation.', {
             botId: this.botId,
-            operation: 'B5CraftMode',
+            operation: 'CraftingMode',
             step: 'capture-craft-reconciliation',
             reconciliation: this.#compactReconciliation(this.pendingCraftReconciliation)
         });
@@ -1190,9 +1200,9 @@ class B5CraftModeService extends ManagedMode {
     }
 
 
-    #b5CompletionContext(details) {
+    #completionContext(details) {
         if (!details || typeof details !== 'object') return null;
-        const direct = details.b5CompletionContext;
+        const direct = details.b5CompletionContext || details.completionContext || null;
         if (direct?.finalChain === true && direct.targetId) {
             return {
                 finalChain: true,
@@ -1224,7 +1234,7 @@ class B5CraftModeService extends ManagedMode {
         this.setPhase('RECONCILING_CRAFT');
         this.waitingReason = 'craft-reconciliation';
 
-        const fresh = await this.b5Planning.inspectAdditionalFresh(1, {
+        const fresh = await this.craftingPlanning.inspectAdditionalFresh(1, {
             cancellationToken,
             expectedGeneration: generation
         });
@@ -1293,9 +1303,9 @@ class B5CraftModeService extends ManagedMode {
             pending.lastObserved.vaultDelta = vaultDelta;
             if (vaultDelta >= pending.expectedDelta) {
                 const provenance = this.#completionProvenanceFromPending(pending, pending.expectedDelta, 'fresh-pv2', generation);
-                this.#accountProvenB5Completion(provenance, pending.expectedDelta, 'fresh-pv2', generation);
+                this.#accountProvenCompletion(provenance, pending.expectedDelta, 'fresh-pv2', generation);
                 this.pendingCraftReconciliation = null;
-                this.pendingB5CompletionProvenance = null;
+                this.pendingCompletionProvenance = null;
                 this.waitingReason = null;
                 this.setPhase('RUNNING');
                 return true;
@@ -1303,9 +1313,9 @@ class B5CraftModeService extends ManagedMode {
         }
 
         if (outputDelta >= pending.expectedDelta) {
-            this.logger?.info?.('B5 PURE: uncertain craft reconciled by fresh expected-output state.', {
+            this.logger?.info?.('CRAFT: uncertain craft reconciled by fresh expected-output state.', {
                 botId: this.botId,
-                operation: 'B5CraftMode',
+                operation: 'CraftingMode',
                 step: 'reconcile-craft-outcome',
                 recipeId: pending.recipeId,
                 outputId: pending.outputId,
@@ -1314,7 +1324,7 @@ class B5CraftModeService extends ManagedMode {
                 attempts: pending.attempts
             });
             if (pending.isFinalTarget === true) {
-                this.pendingB5CompletionProvenance = this.#completionProvenanceFromPending(
+                this.pendingCompletionProvenance = this.#completionProvenanceFromPending(
                     pending,
                     pending.expectedDelta,
                     'fresh-inventory',
@@ -1322,6 +1332,7 @@ class B5CraftModeService extends ManagedMode {
                 );
             }
             this.pendingCraftReconciliation = null;
+            this.#releaseRequestReconciliation();
             this.waitingReason = null;
             this.setPhase('RUNNING');
             return true;
@@ -1378,10 +1389,10 @@ class B5CraftModeService extends ManagedMode {
         }
         if (barrierDecision.mayReplan && this.config.reconciliation.allowRetryAfterVerifiedNoEffect) {
             this.logger?.info?.(baselineSuperseded
-                ? 'B5 PURE: fresh material state superseded the uncertain baseline; planner may safely re-plan.'
-                : 'B5 PURE: repeated fresh reads proved observable inputs and output unchanged; planner may safely re-plan.', {
+                ? 'CRAFT: fresh material state superseded the uncertain baseline; planner may safely re-plan.'
+                : 'CRAFT: repeated fresh reads proved observable inputs and output unchanged; planner may safely re-plan.', {
                 botId: this.botId,
-                operation: 'B5CraftMode',
+                operation: 'CraftingMode',
                 step: 'reconcile-craft-outcome',
                 recipeId: pending.recipeId,
                 outputId: pending.outputId,
@@ -1390,6 +1401,7 @@ class B5CraftModeService extends ManagedMode {
                 noEffectProofPasses: pending.noEffectProofPasses
             });
             this.pendingCraftReconciliation = null;
+            this.#releaseRequestReconciliation();
             this.waitingReason = null;
             this.setPhase('RUNNING');
             return true;
@@ -1406,9 +1418,9 @@ class B5CraftModeService extends ManagedMode {
                 : (allExpectedInputsObservable ? 'craft-no-effect-not-proven' : 'craft-inputs-not-observable');
             this.setPhase('WAITING_RECONCILE');
             if (pending.unresolvedPolls === 1 || pending.unresolvedPolls % 20 === 0) {
-                this.logger?.warn?.('B5 PURE: craft outcome remains unresolved; automatic re-click stays blocked.', {
+                this.logger?.warn?.('CRAFT: craft outcome remains unresolved; automatic re-click stays blocked.', {
                     botId: this.botId,
-                    operation: 'B5CraftMode',
+                    operation: 'CraftingMode',
                     step: 'reconcile-craft-outcome',
                     mutationObserved,
                     allExpectedInputsObservable,
@@ -1462,32 +1474,32 @@ class B5CraftModeService extends ManagedMode {
         };
     }
 
-    async #reconcilePendingB5CompletionProvenance(generation, cancellationToken) {
-        const provenance = this.pendingB5CompletionProvenance;
+    async #reconcilePendingCompletionProvenance(generation, cancellationToken) {
+        const provenance = this.pendingCompletionProvenance;
         if (!provenance) return true;
         if (provenance.batchId !== this.batchId) {
-            this.waitingReason = 'b5-completion-provenance-batch-mismatch';
+            this.waitingReason = 'completion-provenance-batch-mismatch';
             this.setPhase('WAITING_RECONCILE');
             await Timeout.delay(this.config.reconciliation.unresolvedPollMs, { cancellationToken });
             return false;
         }
         if (Number(provenance.recoveryGeneration) === Number(generation)) return true;
 
-        this.waitingReason = 'b5-completion-reconcile';
-        this.setPhase('RECONCILING_B5_COMPLETION');
-        const fresh = await this.b5Planning.inspectAdditionalFresh(1, {
+        this.waitingReason = 'completion-reconcile';
+        this.setPhase('RECONCILING_COMPLETION');
+        const fresh = await this.craftingPlanning.inspectAdditionalFresh(1, {
             cancellationToken,
             expectedGeneration: generation
         });
         if (fresh?.success === false) {
             this.lastResult = this.#compactResult(fresh);
-            this.waitingReason = 'b5-completion-reconcile-read-failed';
+            this.waitingReason = 'completion-reconcile-read-failed';
             this.setPhase('WAITING_RECONCILE');
             await Timeout.delay(this.config.errorRetryMs, { cancellationToken });
             return false;
         }
         if (!this.#generationCurrent(generation)) {
-            await this.#waitForFreshGeneration(cancellationToken, 'generation-changed-during-b5-completion-reconciliation-read');
+            await this.#waitForFreshGeneration(cancellationToken, 'generation-changed-during-completion-reconciliation-read');
             return false;
         }
 
@@ -1508,8 +1520,8 @@ class B5CraftModeService extends ManagedMode {
         };
 
         if (vaultDelta >= provenAmount) {
-            this.#accountProvenB5Completion(provenance, provenAmount, 'fresh-pv2-reconnect', generation);
-            this.pendingB5CompletionProvenance = null;
+            this.#accountProvenCompletion(provenance, provenAmount, 'fresh-pv2-reconnect', generation);
+            this.pendingCompletionProvenance = null;
             this.waitingReason = null;
             this.setPhase('RUNNING');
             return true;
@@ -1524,13 +1536,13 @@ class B5CraftModeService extends ManagedMode {
 
         provenance.recoveryGeneration = null;
         provenance.unresolvedPolls = Number(provenance.unresolvedPolls || 0) + 1;
-        this.waitingReason = 'b5-completion-reconcile-ambiguous';
+        this.waitingReason = 'completion-reconcile-ambiguous';
         this.setPhase('WAITING_RECONCILE');
         if (provenance.unresolvedPolls === 1 || provenance.unresolvedPolls % 20 === 0) {
-            this.logger?.warn?.('B5 PURE: proven uncertain B5 is not yet physically resolvable on the current generation.', {
+            this.logger?.warn?.('CRAFT: proven uncertain target is not yet physically resolvable on the current generation.', {
                 botId: this.botId,
-                operation: 'B5CraftMode',
-                step: 'reconcile-b5-completion-provenance',
+                operation: 'CraftingMode',
+                step: 'reconcile-completion-provenance',
                 markerId: provenance.markerId,
                 originConnectionGeneration: provenance.originConnectionGeneration,
                 reconciliationGeneration: generation,
@@ -1541,8 +1553,23 @@ class B5CraftModeService extends ManagedMode {
         return false;
     }
 
-    #completionProvenanceFromPending(pending, amount, source, reconciliationGeneration = this.modeContext.generation()) {
-        const provenAmount = Math.max(1, Number(amount || pending.expectedDelta || 1));
+    // A concluded reconciliation must release the request-level WAIT gate:
+    // verified no-effect / verified output observation clears
+    // awaitingReconciliation without crediting any target unit (amount 0).
+    #releaseRequestReconciliation({ completedAmount = 0, targetId = null } = {}) {
+        if (this.reconciliationRequest && this.reconciliationRequest === this.requestExecution) {
+            this.reconciliationRequest.resolveReconciliation({
+                verified: true,
+                generation: this.modeContext.generation(),
+                expectedGeneration: this.modeContext.generation(),
+                targetId,
+                completedAmount
+            });
+        }
+        this.reconciliationRequest = null;
+    }
+
+    #completionProvenanceFromPending(pending, amount, source, reconciliationGeneration = this.modeContext.generation()) {        const provenAmount = Math.max(1, Number(amount || pending.expectedDelta || 1));
         return {
             markerId: pending.completionMarkerId,
             batchId: pending.batchId,
@@ -1564,8 +1591,8 @@ class B5CraftModeService extends ManagedMode {
         };
     }
 
-    #accountProvenB5Completion(provenance, amount, source, verificationGeneration = this.modeContext.generation()) {
-        if (!provenance?.markerId || provenance.markerId === this.lastAccountedB5ProvenanceId) return false;
+    #accountProvenCompletion(provenance, amount, source, verificationGeneration = this.modeContext.generation()) {
+        if (!provenance?.markerId || provenance.markerId === this.lastAccountedProvenanceId) return false;
         if (provenance.batchId !== this.batchId
             || Number(verificationGeneration) !== Number(this.modeContext.generation())) return false;
         const provenAmount = Math.max(1, Number(provenance.amount || 1));
@@ -1578,17 +1605,17 @@ class B5CraftModeService extends ManagedMode {
             });
         }
         this.reconciliationRequest = null;
-        this.lastAccountedB5ProvenanceId = provenance.markerId;
-        this.completedB5 += completedAmount;
-        this.#armBatchProtection('post-b5-complete');
-        this.nextB5CycleAt = Date.now() + this.config.postB5CooldownMs;
-        this.logger?.info?.('B5 PURE: reconciled B5 was verified and stored; next batch protection armed.', {
+        this.lastAccountedProvenanceId = provenance.markerId;
+        this.completedTargets += completedAmount;
+        this.#armBatchProtection('post-target-complete');
+        this.nextCycleAt = Date.now() + this.config.postCycleCooldownMs;
+        this.logger?.info?.('CRAFT: reconciled target was verified and stored; next batch protection armed.', {
             botId: this.botId,
-            operation: 'B5CraftMode',
-            step: 'account-reconciled-b5',
+            operation: 'CraftingMode',
+            step: 'account-reconciled-target',
             source,
             completedAmount,
-            completedB5Total: this.completedB5,
+            completedTargetsTotal: this.completedTargets,
             verificationGeneration,
             provenance
         });
@@ -1727,19 +1754,19 @@ class B5CraftModeService extends ManagedMode {
     #normalizeConfig(config) {
         const positive = (key, fallback) => {
             const value = Number(config?.[key] ?? fallback);
-            if (!Number.isFinite(value) || value <= 0) throw new TypeError(`b5CraftMode.${key} phải lớn hơn 0.`);
+            if (!Number.isFinite(value) || value <= 0) throw new TypeError(`craftingMode.${key} phải lớn hơn 0.`);
             return value;
         };
         const stabilityConfig = config?.stability || {};
         const positiveStability = (key, fallback) => {
             const value = Number(stabilityConfig?.[key] ?? fallback);
-            if (!Number.isFinite(value) || value <= 0) throw new TypeError(`b5CraftMode.stability.${key} phải lớn hơn 0.`);
+            if (!Number.isFinite(value) || value <= 0) throw new TypeError(`craftingMode.stability.${key} phải lớn hơn 0.`);
             return value;
         };
         const reconciliationConfig = config?.reconciliation || {};
         const positiveReconciliation = (key, fallback) => {
             const value = Number(reconciliationConfig?.[key] ?? fallback);
-            if (!Number.isFinite(value) || value <= 0) throw new TypeError(`b5CraftMode.reconciliation.${key} phải lớn hơn 0.`);
+            if (!Number.isFinite(value) || value <= 0) throw new TypeError(`craftingMode.reconciliation.${key} phải lớn hơn 0.`);
             return value;
         };
         return Object.freeze({
@@ -1751,7 +1778,7 @@ class B5CraftModeService extends ManagedMode {
             errorRetryMs: positive('errorRetryMs', 5000),
             errorRetryMaxMs: positive('errorRetryMaxMs', 30000),
             craftLoopDelayMs: positive('craftLoopDelayMs', 300),
-            postB5CooldownMs: positive('postB5CooldownMs', 1800000),
+            postCycleCooldownMs: positive('postCycleCooldownMs', 1800000),
             stability: Object.freeze({
                 noProgressBackoffEnabled: stabilityConfig.noProgressBackoffEnabled !== false,
                 noProgressBaseDelayMs: positiveStability('noProgressBaseDelayMs', 10000),
@@ -1770,4 +1797,4 @@ class B5CraftModeService extends ManagedMode {
 
 }
 
-module.exports = B5CraftModeService;
+module.exports = CraftingModeService;

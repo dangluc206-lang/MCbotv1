@@ -5,8 +5,8 @@
  * Reads tiers from configuration data; `partition` splits a CraftingPlan into
  * reserve steps vs final steps, and `stageKind` names a step kind from tier
  * metadata — never from hard-coded tier names. Generic paths carry these
- * generic kinds ('TARGET', 'RESERVE', 'PREPARE_BASE', 'INTERMEDIATE'); the B5
- * boundary translates them to its legacy tier names for compatibility.
+ * generic kinds ('TARGET', 'RESERVE', 'PREPARE_BASE', 'INTERMEDIATE');
+ * consumers translate them to their own legacy names for compatibility.
  */
 class CraftStageClassifier {
     constructor({ tiers = {}, reserveTiers = [], targetKind = 'TARGET' } = {}) {

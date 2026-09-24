@@ -1,8 +1,8 @@
 'use strict';
 
-class B5BatchCoordinator {
+class CraftBatchCoordinator {
     constructor({ botId } = {}) {
-        if (!botId) throw new TypeError('B5BatchCoordinator botId is required.');
+        if (!botId) throw new TypeError('CraftBatchCoordinator botId is required.');
         this.botId = String(botId);
         this.sequence = 0;
     }
@@ -10,11 +10,11 @@ class B5BatchCoordinator {
     next(trigger = 'unspecified') {
         this.sequence += 1;
         return Object.freeze({
-            batchId: `${this.botId}:b5-batch:${this.sequence}`,
+            batchId: `${this.botId}:craft-batch:${this.sequence}`,
             sequence: this.sequence,
             trigger: String(trigger)
         });
     }
 }
 
-module.exports = B5BatchCoordinator;
+module.exports = CraftBatchCoordinator;

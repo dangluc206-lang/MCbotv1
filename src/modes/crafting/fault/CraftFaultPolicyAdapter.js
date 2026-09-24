@@ -1,8 +1,8 @@
 'use strict';
 
-class B5FaultPolicyAdapter {
+class CraftFaultPolicyAdapter {
     constructor(policy) {
-        if (!policy) throw new TypeError('B5FaultPolicyAdapter policy is required.');
+        if (!policy) throw new TypeError('CraftFaultPolicyAdapter policy is required.');
         this.policy = policy;
     }
 
@@ -16,4 +16,4 @@ class B5FaultPolicyAdapter {
     snapshot(...args) { return this.policy.snapshot(...args); }
 }
 
-module.exports = B5FaultPolicyAdapter;
+module.exports = CraftFaultPolicyAdapter;

@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const B5CraftModeService = require('../../../src/modes/b5-craft/B5CraftModeService');
+const CraftingModeService = require('../../../src/modes/crafting/CraftingModeService');
 const ModeCatalog = require('../../../src/modes/ModeCatalog');
 const ModeCoordinator = require('../../../src/modes/ModeCoordinator');
 const ModeContext = require('../../../src/modes/ModeContext');
@@ -24,9 +24,19 @@ async function waitUntil(predicate, timeoutMs = 500) {
     }
 }
 
-function harness({ enabled = true, generationRef = { value: 7 }, craftImplementation = null, planningImplementation = null, protectionImplementation = null, protectionEvidenceKeyImplementation = null, stability = null, reconciliation = null, logger = null, failurePolicy = null, failurePublisher = null } = {}) {
+// Hermetic suite: every harness-created mode is force-disabled after each test
+// so a leaked craft loop can never starve or pollute a later test.
+let harnessMode = null;
+test.afterEach(async () => {
+    if (harnessMode) {
+        try { await harnessMode.disable('afterEach cleanup'); } catch { /* already stopped */ }
+        harnessMode = null;
+    }
+});
+
+function harness({ enabled = true, request = true, requestTarget = 'super_alloy', generationRef = { value: 7 }, craftImplementation = null, planningImplementation = null, protectionImplementation = null, protectionEvidenceKeyImplementation = null, stability = null, reconciliation = null, logger = null, failurePolicy = null, failurePublisher = null } = {}) {
     const calls = { home: 0, protect: 0, protectOptions: [], postSmelt: 0, operationRuns: [], inspect: 0, craft: 0, craftOptions: [], planningConfigs: [], automationConfigs: [], skyDemand: [], skyRelease: [], sequence: [] };
-    const catalog = new ModeCatalog([{ id: 'b5-craft', serviceName: 'b5CraftMode', label: 'Chế B5 thuần' }]).seal();
+    const catalog = new ModeCatalog([{ id: 'crafting', serviceName: 'craftingMode', label: 'Chế B5 thuần' }]).seal();
     const caps = new CapabilityRegistry({ botId: 'bot-01' }).seal();
     const eventBus = new EventBus();
     let operationSequence = 0;
@@ -82,25 +92,45 @@ function harness({ enabled = true, generationRef = { value: 7 }, craftImplementa
             calls.craft += 1;
             calls.craftOptions.push(options);
             calls.sequence.push('craft');
-            if (craftImplementation) return craftImplementation(options, calls);
-            return { success: true, data: { complete: false, waitingForMaterials: true, productive: false, blockingReasons: [{ status: 'waiting', reason: 'waiting-for-complete-b2-batch', baseId: 'diamond' }] } };
+            let result = craftImplementation
+                ? await craftImplementation(options, calls)
+                : { success: true, data: { complete: false, waitingForMaterials: true, productive: false, blockingReasons: [{ status: 'waiting', reason: 'waiting-for-complete-b2-batch', baseId: 'diamond' }] } };
+            // Production automation results always carry the credited target id;
+            // merge it in so fixtures express only what they are testing.
+            if (result?.data && !result.data.targetId && options.targetId) {
+                result = { ...result, data: { ...result.data, targetId: options.targetId } };
+            }
+            return result;
         },
         status() { return {}; },
         reconfigure(config) { calls.automationConfigs.push(config); }
     };
-    const mode = new B5CraftModeService({
+    b5Automation.runTarget = options => b5Automation.runNext(options);
+    const mode = new CraftingModeService({
         botId: 'bot-01', modeContext, modeCoordinator: coordinator, catalog,
-        island, skyTarget: 'sky1', skyblockReadiness: { isGenerationReady: () => true, requireTarget(target, options) { calls.skyDemand.push({ target, options }); }, releaseTarget(owner) { calls.skyRelease.push(owner); } }, b1Materials, b5Planning, b5Automation,
+        island, skyTarget: 'sky1', skyblockReadiness: { isGenerationReady: () => true, requireTarget(target, options) { calls.skyDemand.push({ target, options }); }, releaseTarget(owner) { calls.skyRelease.push(owner); } }, b1Materials, craftingPlanning: b5Planning, automation: b5Automation,
         failurePolicy, failurePublisher,
         logger,
         config: {
             enabled, teleportHomeOnEnable: true, autoResumeOnReconnect: true,
             pollIntervalMs: 5, disconnectedPollMs: 5, errorRetryMs: 5,
-            errorRetryMaxMs: 20, craftLoopDelayMs: 5, postB5CooldownMs: 5,
+            errorRetryMaxMs: 20, craftLoopDelayMs: 5, postCycleCooldownMs: 5,
             stability: stability || { noProgressBackoffEnabled: true, noProgressBaseDelayMs: 5, noProgressMaxDelayMs: 20, sameBlockerThreshold: 2, logEveryNthRepeat: 3 },
             reconciliation: reconciliation || { maxFreshReads: 2, retryMs: 2, unresolvedPollMs: 5, allowRetryAfterVerifiedNoEffect: true }
         }
     });
+    // Generic mode never infers a target: tests that exercise the craft loop
+    // must state the operator request explicitly, exactly like production.
+    mode.craftingItemRegistry = {
+        resolveById: id => ({ id, displayName: id }),
+        getRecipe: () => ({ output: requestTarget, outputAmount: 1 })
+    };
+    harnessMode = mode;
+    if (request) {
+        // FIXED (not ALL): a verified material wait must not terminalize the
+        // campaign request mid-test, mirroring production FIXED-mode requests.
+        assert.equal(mode.setCraftRequest({ targetItemId: requestTarget, quantity: 5 }).success, true);
+    }
     return { mode, coordinator, calls };
 }
 
@@ -113,12 +143,12 @@ test('dynamic request reconciles a verified deposit and idles without another cr
         resolveById: id => ({ id, displayName: id }),
         getRecipe: () => ({ output: 'super_alloy', outputAmount: 1 })
     };
-    mode.b5Automation.runTarget = options => mode.b5Automation.runNext(options);
+    mode.automation.runTarget = options => mode.automation.runNext(options);
     assert.equal(mode.setCraftRequest({ targetItemId: 'super_alloy', quantity: 1 }).success, true);
     await coordinator.initialize(); await coordinator.start();
     try {
         await mode.enable();
-        await waitUntil(() => mode.status().details.completedB5 === 1);
+        await waitUntil(() => mode.status().details.completedTargets === 1);
         assert.equal(mode.requestExecution.snapshot().state, 'COMPLETED',
             'mode accounted verified PV2 deposit but did not resolve its request');
         await waitUntil(() => mode.status().phase === 'WAITING_REQUEST');
@@ -141,14 +171,14 @@ test('a replacement request set during reconciliation never inherits the old cre
         resolveById: id => ({ id, displayName: id }),
         getRecipe: () => ({ output: 'super_alloy', outputAmount: 1 })
     };
-    mode.b5Automation.runTarget = options => mode.b5Automation.runNext(options);
+    mode.automation.runTarget = options => mode.automation.runNext(options);
     assert.equal(mode.setCraftRequest({ targetItemId: 'super_alloy', quantity: 1 }).success, true);
     await coordinator.initialize(); await coordinator.start();
     try {
         await mode.enable();
         await waitUntil(() => mode.status().details.pendingCraftReconciliation !== null);
         assert.equal(mode.setCraftRequest({ targetItemId: 'carbon', quantity: 1 }).success, true, 'replacement request must be accepted while reconciliation is in flight');
-        await waitUntil(() => mode.status().details.completedB5 === 1);
+        await waitUntil(() => mode.status().details.completedTargets === 1);
         const replacement = mode.requestExecution;
         assert.equal(replacement.snapshot().targetItemId, 'carbon');
         assert.equal(replacement.snapshot().state, 'PENDING', 'old deposit must not credit the replacement request');
@@ -188,14 +218,14 @@ test('B5 craft mode demands its configured Sky target, protects storage first, t
     assert.equal(calls.home, 1);
     assert.equal(calls.protect, 1);
     assert.equal(calls.protectOptions[0].trigger, 'explicit-enable');
-    assert.match(calls.protectOptions[0].batchId, /^bot-01:b5-batch:/);
+    assert.match(calls.protectOptions[0].batchId, /^bot-01:craft-batch:/);
     assert.ok(calls.craft >= 1);
     assert.equal(calls.sequence[0], 'protect');
     assert.ok(calls.craftOptions.every(options => options.freshInspection === true));
     assert.ok(calls.craftOptions.every(options => options.decompressionPolicy === 'unbounded'));
     assert.equal(calls.inspect, 0, 'runNext owns the fresh planning snapshot');
     assert.ok(calls.skyDemand.some(call => call.target === 'sky1'));
-    assert.deepEqual(calls.skyRelease, ['b5-craft']);
+    assert.deepEqual(calls.skyRelease, ['crafting']);
     assert.equal(mode.status().details.policy.movement, false);
     assert.equal(mode.status().details.policy.smelting, true);
     assert.equal(mode.publicConfig().storageProtection, undefined);
@@ -208,7 +238,7 @@ test('B5 storage protection boundary disables only its root execution deadline',
     await waitUntil(() => calls.protect >= 1, 200);
     await mode.disable('test complete');
 
-    const protectionRun = calls.operationRuns.find(run => run.operationName === 'B5StorageProtectionBoundary');
+    const protectionRun = calls.operationRuns.find(run => run.operationName === 'CraftStorageProtectionBoundary');
     assert.ok(protectionRun);
     assert.equal(protectionRun.timeoutMs, null);
 });
@@ -285,7 +315,7 @@ test('B5 craft mode discards stale cycle results when connection generation chan
     await new Promise(resolve => setTimeout(resolve, 15));
     await mode.disable('test complete');
     assert.ok(calls.craft >= 1);
-    assert.equal(mode.status().details.completedB5, 0, 'stale generation must not count a B5 completion');
+    assert.equal(mode.status().details.completedTargets, 0, 'stale generation must not count a B5 completion');
     assert.ok(mode.status().details.staleGenerationAborts >= 1);
 });
 
@@ -681,7 +711,7 @@ test('B5 craft arms exactly one post-B5 protection boundary before the next batc
     await mode.disable('test complete');
     assert.equal(calls.protect, 2);
     assert.equal(calls.protectOptions[0].trigger, 'explicit-enable');
-    assert.equal(calls.protectOptions[1].trigger, 'post-b5-complete');
+    assert.equal(calls.protectOptions[1].trigger, 'post-target-complete');
     assert.notEqual(calls.protectOptions[0].batchId, calls.protectOptions[1].batchId);
 });
 
@@ -891,7 +921,7 @@ test('XP-014 guarded operator retry accepts only the current blocked episode and
             incidentId: episode.correlationId, idempotencyKey: 'stale-retry'
         });
         assert.equal(stale.success, false);
-        assert.equal(stale.error.code, 'B5_RETRY_STALE_GENERATION');
+        assert.equal(stale.error.code, 'CRAFT_RETRY_STALE_GENERATION');
 
         const request = {
             expectedBotId: 'bot-01', expectedGeneration: 7, episodeId: episode.episodeId,
@@ -903,7 +933,7 @@ test('XP-014 guarded operator retry accepts only the current blocked episode and
         assert.equal(duplicate, accepted);
         const conflict = mode.requestStorageProtectionRetry({ ...request, expectedGeneration: 6 });
         assert.equal(conflict.success, false);
-        assert.equal(conflict.error.code, 'B5_RETRY_IDEMPOTENCY_CONFLICT');
+        assert.equal(conflict.error.code, 'CRAFT_RETRY_IDEMPOTENCY_CONFLICT');
         const deadline = Date.now() + 600;
         while (calls.protect < 4 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 2));
         assert.ok(calls.protect >= 4, JSON.stringify(mode.status()));
@@ -952,7 +982,7 @@ function uncertainFinalB5Result({ generation = 7, outputCountBefore = 0, vaultBe
         details: {
             recipeId: 'super_alloy',
             outputId: 'super_alloy',
-            b5CompletionContext: { finalChain: true, targetId: 'super_alloy', targetVaultBefore: vaultBefore },
+            completionContext: { finalChain: true, targetId: 'super_alloy', targetVaultBefore: vaultBefore },
             amount: 1,
             expectedDelta: 1,
             operationId,
@@ -1138,15 +1168,15 @@ test('uncertain final B5 proven already stored in PV2 accounts once and protects
     const status = mode.status();
     await mode.disable('test complete');
 
-    assert.equal(status.details.completedB5, 1);
+    assert.equal(status.details.completedTargets, 1);
     assert.equal(calls.protectOptions[0].trigger, 'explicit-enable');
-    assert.equal(calls.protectOptions[1].trigger, 'post-b5-complete');
+    assert.equal(calls.protectOptions[1].trigger, 'post-target-complete');
     const firstCraft = calls.sequence.indexOf('craft');
     const secondProtect = calls.sequence.indexOf('protect', 1);
     const secondCraft = calls.sequence.indexOf('craft', firstCraft + 1);
     assert.ok(firstCraft >= 0 && secondProtect > firstCraft && secondCraft > secondProtect,
         `next craft must be after post-B5 protection: ${calls.sequence.join(' -> ')}`);
-    assert.equal(status.details.pendingB5CompletionProvenance, null);
+    assert.equal(status.details.pendingCompletionProvenance, null);
 });
 
 test('uncertain final B5 proven in inventory arms next protection only after verified recovery deposit', async () => {
@@ -1184,8 +1214,8 @@ test('uncertain final B5 proven in inventory arms next protection only after ver
     const status = mode.status();
     await mode.disable('test complete');
 
-    assert.equal(status.details.completedB5, 1);
-    assert.equal(calls.protectOptions[1].trigger, 'post-b5-complete');
+    assert.equal(status.details.completedTargets, 1);
+    assert.equal(calls.protectOptions[1].trigger, 'post-target-complete');
     const crafts = calls.sequence.reduce((acc, value, index) => { if (value === 'craft') acc.push(index); return acc; }, []);
     const protects = calls.sequence.reduce((acc, value, index) => { if (value === 'protect') acc.push(index); return acc; }, []);
     assert.ok(crafts[0] < crafts[1], 'uncertain craft must be followed by recovery');
@@ -1215,7 +1245,7 @@ test('startup orphan B5 recovery does not invent a post-B5 boundary without unce
     await mode.disable('test complete');
 
     assert.equal(calls.protect, 1, 'orphan recovery must not create a fake post-B5 boundary');
-    assert.equal(status.details.completedB5, 0);
+    assert.equal(status.details.completedTargets, 0);
 });
 
 test('uncertain final B5 can fresh-reconcile and recover on a replacement generation without stale mutation', async () => {
@@ -1254,9 +1284,9 @@ test('uncertain final B5 can fresh-reconcile and recover on a replacement genera
     const status = mode.status();
     await mode.disable('test complete');
 
-    assert.equal(status.details.completedB5, 1);
+    assert.equal(status.details.completedTargets, 1);
     assert.ok(freshCall >= 2, 'replacement generation must perform a fresh physical reconciliation');
-    assert.equal(calls.protectOptions.filter(entry => entry.trigger === 'post-b5-complete').length, 1);
+    assert.equal(calls.protectOptions.filter(entry => entry.trigger === 'post-target-complete').length, 1);
     const protect2 = calls.sequence.indexOf('protect', 1);
     const crafts = calls.sequence.reduce((out, value, index) => { if (value === 'craft') out.push(index); return out; }, []);
     assert.ok(protect2 > crafts[1] && protect2 < crafts[2], `post gate must separate recovery from next craft: ${calls.sequence.join(' -> ')}`);
@@ -1287,12 +1317,12 @@ test('generation change after inventory proof rebinds provenance by fresh read b
     });
     await coordinator.initialize(); await coordinator.start();
     assert.equal((await mode.enable()).success, true);
-    await waitUntil(() => calls.protect >= 2 && mode.status().details.completedB5 === 1, 900);
+    await waitUntil(() => calls.protect >= 2 && mode.status().details.completedTargets === 1, 900);
     const status = mode.status();
     await mode.disable('test complete');
-    assert.equal(status.details.completedB5, 1);
+    assert.equal(status.details.completedTargets, 1);
     assert.ok(freshCall >= 2, 'generation 8 must fresh-read before retrying recovery');
-    assert.equal(calls.protectOptions.filter(entry => entry.trigger === 'post-b5-complete').length, 1);
+    assert.equal(calls.protectOptions.filter(entry => entry.trigger === 'post-target-complete').length, 1);
 });
 
 test('repeated recovery callbacks for one uncertain final B5 account and arm exactly once', async () => {
@@ -1324,8 +1354,8 @@ test('repeated recovery callbacks for one uncertain final B5 account and arm exa
     const status = mode.status();
     await mode.disable('test complete');
 
-    assert.equal(status.details.completedB5, 1, 'same uncertain operation must be accounted once');
-    assert.equal(calls.protectOptions.filter(entry => entry.trigger === 'post-b5-complete').length, 1,
+    assert.equal(status.details.completedTargets, 1, 'same uncertain operation must be accounted once');
+    assert.equal(calls.protectOptions.filter(entry => entry.trigger === 'post-target-complete').length, 1,
         'same uncertain operation must arm exactly one post-B5 gate');
 });
 
@@ -1333,8 +1363,8 @@ test('repeated recovery callbacks for one uncertain final B5 account and arm exa
 test('real StepRunner final-B5 error shape is normalized before B5CraftMode capture and arms post gate after PV2 proof', async () => {
     const runtimeResult = await actualWrappedUncertainFinalChainResult({ leafOutputId: 'super_alloy', vaultBefore: 10 });
     assert.equal(runtimeResult.error.code, 'CRAFTING_OUTCOME_UNCERTAIN');
-    assert.equal(runtimeResult.error.details.b5CompletionContext.targetId, 'super_alloy');
-    assert.equal(runtimeResult.error.details.b5CompletionContext.targetVaultBefore, 10);
+    assert.equal(runtimeResult.error.details.completionContext.targetId, 'super_alloy');
+    assert.equal(runtimeResult.error.details.completionContext.targetVaultBefore, 10);
     assert.ok(Array.isArray(runtimeResult.error.details.parentFlow));
 
     let craftCall = 0;
@@ -1351,16 +1381,16 @@ test('real StepRunner final-B5 error shape is normalized before B5CraftMode capt
     });
     await coordinator.initialize(); await coordinator.start();
     assert.equal((await mode.enable()).success, true);
-    await waitUntil(() => mode.status().details.completedB5 === 1 && calls.protect >= 2, 900);
+    await waitUntil(() => mode.status().details.completedTargets === 1 && calls.protect >= 2, 900);
     const status = mode.status();
     await mode.disable('test complete');
-    assert.equal(status.details.completedB5, 1);
-    assert.equal(calls.protectOptions.filter(entry => entry.trigger === 'post-b5-complete').length, 1);
+    assert.equal(status.details.completedTargets, 1);
+    assert.equal(calls.protectOptions.filter(entry => entry.trigger === 'post-target-complete').length, 1);
 });
 
 test('real StepRunner uncertain B4 inside final chain is not classified as final B5 completion', async () => {
     const runtimeResult = await actualWrappedUncertainFinalChainResult({ leafOutputId: 'alloy_b4', vaultBefore: 10 });
-    assert.equal(runtimeResult.error.details.b5CompletionContext.targetId, 'super_alloy');
+    assert.equal(runtimeResult.error.details.completionContext.targetId, 'super_alloy');
     assert.equal(runtimeResult.error.details.outputId, 'alloy_b4');
     let craftCall = 0;
     const { mode, coordinator, calls } = harness({
@@ -1379,8 +1409,8 @@ test('real StepRunner uncertain B4 inside final chain is not classified as final
     await waitUntil(() => calls.craft >= 2, 500);
     const status = mode.status();
     await mode.disable('test complete');
-    assert.equal(status.details.completedB5, 0);
-    assert.equal(calls.protectOptions.filter(entry => entry.trigger === 'post-b5-complete').length, 0);
+    assert.equal(status.details.completedTargets, 0);
+    assert.equal(calls.protectOptions.filter(entry => entry.trigger === 'post-target-complete').length, 0);
 });
 
 test('recovery accounts only provenance amount when recovery also deposits extra orphan B5', async () => {
@@ -1401,11 +1431,11 @@ test('recovery accounts only provenance amount when recovery also deposits extra
     });
     await coordinator.initialize(); await coordinator.start();
     assert.equal((await mode.enable()).success, true);
-    await waitUntil(() => mode.status().details.completedB5 === 1 && calls.protect >= 2, 700);
+    await waitUntil(() => mode.status().details.completedTargets === 1 && calls.protect >= 2, 700);
     const status = mode.status();
     await mode.disable('test complete');
-    assert.equal(status.details.completedB5, 1);
-    assert.equal(calls.protectOptions.filter(entry => entry.trigger === 'post-b5-complete').length, 1);
+    assert.equal(status.details.completedTargets, 1);
+    assert.equal(calls.protectOptions.filter(entry => entry.trigger === 'post-target-complete').length, 1);
 });
 
 test('recovery below provenance amount does not account, clear provenance, or arm a post gate', async () => {
@@ -1433,9 +1463,9 @@ test('recovery below provenance amount does not account, clear provenance, or ar
     await new Promise(resolve => setTimeout(resolve, 30));
     const status = mode.status();
     await mode.disable('test complete');
-    assert.equal(status.details.completedB5, 0);
-    assert.ok(status.details.pendingB5CompletionProvenance);
-    assert.equal(calls.protectOptions.filter(entry => entry.trigger === 'post-b5-complete').length, 0);
+    assert.equal(status.details.completedTargets, 0);
+    assert.ok(status.details.pendingCompletionProvenance);
+    assert.equal(calls.protectOptions.filter(entry => entry.trigger === 'post-target-complete').length, 0);
 });
 
 test('replacement generation fresh PV2 proof accounts original uncertain marker exactly once', async () => {
@@ -1460,11 +1490,11 @@ test('replacement generation fresh PV2 proof accounts original uncertain marker 
     });
     await coordinator.initialize(); await coordinator.start();
     assert.equal((await mode.enable()).success, true);
-    await waitUntil(() => mode.status().details.completedB5 === 1 && calls.protect >= 2, 800);
+    await waitUntil(() => mode.status().details.completedTargets === 1 && calls.protect >= 2, 800);
     const status = mode.status();
     await mode.disable('test complete');
-    assert.equal(status.details.completedB5, 1);
-    assert.equal(calls.protectOptions.filter(entry => entry.trigger === 'post-b5-complete').length, 1);
+    assert.equal(status.details.completedTargets, 1);
+    assert.equal(calls.protectOptions.filter(entry => entry.trigger === 'post-target-complete').length, 1);
     assert.ok(freshCall >= 2);
 });
 
@@ -1501,8 +1531,8 @@ test('replacement generation can prove final uncertain click had no effect and s
     await waitUntil(() => calls.craft >= 2, 700);
     const status = mode.status();
     await mode.disable('test complete');
-    assert.equal(status.details.completedB5, 0);
-    assert.equal(calls.protectOptions.filter(entry => entry.trigger === 'post-b5-complete').length, 0);
+    assert.equal(status.details.completedTargets, 0);
+    assert.equal(calls.protectOptions.filter(entry => entry.trigger === 'post-target-complete').length, 0);
     assert.equal(status.details.pendingCraftReconciliation, null);
     assert.ok(freshCall >= 3, 'one stale read plus repeated current-generation no-effect proof is required');
 });
@@ -1571,7 +1601,7 @@ test('RF5 T1/T2 consecutive no-effect proof resets on generation change and reso
     assert.equal(afterFirstG8.generationProofReads, 1);
     assert.equal(afterFirstG8.evidenceGeneration, 8);
     assert.equal(craftCall, 1, 'replacement generation must not re-click before proving its own threshold');
-    assert.equal(calls.protectOptions.filter(entry => entry.trigger === 'post-b5-complete').length, 0);
+    assert.equal(calls.protectOptions.filter(entry => entry.trigger === 'post-target-complete').length, 0);
     await waitUntil(() => mode.status().details.pendingCraftReconciliation === null && craftCall >= 2, 1200);
     await mode.disable('test complete');
     assert.ok(freshCall >= 5, 'G7 two reads plus G8 three reads are required');
@@ -1650,4 +1680,69 @@ test('RF5 T4 reconnect storm cannot combine proof passes across generations', as
     assert.equal(craftCall, 1, 'storm must not replay uncertain craft');
     await waitUntil(() => mode.status().details.pendingCraftReconciliation === null && craftCall >= 2, 1200);
     await mode.disable('test complete');
+});
+
+// ---------------------------------------------------------------------------
+// Generic crafting mode contract: operator request drives the target, the mode
+// never infers one, and one engine serves every target identity.
+// ---------------------------------------------------------------------------
+
+test('started without an operator request the mode waits instead of choosing any target', async () => {
+    const { mode, coordinator, calls } = harness({ request: false });
+    await coordinator.initialize(); await coordinator.start();
+    assert.equal((await mode.enable()).success, true);
+    await waitUntil(() => mode.status().phase === 'WAITING_REQUEST', 300);
+    await new Promise(resolve => setTimeout(resolve, 30));
+    const status = mode.status();
+    await mode.disable('test complete');
+
+    assert.equal(status.details.waitingReason, 'no-craft-request');
+    assert.equal(status.details.craftRequest, null);
+    assert.equal(calls.craft, 0, 'no target may be crafted without a request');
+    assert.equal(status.details.completedTargets, 0);
+    assert.equal(calls.protect, 0, 'no storage work is started before an operator request');
+});
+
+test('one generic mode engine runs three different targets through separate requests', async () => {
+    const { mode, coordinator, calls } = harness({
+        request: false,
+        craftImplementation: async options => ({
+            success: true,
+            data: {
+                complete: true,
+                completedTarget: true,
+                completedAmount: 1,
+                targetId: options.targetId,
+                productive: true,
+                blockingReasons: []
+            }
+        })
+    });
+    mode.sharedStorageLease = { acquire: async () => {}, release: () => {}, status: () => null };
+    await coordinator.initialize(); await coordinator.start();
+    assert.equal((await mode.enable()).success, true);
+    await waitUntil(() => mode.status().phase === 'WAITING_REQUEST', 300);
+
+    const targets = ['titanium', 'carbon', 'tungsten'];
+    for (const target of targets) {
+        mode.craftingItemRegistry = {
+            resolveById: id => ({ id, displayName: id }),
+            getRecipe: () => ({ output: target, outputAmount: 1 })
+        };
+        const before = calls.craft;
+        assert.equal(mode.setCraftRequest({ targetItemId: target, quantity: 1 }).success, true);
+        await waitUntil(() => calls.craft > before, 400);
+        await waitUntil(() => mode.status().details.completedTargets >= targets.indexOf(target) + 1, 400);
+        const status = mode.status();
+        assert.equal(status.details.craftRequest.targetItemId, target);
+        assert.equal(status.details.craftRequest.state, 'COMPLETED');
+        // The requested target id, never a configured default, is what the
+        // automation engine was asked to craft.
+        assert.ok(calls.craftOptions.some(options => options.targetId === target),
+            `expected the engine to be asked for ${target}`);
+    }
+
+    await mode.disable('test complete');
+    assert.equal(mode.status().details.completedTargets, 3);
+    assert.deepEqual([...new Set(calls.craftOptions.map(options => options.targetId))].sort(), ['carbon', 'titanium', 'tungsten']);
 });
