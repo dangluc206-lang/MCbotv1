@@ -176,6 +176,9 @@
       const botId = entry.botId || '—';
       const completed = entry.completedB5 ?? '—';
       const state = entry.state || '—';
+      // Legacy B5 debug card (collector-B5/dev boundary only). The generic
+      // crafting status uses target/completedUnits/state/blocker in
+      // CraftingRequestPanel.statusText and botCard, never completedB5.
       return `<div class="b5-journey-card panel"><strong>${escapeText(botId)}</strong><span>${escapeText(state)} · ${escapeText(String(completed))} B5</span></div>`;
     }).join('') : stateView({ empty: 'Chưa có trạng thái B5.' });
     const traceHtml = trace ? `<pre class="dev-json-output">${escapeText(JSON.stringify(trace, null, 2))}</pre>` : stateView({ empty: 'Chưa có trace.' });

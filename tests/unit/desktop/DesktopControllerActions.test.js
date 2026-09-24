@@ -132,7 +132,7 @@ test('DesktopController routes guarded B5 recovery through the mode use case wit
     }]);
 });
 
-test('DesktopController passes a dynamic B5 craft request straight to the mode service', async () => {
+test('DesktopController passes a dynamic generic craft request straight to craftingMode', async () => {
     const calls = { set: [], clear: [] };
     const registries = realCraftingRegistries();
     const controller = new DesktopController({ baseDir: process.cwd() });
@@ -157,10 +157,10 @@ test('DesktopController passes a dynamic B5 craft request straight to the mode s
     // The offerable list comes from the target registry (config policy), not
     // from the legacy item registry, and the dynamic request goes through
     // untouched — never re-planned to a B5 default.
-    const listed = controller.b5CraftItems('bot-01').items;
+    const listed = controller.craftingItems('bot-01').items;
     assert.ok(listed.some(entry => entry.id === 'titanium' && entry.displayName === 'Titanium'));
     assert.ok(listed.every(entry => registries.craftingTargetRegistry.isTarget(entry.id)));
-    const setResult = await controller.setB5CraftRequest('bot-01', { targetItemId: 'titanium', quantity: 10 });
+    const setResult = await controller.setCraftingRequest('bot-01', { targetItemId: 'titanium', quantity: 10 });
     assert.equal(setResult.success, true);
     assert.deepEqual(calls.set, [{ targetItemId: 'titanium', quantity: 10 }]);
     const clearResult = await controller.clearB5CraftRequest('bot-01');

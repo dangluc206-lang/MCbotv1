@@ -897,10 +897,7 @@ function registerBotServices({ profile, configuration, shared }) {
     operationManager,
     logger,
   });
-  const craftingConfig = {
-    ...configuration.registry.require("craftingMode"),
-    ...serverProfile.requireCatalog("serverTimings"),
-  };
+  const craftingConfig = configuration.registry.require("craftingMode");
   const craftingMode = new CraftingModeService({
     botId,
     modeContext,

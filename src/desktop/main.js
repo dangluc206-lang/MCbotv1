@@ -269,6 +269,10 @@ function registerIpc() {
     safeHandle('mcbot:mode:stop', botId => controller.stopMode(botId));
     safeHandle('mcbot:mode:restart', botId => controller.restartMode(botId));
     safeHandle('mcbot:mode:b5-retry-storage-protection', (botId, request) => controller.retryB5StorageProtection(botId, request));
+    safeHandle('mcbot:crafting:items:list', botId => controller.craftingItems(botId));
+    safeHandle('mcbot:crafting:request:set', (botId, request) => controller.setCraftingRequest(botId, request));
+    safeHandle('mcbot:crafting:request:clear', botId => controller.clearCraftingRequest(botId));
+    // Compat: older renderer/preload clients still use the B5-specific namespace.
     safeHandle('mcbot:b5:craft-items:list', botId => controller.b5CraftItems(botId));
     safeHandle('mcbot:b5:craft-request:set', (botId, request) => controller.setB5CraftRequest(botId, request));
     safeHandle('mcbot:b5:craft-request:clear', botId => controller.clearB5CraftRequest(botId));

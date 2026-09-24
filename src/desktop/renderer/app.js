@@ -205,10 +205,10 @@ function botCard(bot, fullActions = false) {
   const operation = activeOperation(bot);
   const id = bot.botId;
   const showTech = document.body.dataset.experience === 'advanced';
-  const b5Details = bot.modes?.crafting?.details || {};
-  const b5Episode = b5Details.protectionEpisode || null;
-  const b5CanRetry = mode.id === 'crafting' && b5Details.recovery?.allowedActions?.includes('retry-storage-protection') && b5Episode;
-  const b5RecoveryButton = b5CanRetry ? `<div class="actions"><button class="button warn" data-action="b5-retry-storage" data-bot="${esc(id)}">Thử lại bảo vệ kho</button></div>` : '';
+  const craftingDetails = bot.modes?.crafting?.details || {};
+  const craftingEpisode = craftingDetails.protectionEpisode || null;
+  const craftingCanRetry = mode.id === 'crafting' && craftingDetails.recovery?.allowedActions?.includes('retry-storage-protection') && craftingEpisode;
+  const craftingRecoveryButton = craftingCanRetry ? `<div class="actions"><button class="button warn" data-action="b5-retry-storage" data-bot="${esc(id)}">Thử lại bảo vệ kho</button></div>` : '';
   const held = player?.heldItem?.displayName || player?.heldItem?.name || '—';
   const mainActions = `<div class="actions">
     ${buttonHtml({ label: 'Kết nối', action: 'connect', bot: id, kind: 'primary', disabled: profile.enabled === false || !connectionView.canConnect, key: `connect:${id}` })}
@@ -255,7 +255,7 @@ function botCard(bot, fullActions = false) {
       ${operation ? `<div class="operation-line"><span>${esc(operation.active)} tác vụ</span><strong title="${esc(operation.detail)}">${esc(operation.name)}${operation.detail ? ` · ${esc(operation.detail)}` : ''}</strong></div>` : '<div class="operation-line"><span>0 tác vụ</span><strong>Không có tác vụ đang chạy</strong></div>'}
       ${showTech ? `<div class="status-detail-grid">
         <div class="status-detail"><span>Sky gateway</span><strong>${bot.skyAutoJoin ? `${esc(bot.skyAutoJoin?.location || 'UNKNOWN')} · ${esc(bot.skyAutoJoin?.activeTarget || bot.skyAutoJoin?.readyTarget || profile.skyblockSelection || '—')} · ${bot.skyAutoJoin?.ready ? 'Sẵn sàng' : bot.skyAutoJoin?.pending ? 'Đang xử lý' : bot.skyAutoJoin?.target ? 'Đang chờ mode gateway' : 'Không có mode yêu cầu'}` : '—'}</strong></div>
-        <div class="status-detail"><span>Bảo vệ kho B5</span><strong>${bot.storageProtection?.storageProtection ? `Reserve ${esc(bot.storageProtection.storageProtection.reserveCoverage ?? 1.5)} B5 · bán 64-only ${bot.storageProtection.storageProtection.sellingCapabilityEnabled === false ? 'không khả dụng' : 'khả dụng'} · chỉ nung raw iron/raw gold` : '—'}</strong></div>
+        <div class="status-detail"><span>Bảo vệ kho</span><strong>${bot.storageProtection?.storageProtection ? `Reserve ${esc(bot.storageProtection.storageProtection.reserveCoverage ?? 1.5)} · bán 64-only ${bot.storageProtection.storageProtection.sellingCapabilityEnabled === false ? 'không khả dụng' : 'khả dụng'} · chỉ nung raw iron/raw gold` : '—'}</strong></div>
         <div class="status-detail"><span>GUI hiện tại</span><strong>${esc(bot.gui?.definitionId || bot.gui?.identity?.candidateId || bot.gui?.title || 'Không mở')}${Number.isFinite(bot.gui?.identity?.confidence) ? ` · ${(Number(bot.gui.identity.confidence) * 100).toFixed(0)}%` : ''}</strong></div>
         <div class="status-detail"><span>Tay phụ</span><strong>${esc(player?.offhandItem?.displayName || player?.offhandItem?.name || '—')}</strong></div>
         <div class="status-detail"><span>Ô trống ước tính</span><strong>${esc(player?.inventory?.slotsFreeApprox ?? '—')}</strong></div>
@@ -263,47 +263,47 @@ function botCard(bot, fullActions = false) {
         <div class="status-detail"><span>Lần thử vào Sky</span><strong>${esc(bot.skyAutoJoin?.pending?.attempt ?? (bot.skyAutoJoin?.ready ? 'Hoàn tất' : '—'))}</strong></div>
         <div class="status-detail"><span>Lỗi gần nhất</span><strong title="${esc(bot.state?.lastError?.message || bot.state?.lastError || '')}">${esc(bot.state?.lastError?.message || bot.state?.lastError || 'Không có')}</strong></div>
       </div>` : ''}
-      ${showTech && mode.id === 'crafting' ? (() => { const d = bot.modes?.crafting?.details || {}; const blocker = d.lastAutomationBlockers?.[0] || null; const blockerText = blocker ? `${blocker.baseId ? `${blocker.baseId}: ` : ''}${blocker.reason || blocker.status || 'đang chờ'}` : ''; const protection = d.protectionEpisode || null; const protectionBlocker = protection?.blocker || null; const protectionText = protection ? `${protection.state || 'PENDING'} · attempt ${protection.totalAttempts ?? 0}${protectionBlocker ? ` · ${protectionBlocker.resource ? `${protectionBlocker.resource}: ` : ''}${protectionBlocker.reason || protectionBlocker.code || 'blocked'} · backoff ${protectionBlocker.backoffMs ?? 0}ms${Number.isFinite(protection.nextEligibleAt) ? ` · retry ${Math.max(0, protection.nextEligibleAt - Date.now())}ms` : ''}` : ''}` : ''; const trace = d.automation?.trace || null; const decision = trace?.plan?.decision; const traceText = trace ? `${trace.traceId || ''}${decision?.kind ? ` · ${decision.kind}${decision.resource ? ` ${decision.resource}` : ''}` : ''}` : ''; const batchText = d.batchId ? `${d.batchId}${d.batchProtectionRequired ? ' · chờ bảo vệ kho' : ' · đã bảo vệ kho'}` : 'chưa có batch'; return `<div class="operation-line"><span>B5 thuần</span><strong>Đã hoàn tất: ${esc(d.completedB5 ?? 0)} · Engine: ${esc(d.automationRuns ?? 0)} lượt / ${esc(d.productiveCycles ?? 0)} có tiến triển · ${esc(batchText)} · ${esc(d.waitingReason ? `Đang chờ: ${viWaitingReason(d.waitingReason)}` : 'Đang xử lý')}</strong></div>${protectionText ? `<div class="operation-line"><span>Gate bảo vệ kho</span><strong title="${esc(protectionText)}">${esc(protectionText)}</strong></div>` : ''}${traceText ? `<div class="operation-line"><span>Trace B5 gần nhất</span><strong title="${esc(traceText)}">${esc(traceText)}</strong></div>` : ''}${blockerText ? `<div class="operation-line"><span>Điểm chặn B5</span><strong title="${esc(blockerText)}">${esc(blockerText)}</strong></div>` : ''}`; })() : ''}
+      ${showTech && mode.id === 'crafting' ? (() => { const d = bot.modes?.crafting?.details || {}; const blocker = d.lastAutomationBlockers?.[0] || null; const blockerText = blocker ? `${blocker.baseId ? `${blocker.baseId}: ` : ''}${blocker.reason || blocker.status || 'đang chờ'}` : ''; const protection = d.protectionEpisode || null; const protectionBlocker = protection?.blocker || null; const protectionText = protection ? `${protection.state || 'PENDING'} · attempt ${protection.totalAttempts ?? 0}${protectionBlocker ? ` · ${protectionBlocker.resource ? `${protectionBlocker.resource}: ` : ''}${protectionBlocker.reason || protectionBlocker.code || 'blocked'} · backoff ${protectionBlocker.backoffMs ?? 0}ms${Number.isFinite(protection.nextEligibleAt) ? ` · retry ${Math.max(0, protection.nextEligibleAt - Date.now())}ms` : ''}` : ''}` : ''; const trace = d.automation?.trace || null; const decision = trace?.plan?.decision; const traceText = trace ? `${trace.traceId || ''}${decision?.kind ? ` · ${decision.kind}${decision.resource ? ` ${decision.resource}` : ''}` : ''}` : ''; const batchText = d.batchId ? `${d.batchId}${d.batchProtectionRequired ? ' · chờ bảo vệ kho' : ' · đã bảo vệ kho'}` : 'chưa có batch'; return `<div class="operation-line"><span>Chế tạo</span><strong>Đã hoàn tất: ${esc(d.completedTargets ?? 0)} · Engine: ${esc(d.automationRuns ?? 0)} lượt / ${esc(d.productiveCycles ?? 0)} có tiến triển · ${esc(batchText)} · ${esc(d.waitingReason ? `Đang chờ: ${viWaitingReason(d.waitingReason)}` : 'Đang xử lý')}</strong></div>${protectionText ? `<div class="operation-line"><span>Gate bảo vệ kho</span><strong title="${esc(protectionText)}">${esc(protectionText)}</strong></div>` : ''}${traceText ? `<div class="operation-line"><span>Trace chế tạo gần nhất</span><strong title="${esc(traceText)}">${esc(traceText)}</strong></div>` : ''}${blockerText ? `<div class="operation-line"><span>Điểm chặn</span><strong title="${esc(blockerText)}">${esc(blockerText)}</strong></div>` : ''}`; })() : ''}
     </div>
-    ${mainActions}${b5RecoveryButton}${modeActions}${mode.id === 'crafting' ? window.MCbotB5CraftRequestPanel.render({ botId: id, items: b5CraftItemsCache[id] || [], request: bot.modes?.crafting?.details?.craftRequest || null, phase: bot.modes?.crafting?.phase || '', draft: b5CraftDraft(id), esc }) : ''}
+    ${mainActions}${craftingRecoveryButton}${modeActions}${mode.id === 'crafting' ? window.MCbotCraftingRequestPanel.render({ botId: id, items: craftingItemsCache[id] || [], request: bot.modes?.crafting?.details?.craftRequest || null, phase: bot.modes?.crafting?.phase || '', waitingReason: bot.modes?.crafting?.details?.waitingReason || '', draft: craftingDraft(id), esc }) : ''}
   </article>`;
 }
 
-const b5CraftItemsCache = {};
-const b5CraftDrafts = {};
-function b5CraftDraft(botId) {
-  return b5CraftDrafts[botId] || (b5CraftDrafts[botId] = { itemId: '', quantity: '', all: false });
+const craftingItemsCache = {};
+const craftingDrafts = {};
+function craftingDraft(botId) {
+  return craftingDrafts[botId] || (craftingDrafts[botId] = { itemId: '', quantity: '', all: false });
 }
-function captureB5CraftDraft(panel) {
-  const botId = panel?.dataset?.b5RequestBot;
+function captureCraftingDraft(panel) {
+  const botId = panel?.dataset?.craftRequestBot;
   if (!botId) return;
-  b5CraftDrafts[botId] = {
-    itemId: panel.querySelector('[data-b5-request-item]')?.value || '',
-    quantity: panel.querySelector('[data-b5-request-quantity]')?.value ?? '',
-    all: Boolean(panel.querySelector('[data-b5-request-all]')?.checked)
+  craftingDrafts[botId] = {
+    itemId: panel.querySelector('[data-craft-request-item]')?.value || '',
+    quantity: panel.querySelector('[data-craft-request-quantity]')?.value ?? '',
+    all: Boolean(panel.querySelector('[data-craft-request-all]')?.checked)
   };
 }
-async function hydrateB5CraftItems() {
-  const panels = [...document.querySelectorAll('[data-b5-request-bot]')];
+async function hydrateCraftingItems() {
+  const panels = [...document.querySelectorAll('[data-craft-request-bot]')];
   for (const panel of panels) {
-    const botId = panel.dataset.b5RequestBot;
+    const botId = panel.dataset.craftRequestBot;
     if (!botId) continue;
     try {
-      if (!b5CraftItemsCache[botId]) {
-        const result = await api(window.mcbot.b5CraftItems(botId));
-        b5CraftItemsCache[botId] = window.MCbotB5CraftRequestPanel.craftables(result?.items || []);
+      if (!craftingItemsCache[botId]) {
+        const result = await api(window.mcbot.craftingItems(botId));
+        craftingItemsCache[botId] = window.MCbotCraftingRequestPanel.craftables(result?.items || []);
       }
-      const items = b5CraftItemsCache[botId];
+      const items = craftingItemsCache[botId];
       if (!items.length) continue;
-      const draft = b5CraftDraft(botId);
-      const select = panel.querySelector('select[data-b5-request-item]');
+      const draft = craftingDraft(botId);
+      const select = panel.querySelector('select[data-craft-request-item]');
       if (select) {
-        select.innerHTML = window.MCbotB5CraftRequestPanel.optionsHtml(items, draft, esc);
+        select.innerHTML = window.MCbotCraftingRequestPanel.optionsHtml(items, draft, esc);
         if (draft.itemId) select.value = draft.itemId;
       }
-      const start = panel.querySelector('[data-action="b5-request-start"]');
+      const start = panel.querySelector('[data-action="craft-request-start"]');
       if (start) start.disabled = false;
-    } catch (error) { reportRendererError(error, 'b5-craft-items'); }
+    } catch (error) { reportRendererError(error, 'crafting-items'); }
   }
 }
 
@@ -325,7 +325,7 @@ function renderDashboard() {
   }
   renderFirstRun();
   renderHealth();
-  hydrateB5CraftItems().catch(() => {});
+  hydrateCraftingItems().catch(() => {});
 }
 
 function applyPresentationPreferences() {
@@ -418,7 +418,7 @@ async function loadB5Journey() {
 function renderModes() {
   const bots = state.snapshot?.bots || [];
   $('#modeCards').innerHTML = bots.length ? bots.map(bot => botCard(bot, true)).join('') : '<div class="empty panel">Chưa có tiến trình bot.</div>';
-  hydrateB5CraftItems().catch(() => {});
+  hydrateCraftingItems().catch(() => {});
 }
 
 // ---- Dev experience pages (render-only; data comes from the shared backend) ----
@@ -821,14 +821,14 @@ async function handleBotAction(button) {
       }))
     });
   }
-  if (action === 'b5-request-start') {
-    const form = window.MCbotB5CraftRequestPanel.readForm(button);
-    captureB5CraftDraft(button.closest('[data-b5-request-bot]'));
-    return runAction({ key: `b5-request:${bot}`, button, success: `Đã gửi yêu cầu chế ${form.quantity === 'ALL' ? 'ALL' : form.quantity} × ${form.targetItemId}.`, fn: () => api(window.mcbot.setB5CraftRequest(bot, form)) });
+  if (action === 'craft-request-start') {
+    const form = window.MCbotCraftingRequestPanel.readForm(button);
+    captureCraftingDraft(button.closest('[data-craft-request-bot]'));
+    return runAction({ key: `craft-request:${bot}`, button, success: `Đã gửi yêu cầu chế ${form.quantity === 'ALL' ? 'ALL' : form.quantity} × ${form.targetItemId}.`, fn: () => api(window.mcbot.setCraftingRequest(bot, form)) });
   }
-  if (action === 'b5-request-clear') {
-    b5CraftDrafts[bot] = { itemId: b5CraftDraft(bot).itemId, quantity: '', all: false };
-    return runAction({ key: `b5-request:${bot}`, button, success: 'Đã xóa yêu cầu chế tạo.', fn: () => api(window.mcbot.clearB5CraftRequest(bot)) });
+  if (action === 'craft-request-clear') {
+    craftingDrafts[bot] = { itemId: craftingDraft(bot).itemId, quantity: '', all: false };
+    return runAction({ key: `craft-request:${bot}`, button, success: 'Đã xóa yêu cầu chế tạo.', fn: () => api(window.mcbot.clearCraftingRequest(bot)) });
   }
   if (action === 'save-profile') {
     const row = button.closest('tr');
@@ -1664,8 +1664,8 @@ function bindEvents() {
       event.preventDefault(); switchPage('logs');
     }
   });
-  document.addEventListener('input', event => { const panel = event.target?.closest?.('[data-b5-request-bot]'); if (panel) captureB5CraftDraft(panel); });
-  document.addEventListener('change', event => { const panel = event.target?.closest?.('[data-b5-request-bot]'); if (panel) captureB5CraftDraft(panel); });
+  document.addEventListener('input', event => { const panel = event.target?.closest?.('[data-craft-request-bot]'); if (panel) captureCraftingDraft(panel); });
+  document.addEventListener('change', event => { const panel = event.target?.closest?.('[data-craft-request-bot]'); if (panel) captureCraftingDraft(panel); });
 }
 
 function restoreLocalPreferences() {

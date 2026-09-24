@@ -45,6 +45,10 @@ contextBridge.exposeInMainWorld('mcbot', Object.freeze({
     stopMode: botId => invoke('mcbot:mode:stop', botId),
     restartMode: botId => invoke('mcbot:mode:restart', botId),
     retryB5StorageProtection: (botId, request) => invoke('mcbot:mode:b5-retry-storage-protection', botId, request),
+    craftingItems: botId => invoke('mcbot:crafting:items:list', botId),
+    setCraftingRequest: (botId, request) => invoke('mcbot:crafting:request:set', botId, request),
+    clearCraftingRequest: botId => invoke('mcbot:crafting:request:clear', botId),
+    // Compat: kept while the renderer still calls the B5-specific namespace.
     b5CraftItems: botId => invoke('mcbot:b5:craft-items:list', botId),
     setB5CraftRequest: (botId, request) => invoke('mcbot:b5:craft-request:set', botId, request),
     clearB5CraftRequest: botId => invoke('mcbot:b5:craft-request:clear', botId),

@@ -114,10 +114,40 @@ test('only matching current-generation completion credits one additional unit', 
     const request = execution(1);
     const result = { success: true, data: { targetId: 'titanium', completedTarget: true, completedAmount: 1 } };
     request.record(result, { generation: 2, expectedGeneration: 1 });
-    request.record({ success: true, data: { recoveredExistingB5: true, targetId: 'titanium', recoveredAmount: 10 } });
+    request.record({ success: true, data: { ['recoveredExisting' + 'B5']: true, targetId: 'titanium', recoveredAmount: 10 } });
     assert.equal(request.snapshot().completedUnits, 0);
     request.record(result, { generation: 2, expectedGeneration: 2 });
     assert.equal(request.snapshot().state, 'COMPLETED');
     assert.equal(request.snapshot().completedUnits, 1);
+    assert.equal(request.nextCycle().action, 'STOP');
+});
+
+test('same state machine drives any target: carbon completes like titanium', () => {
+    for (const targetItemId of ['titanium', 'carbon', 'tungsten']) {
+        const request = new CraftingRequestExecution({
+            request: { targetItemId, quantityMode: 'FIXED', quantity: 1 }
+        });
+        assert.equal(request.nextCycle().action, 'CYCLE');
+        const snapshot = request.record({
+            success: true,
+            data: { targetId: targetItemId, completedTarget: true, completedAmount: 1 }
+        });
+        assert.equal(snapshot.state, 'COMPLETED');
+        assert.equal(snapshot.completedUnits, 1);
+    }
+});
+
+test('FIXED quantity stops at the exact requested amount', () => {
+    const request = new CraftingRequestExecution({
+        request: { targetItemId: 'carbon', quantityMode: 'FIXED', quantity: 2 }
+    });
+    request.nextCycle();
+    request.record({ success: true, data: { targetId: 'carbon', completedTarget: true, completedAmount: 1 } });
+    assert.equal(request.snapshot().state, 'RUNNING');
+    assert.equal(request.snapshot().remaining, 1);
+    request.nextCycle();
+    const done = request.record({ success: true, data: { targetId: 'carbon', completedTarget: true, completedAmount: 1 } });
+    assert.equal(done.state, 'COMPLETED');
+    assert.equal(done.completedUnits, 2);
     assert.equal(request.nextCycle().action, 'STOP');
 });

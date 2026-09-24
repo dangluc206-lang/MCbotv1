@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "baselineVersion": 1,
   "workPackage": "WP-001",
-  "generatedAt": "2026-09-23T15:24:37.793Z",
+  "generatedAt": "2026-09-24T17:10:05.997Z",
   "releaseVersion": "2.7.67",
   "scope": {
     "root": ".",
@@ -39,12 +39,12 @@
       "inScopeChangedPaths": 0
     },
     "reason": "Standalone source tree; version-control metadata is intentionally not required.",
-    "sourceFingerprintSha256": "3b883955b3f61fb64918a4edd5dda4ebb9a56b12682fa32dbe92d37c11caab9f"
+    "sourceFingerprintSha256": "b401746e8ffd84877a93aafb14f36367a3c0c7d3aa9690b3903cb028f4a1fba1"
   },
   "counts": {
-    "files": 907,
-    "source": 418,
-    "tests": 248,
+    "files": 940,
+    "source": 420,
+    "tests": 251,
     "scripts": 41,
     "configJson": 35,
     "routes": 1
@@ -101,7 +101,7 @@
     },
     {
       "area": "desktop",
-      "files": 61,
+      "files": 63,
       "owner": "src/desktop/",
       "layer": "control-plane-desktop",
       "classification": "CURRENT"
@@ -298,10 +298,18 @@
         "reachableSourceFiles": 1
       },
       {
-        "file": "src/desktop/renderer/features/b5/B5CraftRequestPanel.js",
+        "file": "src/desktop/renderer/features/crafting/CraftingRequestPanel.js",
         "exists": true,
         "directLocalDependencies": [],
         "reachableSourceFiles": 1
+      },
+      {
+        "file": "src/desktop/renderer/features/b5/B5CraftRequestPanel.js",
+        "exists": true,
+        "directLocalDependencies": [
+          "src/desktop/renderer/features/crafting/CraftingRequestPanel.js"
+        ],
+        "reachableSourceFiles": 2
       },
       {
         "file": "src/desktop/renderer/features/incidents/IncidentViewModel.js",
@@ -457,6 +465,7 @@
       "src/desktop/renderer/features/b5/B5ViewModel.js",
       "src/desktop/renderer/features/builder/TypedModuleEditor.js",
       "src/desktop/renderer/features/connection/ConnectionViewModel.js",
+      "src/desktop/renderer/features/crafting/CraftingRequestPanel.js",
       "src/desktop/renderer/features/dev/DevPages.js",
       "src/desktop/renderer/features/incidents/IncidentPresenter.js",
       "src/desktop/renderer/features/incidents/IncidentViewModel.js",
@@ -474,8 +483,8 @@
       "src/desktop/update/SquirrelLifecycle.js",
       "src/desktop/update/Version.js",
       "src/desktop/update/local-update-helper.js",
-      "src/desktop/use-cases/B5CraftRequestUseCases.js",
       "src/desktop/use-cases/BotProfileUseCases.js",
+      "src/desktop/use-cases/CraftingRequestUseCases.js",
       "src/desktop/use-cases/CustomModeUseCases.js",
       "src/desktop/use-cases/DesktopRuntimeBootstrap.js",
       "src/desktop/use-cases/FleetControlUseCases.js",
@@ -863,6 +872,7 @@
       "src/desktop/renderer/features/b5/B5ViewModel.js",
       "src/desktop/renderer/features/builder/TypedModuleEditor.js",
       "src/desktop/renderer/features/connection/ConnectionViewModel.js",
+      "src/desktop/renderer/features/crafting/CraftingRequestPanel.js",
       "src/desktop/renderer/features/dev/DevPages.js",
       "src/desktop/renderer/features/incidents/IncidentPresenter.js",
       "src/desktop/renderer/features/incidents/IncidentViewModel.js",
@@ -881,8 +891,8 @@
       "src/desktop/update/SquirrelLifecycle.js",
       "src/desktop/update/Version.js",
       "src/desktop/update/local-update-helper.js",
-      "src/desktop/use-cases/B5CraftRequestUseCases.js",
       "src/desktop/use-cases/BotProfileUseCases.js",
+      "src/desktop/use-cases/CraftingRequestUseCases.js",
       "src/desktop/use-cases/CustomModeUseCases.js",
       "src/desktop/use-cases/DesktopRuntimeBootstrap.js",
       "src/desktop/use-cases/FleetControlUseCases.js",
@@ -1165,6 +1175,7 @@
       "src/simulation/b5/B5PlannerReplay.js"
     ],
     "orphanSourceFiles": [
+      "src/desktop/use-cases/B5CraftRequestUseCases.js",
       "src/server-features/crafting/b1-b3/B1B3CraftingModule.js",
       "src/server-features/crafting/b1-b3/B1B3InputCoordinator.js",
       "src/server-features/crafting/b1-b3/B1B3ReadService.js",
@@ -1500,7 +1511,6 @@
       "src/server-features/crafting/b5/B5FinalCraftCoordinator.js",
       "src/server-features/crafting/b5/B5ReserveChainCoordinator.js",
       "src/server-features/crafting/b5/flows/B5StorageFlow.js",
-      "src/server-features/crafting/b5/support/B5StageContract.js",
       "src/server-features/crafting/b5/trace/B5TraceRecorder.js",
       "src/server-features/crafting/verification/CraftingVerificationAttempt.js",
       "src/server-features/crafting/verification/CraftingVerificationEvidence.js",
@@ -2352,11 +2362,10 @@
     },
     {
       "key": "craftingMode",
-      "file": "config/modes/b5-craft.json",
+      "file": "config/modes/crafting.json",
       "schema": "craftingMode",
       "consumers": [
         "src/bootstrap/registerBotServices.js",
-        "src/bootstrap/registerSharedServices.js",
         "src/desktop/DesktopController.js"
       ],
       "reload": {
@@ -2428,21 +2437,21 @@
     }
   ],
   "architectureInspection": {
-    "valid": false,
+    "valid": true,
     "catalog": {
       "schemaVersion": 3,
-      "sourceFiles": 418,
-      "testFiles": 248,
+      "sourceFiles": 420,
+      "testFiles": 251,
       "scriptFiles": 41,
-      "sourceReachable": 410,
-      "runtimeReachable": 404,
+      "sourceReachable": 411,
+      "runtimeReachable": 405,
       "configGroups": 33,
       "connectionEvents": 31,
       "stalePaths": 42,
       "officialDocuments": 0,
       "governedDocumentRoots": 0,
       "documentScanExclusions": 2,
-      "pendingWiringSources": 8,
+      "pendingWiringSources": 9,
       "coverage": {
         "include": "src/**/*.js",
         "lines": 80,
@@ -2450,27 +2459,14 @@
         "functions": 80
       }
     },
-    "findings": [
-      {
-        "code": "CONFIG_UNREGISTERED",
-        "category": "CURRENT",
-        "file": "config/modes/crafting.json",
-        "message": "JSON config is not registered by ConfigSpecs."
-      },
-      {
-        "code": "CONFIG_SPEC_MISSING",
-        "category": "CURRENT",
-        "file": "config/modes/b5-craft.json",
-        "message": "Registered config is missing: config/modes/b5-craft.json"
-      }
-    ]
+    "findings": []
   },
   "findings": [
     {
       "code": "BASELINE_ARCHITECTURE_VALIDATOR",
       "category": "CURRENT",
       "file": "scripts/validate-architecture.js",
-      "summary": "Architecture validator reports current failures.",
+      "summary": "Architecture validator is clean at capture time.",
       "workPackages": [
         "WP-001"
       ]
@@ -2530,7 +2526,7 @@
       "code": "GENERATION_CANCELLATION_GUARDS_ACTIVE",
       "category": "CURRENT",
       "file": "src/core/events/EventEnvelope.js",
-      "summary": "Generation/cancellation contracts are active with 90 source file(s) carrying generation-guard evidence.",
+      "summary": "Generation/cancellation contracts are active with 89 source file(s) carrying generation-guard evidence.",
       "workPackages": [
         "WP-005"
       ]
@@ -2542,24 +2538,6 @@
       "summary": "Release ZIP completeness/safety policy and real-ZIP verifier are present; source-only fast quality includes the pure contract test.",
       "workPackages": [
         "WP-402"
-      ]
-    },
-    {
-      "code": "CONFIG_UNREGISTERED",
-      "category": "CURRENT",
-      "file": "config/modes/crafting.json",
-      "summary": "JSON config is not registered by ConfigSpecs.",
-      "workPackages": [
-        "WP-001"
-      ]
-    },
-    {
-      "code": "CONFIG_SPEC_MISSING",
-      "category": "CURRENT",
-      "file": "config/modes/b5-craft.json",
-      "summary": "Registered config is missing: config/modes/b5-craft.json",
-      "workPackages": [
-        "WP-001"
       ]
     }
   ]

@@ -25,7 +25,7 @@ const CustomModeUseCases = require('./use-cases/CustomModeUseCases');
 const BotProfileUseCases = require('./use-cases/BotProfileUseCases');
 const ModeConfigurationUseCases = require('./use-cases/ModeConfigurationUseCases');
 const FleetControlUseCases = require('./use-cases/FleetControlUseCases');
-const B5CraftRequestUseCases = require('./use-cases/B5CraftRequestUseCases');
+const CraftingRequestUseCases = require('./use-cases/CraftingRequestUseCases');
 const { plainError, resultPayload } = require('./contracts/DesktopResult');
 
 const SUPPORT_PREVIEW_TTL_MS = 60000;
@@ -99,7 +99,7 @@ class DesktopController {
             bundleProvider: () => this.bundle,
             requireRunning: () => this.#requireRunning()
         });
-        this.b5CraftRequestUseCases = new B5CraftRequestUseCases({
+        this.craftingRequestUseCases = new CraftingRequestUseCases({
             bundleProvider: () => this.bundle,
             requireRunning: () => this.#requireRunning()
         });
@@ -442,9 +442,13 @@ class DesktopController {
     }
 
 
-    b5CraftItems(botId) { return this.b5CraftRequestUseCases.items(botId); }
-    setB5CraftRequest(botId, request) { return this.b5CraftRequestUseCases.set(botId, request); }
-    clearB5CraftRequest(botId) { return this.b5CraftRequestUseCases.clear(botId); }
+    craftingItems(botId) { return this.craftingRequestUseCases.items(botId); }
+    setCraftingRequest(botId, request) { return this.craftingRequestUseCases.set(botId, request); }
+    clearCraftingRequest(botId) { return this.craftingRequestUseCases.clear(botId); }
+    // Kept for older preload/renderer clients: mcbot:b5:craft-* channels.
+    b5CraftItems(botId) { return this.craftingItems(botId); }
+    setB5CraftRequest(botId, request) { return this.setCraftingRequest(botId, request); }
+    clearB5CraftRequest(botId) { return this.clearCraftingRequest(botId); }
 
     reconcileFleet(reason = 'desktop-reconcile') { return this.fleetControlUseCases.reconcile(reason); }
     fleetAction(action) { return this.fleetControlUseCases.fleetAction(action); }

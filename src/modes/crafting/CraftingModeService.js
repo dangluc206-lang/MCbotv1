@@ -45,8 +45,8 @@ class CraftingModeService extends ManagedMode {
     } = {}) {
         super({ modeId: 'crafting', botId, modeContext, modeCoordinator, catalog, logger });
         if (!island?.goHome) throw new TypeError('CraftingModeService island service is required.');
-        // ponytail: `protectForB5Batch` is the legacy service-owned action name (B1StorageMaterialService owns
-        // the mechanics); mode core keeps the call for compat and must not assume B5/super_alloy semantics from it.
+        // ponytail: `protectForB5Batch` is the legacy service-owned action name (storage protection owns
+        // the mechanics); mode core keeps the call for compat and must not assume product-specific semantics from it.
         if (!b1Materials?.protectForB5Batch) throw new TypeError('CraftingModeService B1 storage protection service is required.');
         if (!craftingPlanning?.inspectAdditionalFresh) throw new TypeError('CraftingModeService crafting planning service is required.');
         if (!automation?.runNext) throw new TypeError('CraftingModeService crafting automation service is required.');
@@ -1202,7 +1202,7 @@ class CraftingModeService extends ManagedMode {
 
     #completionContext(details) {
         if (!details || typeof details !== 'object') return null;
-        const direct = details.b5CompletionContext || details.completionContext || null;
+        const direct = details.completionContext || null;
         if (direct?.finalChain === true && direct.targetId) {
             return {
                 finalChain: true,

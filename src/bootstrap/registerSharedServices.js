@@ -62,10 +62,6 @@ function registerSharedServices({
       minerals: configuration.registry.require("minerals"),
       mineralConversions: configuration.registry.require("mineralConversions"),
       smelting: configuration.registry.require("smelting"),
-      serverTimings: {
-        postB5CooldownMs:
-          configuration.registry.require("craftingMode").postCycleCooldownMs,
-      },
     },
   );
   const botFactory = new BotFactory({ clientFactory });

@@ -21,6 +21,7 @@
     "src/desktop/renderer/pages/PageCatalog.js",
     "src/desktop/renderer/features/b5/B5ViewModel.js",
     "src/desktop/renderer/features/b5/B5JourneyPresenter.js",
+    "src/desktop/renderer/features/crafting/CraftingRequestPanel.js",
     "src/desktop/renderer/features/b5/B5CraftRequestPanel.js",
     "src/desktop/renderer/features/incidents/IncidentViewModel.js",
     "src/desktop/renderer/features/incidents/IncidentPresenter.js",
@@ -143,6 +144,11 @@
     }
   ],
   "pendingWiringSources": [
+    {
+      "file": "src/desktop/use-cases/B5CraftRequestUseCases.js",
+      "owner": "crafting",
+      "reason": "Deprecated IPC compat alias for mcbot:b5:craft-*; required only by compat tests while the renderer migration lands. Uses a lazy require so it never forms a runtime import cycle with the generic use-case."
+    },
     {
       "file": "src/server-features/crafting/b1-b3/B1B3CraftingModule.js",
       "owner": "crafting",
