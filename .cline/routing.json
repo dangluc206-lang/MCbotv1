@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceTreeSha": "3f166038b2336bf2fa0a0941c397e8d76aadbf58",
+  "sourceTreeSha": "540ff7d770e4bb0ae9e879aec4f613b796291dc2",
   "rule": "Start with listed files, expand only when root cause is not explained.",
   "tasks": {
     "startup": {
@@ -182,23 +182,24 @@
     },
     "craftingB5Compatibility": {
       "files": [
-        "src/modes/b5-craft/B5CraftModeService.js",
+        "src/modes/crafting/CraftingModeService.js",
         "src/server-features/crafting/B5PlanningService.js",
         "src/server-features/crafting/B5AutomationService.js",
         "src/server-features/crafting/B5AutomationRuntimeDecorator.js",
         "src/planning/crafting/B5ExecutionPlanner.js",
         "src/planning/crafting/B5Planner.js",
-        "src/server-features/crafting/b5/"
+        "src/server-features/crafting/b5/B5CycleCoordinator.js",
+        "src/server-features/crafting/b5/B5FinalCraftCoordinator.js"
       ],
       "configs": [
-        "config/modes/b5-craft.json",
+        "config/modes/crafting.json",
         "config/server-data/b5.json"
       ],
       "tests": [
         "tests/unit/server-features/B5AutomationService.test.js",
         "tests/unit/server-features/B5PlanningService.test.js",
         "tests/unit/server-features/B5CycleCoordinator.test.js",
-        "tests/unit/modes/B5CraftModeService.test.js"
+        "tests/unit/modes/CraftingModeService.test.js"
       ]
     },
     "movement": {

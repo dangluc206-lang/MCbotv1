@@ -3,8 +3,8 @@
   "source": {
     "repository": "dangluc206-lang/MCbotv1",
     "ref": "main",
-    "treeSha": "3f166038b2336bf2fa0a0941c397e8d76aadbf58",
-    "syncBasis": "Verified against the current working tree (AI module and all legacy product .md documents removed): paths, counts, recipes, GUI ids and mode descriptors were re-checked against src/, config/, tests/, scripts/ and architecture/."
+    "treeSha": "540ff7d770e4bb0ae9e879aec4f613b796291dc2",
+    "syncBasis": "Verified against HEAD tree on 2026-09-24 (AI module and all legacy product .md documents removed): paths, counts, recipes, GUI ids and mode descriptors were re-checked against src/, config/, tests/, scripts/ and architecture/; skill routing and supporting skill files kept intact."
   },
   "files": [
     "project.json",

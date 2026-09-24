@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceTreeSha": "3f166038b2336bf2fa0a0941c397e8d76aadbf58",
+  "sourceTreeSha": "540ff7d770e4bb0ae9e879aec4f613b796291dc2",
   "purpose": "Generic crafting guidance derived from current implementation; B5 is a current consumer, not the generic contract.",
   "genericLifecycle": [
     "INPUT_READY",
@@ -30,8 +30,10 @@
     "execution": {
       "owner": "src/server-features/crafting/CraftingOperation.js",
       "entry": "src/server-features/crafting/CraftingService.js",
-      "cycleExecutor": "src/server-features/crafting/b5/B5CycleCoordinator.js (generic target cycle; B5 is only the current consumer)",
-      "finalChainExecutor": "src/server-features/crafting/b5/B5FinalCraftCoordinator.js (stages TARGET/INTERMEDIATE derived from planner output identity)",
+      "cycleExecutor": "src/server-features/crafting/b5/B5CycleCoordinator.js",
+      "cycleExecutorNote": "generic target cycle; B5 is only the current consumer",
+      "finalChainExecutor": "src/server-features/crafting/b5/B5FinalCraftCoordinator.js",
+      "finalChainExecutorNote": "stages TARGET/INTERMEDIATE derived from planner output identity",
       "completionModel": {
         "fields": ["targetId", "completedTarget", "completedAmount"],
         "forbidden": ["completedB5", "completedNewB5", "allowFinalB5", "stopAtB5Ready", "isB5DirectlyReady", "super_alloy fallback"],
@@ -294,7 +296,7 @@
     }
   },
   "currentB5Consumer": {
-    "mode": "src/modes/b5-craft/B5CraftModeService.js",
+    "mode": "src/modes/crafting/CraftingModeService.js",
     "planning": "src/server-features/crafting/B5PlanningService.js",
     "automation": "src/server-features/crafting/B5AutomationService.js",
     "executionPlanner": "src/planning/crafting/B5ExecutionPlanner.js",
