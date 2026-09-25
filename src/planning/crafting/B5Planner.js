@@ -2,6 +2,7 @@
 
 const CraftStageClassifier = require('./CraftStageClassifier');
 
+// ponytail: legacy B5-only shim (compat boundary for B5PlanningService/tests); new generic code must use CraftingPlanner+CraftPlanningService directly, never this wrapper.
 class B5Planner {
     // No hard-coded target: the default target is configuration data injected
     // by the bootstrap layer. A missing targetId fails closed instead of

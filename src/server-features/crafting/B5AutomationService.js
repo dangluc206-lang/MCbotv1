@@ -1,6 +1,8 @@
 'use strict';
 
 const Operation = require('../../operations/Operation');
+const Result = require('../../shared/result/Result');
+const Status = require('../../shared/result/Status');
 const FlowError = require('../../shared/errors/FlowError');
 const B5ReadFlow = require('./b5/flows/B5ReadFlow');
 const B5PlanningFlow = require('./b5/flows/B5PlanningFlow');
@@ -178,23 +180,57 @@ class B5AutomationService {
         });
     }
 
+    /**
+     * Generic crafting-automation cycle for the configured default target.
+     * Kept for internal callers: the result contract is already generic
+     * ({ targetId, completedTarget, completedAmount } from the cycle).
+     */
     run(amount = 1, { cancellationToken = null, operationContext = null, expectedGeneration = null, decompressionPolicy = 'unbounded', decompressionMaxUsageRatio = null, requireKnownCapacity = false } = {}) {
         return this.#runOperation(amount, { additional: false, cancellationToken, operationContext, expectedGeneration, mode: 'production', craftFinalTarget: true, allowNewB2: true, decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity });
     }
 
+    /**
+     * Generic crafting-automation cycle without an explicit request target.
+     * Preserved for compatibility callers (mode recovery/maintenance probes).
+     * The result still carries the generic completion model below; no caller
+     * may assume which item was planned when targetId is omitted.
+     */
     runNext({ cancellationToken = null, operationContext = null, expectedGeneration = null, freshInspection = false, recoveryOnly = false, decompressionPolicy = 'unbounded', decompressionMaxUsageRatio = null, requireKnownCapacity = false } = {}) {
         return this.#runOperation(1, { additional: true, cancellationToken, operationContext, expectedGeneration, mode: 'production', craftFinalTarget: true, allowNewB2: true, freshInspection, recoveryOnly: recoveryOnly === true, decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity });
     }
 
     /**
-     * Same cycle as runNext, but for an explicit crafting-request target instead
-     * of the configured default target. Only the target id travels further down;
-     * the cycle, verification, settlement, deposit and handoff contracts are
-     * unchanged.
+     * Primary generic entry: run exactly one crafting-automation cycle for an
+     * explicit target. Fail-closed when targetId is missing: unlike the legacy
+     * default path this never falls back to any configured item, so generic
+     * callers must name the target they want crafted.
+     *
+     * Generic completion model (sole source of truth):
+     * { targetId, completedTarget, completedAmount } + generic
+     * blocker/error/result fields (waitingForMaterials, blockingReasons,
+     * productive, targetReady, plan, progress).
      */
     runTarget({ targetId = null, cancellationToken = null, operationContext = null, expectedGeneration = null, freshInspection = false, recoveryOnly = false, decompressionPolicy = 'unbounded', decompressionMaxUsageRatio = null, requireKnownCapacity = false } = {}) {
+        const resolvedTarget = String(targetId || '').trim();
+        if (!resolvedTarget) {
+            return Result.fail(
+                Status.INVALID_INPUT,
+                'Crafting automation requires an explicit targetId.',
+                new FlowError('Crafting automation requires an explicit targetId; refusing to fall back to any default item.', {
+                    code: 'CRAFT_TARGET_REQUIRED',
+                    subsystem: 'crafting',
+                    operation: 'CraftingAutomation',
+                    step: 'resolve-target',
+                    action: 'validate targetId',
+                    resource: null,
+                    retryable: false,
+                    details: { targetId: targetId ?? null }
+                }),
+                { operation: 'CraftingAutomation', step: 'resolve-target', targetId: null }
+            );
+        }
         return this.#runOperation(1, {
-            additional: true, targetId, cancellationToken, operationContext, expectedGeneration, mode: 'production',
+            additional: true, targetId: resolvedTarget, cancellationToken, operationContext, expectedGeneration, mode: 'production',
             craftFinalTarget: true, allowNewB2: true, freshInspection, recoveryOnly: recoveryOnly === true,
             decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity
         });
@@ -223,7 +259,15 @@ class B5AutomationService {
         requireKnownCapacity = false,
         targetId = null
     }) {
-        const operationName = mode === 'maintenance' ? 'B5StorageMaintenance' : (additional ? 'B5AutomationNext' : 'B5Automation');
+        // Generic crafting-automation operation identity. Internal B5
+        // coordinators/flows below keep their names; they are not the public
+        // contract. The public result is the cycle data
+        // ({ targetId, completedTarget, completedAmount } + generic blockers).
+        const operationName = mode === 'maintenance' ? 'CraftingStorageMaintenance' : (additional ? 'CraftingAutomationNext' : 'CraftingAutomation');
+        // Compatibility boundary: an omitted targetId resolves to the
+        // configured default only for legacy run/runNext paths. runTarget
+        // never reaches here without an explicit target (fail-closed above),
+        // so generic mode never depends on a default-item fallback.
         const metadataTarget = String(targetId || '').trim() || this.config?.targetId || null;
         const operation = new Operation({
             name: operationName,
@@ -243,7 +287,7 @@ class B5AutomationService {
                 running: false,
                 state: result?.status === 'CANCELLED' ? 'CANCELLED' : 'ERROR',
                 currentStep: result?.meta?.step || this.status()?.currentStep,
-                lastError: result?.message || result?.error?.message || 'B5 automation failed'
+                lastError: result?.message || result?.error?.message || 'Crafting automation failed'
             });
         }
         return result;
@@ -251,15 +295,14 @@ class B5AutomationService {
 
     #quantityTrace() {}
 
-
     #runStep(context, meta, action, options = {}) {
         if (typeof context?.step === 'function') return context.step(meta, action, options);
         return Promise.resolve().then(action).then(result => {
             if (result?.success === false && options?.acceptFailedResult === true) return result;
             if (result?.success === false) {
                 throw FlowError.fromResult(result, {
-                    subsystem: meta?.subsystem || 'b5',
-                    operation: 'B5Automation',
+                    subsystem: meta?.subsystem || 'crafting',
+                    operation: 'CraftingAutomation',
                     step: meta?.step || null,
                     action: meta?.action || null,
                     resource: meta?.resource || null,

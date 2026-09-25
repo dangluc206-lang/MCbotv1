@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const CraftingRecipeRegistry = require('../../../src/server-features/crafting/CraftingRecipeRegistry');
+const CraftPlanningService = require('../../../src/server-features/crafting/CraftPlanningService');
 const MaterialCalculator = require('../../../src/planning/crafting/MaterialCalculator');
 const CraftingPlanner = require('../../../src/planning/crafting/CraftingPlanner');
 const B5Planner = require('../../../src/planning/crafting/B5Planner');
@@ -20,7 +21,6 @@ function createService({ loose = 0, blocks = 0, inventoryB1 = 0, existingB5 = 0,
     const materialCalculator = new MaterialCalculator({ recipeRegistry });
     const planner = new CraftingPlanner({ recipeRegistry, materialCalculator });
     const tiers = { B1: ['b1'], B2: ['b2'], B3: ['b3'], B4: [], B5: ['b5'] };
-    const b5Planner = new B5Planner({ planner, targetId: 'b5', tiers });
     const b1Materials = {
         effectiveItems(items) {
             return { ...items, b1: Number(items.b1 || 0) + Number(items.b1_block || 0) * 9 };
@@ -30,20 +30,42 @@ function createService({ loose = 0, blocks = 0, inventoryB1 = 0, existingB5 = 0,
             return { ...items, b1: Number(items.b1 || 0) + (blockCraftable ? Number(items.b1_block || 0) * 9 : 0) };
         }
     };
-    return new B5PlanningService({
-        storage: { read: async () => ({ success: true, data: new KhoSnapshot({ items: { b1: loose, b1_block: blocks } }) }) },
-        personalVault: {
-            read: async () => ({ success: true, data: new PersonalVaultSnapshot({ totals: { b3: 1, b5: existingB5 }, slotCount: pvEmptySlots === null ? null : 54, emptySlotCount: pvEmptySlots }) })
-        },
-        inventoryReader: { read: () => ({ source: 'bot-inventory', items: inventoryB1 > 0 ? [{ logicalId: 'b1', count: inventoryB1 }] : [] }) },
-        inventoryCounter: { count: (_snapshot, id) => id === 'b1' ? inventoryB1 : 0 },
-        b5Planner,
+    const inventoryCounter = {
+        count: (_view, id) => (id === 'b1' ? inventoryB1 : 0)
+    };
+    // Generic planning authority owns reads and recipe math; B5 wrapper only translates the view.
+    const storageSnapshot = new KhoSnapshot({ items: { b1: loose, b1_block: blocks } });
+    const vaultSnapshot = new PersonalVaultSnapshot({
+        totals: { b3: 1, b5: existingB5 },
+        slotCount: pvEmptySlots === null ? null : 54,
+        emptySlotCount: pvEmptySlots
+    });
+    const readFlows = {
+        storage: { read: async () => ({ success: true, data: storageSnapshot }) },
+        personalVault: { read: async () => ({ success: true, data: vaultSnapshot }) },
+        inventory: {
+            readViews: () => [{
+                source: 'bot-inventory',
+                items: inventoryB1 > 0 ? [{ logicalId: 'b1', count: inventoryB1 }] : [],
+                emptySlotCount: 36
+            }]
+        }
+    };
+    const craftPlanning = new CraftPlanningService({
+        planner,
         materialCalculator,
         recipeRegistry,
         tiers,
-        b1Materials,
-        config: { b1SupplyMode: 'continuous', b2InputSource, personalVaultBackpressure: { minEmptySlots: 3, hardMinEmptySlots: 1 } }
+        storageMaterials: b1Materials,
+        inventoryCounter,
+        readFlows,
+        config: {
+            supplyMode: 'continuous',
+            inputSource: b2InputSource,
+            vaultBackpressure: { minEmptySlots: 3, hardMinEmptySlots: 1 }
+        }
     });
+    return new B5PlanningService({ planning: craftPlanning, tiers, targetId: 'b5' });
 }
 
 test('B5Planner never hard-codes a target: targetId must come from config, per-request target wins', () => {
@@ -118,7 +140,7 @@ test('B5PlanningService preserves stable thrown dependency status instead of col
     const error = new (require('../../../src/shared/errors/FlowError'))('Storage generation is stale.', {
         code: 'DISCONNECTED', subsystem: 'storage', operation: 'KhoService', step: 'generation-guard'
     });
-    service.readFlows.kho.read = async () => { throw error; };
+    service.planning.readFlows.storage.read = async () => { throw error; };
 
     const result = await service.inspectAdditional(1, { expectedGeneration: 7 });
     assert.equal(result.success, false);

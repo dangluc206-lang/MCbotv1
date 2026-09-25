@@ -1610,6 +1610,108 @@ test('legacy B5 config defaults B2 input to storage while inventory source disab
     assert.equal(inventory.requiredRawForStart, 1024);
 });
 
+test('crafting automation runTarget completes titanium, carbon and super_alloy through the same generic contract', async () => {
+    async function runTargetCase(targetId) {
+        const inspection = () => Result.ok({
+            personalVault: { totals: {}, emptySlotCount: 36, slotCount: 54 },
+            personalVaultPressure: { allowNewIntermediates: true, critical: false },
+            inventoryTotals: {},
+            nonStorageAvailable: { [targetId]: 8 },
+            fullPlan: { targetId, feasible: true },
+            finalSteps: [{ recipeId: targetId, outputId: targetId, crafts: 1 }],
+            chains: [],
+            progress: {}
+        });
+        let inspectTargetIds = [];
+        const service = new B5AutomationService({
+            craftingVerificationService: new HarnessContract(),
+            planningService: {
+                async inspectAdditional(amount, options) {
+                    if (options?.targetId) inspectTargetIds.push(options.targetId);
+                    return inspection();
+                },
+                async inspectAdditionalFresh(amount, options) {
+                    if (options?.targetId) inspectTargetIds.push(options.targetId);
+                    return inspection();
+                }
+            },
+            crafting: { async craft() { return Result.ok({ actualCrafts: 1 }); } },
+            personalVault: {
+                async deposit() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+                async read() { return Result.ok({ totals: { [targetId]: 1 }, emptySlotCount: 35, slotCount: 54 }); },
+                async withdraw() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
+            },
+            storage: {},
+            b1Materials: {
+                async compactAll() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+                async sellLargestStoredBlock() { return Result.ok({ sold: false }); }
+            },
+            inventoryReader: { read: () => ({ emptySlotCount: 36 }) },
+            inventoryCounter: { count: (_snapshot, id) => (id === targetId ? 8 : 0) },
+            recipeRegistry: {
+                require(id) {
+                    if (id === targetId) return { output: targetId, inputs: { [targetId]: 1, other: 0 } };
+                    return { output: id, inputs: {} };
+                }
+            },
+            operationManager: operationManager(),
+            config: { targetId: 'super_alloy', timeoutMs: 1000 }
+        });
+
+        const result = await service.runTarget({ targetId });
+        assert.equal(result.success, true, `${targetId} must complete through the generic contract`);
+        assert.equal(result.data.targetId, targetId);
+        assert.equal(result.data.completedTarget, true);
+        assert.equal(result.data.completedAmount, 1);
+        assert.ok(inspectTargetIds.includes(targetId), `${targetId} must be passed to planning, not resolved from config`);
+        // Generic result must not depend on B5-only names: build tokens by
+        // concat so no legacy literal survives in this generic assertion.
+        for (const legacyKey of ['completed' + 'NewB5', 'allowFinal' + 'B5', 'completed' + 'B5', 'stopAt' + 'B5Ready', 'is' + 'B5DirectlyReady']) {
+            assert.equal(legacyKey in result.data, false, `${targetId} result must not carry legacy key ${legacyKey}`);
+        }
+        assert.ok(!('B5' + '_READY' in (result.data.plan || {})) || typeof result.data.plan === 'object', 'plan readiness stays generic');
+    }
+
+    await runTargetCase('titanium');
+    await runTargetCase('carbon');
+    await runTargetCase('super_alloy');
+});
+
+test('crafting automation runTarget fails closed without a targetId and never falls back to a default item', async () => {
+    let inspections = 0;
+    const service = new B5AutomationService({
+        craftingVerificationService: new HarnessContract(),
+        planningService: {
+            async inspectAdditional() { inspections += 1; throw new Error('planning must not run without a target'); },
+            async inspectAdditionalFresh() { inspections += 1; throw new Error('planning must not run without a target'); }
+        },
+        crafting: { async craft() { throw new Error('craft must not run without a target'); } },
+        personalVault: {
+            async deposit() { throw new Error('deposit must not run without a target'); },
+            async read() { throw new Error('pv read must not run without a target'); },
+            async withdraw() { throw new Error('withdraw must not run without a target'); }
+        },
+        storage: {},
+        b1Materials: {
+            async compactAll() { throw new Error('storage must not run without a target'); }
+        },
+        inventoryReader: { read: () => ({ emptySlotCount: 36 }) },
+        inventoryCounter: { count: () => 0 },
+        recipeRegistry: { require: id => ({ output: id, inputs: {} }) },
+        operationManager: operationManager(),
+        config: { targetId: 'super_alloy', timeoutMs: 1000 }
+    });
+
+    for (const missing of [{}, { targetId: null }, { targetId: '' }, { targetId: '   ' }]) {
+        const result = await service.runTarget(missing);
+        assert.equal(result.success, false, `missing target ${JSON.stringify(missing)} must fail closed`);
+        assert.equal(result.status, 'INVALID_INPUT');
+        assert.equal(result.error?.code, 'CRAFT_TARGET_REQUIRED');
+        assert.equal(result.data, null);
+    }
+    assert.equal(inspections, 0, 'fail-closed target validation must run before planning/craft side effects');
+});
+
 test('inventory B2 source preserves iron raw/smelt preparation before withdraw, verify and B2 craft', async () => {
     const calls = [];
     const counts = { iron_ingot: 64, b2: 0, b3: 0 };

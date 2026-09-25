@@ -1,5 +1,17 @@
 'use strict';
 
+const CraftStageClassifier = require('../../planning/crafting/CraftStageClassifier');
+const PersonalVaultReadFlow = require('../personal-vault/PersonalVaultReadFlow');
+const InventoryReadFlow = require('../inventory/InventoryReadFlow');
+const { personalVaultPressure } = require('./CraftInputAvailability');
+const Result = require('../../shared/result/Result');
+const Status = require('../../shared/result/Status');
+const FlowError = require('../../shared/errors/FlowError');
+const Operation = require('../../operations/Operation');
+
+// ponytail: cached-read TTL ceiling is 5s; raise via dataMaxAgeMs injection if profiling shows excess /kho+/pv2 reads.
+const DEFAULT_DATA_MAX_AGE_MS = 5000;
+
 /**
  * Generic crafting planning authority.
  *
