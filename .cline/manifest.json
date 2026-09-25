@@ -3,8 +3,8 @@
   "source": {
     "repository": "dangluc206-lang/MCbotv1",
     "ref": "main",
-    "treeSha": "540ff7d770e4bb0ae9e879aec4f613b796291dc2",
-    "syncBasis": "Verified against HEAD tree on 2026-09-24 (AI module and all legacy product .md documents removed): paths, counts, recipes, GUI ids and mode descriptors were re-checked against src/, config/, tests/, scripts/ and architecture/; skill routing and supporting skill files kept intact."
+    "treeSha": "6cd5b58bbe730bbcfacaf4deeb25ab2714cede68",
+    "syncBasis": "Resynced to HEAD tree a4acdc9 on 2026-09-26: tree counts recomputed from HEAD tree; context-index refs (tasks/skills/rules) re-checked against working tree and HEAD-tracked files; BOM stripped. Fact content of architecture/ownership/routing/server-profile/crafting-contract keeps its 2026-09-24 verification basis."
   },
   "files": [
     "project.json",
