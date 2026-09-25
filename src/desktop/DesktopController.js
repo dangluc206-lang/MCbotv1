@@ -688,7 +688,7 @@ class DesktopController {
         const current = this.bundle.configuration.registry.require('craftingMode');
         const next = {
             ...current,
-            ...pick(fields, ['enabled','teleportHomeOnEnable','autoResumeOnReconnect','pollIntervalMs','disconnectedPollMs','errorRetryMs','errorRetryMaxMs','craftLoopDelayMs','postB5CooldownMs']),
+            ...pick(fields, ['enabled','teleportHomeOnEnable','autoResumeOnReconnect','pollIntervalMs','disconnectedPollMs','errorRetryMs','errorRetryMaxMs','craftLoopDelayMs','postCycleCooldownMs','postB5CooldownMs']),
             stability: {
                 ...(current.stability || {}),
                 ...(fields.stability || {})

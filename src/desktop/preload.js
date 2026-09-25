@@ -62,6 +62,8 @@ contextBridge.exposeInMainWorld('mcbot', Object.freeze({
     sendSkyCommand: (botId, options) => invoke('mcbot:sky-commands:send', botId, options),
     collectorConfig: botId => invoke('mcbot:config:collector:get', botId),
     updateCollectorConfig: (botId, fields) => invoke('mcbot:config:collector:update', botId, fields),
+    b5CraftConfig: () => invoke('mcbot:config:b5-craft:get'),
+    updateB5CraftConfig: fields => invoke('mcbot:config:b5-craft:update', fields),
     fishingConfig: botId => invoke('mcbot:config:fishing:get', botId),
     updateFishingArea: (botId, fields) => invoke('mcbot:config:fishing:update-area', botId, fields),
     b5CraftConfig: () => invoke('mcbot:config:b5-craft:get'),

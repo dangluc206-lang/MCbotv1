@@ -45,10 +45,29 @@ const state = {
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const configLabels = Object.freeze({
-  app:'Ứng dụng & vận hành', server:'Máy chủ Minecraft', commands:'Danh sách lệnh', skyCommands:'Lệnh riêng theo Sky', commandResponses:'Phản hồi lệnh', serverLogin:'Đăng nhập server', resourcePack:'Gói tài nguyên', discord:'Discord', guiWindows:'Nhận diện cửa sổ GUI', guiSlots:'Vai trò ô GUI', guiObservation:'Quan sát GUI', inventoryObservation:'Quan sát túi đồ', movement:'Di chuyển', locations:'Vị trí', routes:'Tuyến đường', items:'Nhận diện vật phẩm', storage:'Kho /kho', personalVault:'Kho cá nhân /pv 2', minerals:'Menu khoáng sản', mineralConversions:'Đổi phôi/khối & bảo vệ kho', smelting:'Nung', island:'Đảo /is', dungeon:'Hầm ngục', skyblock:'Vào Skyblock', recipes:'Công thức chế tạo', craftingTiers:'Tầng chế tạo', b5:'Quy tắc B5', collectorB5Mode:'Collector+B5 cũ', craftingMode:'Chế B5 thuần', fishingMode:'Câu cá', dailyRecovery:'Khung phục hồi theo giờ', craftingTargets:'Mục tiêu chế tạo'
+  app:'Ứng dụng & vận hành', server:'Máy chủ Minecraft', commands:'Danh sách lệnh', skyCommands:'Lệnh riêng theo Sky', commandResponses:'Phản hồi lệnh', serverLogin:'Đăng nhập server', resourcePack:'Gói tài nguyên', discord:'Discord', guiWindows:'Nhận diện cửa sổ GUI', guiSlots:'Vai trò ô GUI', guiObservation:'Quan sát GUI', inventoryObservation:'Quan sát túi đồ', movement:'Di chuyển', locations:'Vị trí', routes:'Tuyến đường', items:'Nhận diện vật phẩm', storage:'Kho /kho', personalVault:'Kho cá nhân /pv 2', minerals:'Menu khoáng sản', mineralConversions:'Đổi phôi/khối & bảo vệ kho', smelting:'Nung', island:'Đảo /is', dungeon:'Hầm ngục', skyblock:'Vào Skyblock', recipes:'Công thức chế tạo', craftingTiers:'Tầng chế tạo', b5:'Quy tắc B5', collectorB5Mode:'Collector+B5 cũ', craftingMode:'Chế tạo thuần', fishingMode:'Câu cá', dailyRecovery:'Khung phục hồi theo giờ', craftingTargets:'Mục tiêu chế tạo'
 });
 
 const pageTitles = window.MCbotPageCatalog;
+
+function bridgeAvailable() {
+  return typeof window !== 'undefined' && Boolean(window.mcbot);
+}
+
+function bridgeMissingError(action = 'Thao tác') {
+  return new Error(`${action} không khả dụng: cầu kết nối phần mềm (window.mcbot) chưa sẵn sàng. Hãy mở bằng Electron.`);
+}
+
+function setBridgeDependentUiDisabled(disabled) {
+  for (const id of ['loadB5PureConfig', 'saveB5PureConfig', 'loadB5Rules', 'saveB5Rules', 'loadStorageProtect', 'saveStorageProtect']) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.disabled = disabled;
+      if (disabled) el.title = 'Không khả dụng: cầu kết nối phần mềm chưa sẵn sàng.';
+      else el.removeAttribute('title');
+    }
+  }
+}
 
 async function api(promise) {
   return window.MCbotRendererApiClient.call(promise);
@@ -856,12 +875,18 @@ async function handleFleetAction(button) {
 }
 
 function switchDevPage(page) {
+  const experienceLevel = state.preferences?.experienceLevel || 'standard';
   const next = window.MCbotDevRouter.apply(page, {
     document,
     catalog: pageTitles,
-    experienceLevel: state.preferences?.experienceLevel || 'standard'
+    experienceLevel
   });
-  if (!next) return;
+  if (!next) {
+    // Contract unchanged: DEV pages require experienceLevel='advanced'.
+    // Never leave a visible nav item silently unresponsive.
+    if (experienceLevel !== 'advanced') toast('Công cụ Dev chỉ khả dụng ở chế độ Nâng cao. Bật Mức trải nghiệm “Nâng cao” trong Cài đặt.', 'warn');
+    return;
+  }
   state.devPage = next;
   localStorage.setItem('mcbot.devPage', next);
   if (next === 'dev-overview') renderDevOverview();
@@ -1066,6 +1091,7 @@ async function openCommandPalette() {
 }
 
 async function loadB5PureConfig() {
+  if (!bridgeAvailable() || typeof window.mcbot.b5CraftConfig !== 'function') throw bridgeMissingError('Tải cấu hình chế tạo');
   const group = await api(window.mcbot.b5CraftConfig());
   const c = group.value || {};
   $('#b5PureEnabled').checked = c.enabled !== false;
@@ -1073,7 +1099,7 @@ async function loadB5PureConfig() {
   $('#b5PureResume').checked = c.autoResumeOnReconnect !== false;
   $('#b5PurePoll').value = c.pollIntervalMs ?? 10000;
   $('#b5PureCraftDelay').value = c.craftLoopDelayMs ?? 300;
-  $('#b5PureCooldownMinutes').value = Math.round(Number(c.postB5CooldownMs ?? 1800000) / 60000);
+  $('#b5PureCooldownMinutes').value = Math.round(Number(c.postCycleCooldownMs ?? c.postB5CooldownMs ?? 1800000) / 60000);
   $('#b5PureRetry').value = c.errorRetryMs ?? 5000;
   $('#b5PureDisconnectedPoll').value = c.disconnectedPollMs ?? 1500;
   $('#b5PureRetryMax').value = c.errorRetryMaxMs ?? 30000;
@@ -1088,13 +1114,14 @@ async function loadB5PureConfig() {
 }
 
 async function saveB5PureConfig() {
+  if (!bridgeAvailable() || typeof window.mcbot.updateB5CraftConfig !== 'function') throw bridgeMissingError('Lưu cấu hình chế tạo');
   return api(window.mcbot.updateB5CraftConfig({
     enabled: $('#b5PureEnabled').checked,
     teleportHomeOnEnable: $('#b5PureHome').checked,
     autoResumeOnReconnect: $('#b5PureResume').checked,
     pollIntervalMs: Number($('#b5PurePoll').value),
     craftLoopDelayMs: Number($('#b5PureCraftDelay').value),
-    postB5CooldownMs: Number($('#b5PureCooldownMinutes').value) * 60000,
+    postCycleCooldownMs: Number($('#b5PureCooldownMinutes').value) * 60000,
     errorRetryMs: Number($('#b5PureRetry').value),
     disconnectedPollMs: Number($('#b5PureDisconnectedPoll').value),
     errorRetryMaxMs: Number($('#b5PureRetryMax').value),
@@ -1364,7 +1391,7 @@ function bindEvents() {
   $('#refreshBtn').onclick = () => refreshSnapshot();
   $('#reloadProfiles').onclick = () => loadProfiles().catch(error => toast(error.message, 'error'));
   $('#loadB5PureConfig').onclick = () => loadB5PureConfig().catch(error => toast(error.message, 'error'));
-  $('#saveB5PureConfig').onclick = event => runAction({ key: 'b5-pure-config', button: event.currentTarget, success: 'Đã lưu cấu hình B5 thuần.', refresh: false, fn: saveB5PureConfig }).catch(() => {});
+  $('#saveB5PureConfig').onclick = event => runAction({ key: 'b5-pure-config', button: event.currentTarget, success: 'Đã lưu cấu hình chế tạo.', refresh: false, fn: saveB5PureConfig }).catch(() => {});
   $('#loadB5Rules').onclick = () => loadB5Rules().catch(error => toast(error.message, 'error'));
   $('#b5B2InputSource').addEventListener('change', syncB2InputSourceUi);
   $('#saveB5Rules').onclick = event => runAction({ key: 'b5-rules-config', button: event.currentTarget, success: 'Đã lưu quy tắc B5. Hãy khởi động lại hệ thống nền để áp dụng đầy đủ.', refresh: false, fn: saveB5Rules }).catch(() => {});
@@ -1680,6 +1707,20 @@ async function initialize() {
   restoreLocalPreferences();
   switchPage(state.page);
   switchDevPage(state.devPage);
+  if (!bridgeAvailable()) {
+    // BUG-1: Playwright/Chromium without Electron preload has no window.mcbot.
+    // Fail closed with operator-safe banner + structured log, never raw TypeError.
+    const banner = $('#setupBanner');
+    if (banner) {
+      banner.classList.remove('hidden');
+      banner.innerHTML = '<strong>Chế độ xem ngoại tuyến: cầu kết nối phần mềm chưa sẵn sàng.</strong><span>Mở bằng Electron để điều khiển bot. Các nút tải/lưu cấu hình đã bị vô hiệu hoá.</span>';
+    }
+    setBridgeDependentUiDisabled(true);
+    reportRendererError(new Error('window.mcbot bridge missing at initialize'), 'initialize:bridge-missing');
+    toast('Cầu kết nối phần mềm chưa sẵn sàng. Hãy mở bằng Electron.', 'warn');
+    return;
+  }
+  setBridgeDependentUiDisabled(false);
   window.mcbot.onSnapshot(acceptSnapshot);
   window.mcbot.onLog(log => {
     state.logs.push(log);

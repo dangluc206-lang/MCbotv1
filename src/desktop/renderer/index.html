@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'">
   <title>MCbot Desktop</title>
+  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -91,21 +92,21 @@
       <section class="page" id="page-modes">
         <div class="section-head"><div><h2>Điều khiển chế độ</h2><p>Mỗi bot chỉ có một chế độ chính tại một thời điểm</p></div></div>
         <div id="modeCards" class="bot-grid"></div>
-        <div class="section-head"><div><h2>Hành trình B5</h2><p>Hiển thị postcondition đã xác minh, baseline bất biến và chỉ bán theo 64.</p></div><button class="button ghost" id="refreshB5Journey">Làm mới</button></div>
-        <div id="b5Journey" class="b5-journey-grid"><div class="empty panel">Chưa có trạng thái B5.</div></div>
+        <div class="section-head"><div><h2>Hành trình chế tạo</h2><p>Hiển thị postcondition đã xác minh, baseline bất biến và chỉ bán theo 64.</p></div><button class="button ghost" id="refreshB5Journey">Làm mới</button></div>
+        <div id="b5Journey" class="b5-journey-grid"><div class="empty panel">Chưa có trạng thái chế tạo.</div></div>
         <div class="section-head config-head"><div><h2>Cấu hình chế độ</h2><p>Kiểm tra hợp lệ + sao lưu + nạp lại</p></div></div>
         <div class="two-column">
           <div class="panel form-panel accent-panel">
-            <div class="panel-title"><h2>Chế B5 thuần</h2><span class="tag">KHUYẾN NGHỊ</span></div>
-            <p>Khi bật mode: yêu cầu đúng Sky của bot, <code>/is</code>, chạy Bảo vệ kho bắt buộc rồi chế B5. Không tự di chuyển.</p>
+            <div class="panel-title"><h2>Chế tạo thuần</h2><span class="tag">KHUYẾN NGHỊ</span></div>
+            <p>Khi bật mode: yêu cầu đúng Sky của bot, <code>/is</code>, chạy Bảo vệ kho bắt buộc rồi chế tạo mục tiêu. Không tự di chuyển.</p>
             <label class="check"><input id="b5PureEnabled" type="checkbox"> Cho phép chế độ</label>
             <label class="check"><input id="b5PureHome" type="checkbox"> Tự <code>/is</code> khi bắt đầu / kết nối lại</label>
             <label class="check"><input id="b5PureResume" type="checkbox"> Tự tiếp tục sau khi kết nối lại</label>
             <div class="inline-fields"><label>Chu kỳ đọc/kế hoạch (ms)<input id="b5PurePoll" type="number" min="500"></label><label>Độ trễ sau chế tạo (ms)<input id="b5PureCraftDelay" type="number" min="1"></label></div>
-            <label>Nghỉ sau khi hoàn tất B5 (phút)<input id="b5PureCooldownMinutes" type="number" min="1"></label>
+            <label>Nghỉ sau khi hoàn tất mục tiêu (phút)<input id="b5PureCooldownMinutes" type="number" min="1"></label>
             <label>Chờ trước khi thử lại lỗi (ms)<input id="b5PureRetry" type="number" min="100"></label>
             <div class="inline-fields"><label>Chu kỳ khi mất kết nối (ms)<input id="b5PureDisconnectedPoll" type="number" min="100"></label><label>Trần backoff lỗi (ms)<input id="b5PureRetryMax" type="number" min="100"></label></div>
-            <p class="muted">Bảo vệ kho và đối soát sau click là bắt buộc; không có công tắc tắt trong mode B5.</p>
+            <p class="muted">Bảo vệ kho và đối soát sau click là bắt buộc; không có công tắc tắt trong chế độ chế tạo.</p>
             <div class="inline-fields"><label>Số lần đọc mới để đối soát<input id="b5PureReconcileReads" type="number" min="1" step="1"></label><label>Khoảng chờ đối soát (ms)<input id="b5PureReconcileRetry" type="number" min="100"></label></div>
             <div class="inline-fields"><label>Chu kỳ chờ khi còn bất định (ms)<input id="b5PureReconcileUnresolved" type="number" min="100"></label><label class="check"><input id="b5PureRetryAfterNoEffect" type="checkbox"> Chỉ cho phép lập kế hoạch lại khi chứng minh input quan sát được không hề bị tiêu thụ</label></div>
             <div class="inline-fields"><label>Backoff khi không tiến triển (ms)<input id="b5PureNoProgressBase" type="number" min="100"></label><label>Trần backoff chờ (ms)<input id="b5PureNoProgressMax" type="number" min="100"></label></div>
@@ -235,7 +236,7 @@
             <button class="dev-nav-item" data-dev-page="logs"><span>04</span>Logs <b id="logUnreadBadge" class="nav-badge hidden">0</b></button>
             <button class="dev-nav-item" data-dev-page="incident-debug"><span>05</span>Incident Debug</button>
             <button class="dev-nav-item" data-dev-page="runtime-state"><span>06</span>Runtime State</button>
-            <button class="dev-nav-item" data-dev-page="b5-debug"><span>07</span>B5 Debug</button>
+            <button class="dev-nav-item" data-dev-page="b5-debug"><span>07</span>Craft Debug</button>
             <button class="dev-nav-item" data-dev-page="diagnostics"><span>08</span>Diagnostics</button>
             <button class="dev-nav-item" data-dev-page="config-debug"><span>09</span>Config Debug</button>
           </nav>
@@ -299,8 +300,8 @@
           </section>
 
           <section class="dev-page" id="dev-page-b5-debug">
-            <div class="section-head"><div><h2>B5 Debug</h2><p>Journey operator + trace replay fixture của B5</p></div><label>Bot<select id="b5DebugBotSelect"></select></label><button class="button ghost" id="b5DebugRefresh">Làm mới</button></div>
-            <div id="b5DebugJourney" class="b5-journey-grid"><div class="empty panel">Chưa có trạng thái B5.</div></div>
+            <div class="section-head"><div><h2>Chế tạo Debug</h2><p>Journey operator + trace replay fixture của chế tạo (tương thích B5)</p></div><label>Bot<select id="b5DebugBotSelect"></select></label><button class="button ghost" id="b5DebugRefresh">Làm mới</button></div>
+            <div id="b5DebugJourney" class="b5-journey-grid"><div class="empty panel">Chưa có trạng thái chế tạo.</div></div>
             <div class="section-head"><div><h2>Trace replay fixture</h2><p>Planning input/digest để replay offline qua scripts/replay-b5-plan.js</p></div></div>
             <pre id="b5DebugTrace" class="log-console panel">Chọn một bot để đọc trace.</pre>
           </section>
@@ -409,7 +410,7 @@
     </form>
   </dialog>
   <dialog id="commandPaletteDialog" class="command-palette" aria-labelledby="commandPaletteTitle">
-    <form method="dialog"><div class="panel-title"><h2 id="commandPaletteTitle">Tìm chức năng</h2><button class="button ghost small" value="cancel" aria-label="Đóng">Esc</button></div><label for="commandPaletteInput" class="sr-only">Từ khóa</label><input id="commandPaletteInput" placeholder="Thêm bot, chạy B5, xử lý lỗi…" autocomplete="off"><div id="commandPaletteResults" class="command-palette-results" role="listbox"></div></form>
+    <form method="dialog"><div class="panel-title"><h2 id="commandPaletteTitle">Tìm chức năng</h2><button class="button ghost small" value="cancel" aria-label="Đóng">Esc</button></div><label for="commandPaletteInput" class="sr-only">Từ khóa</label><input id="commandPaletteInput" placeholder="Thêm bot, chạy chế tạo, xử lý lỗi…" autocomplete="off"><div id="commandPaletteResults" class="command-palette-results" role="listbox"></div></form>
   </dialog>
   <script src="core/RendererApiClient.js"></script>
   <script src="core/Html.js"></script>
