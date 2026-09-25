@@ -14,10 +14,10 @@
       "computedHash": "328d3ddd8610003062946ed08c29ffd95b3f3cefc52c92993235112a8b1b8bff"
     },
     "frontend-design": {
-      "source": "cline/skills",
+      "source": "aladicf/better-web-ui",
       "sourceType": "github",
       "skillPath": "skills/frontend-design/SKILL.md",
-      "computedHash": "860b2d737f7de8f49d7080acdbfa8e33fe523a15727b0e8d40a38dde8ba4517d"
+      "computedHash": "c2cf87cdd07523f4b92d9bbc0b6f90dde57ac574f47a140ca477df4c47a639a9"
     },
     "polish": {
       "source": "aladicf/better-web-ui",
