@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "skills": {
+    "audit": {
+      "source": "aladicf/better-web-ui",
+      "sourceType": "github",
+      "skillPath": "skills/audit/SKILL.md",
+      "computedHash": "6875ef913334513332ee311a7f30898b4fd161fa89dff65776a632e52300c18e"
+    },
+    "critique": {
+      "source": "aladicf/better-web-ui",
+      "sourceType": "github",
+      "skillPath": "skills/critique/SKILL.md",
+      "computedHash": "328d3ddd8610003062946ed08c29ffd95b3f3cefc52c92993235112a8b1b8bff"
+    },
+    "frontend-design": {
+      "source": "cline/skills",
+      "sourceType": "github",
+      "skillPath": "skills/frontend-design/SKILL.md",
+      "computedHash": "860b2d737f7de8f49d7080acdbfa8e33fe523a15727b0e8d40a38dde8ba4517d"
+    },
+    "polish": {
+      "source": "aladicf/better-web-ui",
+      "sourceType": "github",
+      "skillPath": "skills/polish/SKILL.md",
+      "computedHash": "220c204cb6e665641472db5b4a9e7d9382a6d561a76bb2d95a14850cc5206efb"
+    },
+    "quieter": {
+      "source": "aladicf/better-web-ui",
+      "sourceType": "github",
+      "skillPath": "skills/quieter/SKILL.md",
+      "computedHash": "da18be4180ecbb742788c8b0ddc69acf119303b2a8b36228eac76392cbff5eaf"
+    }
+  }
+}
