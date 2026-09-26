@@ -27,6 +27,12 @@ function prepareFixture(root) {
 }
 
 function runHarness({ fixtureRoot, artifactRoot }) {
+    // The harness must start the real Electron binary. An inherited
+    // ELECTRON_RUN_AS_NODE (set by some IDE/extension hosts) makes electron.exe
+    // run as plain Node, which rejects the Electron CLI flags below, so it is
+    // removed from the child environment instead of being inherited.
+    const harnessEnv = { ...process.env, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true', MCBOT_E2E_FIXTURE_ROOT: fixtureRoot, MCBOT_E2E_ARTIFACT_ROOT: artifactRoot };
+    delete harnessEnv.ELECTRON_RUN_AS_NODE;
     return new Promise((resolve, reject) => {
         const child = spawn(electronExecutable, [
             '--disable-gpu',
@@ -40,7 +46,7 @@ function runHarness({ fixtureRoot, artifactRoot }) {
             cwd: projectRoot,
             windowsHide: true,
             stdio: ['ignore', 'pipe', 'pipe'],
-            env: { ...process.env, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true', MCBOT_E2E_FIXTURE_ROOT: fixtureRoot, MCBOT_E2E_ARTIFACT_ROOT: artifactRoot }
+            env: harnessEnv
         });
         let stdout = '';
         let stderr = '';
@@ -90,8 +96,18 @@ test('Desktop critical flow is deterministic without network or secrets', { time
     assert.ok(result.accessibility.interactiveCount >= 40);
     assert.equal(result.visualLayout.contract, 'desktop-visual-layout-v1');
     assert.equal(result.visualLayout.navGroups, 4);
-    assert.ok(result.visualLayout.pages >= 10);
+    // UI contract: 6 user pages + builder + tools live in the user shell (.page)
+    // and the 9 Dev nav pages live in the Dev shell (.dev-page).
+    assert.ok(result.visualLayout.pages >= 8);
+    assert.ok(result.visualLayout.devPages >= 9);
     assert.equal(result.visualLayout.horizontalOverflow, false);
+    // Every user page, every Dev nav page and the palette-only create-mode page
+    // must be reachable; the tour closes on the dashboard.
+    assert.deepEqual(result.visitedPages, [
+        'bots', 'bot-detail', 'modes', 'incidents', 'settings',
+        'dev-overview', 'inspector', 'events', 'logs', 'incident-debug', 'runtime-state', 'b5-debug', 'diagnostics', 'config-debug',
+        'builder', 'dashboard'
+    ]);
     assert.equal(result.fixtureVersion, packageJson.version);
     assert.ok(fs.statSync(result.screenshotPath).size > 1000);
     succeeded = true;

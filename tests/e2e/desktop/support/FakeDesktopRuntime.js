@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const CommandPaletteCatalog = require('../../../../src/desktop/presentation/CommandPaletteCatalog');
 
 const FIXED_TIME = '2026-08-24T00:00:00.000Z';
 
@@ -116,6 +117,10 @@ class FakeDesktopRuntime {
         case 'mcbot:config:collector:get': return clone(this.configByKey.get('collectorB5Mode'));
         case 'mcbot:config:fishing:get': return { resolved: clone(this.configByKey.get('fishingMode')), overrides: {} };
         case 'mcbot:logs': return clone(this.logs);
+        case 'mcbot:events:snapshot': return [];
+        case 'mcbot:bot:dev-detail': return { botId: args[0] || null, lifecycle: this.lifecycle, generation: 1, services: [] };
+        case 'mcbot:b5:trace': return { botId: args[0] || null, cycles: [] };
+        case 'mcbot:presentation:search': return CommandPaletteCatalog.search(args[0], { experienceLevel: 'advanced', ...(args[1] || {}) });
         case 'mcbot:diagnostics:list': return { contract: 'runtime-failure-artifact-v1', items: [], warnings: [] };
         case 'mcbot:support:preview': return { contract: 'support-bundle', version: 2, previewId: 'support-preview:e2e', entryCount: 2, totalBytes: 1024, privacy: { default: 'PSEUDONYMIZED' }, warnings: [], files: [] };
         case 'mcbot:app:info': return { version: this.manifest.appVersion, name: 'MCbot Desktop', packaged: false, platform: process.platform, arch: process.arch };
@@ -123,8 +128,10 @@ class FakeDesktopRuntime {
         case 'mcbot:update:migration-status': return { lastBackup: null };
         case 'mcbot:preferences:get': return { closeToTray: false, notifyErrors: true, snapshotIntervalMs: 900, startBackendOnLaunch: false, preventSystemSleepWhileActive: false, launchAtLogin: false, experienceLevel:'advanced', colorTheme:'dark', firstRun:{ status:'COMPLETED', step:6, startedAt:FIXED_TIME, completedAt:FIXED_TIME, durationMs:0 }, loginItem: { supported: false, openAtLogin: false } };
         case 'mcbot:secrets:status': return { state: 'NOT_CONFIGURED', encryptionAvailable: true, keys: [], recovery: null };
-        case 'mcbot:renderer:error': this.rendererErrors.push(clone(args[0])); return { recorded: true };
-        default:
+        case 'mcbot:crafting:items:list': return { items: [{ id: 'titanium', displayName: 'Titanium' }, { id: 'carbon', displayName: 'Carbon' }] };
+        case 'mcbot:crafting:request:set': return { success: true, data: { request: { targetItemId: args[1].targetItemId, quantity: args[1].quantity } } };
+        case 'mcbot:crafting:request:clear': return { success: true };
+
             if (SAFE_NOOP_CHANNELS.has(channel)) return { accepted: true };
             throw new Error(`Unhandled E2E IPC channel: ${channel}`);
         }
