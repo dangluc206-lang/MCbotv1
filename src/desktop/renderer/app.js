@@ -479,11 +479,17 @@ function eventMatches(record) {
   const subsystem = $('#eventSubsystem')?.value || 'all';
   const severity = $('#eventSeverity')?.value || 'all';
   const bot = $('#eventBot')?.value || 'all';
+  const generation = ($('#eventGeneration')?.value || '').trim();
+  const attempt = ($('#eventAttempt')?.value || '').trim();
+  const operation = ($('#eventOperation')?.value || '').trim().toLowerCase();
   const query = ($('#eventSearch')?.value || '').trim().toLowerCase();
   if (subsystem !== 'all' && String(record.subsystem || '') !== subsystem) return false;
   if (severity !== 'all' && String(record.severity || '') !== severity) return false;
   if (bot !== 'all' && String(record.botId || '') !== bot) return false;
-  const text = `${record.eventType || ''} ${record.eventId || ''} ${record.botId || ''} ${record.subsystem || ''} ${record.source || ''} ${record.severity || ''} ${JSON.stringify(record.payload || {})}`.toLowerCase();
+  if (generation && String(record.generation ?? '') !== generation) return false;
+  if (attempt && String(record.attemptEpoch ?? '') !== attempt) return false;
+  if (operation && !`${record.operationId || ''} ${record.correlationId || ''}`.toLowerCase().includes(operation)) return false;
+  const text = `${record.eventType || ''} ${record.eventId || ''} ${record.botId || ''} ${record.modeId || ''} ${record.operationId || ''} ${record.correlationId || ''} ${record.subsystem || ''} ${record.source || ''} ${record.severity || ''} ${JSON.stringify(record.payload || {})}`.toLowerCase();
   return !query || text.includes(query);
 }
 
@@ -531,12 +537,21 @@ function renderIncidentDebug() {
 async function renderIncidentDebugDetail() {
   const detail = $('#incidentDebugDetail');
   if (!detail) return;
-  const incident = (state.incidents || []).find(item => item.id === state.incidentDebugId);
-  if (!incident) { detail.innerHTML = '<div class="empty">Chọn một sự cố để xem timeline đầy đủ.</div>'; return; }
-  let diagnostic = null;
-  const artifactId = incident.evidenceRefs?.at(-1);
-  if (artifactId) { try { diagnostic = await api(window.mcbot.readDiagnostic(artifactId)); } catch { diagnostic = null; } }
-  detail.innerHTML = window.MCbotDevPages.incidentTimeline(incident, diagnostic);
+  const summary = (state.incidents || []).find(item => item.id === state.incidentDebugId);
+  if (!summary) { detail.innerHTML = '<div class="empty">Chọn một sự cố để xem timeline đầy đủ.</div>'; return; }
+  // incident(id) detail carries first/lastGeneration + operationIds for the
+  // multi-evidence nav; fall back to the list summary when backend is offline.
+  let incident = summary;
+  try { incident = await api(window.mcbot.readIncident(summary.id)); }
+  catch { incident = summary; }
+  // Navigate every evidence artifact (one-way evidenceRefs → artifactId), then
+  // render incident → evidence → operation → recovery → raw JSON.
+  const diagnostics = [];
+  for (const artifactId of (incident.evidenceRefs || [])) {
+    try { diagnostics.push(await api(window.mcbot.readDiagnostic(artifactId))); }
+    catch { diagnostics.push(null); }
+  }
+  detail.innerHTML = window.MCbotDevPages.incidentTimeline(incident, diagnostics.at(-1) || null);
 }
 
 function renderRuntimeState() {
@@ -549,7 +564,12 @@ async function renderB5Debug() {
   const traceEl = $('#b5DebugTrace');
   if (!botId || !traceEl) return;
   const journey = state.b5Journey.find(item => item.botId === botId);
-  $('#b5DebugJourney').innerHTML = window.MCbotB5JourneyPresenter.render(journey ? [journey] : [], esc);
+  const bot = (state.snapshot?.bots || []).find(entry => entry.botId === botId) || null;
+  // Render modes.crafting.details (crafting status/blocker/verification) first,
+  // then journey + trace replay fixture. Read-only, no runtime logic.
+  const details = bot?.modes?.crafting?.details || bot?.modes?.b5Craft?.details || null;
+  const detailsHtml = details ? `<div class="section-head"><div><h2>modes.crafting.details</h2><p>Raw crafting status của bot hiện tại</p></div></div><pre class="log-console panel">${esc(JSON.stringify(details, null, 2))}</pre>` : '';
+  $('#b5DebugJourney').innerHTML = detailsHtml + window.MCbotB5JourneyPresenter.render(journey ? [journey] : [], esc);
   try { traceEl.textContent = JSON.stringify(await api(window.mcbot.b5Trace(botId)), null, 2); }
   catch (error) { traceEl.textContent = `Trace lỗi: ${error.message}`; }
 }
@@ -1658,6 +1678,7 @@ function bindEvents() {
   $('#inspectorRefresh').onclick = () => renderInspector().catch(() => {});
   for (const id of ['eventSubsystem', 'eventSeverity', 'eventBot']) $('#' + id).addEventListener('change', renderEventStream);
   $('#eventSearch').addEventListener('input', () => requestAnimationFrame(renderEventStream));
+  for (const id of ['eventGeneration', 'eventAttempt', 'eventOperation']) $('#' + id)?.addEventListener('input', () => requestAnimationFrame(renderEventStream));
   $('#eventPause').addEventListener('change', () => { if (!$('#eventPause').checked) renderEventStream(); });
   $('#eventAutoScroll').addEventListener('change', renderEventStream);
   $('#clearEventView').onclick = clearEventView;

@@ -115,7 +115,7 @@ contextBridge.exposeInMainWorld('mcbot', Object.freeze({
     onSnapshot: listener => subscribe('mcbot:snapshot', listener),
     onOperatorSnapshot: listener => subscribe('mcbot:operator-snapshot', listener),
     devLogs: limit => invoke('mcbot:dev:logs', limit),
-    eventSnapshot: limit => invoke('mcbot:events:snapshot', limit),
+    eventSnapshot: options => invoke('mcbot:events:snapshot', options),
     botDevDetail: botId => invoke('mcbot:bot:dev-detail', botId),
     b5Trace: botId => invoke('mcbot:b5:trace', botId),
     onDevLog: listener => subscribe('mcbot:dev-log', listener),

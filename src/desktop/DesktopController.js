@@ -137,8 +137,8 @@ class DesktopController {
         return this.eventInspectorBridge?.onEvent?.(listener) || (() => {});
     }
 
-    eventSnapshot({ limit = 1000 } = {}) {
-        return this.eventInspectorBridge?.snapshot?.({ limit }) || [];
+    eventSnapshot({ limit = 1000, botId = null, generation = null, attemptEpoch = null, operationId = null, eventType = null } = {}) {
+        return this.eventInspectorBridge?.snapshot?.({ limit, botId, generation, attemptEpoch, operationId, eventType }) || [];
     }
 
     reportRendererError(payload = {}) {
@@ -295,6 +295,8 @@ class DesktopController {
 
     // Dev UI Bot Inspector: same runtime snapshot the operator view uses, plus
     // the registered service names. No new state system; read-only projection.
+    // recentOperations surfaces the live OperationManager snapshot so the Dev UI
+    // can trace lỗi → event → generation → mode → operation → recovery.
     botDevDetail(botId) {
         const bot = this.snapshot().bots.find(item => item.botId === botId);
         if (!bot) throw Object.assign(new Error(`Bot does not exist: ${botId}`), { code: 'DESKTOP_BOT_NOT_FOUND' });
@@ -302,18 +304,25 @@ class DesktopController {
         return {
             contract: 'dev-bot-detail-v1',
             bot,
+            recentOperations: bot.operation || null,
             services: Object.keys(runtime.services || {}).sort(),
             projectedAt: VietnamTime.iso()
         };
     }
 
-    // Dev UI B5 Debug: expose the existing B5 trace recorder replay fixture.
+    // Dev UI B5 Debug: expose the existing B5 trace recorder history plus the
+    // operator journey context (modes.crafting.details lives in bot snapshot).
+    // Renderer renders modes.crafting.details; trace carries replay fixture.
     b5Trace(botId) {
         const runtime = this.#runtime(botId);
         const recorder = runtime.getService?.('b5TraceRecorder');
+        const bot = this.snapshot().bots.find(item => item.botId === botId) || null;
         return {
             contract: 'dev-b5-trace-v1',
             botId,
+            crafting: bot?.modes?.crafting || null,
+            trace: recorder?.latest?.() || null,
+            history: recorder?.snapshot?.({ limit: 20 }) || [],
             replayFixture: recorder?.latestReplayFixture?.() || null,
             projectedAt: VietnamTime.iso()
         };
@@ -344,7 +353,20 @@ class DesktopController {
         await this.incidents({ limit: 100 });
         const incident = this.incidentIndexStore.find(id);
         if (!incident) throw Object.assign(new Error('Incident does not exist.'), { code: 'DESKTOP_INCIDENT_NOT_FOUND' });
-        return incident;
+        // Dev UI incident-debug multi-evidence nav: first/last generation plus
+        // the distinct operationIds seen across the timeline. No bypass API.
+        const generations = (incident.timeline || [])
+            .map(entry => Number(entry?.generation))
+            .filter(value => Number.isInteger(value));
+        const operationIds = [...new Set((incident.timeline || [])
+            .map(entry => String(entry?.operationId || entry?.correlationId || '').trim())
+            .filter(Boolean))];
+        return {
+            ...incident,
+            firstGeneration: generations.length ? generations[0] : (incident.generation ?? null),
+            lastGeneration: generations.length ? generations[generations.length - 1] : (incident.generation ?? null),
+            operationIds
+        };
     }
 
     async transitionIncident(id, state, options = {}) {

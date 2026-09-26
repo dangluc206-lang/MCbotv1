@@ -121,8 +121,11 @@ function normalizeEnvelope(input = {}) {
     // Envelope already carries these at the top level; fall back to payload for
     // callers that emit the raw payload object (primitive compatibility path).
     const botId = normalizeLegalString(input.botId ?? payload.botId);
-    const generation = normalizePositiveInteger(input.connectionGeneration ?? input.generation ?? payload.connectionGeneration);
+    const generation = normalizePositiveInteger(input.connectionGeneration ?? input.generation ?? payload.connectionGeneration ?? payload.generation);
     const attemptEpoch = normalizeAttemptEpoch(input.attemptEpoch ?? payload.attemptEpoch);
+    const modeId = normalizeLegalString(input.modeId ?? payload.modeId ?? payload.mode);
+    const operationId = normalizeLegalString(input.operationId ?? payload.operationId);
+    const correlationId = normalizeLegalString(input.correlationId ?? payload.correlationId ?? operationId);
     const subsystem = normalizeLegalString(input.subsystem ?? payload.subsystem) || inferSubsystem(eventType);
     const source = normalizeLegalString(input.source ?? payload.source) || subsystem;
     const severity = normalizeLegalString(input.severity) || inferSeverity(eventType);
@@ -135,11 +138,27 @@ function normalizeEnvelope(input = {}) {
         botId,
         generation,
         attemptEpoch,
+        modeId,
+        operationId,
+        correlationId,
         source,
         subsystem,
         severity,
         payload
     });
+}
+
+function matchesFilter(record = {}, filter = {}) {
+    if (filter.botId && String(record.botId || '') !== String(filter.botId)) return false;
+    if (filter.eventType && String(record.eventType || '') !== String(filter.eventType)) return false;
+    if (filter.generation !== undefined && filter.generation !== null && filter.generation !== '') {
+        if (Number(record.generation) !== Number(filter.generation)) return false;
+    }
+    if (filter.attemptEpoch !== undefined && filter.attemptEpoch !== null && filter.attemptEpoch !== '') {
+        if (Number(record.attemptEpoch) !== Number(filter.attemptEpoch)) return false;
+    }
+    if (filter.operationId && String(record.operationId || '') !== String(filter.operationId)) return false;
+    return true;
 }
 
 class EventInspectorBridge {
@@ -175,6 +194,39 @@ class EventInspectorBridge {
             const off = eventBus.on(eventType, envelope => this.#dispatch(eventType, envelope));
             if (typeof off === 'function') this.unsubscribers.add(off);
         }
+        // Unknown events: never drop observability. New eventBus.emit names that
+        // are not in EMITTED_EVENTS are still normalized (subsystem inferred from
+        // prefix, severity from keywords) so the Dev stream shows them.
+        const known = new Set(this.emittedEventNames);
+        let extraNames = [];
+        try {
+            const emitter = eventBus.emitter || eventBus._emitter || null;
+            if (typeof emitter?.eventNames === 'function') extraNames = emitter.eventNames();
+            else if (typeof eventBus.eventNames === 'function') extraNames = eventBus.eventNames();
+        } catch { extraNames = []; }
+        for (const eventType of extraNames) {
+            if (typeof eventType !== 'string' || known.has(eventType)) continue;
+            const off = eventBus.on(eventType, envelope => this.#dispatchUnknown(eventType, envelope));
+            if (typeof off === 'function') this.unsubscribers.add(off);
+        }
+    }
+
+    #dispatchUnknown(eventType, envelope = {}) {
+        if (!eventType) return;
+        const candidate = envelope && typeof envelope === 'object' && !Array.isArray(envelope)
+            ? { ...envelope, eventType: envelope.eventType || eventType }
+            : { eventType, payload: { value: String(envelope ?? '') } };
+        const record = normalizeEnvelope(candidate);
+        if (!record) return;
+        this.events.push(record);
+        if (this.events.length > this.maxEvents) this.events.splice(0, this.events.length - this.maxEvents);
+        if (this.listener) {
+            try { this.listener(record); } catch { /* listener errors are non-fatal for the bridge */ }
+        }
+    }
+
+    recordUnknown(eventType, envelope = {}) {
+        return this.#dispatchUnknown(eventType, envelope);
     }
 
     watchAll() {
@@ -195,9 +247,12 @@ class EventInspectorBridge {
         this.events = [];
     }
 
-    snapshot({ limit = 1000 } = {}) {
+    snapshot({ limit = 1000, botId = null, generation = null, attemptEpoch = null, operationId = null, eventType = null } = {}) {
         const safeLimit = Math.max(1, Math.min(this.maxEvents, Number(limit) || 1000));
-        return this.events.slice(-safeLimit).map(entry => ({ ...entry }));
+        const filter = { botId, generation, attemptEpoch, operationId, eventType };
+        const hasFilter = Object.values(filter).some(value => value !== null && value !== undefined && value !== '');
+        const scoped = hasFilter ? this.events.filter(record => matchesFilter(record, filter)) : this.events;
+        return scoped.slice(-safeLimit).map(entry => ({ ...entry }));
     }
 
     onEvent(listener) {
@@ -210,9 +265,11 @@ class EventInspectorBridge {
 module.exports = Object.freeze({
     EventInspectorBridge,
     normalizeEnvelope,
+    matchesFilter,
     inferSubsystem,
     inferSeverity,
     normalizePositiveInteger,
+    normalizeAttemptEpoch,
     normalizeLegalString,
     EMITTED_EVENTS,
     SUBSYSTEM_RULES,

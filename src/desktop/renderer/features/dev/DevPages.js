@@ -38,12 +38,18 @@
     if (!bots?.length) return stateView({ empty: 'Không có runtime nào.' });
     return bots.map(bot => {
       const mode = bot.modeOwner?.modeId || bot.modeOwner?.mode || bot.intent?.desiredMode || '—';
-      const ops = Number(bot.operation?.active || 0);
+      const ops = bot.operation?.operations || [];
+      const current = ops[0] || null;
       const gui = bot.gui?.definitionId || bot.gui?.title || '—';
+      const activeIncident = bot.state?.lastError?.code || '';
+      const opText = current
+        ? `${current.operationId || '?'}:${current.operationName || current.metadata?.operation || 'op'}@gen${current.connectionGeneration ?? bot.connectionGeneration ?? '?'}`
+        : '—';
+      const errText = bot.state?.lastError ? ` · err=${bot.state.lastError.code || bot.state.lastError.message || 'err'}` : '';
       return `<div class="log-line"><span class="log-time">${escapeText(bot.state?.connectionState || '—')}</span>` +
         `<span class="log-level">${escapeText(String(bot.connectionGeneration ?? '—'))}</span>` +
         `<span class="log-scope">${escapeText(bot.botId)}</span>` +
-        `<span class="log-message">mode=${escapeText(String(mode))} · ops=${ops} · gen=${escapeText(String(bot.connectionGeneration ?? '—'))} · intent=${escapeText(String(intentText(bot.intent)))} · gui=${escapeText(String(gui))} · services=${(bot.services || []).length}</span></div>`;
+        `<span class="log-message">mode=${escapeText(String(mode))} · ops=${ops.length} · op=${escapeText(opText)} · gen=${escapeText(String(bot.connectionGeneration ?? '—'))} · attempt=${escapeText(String(bot.attemptEpoch ?? bot.connectionAttemptEpoch ?? '—'))} · intent=${escapeText(String(intentText(bot.intent)))} · gui=${escapeText(String(gui))}${errText ? ` · ${escapeText(String(errText))}` : ''}${activeIncident ? ` · incident=${escapeText(String(activeIncident))}` : ''} · services=${(bot.services || []).length}</span></div>`;
     }).join('');
   }
 
@@ -93,22 +99,36 @@
     return `<div class="log-line ${escapeText(record.level)}"><span class="log-time">${escapeText(time)}</span><span class="log-level ${escapeText(record.level)}">${escapeText(String(record.level || '').toUpperCase())}</span><span class="log-scope" title="${escapeText(record.scope)}">${escapeText(record.scope)}</span><span class="log-message">${escapeText(record.message)}${meta ? ` <span class="log-meta">· ${escapeText(meta)}</span>` : ''}${stackHtml}</span></div>`;
   }
 
-  // ---- Incident timeline ----
+  // ---- Incident timeline (Dev incident-debug: multi-evidence nav) ----
+  // Renderer-only: incident → evidence (artifactId list) → operation
+  // (operationIds/first-last generation) → recovery (allowedActions/history) → raw JSON.
+  // correlation: incidentId, botId, generation, attemptEpoch*, modeId, operationId.
+  // (*attemptEpoch lives on events/logs, not on the incident index.)
 
   function incidentTimeline(incident, diagnostic) {
     const entries = [];
     entries.push(['Incident', `${incident.code || incident.id} · severity ${incident.severity || '—'} · state ${incident.state}`]);
-    entries.push(['Bot / generation', `${incident.botId || '—'} · gen ${incident.generation ?? '—'}`]);
+    const genRange = incident.firstGeneration !== undefined || incident.lastGeneration !== undefined
+      ? `${incident.firstGeneration ?? incident.generation ?? '—'} → ${incident.lastGeneration ?? incident.generation ?? '—'}`
+      : `${incident.generation ?? '—'}`;
+    entries.push(['Bot / generation', `${incident.botId || '—'} · gen ${incident.generation ?? '—'} · range ${genRange}`]);
+    entries.push(['Mode / resource', `${incident.modeId || '—'} / ${incident.resource || '—'}`]);
+    if (incident.operationIds?.length) entries.push(['Operations', incident.operationIds.join(', ')]);
+    entries.push(['Count', String(incident.count ?? 1)]);
     if (incident.firstSeenAt) entries.push(['Lần đầu thấy', String(incident.firstSeenAt)]);
     if (incident.lastSeenAt) entries.push(['Lần cuối thấy', String(incident.lastSeenAt)]);
     if (incident.summary || incident.message) entries.push(['Mô tả', incident.summary || incident.message]);
     const evidence = incident.evidenceRefs || [];
-    for (const [index, ref] of evidence.entries()) entries.push(`evidence:${index + 1}`, String(ref));
+    for (const [index, ref] of evidence.entries()) entries.push([`evidence:${index + 1}/${evidence.length}`, String(ref)]);
     if (incident.allowedActions?.length) entries.push(['Hành động cho phép', incident.allowedActions.join(', ')]);
     if (incident.history?.length) {
       for (const entry of incident.history) entries.push(['Transition', `${entry.state || entry.to || '—'} · ${entry.reason || ''} · ${entry.at || ''}`]);
     }
+    if (incident.timeline?.length) {
+      for (const entry of incident.timeline) entries.push(['Timeline', `${entry.kind || '—'} · ${entry.code || ''} · gen ${entry.generation ?? '—'} · op ${entry.operationId || entry.correlationId || '—'} · ${entry.summary || entry.reason || ''} · ${entry.at || ''}`]);
+    }
     if (diagnostic) entries.push(['Raw diagnostic (JSON)', `<pre class="compact-output">${escapeText(JSON.stringify(diagnostic, null, 2))}</pre>`]);
+    entries.push(['Raw incident (JSON)', `<pre class="compact-output">${escapeText(JSON.stringify(incident, null, 2))}</pre>`]);
     return `<div class="incident-timeline">${chunk(entries).map(([label, value]) => `<div class="timeline-step"><span>${escapeText(label)}</span><strong>${value}</strong></div>`).join('') || stateView({ empty: 'Không có timeline.' })}</div>`;
   }
 
@@ -126,6 +146,9 @@
   }
 
   // ---- Event stream (EventBus inspector) ----
+  // Renderer-only: unified correlation columns eventId · type · bot · gen ·
+  // attempt · mode · operation. eventId is self-generated (copy/grep only),
+  // join truth is botId+generation+attemptEpoch+operationId. Raw JSON kept.
 
   function eventLine(record) {
     const time = new Date(record.timestamp).toLocaleTimeString('vi-VN', { hour12: false });
@@ -135,6 +158,9 @@
       record.botId ? `bot=${escapeText(record.botId)}` : '',
       record.generation ? `gen=${escapeText(String(record.generation))}` : '',
       record.attemptEpoch ? `attempt=${escapeText(String(record.attemptEpoch))}` : '',
+      record.modeId ? `mode=${escapeText(String(record.modeId))}` : '',
+      record.operationId ? `op=${escapeText(String(record.operationId))}` : '',
+      record.correlationId && record.correlationId !== record.operationId ? `corr=${escapeText(String(record.correlationId))}` : '',
       record.source ? `source=${escapeText(record.source)}` : '',
       record.subsystem ? `subsystem=${escapeText(record.subsystem)}` : ''
     ].filter(Boolean).join(' · ');
@@ -170,6 +196,8 @@
   }
 
   // ---- B5 Debug ----
+  // Renderer-only: journey operator + trace replay. modes.crafting.details is
+  // rendered when present (crafting status/blocker/verification), then trace.
 
   function b5DebugView(journey, trace) {
     const journeyHtml = journey?.length ? journey.map(entry => {
@@ -179,7 +207,11 @@
       // Legacy B5 debug card (collector-B5/dev boundary only). The generic
       // crafting status uses target/completedUnits/state/blocker in
       // CraftingRequestPanel.statusText and botCard, never completedB5.
-      return `<div class="b5-journey-card panel"><strong>${escapeText(botId)}</strong><span>${escapeText(state)} · ${escapeText(String(completed))} B5</span></div>`;
+      const details = entry.details ? ` · details=${shorten(entry.details)}` : '';
+      const phase = entry.phase ? ` · phase=${entry.phase}` : '';
+      const gen = entry.connectionGeneration ?? entry.generation;
+      const genText = gen !== undefined && gen !== null ? ` · gen=${gen}` : '';
+      return `<div class="b5-journey-card panel"><strong>${escapeText(botId)}</strong><span>${escapeText(state)} · ${escapeText(String(completed))} B5${escapeText(String(phase))}${escapeText(String(genText))}${escapeText(String(details))}</span></div>`;
     }).join('') : stateView({ empty: 'Chưa có trạng thái B5.' });
     const traceHtml = trace ? `<pre class="dev-json-output">${escapeText(JSON.stringify(trace, null, 2))}</pre>` : stateView({ empty: 'Chưa có trace.' });
     return `${journeyHtml}${traceHtml}`;

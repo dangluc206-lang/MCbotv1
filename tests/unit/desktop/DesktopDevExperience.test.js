@@ -103,13 +103,23 @@ test('dev presenters escape html and build the incident timeline', () => {
         severity: 'HIGH',
         state: 'OPEN',
         botId: 'bot-01',
+        modeId: 'crafting',
+        resource: 'b5',
         generation: 4,
+        firstGeneration: 3,
+        lastGeneration: 4,
+        operationIds: ['bot-01:op:1'],
+        count: 2,
         evidenceRefs: ['artifact-a', 'artifact-b'],
-        history: [{ state: 'RECOVERING', reason: 'retry-storage-protection' }]
+        history: [{ state: 'RECOVERING', reason: 'retry-storage-protection' }],
+        timeline: [{ kind: 'OPENED', code: 'CRAFTING_X', generation: 4, operationId: 'bot-01:op:1', summary: 'boom', at: new Date().toISOString() }]
     }, null);
     assert.ok(timeline.includes('CRAFTING_X'));
     assert.ok(timeline.includes('artifact-b'));
+    assert.ok(timeline.includes('evidence:2/2'), 'multi-evidence nav must render n/N');
     assert.ok(timeline.includes('retry-storage-protection'));
+    assert.ok(timeline.includes('bot-01:op:1'), 'operationIds must render');
+    assert.ok(timeline.includes('Raw incident'), 'raw incident JSON must render');
 });
 
 test('dev logLine renders stack trace in a collapsible details block', () => {
@@ -212,16 +222,33 @@ test('dev presenters handle empty inputs with stateView', () => {
 });
 test('normalizeEnvelope infers subsystem and severity from eventType', () => {
     const { normalizeEnvelope } = require('../../../src/desktop/events/EventInspectorBridge');
-    const record = normalizeEnvelope({ eventType: 'connection:spawned', botId: 'bot-01', connectionGeneration: 3, attemptEpoch: 1, payload: { host: 'mc.example.com' } });
+    const record = normalizeEnvelope({ eventType: 'connection:spawned', botId: 'bot-01', connectionGeneration: 3, attemptEpoch: 1, modeId: 'fishing', operationId: 'bot-01:op:7', payload: { host: 'mc.example.com' } });
     assert.equal(record.subsystem, 'connection');
     assert.equal(record.severity, 'info');
     assert.equal(record.botId, 'bot-01');
     assert.equal(record.generation, 3);
     assert.equal(record.attemptEpoch, 1);
+    assert.equal(record.modeId, 'fishing');
+    assert.equal(record.operationId, 'bot-01:op:7');
+    assert.equal(record.correlationId, 'bot-01:op:7');
     assert.equal(record.source, 'connection');
     assert.ok(record.eventId.startsWith('evt-'));
     assert.equal(typeof record.timestamp, 'number');
     assert.deepEqual(record.payload, { host: 'mc.example.com' });
+});
+
+test('normalizeEnvelope surfaces mode/operation/correlation top-level, falls back to payload', () => {
+    const { normalizeEnvelope } = require('../../../src/desktop/events/EventInspectorBridge');
+    const fromPayload = normalizeEnvelope({ eventType: 'mode:fishing:catch', payload: { botId: 'bot-02', connectionGeneration: 2, attemptEpoch: 3, mode: 'fishing', operationId: 'bot-02:op:1', correlationId: 'corr-9' } });
+    assert.equal(fromPayload.botId, 'bot-02');
+    assert.equal(fromPayload.generation, 2);
+    assert.equal(fromPayload.attemptEpoch, 3);
+    assert.equal(fromPayload.modeId, 'fishing');
+    assert.equal(fromPayload.operationId, 'bot-02:op:1');
+    assert.equal(fromPayload.correlationId, 'corr-9');
+    // operationId doubles as correlationId when only one is present.
+    const implied = normalizeEnvelope({ eventType: 'connection:spawned', botId: 'b', operationId: 'b:op:1' });
+    assert.equal(implied.correlationId, 'b:op:1');
 });
 
 test('normalizeEnvelope redacts sensitive payload keys', () => {
@@ -321,13 +348,15 @@ test('EventInspectorBridge onEvent replaces listener and returns unsubscribe', (
 });
 
 test('DevPages.eventLine renders event fields, escapes html, and exposes raw json + copy', () => {
-    const record = { eventId: 'evt-123', eventType: 'connection:spawned', timestamp: new Date().toISOString(), botId: 'bot-01', generation: 3, attemptEpoch: 1, source: 'connection', subsystem: 'connection', severity: 'info', payload: { host: 'mc.example.com', msg: '<script>alert(1)</script>' } };
+    const record = { eventId: 'evt-123', eventType: 'connection:spawned', timestamp: new Date().toISOString(), botId: 'bot-01', generation: 3, attemptEpoch: 1, modeId: 'fishing', operationId: 'bot-01:op:7', source: 'connection', subsystem: 'connection', severity: 'info', payload: { host: 'mc.example.com', msg: '<script>alert(1)</script>' } };
     const html = DevPages.eventLine(record);
     assert.ok(html.includes('evt-123'), 'event id must render');
     assert.ok(html.includes('connection:spawned'), 'event type must render');
     assert.ok(html.includes('bot=bot-01'), 'botId meta must render');
     assert.ok(html.includes('gen=3'), 'generation meta must render');
     assert.ok(html.includes('attempt=1'), 'attemptEpoch meta must render');
+    assert.ok(html.includes('mode=fishing'), 'modeId meta must render');
+    assert.ok(html.includes('op=bot-01'), 'operationId meta must render');
     assert.ok(html.includes('source=connection'), 'source meta must render');
     assert.ok(html.includes('subsystem=connection'), 'subsystem meta must render');
     assert.ok(html.includes('data-event-id="evt-123"'), 'copy data attribute must render');
@@ -351,6 +380,95 @@ test('DevPages.eventStream renders multiple events and empty state', () => {
     assert.ok(DevPages.eventStream([]).includes('dev-empty'));
 });
 
+test('DevPages.fleetRows renders gen/attempt/operation/incident correlation', () => {
+    const html = DevPages.fleetRows([{
+        botId: 'bot-01',
+        connectionGeneration: 5,
+        state: { connectionState: 'CONNECTED', lastError: { code: 'CONNECTION_KICKED' } },
+        intent: { desiredConnection: 'CONNECTED', desiredMode: 'fishing' },
+        modeOwner: { modeId: 'fishing' },
+        operation: { operations: [{ operationId: 'bot-01:op:7', operationName: 'FishCycle', connectionGeneration: 5 }] },
+        gui: { definitionId: 'kho' },
+        services: ['a', 'b']
+    }], () => 'conn');
+    assert.ok(html.includes('op=bot-01:op:7'), 'current operation must render');
+    assert.ok(html.includes('gen=5'), 'generation must render');
+    assert.ok(html.includes('incident=CONNECTION_KICKED'), 'last error code must render');
+});
+
+test('EventInspectorBridge snapshot filters by correlation, stays backward-compat', () => {
+    const { EventInspectorBridge } = require('../../../src/desktop/events/EventInspectorBridge');
+    const handlers = {};
+    const mockBus = { on: (name, handler) => { handlers[name] = handler; return () => {}; } };
+    const bridge = new EventInspectorBridge({ sharedEventBus: mockBus, maxEvents: 50 });
+    bridge.watchAll();
+    handlers['connection:spawned']({ eventType: 'connection:spawned', botId: 'bot-01', connectionGeneration: 1, attemptEpoch: 1, operationId: 'bot-01:op:1', payload: {} });
+    handlers['connection:kicked']({ eventType: 'connection:kicked', botId: 'bot-02', connectionGeneration: 2, payload: {} });
+    assert.equal(bridge.snapshot({ limit: 10 }).length, 2);
+    assert.equal(bridge.snapshot({ limit: 10, botId: 'bot-01' }).length, 1);
+    assert.equal(bridge.snapshot({ limit: 10, generation: 2 }).length, 1);
+    assert.equal(bridge.snapshot({ limit: 10, operationId: 'bot-01:op:1' }).length, 1);
+    assert.equal(bridge.snapshot({ limit: 10, botId: 'bot-01', generation: 2 }).length, 0);
+    bridge.unwatch();
+});
+
+test('EventInspectorBridge keeps unknown events observable', () => {
+    const { EventInspectorBridge } = require('../../../src/desktop/events/EventInspectorBridge');
+    const bridge = new EventInspectorBridge({});
+    bridge.recordUnknown('crafting:custom-new-event', { botId: 'bot-01', payload: { foo: 'bar' } });
+    const snap = bridge.snapshot({ limit: 10 });
+    assert.equal(snap.length, 1);
+    assert.equal(snap[0].subsystem, 'crafting');
+    assert.equal(snap[0].eventType, 'crafting:custom-new-event');
+    bridge.unwatch();
+});
+
+test('DesktopController dev detail has recentOperations and b5 history', () => {
+    const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcbot-dev-detail-'));
+    try {
+        const controller = new DesktopController({ baseDir });
+        const bot = {
+            botId: 'bot-01',
+            operation: { active: 1, operations: [{ operationId: 'bot-01:op:1', operationName: 'FishCycle', connectionGeneration: 4 }] },
+            modes: { crafting: { details: { phase: 'CRAFTING' } } }
+        };
+        controller.snapshot = () => ({ bots: [bot] });
+        controller.bundle = { application: { getRuntime: () => ({ services: { b: 1 }, getService: name => name === 'b5TraceRecorder' ? { latest: () => ({ traceId: 't1' }), snapshot: () => [{ traceId: 't1' }], latestReplayFixture: () => ({ version: 1 }) } : null }) } };
+        controller.lifecycle = 'RUNNING';
+        const detail = controller.botDevDetail('bot-01');
+        assert.deepEqual(detail.recentOperations, bot.operation);
+        const trace = controller.b5Trace('bot-01');
+        assert.equal(trace.trace.traceId, 't1');
+        assert.equal(trace.history.length, 1);
+        assert.ok(trace.crafting, 'modes.crafting must be exposed');
+    } finally {
+        fs.rmSync(baseDir, { recursive: true, force: true });
+    }
+});
+
+test('DesktopController incident detail adds generation range and ops', async () => {
+    const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcbot-dev-inc-'));
+    try {
+        const controller = new DesktopController({ baseDir });
+        const incident = {
+            id: 'incident:1', botId: 'bot-01', generation: 4, count: 2,
+            timeline: [
+                { kind: 'OPENED', generation: 3, operationId: 'bot-01:op:1', at: new Date().toISOString() },
+                { kind: 'REPEATED', generation: 4, operationId: 'bot-01:op:2', at: new Date().toISOString() }
+            ]
+        };
+        controller.incidentIndexStore.incidents = [incident];
+        controller.incidentIndexStore.loaded = true;
+        controller.incidents = async () => ({ items: [incident] });
+        const detail = await controller.incident('incident:1');
+        assert.equal(detail.firstGeneration, 3);
+        assert.equal(detail.lastGeneration, 4);
+        assert.deepEqual(detail.operationIds, ['bot-01:op:1', 'bot-01:op:2']);
+    } finally {
+        fs.rmSync(baseDir, { recursive: true, force: true });
+    }
+});
+
 test('EventInspectorBridge is constructible through the DesktopController import path', () => {
     // Regression for "DesktopRenderer EventInspectorBridge is not a constructor":
     // DesktopController previously assigned the whole frozen namespace object
@@ -358,10 +476,13 @@ test('EventInspectorBridge is constructible through the DesktopController import
     const mod = require('../../../src/desktop/events/EventInspectorBridge');
     assert.equal(typeof mod, 'object', 'module must export a named namespace');
     assert.equal(typeof mod.EventInspectorBridge, 'function', 'named export must be the class');
+    assert.equal(typeof mod.matchesFilter, 'function', 'filter helper must be exported');
+    assert.equal(typeof mod.normalizeAttemptEpoch, 'function', 'epoch helper must be exported');
     const instance = new mod.EventInspectorBridge({ listener: () => {} });
     assert.equal(typeof instance.watchAll, 'function');
     assert.equal(typeof instance.snapshot, 'function');
     assert.equal(typeof instance.onEvent, 'function');
+    assert.equal(typeof instance.recordUnknown, 'function');
     assert.deepEqual(instance.snapshot(), []);
 });
 

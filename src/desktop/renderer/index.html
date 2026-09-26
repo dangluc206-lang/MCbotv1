@@ -258,11 +258,14 @@
           </section>
 
           <section class="dev-page" id="dev-page-events">
-            <div class="section-head"><div><h2>Event Stream</h2><p>EventBus inspector: eventId, type, timestamp, botId, generation, attemptEpoch, source, payload</p></div></div>
+            <div class="section-head"><div><h2>Event Stream</h2><p>EventBus inspector: eventId, type, timestamp, botId, generation, attemptEpoch, mode, operation, source, payload · eventId tự sinh chỉ để copy/grep, join bằng botId+generation+attemptEpoch+operationId</p></div></div>
             <div class="toolbar panel">
               <select id="eventSubsystem" aria-label="Lọc subsystem"><option value="all">Mọi subsystem</option><option value="connection">Connection</option><option value="reconnect">Reconnect</option><option value="mode">Mode</option><option value="operation">Operation</option><option value="gui">GUI</option><option value="inventory">Inventory</option><option value="storage">Storage</option><option value="crafting">Crafting</option><option value="movement">Movement</option><option value="skyblock">Skyblock</option></select>
               <select id="eventSeverity" aria-label="Lọc độ nghiêm trọng"><option value="all">Mọi mức</option><option value="error">Error</option><option value="warn">Warn</option><option value="info">Info</option><option value="debug">Debug</option></select>
               <select id="eventBot" aria-label="Lọc bot"><option value="all">Mọi bot</option></select>
+              <input id="eventGeneration" aria-label="Lọc generation" placeholder="gen..." inputmode="numeric" style="max-width:90px">
+              <input id="eventAttempt" aria-label="Lọc attemptEpoch" placeholder="attempt..." inputmode="numeric" style="max-width:100px">
+              <input id="eventOperation" aria-label="Lọc operationId" placeholder="operationId...">
               <input id="eventSearch" aria-label="Tìm sự kiện" placeholder="Tìm eventType, eventId, source, payload...">
               <label class="check toolbar-check"><input id="eventPause" type="checkbox"> Tạm dừng</label>
               <label class="check toolbar-check"><input id="eventAutoScroll" type="checkbox" checked> Tự cuộn</label>
