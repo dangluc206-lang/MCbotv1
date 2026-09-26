@@ -71,6 +71,10 @@ class FleetReconciler {
         let outcome = null;
         for (let pass = 1; pass <= 8; pass += 1) {
             taskContext.cancellationToken.throwIfCancelled();
+            const runtimeState = this.requireRuntime(botId).getState?.()?.lifecycleState || null;
+            if (runtimeState && runtimeState !== "RUNNING" && runtimeState !== "INITIALIZED") {
+                return { botId, status: "BLOCKED_RUNTIME_STOPPING", lifecycleState: runtimeState, reason, pass };
+            }
             const intent = this.store.get(botId);
             if (!intent) return { botId, status: 'NO_INTENT', reason, pass };
             outcome = await this.#applyIntent(botId, intent, taskContext);
@@ -100,6 +104,7 @@ class FleetReconciler {
         }
 
         runtime.getService?.('reconnectManager')?.resume?.('Durable intent requests connection.');
+        runtime.requireService('connectionManager').allowConnections?.('Durable intent requests connection.');
         if (!runtime.context.has()) await runtime.requireService('connectionManager').connect();
         taskContext.cancellationToken.throwIfCancelled();
         if (!runtime.context.has()) return { status: 'WAITING_CONNECTION', modeStatus: null };
@@ -116,6 +121,12 @@ class FleetReconciler {
         if (!target.status().enabled) {
             const enabled = await target.enable();
             if (enabled?.success === false) throw enabled.error || new Error(enabled.message || `Failed to enable ${intent.desiredMode}.`);
+        } else if (typeof target.refreshGeneration === 'function') {
+            // L-5: ManagedMode descendants (crafting/composable) track the active
+            // generation for stale-output guards. Reconcile after a kick →
+            // reconnect is the authoritative point to adopt the new generation
+            // because reconcile observes the post-spawn verified connection.
+            target.refreshGeneration();
         }
         taskContext.cancellationToken.throwIfCancelled();
         if (intent.modeState === 'PAUSED' && !target.status().paused) {

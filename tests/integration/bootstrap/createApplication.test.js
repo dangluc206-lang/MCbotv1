@@ -75,7 +75,7 @@ function createFakeClient(chatMessages = []) {
     return client;
 }
 
-test('enabled runtime connects, survives initial failure and reconnects to spawn', async t => {
+test('enabled runtime stays offline at boot, then operator connect survives initial failure and reconnects to spawn', async t => {
     const previousPassword = process.env.MCBOT_BOT_01_PASSWORD;
     process.env.MCBOT_BOT_01_PASSWORD = 'test-password';
     t.after(() => {
@@ -122,9 +122,17 @@ test('enabled runtime connects, survives initial failure and reconnects to spawn
     };
 
     const records = [];
-    const { application } = await createApplication({ baseDir, clientFactory, output: record => records.push(record) });
+    const { application, fleetControl } = await createApplication({ baseDir, clientFactory, output: record => records.push(record) });
     await application.initialize();
     await application.start();
+
+    // M-1 A (offline-at-boot): boot never connects; the operator connects.
+    // The first attempt fails by fixture design, so the immediate reconcile
+    // reports failure while ReconnectManager retries in the background.
+    assert.equal(attempts, 0);
+    assert.equal(application.getRuntime('bot-01').context.has(), false);
+    await fleetControl.requestConnection('bot-01', 'CONNECTED', { source: 'operator-test' });
+    assert.equal(fleetControl.intent('bot-01').desiredConnection, 'CONNECTED');
 
     const runtime = application.getRuntime('bot-01');
     await waitFor(() => runtime.getState().connectionState === 'CONNECTED');
@@ -144,7 +152,7 @@ test('enabled runtime connects, survives initial failure and reconnects to spawn
     await application.destroy();
 });
 
-test('a fresh application session ignores stale connection/mode intent and starts enabled bots connected but idle', async t => {
+test('a fresh application session ignores stale connection/mode intent and starts every bot disconnected', async t => {
     const baseDir = await createIsolatedBaseDir(t, 'mcbot-fresh-session-');
     const profilePath = path.join(baseDir, 'config/bots/bot-01.json');
     const profile = JSON.parse(await fs.readFile(profilePath, 'utf8'));
@@ -184,12 +192,18 @@ test('a fresh application session ignores stale connection/mode intent and start
     });
     await application.initialize();
     await application.start();
-    await waitFor(() => application.getRuntime('bot-01').context.has());
-    assert.equal(clientCreations, 1);
-    assert.equal(fleetControl.intent('bot-01').desiredConnection, 'CONNECTED');
+    // M-1 A (offline-at-boot): stale CONNECTED/fishing intent is reset to
+    // DISCONNECTED/idle; no client is created until the operator connects.
+    assert.equal(application.getRuntime('bot-01').context.has(), false);
+    assert.equal(clientCreations, 0);
+    assert.equal(fleetControl.intent('bot-01').desiredConnection, 'DISCONNECTED');
     assert.equal(fleetControl.intent('bot-01').desiredMode, null);
     assert.equal(fleetControl.intent('bot-01').modeState, null);
     assert.equal(application.getRuntime('bot-01').requireService('fishingMode').status().enabled, false);
+    const reconnected = await fleetControl.requestConnection('bot-01', 'CONNECTED', { source: 'operator-test' });
+    assert.equal(reconnected.success, true);
+    await waitFor(() => application.getRuntime('bot-01').context.has());
+    assert.equal(clientCreations, 1);
     await application.destroy();
 });
 

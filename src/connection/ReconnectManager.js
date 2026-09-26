@@ -101,6 +101,7 @@ class ReconnectManager {
 
     schedule(reason, failureClass = null, sourceGeneration = null, sourceAttemptEpoch = null, { decisionKey = null } = {}) {
         if (!this.running || this.suspended || !this.policy.enabled) return false;
+        if (typeof this.connectionManager?.isAcceptingConnections === 'function' && !this.connectionManager.isAcceptingConnections()) return false;
 
         const generation = this.#positiveInteger(sourceGeneration);
         const attemptEpoch = this.#positiveInteger(sourceAttemptEpoch);
@@ -299,6 +300,7 @@ class ReconnectManager {
             });
 
             if (!this.running || this.suspended || this.context?.has?.()) return;
+            if (typeof this.connectionManager?.isAcceptingConnections === "function" && !this.connectionManager.isAcceptingConnections()) return;
 
             // Production ConnectionManager marks errors whose canonical failure
             // event was already emitted synchronously before connect() rejects.

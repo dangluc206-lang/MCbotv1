@@ -59,7 +59,7 @@ async function waitFor(predicate, timeoutMs = 2000) {
     throw new Error('Timed out waiting for Desktop first-start connection fixture.');
 }
 
-test('Desktop first autostart uses migrated runtime config and resolved credential to connect', async t => {
+test('Desktop first autostart boots offline, then operator connect uses migrated runtime config and resolved credential', async t => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mcbot-desktop-first-start-'));
     t.after(() => fs.rm(root, { recursive: true, force: true }));
     const templateRoot = path.join(root, 'application');
@@ -96,6 +96,11 @@ test('Desktop first autostart uses migrated runtime config and resolved credenti
     });
 
     await controller.start();
+    // M-1 A (offline-at-boot): first start never auto-connects.
+    assert.equal(controller.bundle.application.getRuntime('bot-01').context.has(), false);
+    assert.equal(chatMessages.length, 0);
+    const connectResult = await controller.connect('bot-01');
+    assert.equal(connectResult.success, true);
     await waitFor(() => controller.bundle.application.getRuntime('bot-01').getState().connectionState === 'CONNECTED');
     assert.equal(createOptions.baseDir, path.join(path.resolve(userDataRoot), 'runtime-dev'));
     assert.equal(createOptions.environment.MCBOT_BOT_01_PASSWORD, password);

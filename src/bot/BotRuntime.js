@@ -36,6 +36,7 @@ class BotRuntime {
     }
 
     async stop() {
+        this.state.patch({ lifecycleState: "STOPPING" });
         try {
             await this.lifecycle.stop();
             this.state.patch({
@@ -49,6 +50,7 @@ class BotRuntime {
     }
 
     async destroy() {
+        this.state.patch({ lifecycleState: "STOPPING" });
         try {
             await this.lifecycle.destroy();
             this.state.patch({

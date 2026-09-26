@@ -16,6 +16,11 @@
     {"id":"fleet-partial-stop","severity":"HEAVY","faultClass":"FLEET","expectedState":"PARTIAL","safeOutcome":"every bot attempted","evidenceTest":"tests/unit/recovery/FleetControlService.test.js"},
     {"id":"renderer-hostile-ipc","severity":"MEDIUM","faultClass":"SECURITY","expectedState":"REQUEST_REJECTED","safeOutcome":"no handler invocation","evidenceTest":"tests/unit/desktop/DesktopApiContract.test.js"},
     {"id":"custom-mode-revision-conflict","severity":"MEDIUM","faultClass":"CONFIG","expectedState":"SAVE_REJECTED","safeOutcome":"newer operator bytes retained","evidenceTest":"tests/unit/modes/ComposableModePlatform.test.js"},
-    {"id":"release-canary-regression","severity":"HEAVY","faultClass":"RELEASE","expectedState":"ROLLBACK","safeOutcome":"no rollout advance","evidenceTest":"tests/unit/desktop/ReleaseCanaryPolicy.test.js"}
+    {"id":"release-canary-regression","severity":"HEAVY","faultClass":"RELEASE","expectedState":"ROLLBACK","safeOutcome":"no rollout advance","evidenceTest":"tests/unit/desktop/ReleaseCanaryPolicy.test.js"},
+    {"id":"shutdown-reconnect-race","severity":"MEDIUM","faultClass":"CONNECTION","expectedState":"DISCONNECTED","safeOutcome":"no resurrect","evidenceTest":"tests/unit/lifecycle/LifecycleConnectionContract.test.js"},
+    {"id":"operator-disconnect-cancels-reconnect","severity":"MEDIUM","faultClass":"CONNECTION","expectedState":"SUSPENDED","safeOutcome":"no resurrect","evidenceTest":"tests/unit/recovery/FleetControlService.test.js"},
+    {"id":"mode-transition-interleave","severity":"MEDIUM","faultClass":"MODE","expectedState":"SERIALIZED","safeOutcome":"no hook interleave","evidenceTest":"tests/unit/lifecycle/LifecycleModeSerialization.test.js"},
+    {"id":"intent-interleave-merge","severity":"MEDIUM","faultClass":"FLEET","expectedState":"MERGED","safeOutcome":"no lost update","evidenceTest":"tests/unit/lifecycle/LifecycleReconcileGate.test.js"},
+    {"id":"startup-offline-then-operator-connect","severity":"MEDIUM","faultClass":"FLEET","expectedState":"DISCONNECTED","safeOutcome":"boot never connects","evidenceTest":"tests/integration/lifecycle/LifecycleFull.test.js"}
   ]
 }

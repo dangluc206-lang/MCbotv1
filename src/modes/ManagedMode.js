@@ -58,7 +58,10 @@ class ManagedMode {
             this.subscriptions = this.modeContext.subscriptions(this.modeId);
             await this.onEnable();
             if (!this.enabled) return Result.fail(Status.CANCELLED, `${this.definition.label} stopped during startup.`);
-            this.phase = 'RUNNING';
+            // I7: a pause() that won the coordinator lease while onEnable()
+            // was in flight must not be overwritten back to RUNNING.
+            if (this.paused) this.phase = 'PAUSED';
+            else this.phase = 'RUNNING';
             this.updatedAt = this.#now();
             return Result.ok(this.status(), { leaseId: acquired.leaseId });
         } catch (error) {
@@ -98,7 +101,8 @@ class ManagedMode {
             this.phase = 'RESUMING';
             this.updatedAt = this.#now();
             await this.onResume();
-            this.activeGeneration = this.modeContext.generation();
+            if (!this.enabled) return Result.fail(Status.CANCELLED, `${this.definition.label} stopped during resume.`);
+            this.refreshGeneration();
             this.paused = false;
             this.phase = 'RUNNING';
             this.updatedAt = this.#now();
@@ -148,6 +152,12 @@ class ManagedMode {
 
     async stop(reason) { return this.disable(reason); }
     async destroy() { return this.disable(`${this.definition.label} destroyed.`); }
+
+    refreshGeneration() {
+        if (!this.enabled) return null;
+        this.activeGeneration = this.modeContext.generation ? this.modeContext.generation() : this.activeGeneration;
+        return this.activeGeneration;
+    }
 
     status() {
         return immutableClone({

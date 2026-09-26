@@ -601,7 +601,7 @@ class DiscordPanelManager {
         if (action === 'disconnect') {
             result = this.fleetControl
                 ? await this.fleetControl.requestConnection(botId, 'DISCONNECTED', { source: 'discord-remote' })
-                : await runtime.requireService('connectionManager').disconnect('Disconnected from Discord remote.');
+                : await runtime.requireService('connectionManager').stop('Disconnected from Discord remote.');
             if (result?.success === false) throw result.error || new Error(result.message || 'Không ngắt được bot.');
             return;
         }

@@ -65,6 +65,15 @@ class DurableIntentStore {
     }
 
     setIntent(botId, intent, { expectedRevision = null } = {}) {
+        return this.updateIntent(botId, () => intent, { expectedRevision });
+    }
+
+    // I9: atomic read-modify-write inside the write queue. The updater receives
+    // the current intent (or null) and returns the replacement body; revision
+    // bump + validation + disk commit happen in the same queued task so
+    // interleaved operator requests cannot lose each other's updates.
+    updateIntent(botId, updater, { expectedRevision = null } = {}) {
+        if (typeof updater !== 'function') throw new TypeError('Intent updater must be a function.');
         return this.#enqueue(async () => {
             this.#writable();
             const id = this.#botId(botId);
@@ -74,7 +83,7 @@ class DurableIntentStore {
                 error.code = 'INTENT_REVISION_CONFLICT';
                 throw error;
             }
-            const normalized = this.#intent(id, intent, (current?.revision || 0) + 1);
+            const normalized = this.#intent(id, updater(current ? immutableClone(current) : null), (current?.revision || 0) + 1);
             const intents = { ...this.state.intents, [id]: normalized };
             await this.#commit(intents);
             return this.get(id);

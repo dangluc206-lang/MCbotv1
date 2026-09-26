@@ -1,5 +1,6 @@
 'use strict';
 
+const KeyedMutationCoordinator = require('../core/KeyedMutationCoordinator');
 const Result = require('../shared/result/Result');
 const Status = require('../shared/result/Status');
 const { immutableClone } = require('../shared/utils/object');
@@ -7,13 +8,17 @@ const { immutableClone } = require('../shared/utils/object');
 const REQUIRED_METHODS = ['enable', 'disable', 'pause', 'resume', 'status'];
 
 class RuntimeModeRegistry {
-    constructor({ botId, catalog, capabilityRegistry, services = {} } = {}) {
+    constructor({ botId, catalog, capabilityRegistry, services = {}, mutationCoordinator = null } = {}) {
         if (typeof botId !== 'string' || !botId.trim()) throw new TypeError('RuntimeModeRegistry botId is required.');
         if (!catalog?.list || !catalog?.require) throw new TypeError('RuntimeModeRegistry catalog is required.');
         if (!capabilityRegistry?.missing) throw new TypeError('RuntimeModeRegistry capabilityRegistry is required.');
         this.botId = botId.trim();
         this.catalog = catalog;
         this.capabilityRegistry = capabilityRegistry;
+        // I7: serialize same-mode transitions so ModeControlService (operator)
+        // and FleetReconciler (durable intent) cannot interleave one mode's
+        // enable/pause/resume/disable hooks.
+        this.mutations = mutationCoordinator || new KeyedMutationCoordinator({ name: `ModeTransitions:${this.botId}` });
         this.services = new Map();
         for (const [name, service] of Object.entries(services)) this.bindByServiceName(name, service);
     }
@@ -85,18 +90,27 @@ class RuntimeModeRegistry {
         if (!['enable', 'disable', 'pause', 'resume'].includes(normalizedAction)) {
             throw new TypeError(`Unsupported mode transition: ${action}`);
         }
-        const service = this.require(modeId);
-        if (normalizedAction === 'enable') this.assertReady(modeId);
-        return service[normalizedAction](...(normalizedAction === 'disable' || normalizedAction === 'pause' ? [reason] : []));
+        const definition = this.catalog.require(modeId);
+        // I7: serialize per mode id. Distinct modes may still transition in
+        // parallel (different primary lease claims fail fast at the coordinator).
+        return this.mutations.run(definition.id, async () => {
+            const service = this.require(definition.id);
+            if (normalizedAction === 'enable') this.assertReady(definition.id);
+            return service[normalizedAction](...(normalizedAction === 'disable' || normalizedAction === 'pause' ? [reason] : []));
+        });
     }
 
     async disableAll(reason = 'Mode registry reset.', { except = null } = {}) {
         const results = [];
         for (const definition of this.catalog.list()) {
             if (except && definition.id === except) continue;
+            // I7: disableAll is part of the same per-mode serialization as
+            // transition() so an operator enable and a reconcile disableAll
+            // cannot interleave one mode's hooks.
             const service = this.get(definition.id);
             if (!service?.status?.().enabled) continue;
-            results.push({ modeId: definition.id, result: await service.disable(reason) });
+            const result = await this.mutations.run(definition.id, () => service.disable(reason));
+            results.push({ modeId: definition.id, result });
         }
         return results;
     }

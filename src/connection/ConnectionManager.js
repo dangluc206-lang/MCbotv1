@@ -35,6 +35,7 @@ class ConnectionManager {
 
         this.connecting = null;
         this.stopping = false;
+        this.connectionsAllowed = true;
         this.clientCleanups = new Map();
         this.clientSignals = new WeakMap();
         this.connectionSuccesses = new WeakMap();
@@ -45,6 +46,9 @@ class ConnectionManager {
     async initialize() {}
 
     async start() {
+        this.connectionsAllowed = true;
+        // ponytail: offline-at-boot only skips auto-connect; the latch stays
+        // open so an explicit operator connect works. Only stop() closes it.
         if (!this.autoConnect) {
             this.eventBus?.emit('connection:disabled', { botId: this.botId });
             this.logger?.debug?.('Minecraft connection is disabled for bot profile.', {
@@ -66,9 +70,26 @@ class ConnectionManager {
         }
     }
 
+    allowConnections(reason) {
+        if (reason === undefined) reason = "Explicit connect requested.";
+        this.connectionsAllowed = true;
+        return true;
+    }
+
+    isAcceptingConnections() {
+        return this.connectionsAllowed === true;
+    }
+
     async connect() {
         if (this.context.has()) return this.context.get();
         if (this.connecting) return this.connecting;
+        if (this.connectionsAllowed !== true) {
+            const error = new FlowError("Minecraft connections are stopped for this bot.");
+            error.code = "CONNECTION_STOPPED";
+            error.retryable = false;
+            error.intentionalStop = true;
+            throw error;
+        }
 
         this.stopping = false;
         this.connecting = this.#connect().finally(() => {
@@ -102,7 +123,7 @@ class ConnectionManager {
     }
 
     async requestReconnect(reason = 'Reconnect requested by runtime capability.', { expectedGeneration = null } = {}) {
-        if (this.stopping) return false;
+        if (this.stopping || this.connectionsAllowed !== true) return false;
         const currentGeneration = Number(this.context.getGeneration());
         if (expectedGeneration !== null && expectedGeneration !== undefined) {
             const expected = Number(expectedGeneration);
@@ -571,6 +592,7 @@ class ConnectionManager {
 
     async stop() {
         this.stopping = true;
+        this.connectionsAllowed = false;
         const client = this.context.get();
 
         if (client) {

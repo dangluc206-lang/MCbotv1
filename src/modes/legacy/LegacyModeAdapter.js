@@ -15,6 +15,9 @@ class LegacyModeAdapter {
         this.modeId = modeId.trim();
         this.service = service;
         this.modeContext = modeContext;
+        // ponytail: no per-adapter transition queue. RuntimeModeRegistry is the
+        // single serialization choke point; a second queue here would only add
+        // latency and split ordering across two locks.
         this.requiredCapabilities = Object.freeze([...new Set((requiredCapabilities || []).map(String).map(value => value.trim()).filter(Boolean))].sort());
     }
 
