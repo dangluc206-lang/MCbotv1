@@ -347,9 +347,11 @@ test('EventInspectorBridge onEvent replaces listener and returns unsubscribe', (
     bridge.unwatch();
 });
 
-test('DevPages.eventLine renders event fields, escapes html, and exposes raw json + copy', () => {
+test('DevPages.eventLine renders correlation-first summary per P0-1', () => {
     const record = { eventId: 'evt-123', eventType: 'connection:spawned', timestamp: new Date().toISOString(), botId: 'bot-01', generation: 3, attemptEpoch: 1, modeId: 'fishing', operationId: 'bot-01:op:7', source: 'connection', subsystem: 'connection', severity: 'info', payload: { host: 'mc.example.com', msg: '<script>alert(1)</script>' } };
     const html = DevPages.eventLine(record);
+    // P0-1: summary dòng đầu hiện đủ botId·gen·attempt·opId·eventId·type.
+    assert.ok(html.includes('bot-01 · gen 3 · attempt 1 · bot-01:op:7 · evt-123 · connection:spawned'), 'correlation-first summary must render');
     assert.ok(html.includes('evt-123'), 'event id must render');
     assert.ok(html.includes('connection:spawned'), 'event type must render');
     assert.ok(html.includes('bot=bot-01'), 'botId meta must render');

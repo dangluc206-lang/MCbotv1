@@ -34,8 +34,14 @@
 
   // ---- Fleet ----
 
-  function fleetRows(bots, viConnection) {
+  function fleetRows(bots, viConnection, incidents = []) {
     if (!bots?.length) return stateView({ empty: 'Không có runtime nào.' });
+    const openByBot = new Map();
+    for (const incident of (incidents || [])) {
+      if (!incident || !incident.botId) continue;
+      if (!['OPEN', 'RECOVERING', 'NEEDS_ACTION'].includes(String(incident.state || 'OPEN'))) continue;
+      openByBot.set(incident.botId, (openByBot.get(incident.botId) || 0) + 1);
+    }
     return bots.map(bot => {
       const mode = bot.modeOwner?.modeId || bot.modeOwner?.mode || bot.intent?.desiredMode || '—';
       const ops = bot.operation?.operations || [];
@@ -46,10 +52,11 @@
         ? `${current.operationId || '?'}:${current.operationName || current.metadata?.operation || 'op'}@gen${current.connectionGeneration ?? bot.connectionGeneration ?? '?'}`
         : '—';
       const errText = bot.state?.lastError ? ` · err=${bot.state.lastError.code || bot.state.lastError.message || 'err'}` : '';
+      const openCount = openByBot.get(bot.botId) || 0;
       return `<div class="log-line"><span class="log-time">${escapeText(bot.state?.connectionState || '—')}</span>` +
         `<span class="log-level">${escapeText(String(bot.connectionGeneration ?? '—'))}</span>` +
         `<span class="log-scope">${escapeText(bot.botId)}</span>` +
-        `<span class="log-message">mode=${escapeText(String(mode))} · ops=${ops.length} · op=${escapeText(opText)} · gen=${escapeText(String(bot.connectionGeneration ?? '—'))} · attempt=${escapeText(String(bot.attemptEpoch ?? bot.connectionAttemptEpoch ?? '—'))} · intent=${escapeText(String(intentText(bot.intent)))} · gui=${escapeText(String(gui))}${errText ? ` · ${escapeText(String(errText))}` : ''}${activeIncident ? ` · incident=${escapeText(String(activeIncident))}` : ''} · services=${(bot.services || []).length}</span></div>`;
+        `<span class="log-message">mode=${escapeText(String(mode))} · ops=${ops.length} · op=${escapeText(opText)} · gen=${escapeText(String(bot.connectionGeneration ?? '—'))} · attempt=${escapeText(String(bot.attemptEpoch ?? bot.connectionAttemptEpoch ?? '—'))} · intent=${escapeText(String(intentText(bot.intent)))} · gui=${escapeText(String(gui))}${errText ? ` · ${escapeText(String(errText))}` : ''}${activeIncident ? ` · incident=${escapeText(String(activeIncident))}` : ''} · incidents=${openCount} · services=${(bot.services || []).length}</span></div>`;
     }).join('');
   }
 
@@ -105,7 +112,7 @@
   // correlation: incidentId, botId, generation, attemptEpoch*, modeId, operationId.
   // (*attemptEpoch lives on events/logs, not on the incident index.)
 
-  function incidentTimeline(incident, diagnostic) {
+  function incidentTimeline(incident, diagnostic, options = {}) {
     const entries = [];
     entries.push(['Incident', `${incident.code || incident.id} · severity ${incident.severity || '—'} · state ${incident.state}`]);
     const genRange = incident.firstGeneration !== undefined || incident.lastGeneration !== undefined
@@ -119,7 +126,12 @@
     if (incident.lastSeenAt) entries.push(['Lần cuối thấy', String(incident.lastSeenAt)]);
     if (incident.summary || incident.message) entries.push(['Mô tả', incident.summary || incident.message]);
     const evidence = incident.evidenceRefs || [];
-    for (const [index, ref] of evidence.entries()) entries.push([`evidence:${index + 1}/${evidence.length}`, String(ref)]);
+    // P0-5: đánh dấu evidence đang xem (artifact i/n) trong multi-evidence nav.
+    const activeIndex = Number(options.evidenceIndex);
+    for (const [index, ref] of evidence.entries()) {
+      const marker = Number.isInteger(activeIndex) && evidence.length > 1 && index === activeIndex ? ' ← đang xem' : '';
+      entries.push([`evidence:${index + 1}/${evidence.length}`, `${String(ref)}${marker}`]);
+    }
     if (incident.allowedActions?.length) entries.push(['Hành động cho phép', incident.allowedActions.join(', ')]);
     if (incident.history?.length) {
       for (const entry of incident.history) entries.push(['Transition', `${entry.state || entry.to || '—'} · ${entry.reason || ''} · ${entry.at || ''}`]);
@@ -142,7 +154,22 @@
 
   function inspectorView(detail) {
     if (!detail) return stateView({ empty: 'Chưa có dữ liệu inspector.' });
-    return `<pre class="dev-json-output">${escapeText(JSON.stringify(detail, null, 2))}</pre>`;
+    // P0-4: header correlation rút từ botDevDetail (bot/state/intent/generation/
+    // modeOwner/operationIds/services) + <pre> raw JSON hiện có. Không đổi botDevDetail.
+    const bot = detail.bot || {};
+    const ops = bot.operation?.operations || [];
+    const current = ops[0] || null;
+    const opIds = ops.map(entry => entry?.operationId).filter(Boolean).slice(0, 5);
+    const header = [
+      `bot=${bot.botId || detail.botId || '—'}`,
+      `gen=${bot.connectionGeneration ?? '—'}`,
+      `intent=${intentText(bot.intent)}`,
+      `mode=${bot.modeOwner?.modeId || bot.modeOwner?.mode || bot.intent?.desiredMode || '—'}`,
+      `ops=${ops.length}${current ? ` · current=${current.operationId || '?'}:${current.operationName || current.metadata?.operation || 'op'}` : ''}${opIds.length ? ` · opIds=${opIds.join(',')}` : ''}`,
+      `services=${(detail.services || []).length}`
+    ].join(' · ');
+    return `<div class="inspector-correlation"><span class="log-meta">${escapeText(header)}</span></div>` +
+      `<pre class="dev-json-output">${escapeText(JSON.stringify(detail, null, 2))}</pre>`;
   }
 
   // ---- Event stream (EventBus inspector) ----
@@ -153,7 +180,10 @@
   function eventLine(record) {
     const time = new Date(record.timestamp).toLocaleTimeString('vi-VN', { hour12: false });
     const type = record.eventType || '—';
-    const summary = [record.eventId, type].filter(Boolean).join(' · ');
+    const opOrMode = record.operationId || record.modeId || '';
+    // P0-1: summary dòng đầu hiện đủ botId·gen·attempt·opId/modeId·eventId·type.
+    // eventId tự sinh chỉ để copy/grep; join truth là botId+generation+attemptEpoch+operationId.
+    const summary = [record.botId || '', record.generation ? `gen ${record.generation}` : '', record.attemptEpoch ? `attempt ${record.attemptEpoch}` : '', opOrMode, record.eventId || '', type].filter(Boolean).join(' · ');
     const meta = [
       record.botId ? `bot=${escapeText(record.botId)}` : '',
       record.generation ? `gen=${escapeText(String(record.generation))}` : '',
@@ -211,7 +241,14 @@
       const phase = entry.phase ? ` · phase=${entry.phase}` : '';
       const gen = entry.connectionGeneration ?? entry.generation;
       const genText = gen !== undefined && gen !== null ? ` · gen=${gen}` : '';
-      return `<div class="b5-journey-card panel"><strong>${escapeText(botId)}</strong><span>${escapeText(state)} · ${escapeText(String(completed))} B5${escapeText(String(phase))}${escapeText(String(genText))}${escapeText(String(details))}</span></div>`;
+      // P0/P1-9: render modes.crafting.details khi journey entry mang target/
+      // completedUnits (fallback completedB5 cũ): target/completedUnits/state.
+      const target = entry.targetItemId || entry.target || null;
+      const units = entry.completedUnits ?? null;
+      const enriched = (target || units !== null)
+        ? ` · target=${target || '—'}/completedUnits=${units ?? '—'}`
+        : '';
+      return `<div class="b5-journey-card panel"><strong>${escapeText(botId)}</strong><span>${escapeText(state)} · ${escapeText(String(completed))} B5${escapeText(String(phase))}${escapeText(String(genText))}${escapeText(String(details))}${escapeText(String(enriched))}</span></div>`;
     }).join('') : stateView({ empty: 'Chưa có trạng thái B5.' });
     const traceHtml = trace ? `<pre class="dev-json-output">${escapeText(JSON.stringify(trace, null, 2))}</pre>` : stateView({ empty: 'Chưa có trace.' });
     return `${journeyHtml}${traceHtml}`;

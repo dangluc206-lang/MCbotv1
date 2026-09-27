@@ -32,6 +32,7 @@ const state = {
   health: null,
   incidents: [],
   selectedIncidentId: null,
+  incidentEvidenceIndex: 0,
   b5Journey: [],
   configWorkspace: null,
   backupCatalog: [],
@@ -463,7 +464,7 @@ function renderDevOverview() {
     ].map(([label, value, sub]) => `<div class="metric"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(sub)}</small></div>`).join('');
   }
   const table = $('#devFleetTable');
-  if (table) table.innerHTML = window.MCbotDevPages.fleetRows(bots, viConnection);
+  if (table) table.innerHTML = window.MCbotDevPages.fleetRows(bots, viConnection, state.incidents || []);
 }
 
 async function renderInspector() {
@@ -546,12 +547,25 @@ async function renderIncidentDebugDetail() {
   catch { incident = summary; }
   // Navigate every evidence artifact (one-way evidenceRefs → artifactId), then
   // render incident → evidence → operation → recovery → raw JSON.
+  const evidence = incident.evidenceRefs || [];
   const diagnostics = [];
-  for (const artifactId of (incident.evidenceRefs || [])) {
+  for (const artifactId of evidence) {
     try { diagnostics.push(await api(window.mcbot.readDiagnostic(artifactId))); }
     catch { diagnostics.push(null); }
   }
-  detail.innerHTML = window.MCbotDevPages.incidentTimeline(incident, diagnostics.at(-1) || null);
+  // P0-5: prev/next qua mọi evidenceRefs bằng readDiagnostic hiện có (không thêm IPC).
+  const requested = Number(state.incidentEvidenceIndex || 0);
+  const safeIndex = evidence.length ? Math.max(0, Math.min(evidence.length - 1, requested)) : 0;
+  state.incidentEvidenceIndex = safeIndex;
+  const diagnostic = evidence.length ? (diagnostics[safeIndex] || null) : null;
+  const evidenceNav = evidence.length
+    ? `<div class="actions incident-evidence-nav"><button class="button ghost small" id="incidentEvidencePrev" ${safeIndex <= 0 ? 'disabled' : ''}>← Prev evidence</button><span class="log-meta">artifact ${safeIndex + 1}/${evidence.length}</span><button class="button ghost small" id="incidentEvidenceNext" ${safeIndex >= evidence.length - 1 ? 'disabled' : ''}>Next evidence →</button></div>`
+    : '';
+  detail.innerHTML = evidenceNav + window.MCbotDevPages.incidentTimeline(incident, diagnostic, { evidenceIndex: safeIndex });
+  const prev = $('#incidentEvidencePrev');
+  const next = $('#incidentEvidenceNext');
+  if (prev) prev.onclick = () => { state.incidentEvidenceIndex = Math.max(0, safeIndex - 1); renderIncidentDebugDetail().catch(() => {}); };
+  if (next) next.onclick = () => { state.incidentEvidenceIndex = Math.min(evidence.length - 1, safeIndex + 1); renderIncidentDebugDetail().catch(() => {}); };
 }
 
 function renderRuntimeState() {
@@ -1691,6 +1705,7 @@ function bindEvents() {
     const item = event.target.closest('[data-incident-debug-id]');
     if (!item) return;
     state.incidentDebugId = item.dataset.incidentDebugId;
+    state.incidentEvidenceIndex = 0;
     renderIncidentDebug();
     renderIncidentDebugDetail().catch(() => {});
   });
