@@ -7,6 +7,9 @@ const path = require('node:path');
 
 const renderer = fs.readFileSync(path.resolve(__dirname, '../../../src/desktop/renderer/app.js'), 'utf8');
 const panel = fs.readFileSync(path.resolve(__dirname, '../../../src/desktop/renderer/features/crafting/CraftingRequestPanel.js'), 'utf8');
+// botCard moved out of the legacy facade into features/bots/BotCardPresenter.js:
+// card markup assertions read that module.
+const botCardPresenter = fs.readFileSync(path.resolve(__dirname, '../../../src/desktop/renderer/features/bots/BotCardPresenter.js'), 'utf8');
 
 function hydrateBody() {
     const start = renderer.indexOf('async function hydrateCraftingItems()');
@@ -49,13 +52,15 @@ test('both bot-card render paths hydrate the craft request panel', () => {
 // Regression: the craft request panel replaced ${modeActions}, which removed every
 // mode start/pause/resume/restart/stop button from the mode page.
 test('bot card still renders the mode control actions next to the request panel', () => {
-    const card = renderer.slice(renderer.indexOf('function botCard('), renderer.indexOf('function renderDashboard()'));
+    const start = botCardPresenter.indexOf('function modeActionsHtml(');
+    assert.ok(start >= 0, 'modeActionsHtml must exist in the card presenter');
+    const card = botCardPresenter.slice(start, botCardPresenter.indexOf('return Object.freeze({ botCard })', start));
     assert.match(card, /\$\{modeActions\}/);
     assert.match(card, /action: 'mode-start'/);
     assert.match(card, /action: 'mode-stop'/);
     assert.match(card, /action: 'mode-pause'/);
     assert.match(card, /action: 'mode-resume'/);
-    assert.match(card, /MCbotCraftingRequestPanel\.render\(/);
+    assert.match(card, /CraftingRequestPanel\.render\(/);
 });
 
 test('panel module owns the placeholder and the renderer never builds option markup', () => {

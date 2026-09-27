@@ -1,55 +1,34 @@
 'use strict';
 
-const state = {
-  snapshot: null,
-  profiles: [],
-  commands: [],
-  skyCommands: {},
-  skyCommandSelections: [],
-  skyCommandEditingId: null,
-  logs: [],
-  preferences: null,
-  appInfo: null,
-  guiOutput: null,
-  page: localStorage.getItem('mcbot.page') || 'dashboard',
-  devPage: localStorage.getItem('mcbot.devPage') || 'dev-overview',
-  profilesLoaded: false,
-  commandsLoaded: false,
-  lastSnapshotReceivedAt: 0,
-  renderScheduled: false,
-  logRenderScheduled: false,
-  logUnread: 0,
-  pending: new Set(),
-  selectorSignature: '',
-  configGroups: [],
-  customModes: [],
-  customModules: [],
-  customTemplates: [],
-  customDraft: null,
-  localUpdate: null,
-  updateMigration: null,
-  readiness: null,
-  health: null,
-  incidents: [],
-  selectedIncidentId: null,
-  incidentEvidenceIndex: 0,
-  b5Journey: [],
-  configWorkspace: null,
-  backupCatalog: [],
-  devLogs: [],
-  devLogsLoaded: false,
-  incidentDebugId: null,
-  events: [],
-  eventsLoaded: false
-};
+const state = window.MCbotRendererStore.initialState(localStorage.getItem('mcbot.page'), localStorage.getItem('mcbot.devPage'));
+const configLabels = window.MCbotConfigGroupCatalog;
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
-const configLabels = Object.freeze({
-  app:'Ứng dụng & vận hành', server:'Máy chủ Minecraft', commands:'Danh sách lệnh', skyCommands:'Lệnh riêng theo Sky', commandResponses:'Phản hồi lệnh', serverLogin:'Đăng nhập server', resourcePack:'Gói tài nguyên', discord:'Discord', guiWindows:'Nhận diện cửa sổ GUI', guiSlots:'Vai trò ô GUI', guiObservation:'Quan sát GUI', inventoryObservation:'Quan sát túi đồ', movement:'Di chuyển', locations:'Vị trí', routes:'Tuyến đường', items:'Nhận diện vật phẩm', storage:'Kho /kho', personalVault:'Kho cá nhân /pv 2', minerals:'Menu khoáng sản', mineralConversions:'Đổi phôi/khối & bảo vệ kho', smelting:'Nung', island:'Đảo /is', dungeon:'Hầm ngục', skyblock:'Vào Skyblock', recipes:'Công thức chế tạo', craftingTiers:'Tầng chế tạo', b5:'Quy tắc B5', collectorB5Mode:'Collector+B5 cũ', craftingMode:'Chế tạo thuần', fishingMode:'Câu cá', dailyRecovery:'Khung phục hồi theo giờ', craftingTargets:'Mục tiêu chế tạo'
-});
 
 const pageTitles = window.MCbotPageCatalog;
+
+const { formatDuration, connClass, viConnection, viModeBadge, viPressure, viPhase, viWaitingReason, position, activeOperation } = window.MCbotOperatorPresenter;
+
+// Composition root wiring: the snapshot loop owns the accept/paint cycle but gets
+// the mutable store, the DOM helper and the page renderers from this file.
+const snapshotLoop = window.MCbotRendererSnapshotLoop.create({
+  state, $, api, toast, viPhase, formatDuration, syncSelectors, loadStaticData,
+  renderDashboard, renderModes, renderDevOverview
+});
+const { scheduleDynamicRender, acceptSnapshot, refreshSnapshot } = snapshotLoop;
+// The desktop e2e harness calls renderFreshness() by bare global name
+// (tests/e2e/desktop/support/DesktopElectronHarness.js), so the declaration stays here.
+function renderFreshness() { return snapshotLoop.renderFreshness(); }
+
+// Bot-card presenter: owns the per-bot card markup. modeInfo/connectionControlState/
+// buttonHtml stay here because the dev pages and the mode page also use them.
+const { botCard } = window.MCbotBotCardPresenter.create({
+  esc, document, connClass, viConnection, viModeBadge, viWaitingReason, position, activeOperation,
+  connectionControlState, modeInfo, buttonHtml, craftingDraft,
+  craftingItemsFor: botId => craftingItemsCache[botId] || [],
+  CraftingRequestPanel: window.MCbotCraftingRequestPanel
+});
 
 function bridgeAvailable() {
   return typeof window !== 'undefined' && Boolean(window.mcbot);
@@ -121,44 +100,8 @@ function reportRendererError(error, source = 'renderer') {
   }
 }
 
-function formatDuration(ms) {
-  const total = Math.max(0, Math.floor(Number(ms || 0) / 1000));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  if (h) return `${h}h ${m}m`;
-  if (m) return `${m}m ${s}s`;
-  return `${s}s`;
-}
-
-function connClass(status) {
-  const value = String(status || '').toLowerCase();
-  return ['connected', 'reconnecting', 'disconnected', 'failed'].includes(value) ? value : '';
-}
-
-function viConnection(status) {
-  return ({ CONNECTED: 'Đã kết nối', CONNECTING: 'Đang kết nối', LOGGED_IN: 'Đã đăng nhập Minecraft', AUTHENTICATING: 'Đang đăng nhập server', AUTHENTICATION_FAILED: 'Đăng nhập server thất bại', KICKED: 'Bị máy chủ ngắt', RECONNECTING: 'Đang kết nối lại', DISCONNECTED: 'Đã ngắt', DISABLED: 'Đã tắt kết nối', FAILED: 'Lỗi kết nối', IDLE: 'Đang rảnh' })[String(status || '').toUpperCase()] || String(status || 'Không rõ');
-}
-
 function connectionControlState(bot) {
   return window.MCbotConnectionViewModel.controlState(bot);
-}
-
-function viModeBadge(className) {
-  return ({ running: 'ĐANG CHẠY', paused: 'TẠM DỪNG', pending: 'ĐANG CHUẨN BỊ' })[String(className || '').toLowerCase()] || 'ĐANG RẢNH';
-}
-
-function viPressure(level) {
-  return ({ NORMAL: 'Bình thường', RISING: 'Đang tăng', HIGH: 'Cao', CRITICAL: 'Nguy cấp', UNKNOWN: 'Chưa rõ' })[String(level || '').toUpperCase()] || String(level || 'Chưa rõ');
-}
-
-function viPhase(phase) {
-  const map = { OFF:'Tắt', STOPPED:'Tắt', STARTING:'Đang khởi động', RUNNING:'Đang chạy', PAUSED:'Tạm dừng', PAUSING:'Đang tạm dừng', RESUMING:'Đang tiếp tục', STOPPING:'Đang dừng', PREPARING:'Đang chuẩn bị', WAITING_CONNECTION:'Chờ kết nối', WAITING_SKYBLOCK:'Chờ Skyblock', B1_NORMALIZATION:'Đang nung / đổi khối B1', COOLDOWN:'Đang nghỉ sau chu kỳ', GOING_HOME:'Đang /is', STORAGE_CHECK:'Đang kiểm tra kho', STORAGE_PROTECTION:'Đang bảo vệ kho', READING_B5:'Đang đọc vật liệu B5', CRAFTING:'Đang chế tạo', WAITING_STORAGE:'Chờ giảm áp lực kho', WAITING_HEADROOM:'Chờ chỗ trống để bung khối', WAITING_MATERIALS:'Chờ vật liệu', WAITING_PV2:'Chờ PV2', COMPLETED:'Đã chế xong mục tiêu', WAITING_REQUEST:'Chờ yêu cầu chế tạo', WAITING_RETRY:'Chờ thử lại', WAITING_MANUAL_RESUME:'Chờ bấm Tiếp tục sau reconnect', ERROR:'Lỗi' };
-  return map[String(phase || '').toUpperCase()] || String(phase || '—').replaceAll('_',' ');
-}
-
-function viWaitingReason(reason) {
-  return ({ connection:'kết nối', skyblock:'Skyblock', 'storage-pressure':'giảm áp lực kho', materials:'vật liệu', 'pv2-backpressure':'chỗ trống PV2', 'decompression-headroom':'chỗ trống để bung khối', paused:'tiếp tục thủ công', timeout:'thử lại sau timeout', 'not_ready':'hệ thống sẵn sàng', 'manual-resume-after-reconnect':'bấm Tiếp tục sau reconnect', cooldown:'hết thời gian nghỉ sau chu kỳ', 'no-craft-request':'chưa có yêu cầu chế tạo' })[String(reason || '').toLowerCase()] || String(reason || '');
 }
 
 function modeInfo(bot) {
@@ -177,20 +120,6 @@ function modeInfo(bot) {
   const definition = resolved.definition;
   const manualResume = target?.details?.waitingReason === 'manual-resume-after-reconnect';
   return { id, name: definition?.label || id, phase: viPhase(target?.phase || (paused ? 'PAUSED' : 'RUNNING')), paused, manualResume, className: paused || manualResume ? 'paused' : 'running' };
-}
-
-function position(player) {
-  const p = player?.position;
-  return p ? `${Number(p.x).toFixed(1)}, ${Number(p.y).toFixed(1)}, ${Number(p.z).toFixed(1)}` : '—';
-}
-
-function activeOperation(bot) {
-  const operations = bot.operation?.operations || [];
-  const op = operations[0];
-  if (!op) return null;
-  const meta = op.metadata || {};
-  const detail = meta.step || meta.action || meta.operation || op.status || '';
-  return { name: op.operationName || op.operationId || 'Tác vụ', detail, active: Number(bot.operation?.active || operations.length) };
 }
 
 function isPending(key) { return state.pending.has(key); }
@@ -214,79 +143,6 @@ function renderMetrics() {
     ['Tác vụ', activeOps, 'tác vụ đang hoạt động'],
     ['Thời gian chạy', formatDuration(uptime), errors ? `${errors} bot có lỗi` : 'hệ thống nền ổn định']
   ].map(([label, value, sub]) => `<div class="metric"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(sub)}</small></div>`).join('');
-}
-
-function botCard(bot, fullActions = false) {
-  const profile = bot.profile || {};
-  const connection = bot.state?.connectionState || 'DISCONNECTED';
-  const connectionView = connectionControlState(bot);
-  const mode = modeInfo(bot);
-  const player = bot.player;
-  const operation = activeOperation(bot);
-  const id = bot.botId;
-  const showTech = document.body.dataset.experience === 'advanced';
-  const craftingDetails = bot.modes?.crafting?.details || {};
-  const craftingEpisode = craftingDetails.protectionEpisode || null;
-  const craftingCanRetry = mode.id === 'crafting' && craftingDetails.recovery?.allowedActions?.includes('retry-storage-protection') && craftingEpisode;
-  const craftingRecoveryButton = craftingCanRetry ? `<div class="actions"><button class="button warn" data-action="b5-retry-storage" data-bot="${esc(id)}">Thử lại bảo vệ kho</button></div>` : '';
-  const held = player?.heldItem?.displayName || player?.heldItem?.name || '—';
-  const mainActions = `<div class="actions">
-    ${buttonHtml({ label: 'Kết nối', action: 'connect', bot: id, kind: 'primary', disabled: profile.enabled === false || !connectionView.canConnect, key: `connect:${id}` })}
-    ${buttonHtml({ label: 'Về đảo', action: 'home', bot: id, disabled: !connectionView.online, key: `home:${id}` })}
-    ${buttonHtml({ label: 'Ngắt riêng bot này', action: 'disconnect', bot: id, kind: 'danger', disabled: !connectionView.canDisconnect, key: `disconnect:${id}` })}
-  </div>`;
-  const availableModes = bot.modes?.available || [
-    { definition: { id: 'crafting', label: 'Chế tạo' }, readiness: { ready: true } },
-    { definition: { id: 'collector-b5', label: 'Collector+B5 (cũ)' }, readiness: { ready: true } },
-    { definition: { id: 'fishing', label: 'Câu cá' }, readiness: { ready: true } }
-  ];
-  const startModeButtons = availableModes.map(entry => {
-    const modeId = entry.definition?.id || '';
-    const readiness = entry.readiness || { ready: true, missingCapabilities: [] };
-    const profileDisabled = profile.enabled === false;
-    const sameMode = mode.id === modeId;
-    const blocked = !readiness.ready;
-    const missing = (readiness.missingCapabilities || []).join(', ');
-    return buttonHtml({
-      label: `${entry.definition?.label || modeId || 'Chế độ'}${!connectionView.online && !connectionView.connecting && !connectionView.wantsConnected ? ' · tự kết nối' : ''}`,
-      action: 'mode-start', bot: id, mode: modeId, kind: 'primary',
-      disabled: profileDisabled || blocked || sameMode,
-      title: profileDisabled ? 'Hồ sơ bot đang tắt.' : blocked ? `Chưa sẵn sàng: ${missing || 'service mode chưa được bind'}` : !connectionView.online && !connectionView.wantsConnected ? 'Bật mode và tự kết nối bot.' : '',
-      key: `mode:${id}`
-    });
-  }).join('');
-  const modeActions = fullActions ? `<div class="actions">
-    ${startModeButtons}
-    ${buttonHtml({ label: 'Tạm dừng', action: 'mode-pause', bot: id, disabled: !mode.id || mode.paused, key: `mode:${id}` })}
-    ${buttonHtml({ label: 'Tiếp tục', action: 'mode-resume', bot: id, disabled: !mode.id || (!mode.paused && !mode.manualResume), key: `mode:${id}` })}
-    ${buttonHtml({ label: 'Khởi động lại chế độ', action: 'mode-restart', bot: id, kind: 'warn', disabled: !mode.id, key: `mode:${id}` })}
-    ${buttonHtml({ label: 'Dừng chế độ', action: 'mode-stop', bot: id, kind: 'danger', disabled: !mode.id, key: `mode:${id}` })}
-  </div>` : '';
-  return `<article class="bot-card">
-    <div class="bot-head"><div class="bot-name"><strong>${esc(profile.displayName || id)}</strong><span>${esc(profile.username || id)} · phiên kết nối ${esc(bot.connectionGeneration)} · ${esc(player?.ping ?? '—')} ms</span></div><span class="badge ${connClass(connection)}">${esc(viConnection(connection))}</span></div>
-    <div class="bot-stats">
-      <div class="stat"><span>Máu / thức ăn</span><strong>${esc(player?.health ?? '—')} / ${esc(player?.food ?? '—')}</strong></div>
-      <div class="stat"><span>Túi đồ</span><strong>${esc(player?.inventory?.slotsUsed ?? '—')} ô · ${esc(player?.inventory?.itemCount ?? '—')} vật phẩm</strong></div>
-      <div class="stat"><span>Vật phẩm tay chính</span><strong title="${esc(held)}">${esc(held)}</strong></div>
-      <div class="stat"><span>Vị trí</span><strong title="${esc(position(player))}">${esc(position(player))}</strong></div>
-    </div>
-    <div class="mode-box">
-      <div class="mode-row"><div><div class="mode-title">${esc(mode.name)}</div><div class="mode-phase">${esc(mode.phase)}</div></div><span class="badge ${mode.className}">${esc(viModeBadge(mode.className))}</span></div>
-      ${operation ? `<div class="operation-line"><span>${esc(operation.active)} tác vụ</span><strong title="${esc(operation.detail)}">${esc(operation.name)}${operation.detail ? ` · ${esc(operation.detail)}` : ''}</strong></div>` : '<div class="operation-line"><span>0 tác vụ</span><strong>Không có tác vụ đang chạy</strong></div>'}
-      ${showTech ? `<div class="status-detail-grid">
-        <div class="status-detail"><span>Sky gateway</span><strong>${bot.skyAutoJoin ? `${esc(bot.skyAutoJoin?.location || 'UNKNOWN')} · ${esc(bot.skyAutoJoin?.activeTarget || bot.skyAutoJoin?.readyTarget || profile.skyblockSelection || '—')} · ${bot.skyAutoJoin?.ready ? 'Sẵn sàng' : bot.skyAutoJoin?.pending ? 'Đang xử lý' : bot.skyAutoJoin?.target ? 'Đang chờ mode gateway' : 'Không có mode yêu cầu'}` : '—'}</strong></div>
-        <div class="status-detail"><span>Bảo vệ kho</span><strong>${bot.storageProtection?.storageProtection ? `Reserve ${esc(bot.storageProtection.storageProtection.reserveCoverage ?? 1.5)} · bán 64-only ${bot.storageProtection.storageProtection.sellingCapabilityEnabled === false ? 'không khả dụng' : 'khả dụng'} · chỉ nung raw iron/raw gold` : '—'}</strong></div>
-        <div class="status-detail"><span>GUI hiện tại</span><strong>${esc(bot.gui?.definitionId || bot.gui?.identity?.candidateId || bot.gui?.title || 'Không mở')}${Number.isFinite(bot.gui?.identity?.confidence) ? ` · ${(Number(bot.gui.identity.confidence) * 100).toFixed(0)}%` : ''}</strong></div>
-        <div class="status-detail"><span>Tay phụ</span><strong>${esc(player?.offhandItem?.displayName || player?.offhandItem?.name || '—')}</strong></div>
-        <div class="status-detail"><span>Ô trống ước tính</span><strong>${esc(player?.inventory?.slotsFreeApprox ?? '—')}</strong></div>
-        <div class="status-detail"><span>Hướng nhìn</span><strong>${Number.isFinite(player?.yaw) ? `${Number(player.yaw).toFixed(2)} / ${Number(player.pitch || 0).toFixed(2)}` : '—'}</strong></div>
-        <div class="status-detail"><span>Lần thử vào Sky</span><strong>${esc(bot.skyAutoJoin?.pending?.attempt ?? (bot.skyAutoJoin?.ready ? 'Hoàn tất' : '—'))}</strong></div>
-        <div class="status-detail"><span>Lỗi gần nhất</span><strong title="${esc(bot.state?.lastError?.message || bot.state?.lastError || '')}">${esc(bot.state?.lastError?.message || bot.state?.lastError || 'Không có')}</strong></div>
-      </div>` : ''}
-      ${showTech && mode.id === 'crafting' ? (() => { const d = bot.modes?.crafting?.details || {}; const blocker = d.lastAutomationBlockers?.[0] || null; const blockerText = blocker ? `${blocker.baseId ? `${blocker.baseId}: ` : ''}${blocker.reason || blocker.status || 'đang chờ'}` : ''; const protection = d.protectionEpisode || null; const protectionBlocker = protection?.blocker || null; const protectionText = protection ? `${protection.state || 'PENDING'} · attempt ${protection.totalAttempts ?? 0}${protectionBlocker ? ` · ${protectionBlocker.resource ? `${protectionBlocker.resource}: ` : ''}${protectionBlocker.reason || protectionBlocker.code || 'blocked'} · backoff ${protectionBlocker.backoffMs ?? 0}ms${Number.isFinite(protection.nextEligibleAt) ? ` · retry ${Math.max(0, protection.nextEligibleAt - Date.now())}ms` : ''}` : ''}` : ''; const trace = d.automation?.trace || null; const decision = trace?.plan?.decision; const traceText = trace ? `${trace.traceId || ''}${decision?.kind ? ` · ${decision.kind}${decision.resource ? ` ${decision.resource}` : ''}` : ''}` : ''; const batchText = d.batchId ? `${d.batchId}${d.batchProtectionRequired ? ' · chờ bảo vệ kho' : ' · đã bảo vệ kho'}` : 'chưa có batch'; return `<div class="operation-line"><span>Chế tạo</span><strong>Đã hoàn tất: ${esc(d.completedTargets ?? 0)} · Engine: ${esc(d.automationRuns ?? 0)} lượt / ${esc(d.productiveCycles ?? 0)} có tiến triển · ${esc(batchText)} · ${esc(d.waitingReason ? `Đang chờ: ${viWaitingReason(d.waitingReason)}` : 'Đang xử lý')}</strong></div>${protectionText ? `<div class="operation-line"><span>Gate bảo vệ kho</span><strong title="${esc(protectionText)}">${esc(protectionText)}</strong></div>` : ''}${traceText ? `<div class="operation-line"><span>Trace chế tạo gần nhất</span><strong title="${esc(traceText)}">${esc(traceText)}</strong></div>` : ''}${blockerText ? `<div class="operation-line"><span>Điểm chặn</span><strong title="${esc(blockerText)}">${esc(blockerText)}</strong></div>` : ''}`; })() : ''}
-    </div>
-    ${mainActions}${craftingRecoveryButton}${modeActions}${mode.id === 'crafting' ? window.MCbotCraftingRequestPanel.render({ botId: id, items: craftingItemsCache[id] || [], request: bot.modes?.crafting?.details?.craftRequest || null, phase: bot.modes?.crafting?.phase || '', waitingReason: bot.modes?.crafting?.details?.waitingReason || '', draft: craftingDraft(id), esc }) : ''}
-  </article>`;
 }
 
 const craftingItemsCache = {};
@@ -636,58 +492,6 @@ function syncSelectors() {
   syncSelect($('#logBot'), '<option value="all">Mọi bot</option>' + botOptions, localStorage.getItem('mcbot.logBot') || 'all');
   syncSelect($('#guiCommand'), guiCommandOptions);
   syncSelect($('#commandKey'), commandOptions);
-}
-
-function renderBackend() {
-  const lifecycle = state.snapshot?.lifecycle || 'STOPPED';
-  $('#backendState').textContent = viPhase(lifecycle);
-  $('#backendDot').className = `dot ${String(lifecycle).toLowerCase()}`;
-  $('#sidebarFleet').textContent = `${state.snapshot?.bots?.length || 0} bot`;
-  $('#sidebarMemory').textContent = `${state.snapshot?.system?.memoryMb ?? '—'} MB`;
-  $('#settingsBackendState').textContent = viPhase(lifecycle);
-  $('#settingsUptime').textContent = formatDuration(state.snapshot?.system?.uptimeMs || 0);
-  $('#settingsMemory').textContent = `${state.snapshot?.system?.memoryMb ?? '—'} MB`;
-  $('#startBackend').disabled = lifecycle === 'RUNNING' || lifecycle === 'STARTING';
-  $('#stopBackend').disabled = lifecycle !== 'RUNNING';
-  $('#restartBackend').disabled = lifecycle === 'STARTING' || lifecycle === 'STOPPING';
-}
-
-function renderFreshness() {
-  const age = state.lastSnapshotReceivedAt ? Date.now() - state.lastSnapshotReceivedAt : Infinity;
-  const threshold = Math.max(5000, Number(state.preferences?.snapshotIntervalMs || 900) * 4);
-  const stale = age > threshold;
-  const el = $('#liveState');
-  el.classList.toggle('stale', stale);
-  el.querySelector('strong').textContent = stale ? 'Mất cập nhật trực tiếp' : 'Trực tiếp';
-  $('#updatedAt').textContent = state.snapshot?.updatedAt ? `${stale ? 'Lần cuối' : 'Cập nhật'} ${new Date(state.snapshot.updatedAt).toLocaleTimeString('vi-VN', { hour12: false })}` : 'Chưa có bản chụp trạng thái';
-}
-
-function scheduleDynamicRender() {
-  if (state.renderScheduled) return;
-  state.renderScheduled = true;
-  requestAnimationFrame(() => {
-    state.renderScheduled = false;
-    renderBackend();
-    syncSelectors();
-    if (state.page === 'dashboard') renderDashboard();
-    if (state.page === 'modes') renderModes();
-    if (state.devPage === 'dev-overview') renderDevOverview();
-    renderFreshness();
-  });
-}
-
-function acceptSnapshot(snapshot) {
-  if (!snapshot) return;
-  const previousLifecycle = state.snapshot?.lifecycle;
-  state.snapshot = snapshot;
-  state.lastSnapshotReceivedAt = Date.now();
-  if (previousLifecycle !== 'RUNNING' && snapshot.lifecycle === 'RUNNING') loadStaticData().catch(error => toast(error.message, 'error'));
-  scheduleDynamicRender();
-}
-
-async function refreshSnapshot({ quiet = false } = {}) {
-  try { acceptSnapshot(await api(window.mcbot.snapshot())); }
-  catch (error) { if (!quiet) toast(error.message, 'error'); }
 }
 
 async function loadProfiles() {
@@ -1364,369 +1168,28 @@ function changeWorkflowStep(button) {
   fillCustomBuilder(draft);
 }
 
-function bindEvents() {
-  document.addEventListener('click', event => {
-    const botAction = event.target.closest('[data-action]');
-    if (botAction) handleBotAction(botAction).catch(() => {});
-    const fleetAction = event.target.closest('[data-fleet-action]');
-    if (fleetAction) handleFleetAction(fleetAction).catch(() => {});
-  });
-  $('#nav').addEventListener('click', event => { const item = event.target.closest('.nav-item'); if (item) switchPage(item.dataset.page); });
-  $('#devNav').addEventListener('click', event => { const item = event.target.closest('.dev-nav-item'); if (item) switchDevPage(item.dataset.devPage); });
-  $('#openCommandPalette').onclick = () => openCommandPalette().catch(error => toast(error.message, 'error'));
-  $('#commandPaletteInput').addEventListener('input', event => renderCommandPalette(event.target.value).catch(error => toast(error.message, 'error')));
-  $('#commandPaletteResults').addEventListener('click', event => { const item = event.target.closest('[data-palette-route]'); if (!item) return; $('#commandPaletteDialog').close(); switchPage(item.dataset.paletteRoute); });
-  $('#firstRunPanel').addEventListener('click', async event => {
-    const button = event.target.closest('[data-first-run-action]'); if (!button) return;
-    const current = state.preferences?.firstRun || { status:'NOT_STARTED', step:1 };
-    const now = new Date().toISOString();
-    if (button.dataset.firstRunAction === 'continue') {
-      if (current.status === 'NOT_STARTED') state.preferences = await api(window.mcbot.setPreferences({ firstRun:{ ...current, status:'IN_PROGRESS', startedAt:now } }));
-      switchPage(button.dataset.route || 'dashboard');
-    } else if (button.dataset.firstRunAction === 'next') {
-      const step = Math.min(6, Number(current.step || 1) + 1);
-      const completed = Number(current.step || 1) >= 6;
-      const startedAt = current.startedAt || now;
-      state.preferences = await api(window.mcbot.setPreferences({ firstRun:{ status:completed ? 'COMPLETED' : 'IN_PROGRESS', step, startedAt, completedAt:completed ? now : null, durationMs:completed ? Math.max(0, Date.now() - Date.parse(startedAt)) : null } }));
-      renderFirstRun();
-    } else if (button.dataset.firstRunAction === 'skip') {
-      state.preferences = await api(window.mcbot.setPreferences({ firstRun:{ ...current, status:'SKIPPED' } }));
-      renderFirstRun();
-    }
-  });
-  $('#refreshIncidents').onclick = () => loadIncidents().catch(error => toast(error.message, 'error'));
-  $('#incidentStateFilter').onchange = () => loadIncidents().catch(error => toast(error.message, 'error'));
-  $('#incidentBotFilter').onchange = () => loadIncidents().catch(error => toast(error.message, 'error'));
-  $('#incidentList').addEventListener('click', event => { const item = event.target.closest('[data-incident-id]'); if (!item) return; state.selectedIncidentId = item.dataset.incidentId; renderIncidents(); });
-  $('#incidentDetail').addEventListener('click', async event => {
-    const actionButton = event.target.closest('[data-incident-action]');
-    const transitionButton = event.target.closest('[data-incident-transition]');
-    try {
-      if (actionButton) {
-        const incident = state.incidents.find(item => item.id === actionButton.dataset.incidentId); if (!incident) return;
-        const action = actionButton.dataset.incidentAction;
-        if (['retry-storage-protection','reconnect-bot'].includes(action) && !await confirmInApp({ title:'Thực hiện action có guard?', message:`${action} · bot ${incident.botId} · generation ${incident.generation}` })) return;
-        const result = await api(window.mcbot.executeIncidentAction(incident.id, action, { expectedGeneration:incident.generation, idempotencyKey:`desktop-incident:${incident.id}:${action}:${crypto.randomUUID()}` }));
-        if (action === 'inspect-diagnostic') { switchPage('diagnostics'); $('#diagnosticOutput').textContent = JSON.stringify(result.diagnostic, null, 2); }
-        else if (action === 'edit-config') switchPage('settings');
-        else if (action === 'export-support') toast(`Gói hỗ trợ: ${result.entryCount} mục · ${result.totalBytes} byte.`);
-        else toast('Action sự cố đã được tiếp nhận.');
-        await loadIncidents();
-      } else if (transitionButton) {
-        await api(window.mcbot.transitionIncident(transitionButton.dataset.incidentId, transitionButton.dataset.incidentTransition, {}));
-        await loadIncidents();
-      }
-    } catch (error) { toast(error.message, 'error'); }
-  });
-  $('#refreshB5Journey').onclick = () => loadB5Journey().catch(error => toast(error.message, 'error'));
-  $('#b5Journey').addEventListener('click', event => { const button = event.target.closest('[data-b5-journey-retry]'); if (!button) return; button.dataset.action = 'b5-retry-storage'; button.dataset.bot = button.dataset.b5JourneyRetry; handleBotAction(button).then(loadB5Journey).catch(() => {}); });
-  $('#refreshBtn').onclick = () => refreshSnapshot();
-  $('#reloadProfiles').onclick = () => loadProfiles().catch(error => toast(error.message, 'error'));
-  $('#loadB5PureConfig').onclick = () => loadB5PureConfig().catch(error => toast(error.message, 'error'));
-  $('#saveB5PureConfig').onclick = event => runAction({ key: 'b5-pure-config', button: event.currentTarget, success: 'Đã lưu cấu hình chế tạo.', refresh: false, fn: saveB5PureConfig }).catch(() => {});
-  $('#loadB5Rules').onclick = () => loadB5Rules().catch(error => toast(error.message, 'error'));
-  $('#b5B2InputSource').addEventListener('change', syncB2InputSourceUi);
-  $('#saveB5Rules').onclick = event => runAction({ key: 'b5-rules-config', button: event.currentTarget, success: 'Đã lưu quy tắc B5. Hãy khởi động lại hệ thống nền để áp dụng đầy đủ.', refresh: false, fn: saveB5Rules }).catch(() => {});
-  $('#loadStorageProtect').onclick = () => loadStorageProtection().catch(error => toast(error.message, 'error'));
-  $('#saveStorageProtect').onclick = event => runAction({ key: 'storage-protect-config', button: event.currentTarget, success: 'Đã lưu và áp dụng mức bảo vệ kho cho các bot đang chạy.', refresh: false, fn: saveStorageProtection }).catch(() => {});
-
-  $('#skyCommandSky').onchange = () => { renderSkyCommands(); clearSkyCommandEditor(); };
-  $('#newSkyCommand').onclick = () => clearSkyCommandEditor();
-  $('#saveSkyCommand').onclick = event => runAction({ key: 'sky-command-save', button: event.currentTarget, success: 'Đã lưu lệnh riêng theo Sky và áp dụng ngay.', refresh: false, fn: saveSkyCommandFromEditor }).catch(() => {});
-  $('#skyCommandList').addEventListener('click', event => {
-    const button = event.target.closest('[data-sky-command-action]');
-    if (!button) return;
-    const skyId = button.dataset.sky;
-    const commandId = button.dataset.commandId;
-    const definition = state.skyCommands?.[skyId]?.[commandId];
-    if (button.dataset.skyCommandAction === 'edit' && definition) {
-      $('#skyCommandSky').value = skyId;
-      state.skyCommandEditingId = commandId;
-      $('#skyCommandId').value = commandId;
-      $('#skyCommandLabel').value = definition.label || commandId;
-      $('#skyCommandValue').value = definition.command || '';
-      $('#skyCommandDescription').value = definition.description || '';
-      $('#skyCommandEnabled').checked = definition.enabled !== false;
-      return;
-    }
-    if (button.dataset.skyCommandAction === 'delete') {
-      runAction({ key: `sky-command-delete:${skyId}:${commandId}`, button, success: 'Đã xóa lệnh riêng theo Sky.', refresh: false, fn: async () => {
-        const result = await api(window.mcbot.deleteSkyCommand(skyId, commandId));
-        await Promise.all([loadSkyCommands(), loadCommands()]);
-        return result;
-      }}).catch(() => {});
-      return;
-    }
-    if (button.dataset.skyCommandAction === 'send') {
-      let args = {};
-      try { args = JSON.parse($('#skyCommandArgs').value || '{}'); } catch (error) { toast(`JSON tham số không hợp lệ: ${error.message}`, 'error'); return; }
-      runAction({ key: `sky-command-send:${skyId}:${commandId}`, button, success: `Đã gửi ${commandId} cho bot đang ở ${skyId}.`, refresh: false, fn: () => api(window.mcbot.sendSkyCommand($('#skyCommandBot').value, { skyId, commandId, args })) }).catch(() => {});
-    }
-  });
-
-  $('#advancedConfigGroup').onchange = () => loadAdvancedConfig().catch(error => toast(error.message, 'error'));
-  $('#loadAdvancedConfig').onclick = () => loadAdvancedConfig().catch(error => toast(error.message, 'error'));
-  $('#previewAdvancedConfig').onclick = () => previewAdvancedConfig().catch(error => toast(error.message, 'error'));
-  $('#saveAdvancedConfig').onclick = event => runAction({ key: 'advanced-config', button: event.currentTarget, success: 'Cấu hình hợp lệ và đã được lưu.', refresh: false, fn: saveAdvancedConfig }).catch(() => {});
-  $('#undoAdvancedConfig').onclick = event => runAction({ key:'advanced-config-undo', button:event.currentTarget, success:'Đã hoàn tác cấu hình.', refresh:false, fn:undoAdvancedConfig }).catch(() => {});
-
-  $('#modulePalette').addEventListener('click', event => {
-    const button = event.target.closest('[data-module-add]'); if (!button) return;
-    let draft; try { draft = draftFromBuilder(); } catch (error) { toast(`JSON bước không hợp lệ: ${error.message}`, 'error'); return; }
-    const step = defaultModuleStep(button.dataset.moduleType);
-    if (button.dataset.moduleAdd === 'start') draft.workflow.start.push(step);
-    else if (button.dataset.moduleAdd === 'stop') draft.workflow.stop.push(step);
-    else draft.workflow.loop.steps.push(step);
-    fillCustomBuilder(draft);
-  });
-  for (const id of ['customStartSteps','customLoopSteps','customStopSteps']) $('#' + id).addEventListener('click', event => {
-    const button = event.target.closest('[data-step-action]'); if (button) return changeWorkflowStep(button);
-    const remove = event.target.closest('[data-nested-remove]'); if (remove) return remove.closest('.typed-nested-row')?.remove();
-    const add = event.target.closest('[data-nested-add]');
-    if (add) add.closest('.typed-nested-section').querySelector(':scope > .typed-nested-list').insertAdjacentHTML('beforeend', window.MCbotTypedModuleEditor.renderNestedRow(defaultModuleStep('wait'), state.customModules, esc, 1));
-  });
-  for (const id of ['customStartSteps','customLoopSteps','customStopSteps']) $('#' + id).addEventListener('change', event => {
-    const nestedSelect = event.target.closest('.nested-step-type');
-    if (nestedSelect) {
-      const nestedRow = nestedSelect.closest('.typed-nested-row');
-      const step = defaultModuleStep(nestedSelect.value);
-      const descriptor = state.customModules.find(item => item.type === step.type);
-      nestedRow.querySelector(':scope > .step-editor').innerHTML = window.MCbotTypedModuleEditor.render(step, descriptor, state.customModules, esc, 1);
-      return;
-    }
-    const select = event.target.closest('.step-type'); if (!select) return;
-    const row = select.closest('.workflow-step');
-    let draft; try { draft = draftFromBuilder(); } catch { draft = state.customDraft || newCustomDraft(); }
-    const list = row.dataset.workflowSection === 'start' ? draft.workflow.start : row.dataset.workflowSection === 'stop' ? draft.workflow.stop : draft.workflow.loop.steps;
-    list[Number(row.dataset.stepIndex)] = defaultModuleStep(select.value);
-    fillCustomBuilder(draft);
-  });
-  $('#moduleSearch').oninput = event => renderModulePalette(event.target.value);
-  $('#applyCustomTemplate').onclick = () => {
-    const template = state.customTemplates.find(item => item.id === $('#customModeTemplate').value);
-    if (!template) return toast('Chưa chọn mẫu.', 'warn');
-    fillCustomBuilder(template.definition); toast(`Đã nạp mẫu ${template.label}.`);
-  };
-  $('#dryRunCustomMode').onclick = event => runAction({ key:'custom-mode-dry-run', button:event.currentTarget, success:'Mô phỏng hoàn tất; không gọi capability.', refresh:false, fn:async () => {
-    const report = await api(window.mcbot.customModeDryRun(draftFromBuilder(), { connected:true, guiId:null }));
-    $('#customModeSimulation').textContent = JSON.stringify(report, null, 2); return report;
-  }}).catch(() => {});
-  $('#packageCustomMode').onclick = event => runAction({ key:'custom-mode-package', button:event.currentTarget, success:'Package manifest và digest hợp lệ.', refresh:false, fn:async () => {
-    const report = await api(window.mcbot.customModePackage(draftFromBuilder()));
-    $('#customModeSimulation').textContent = JSON.stringify(report.manifest, null, 2); return report;
-  }}).catch(() => {});
-  $('#newCustomMode').onclick = () => { $('#customModeSelect').value = ''; fillCustomBuilder(); };
-  $('#clearCustomSteps').onclick = () => { const draft = draftFromBuilder(); draft.workflow.start = []; draft.workflow.loop.steps = []; draft.workflow.stop = []; fillCustomBuilder(draft); };
-  $('#customModeSelect').onchange = () => {
-    const id = $('#customModeSelect').value;
-    const entry = state.customModes.find(item => customModeEntryId(item) === id);
-    if (!entry?.valid && entry) { fillCustomBuilder({ ...newCustomDraft(), id, label: `${id} (cần sửa)` }); toast(`File mode ${id} đang lỗi. Có thể sửa lại hoặc xóa.`, 'warn'); return; }
-    fillCustomBuilder(entry?.raw || null);
-  };
-  $('#saveCustomMode').onclick = event => runAction({ key: 'custom-mode-save', button: event.currentTarget, success: 'Đã lưu chế độ. Khởi động lại hệ thống nền để đăng ký chế độ mới.', refresh: false, fn: async () => {
-    const definition = draftFromBuilder();
-    const existing = state.customModes.find(item => customModeEntryId(item) === definition.id);
-    const result = await api(window.mcbot.saveCustomMode(definition, { expectedDigest:existing?.digest || null }));
-    await loadCustomModeCatalog(); $('#customModeSelect').value = definition.id; fillCustomBuilder(definition); return result;
-  }}).catch(() => {});
-  $('#deleteCustomMode').onclick = async event => {
-    const id = $('#customModeSelect').value || $('#customModeId').value.trim();
-    if (!id) return toast('Chưa chọn chế độ để xóa.', 'warn');
-    if (!await confirmInApp({ title:`Xóa chế độ ${id}?`, message:'File mode sẽ bị xóa; backend cần khởi động lại để cập nhật danh mục.', destructive:true })) return;
-    runAction({ key: 'custom-mode-delete', button: event.currentTarget, success: 'Đã xóa chế độ. Khởi động lại hệ thống nền để cập nhật danh mục.', refresh: false, fn: async () => { const result = await api(window.mcbot.deleteCustomMode(id)); await loadCustomModeCatalog(); fillCustomBuilder(); return result; } }).catch(() => {});
-  };
-  $('#applyCustomJson').onclick = () => { try { fillCustomBuilder(JSON.parse($('#customModeJson').value)); toast('Đã áp dụng JSON vào trình dựng.'); } catch (error) { toast(`JSON không hợp lệ: ${error.message}`, 'error'); } };
-  $('#createProfileBtn').onclick = event => runAction({ key: 'profile-create', button: event.currentTarget, success: 'Đã tạo bot mới.', refresh: false, fn: async () => {
-    const fields = {
-      id: $('#newBotId').value.trim(),
-      displayName: $('#newBotDisplayName').value.trim(),
-      username: $('#newBotUsername').value.trim(),
-      auth: $('#newBotAuth').value,
-      version: $('#newBotVersion').value.trim(),
-      serverProfile: $('#newBotServerProfile').value.trim(),
-      skyblockSelection: $('#newBotSkySelection').value
-    };
-    const result = await api(window.mcbot.createProfile(fields));
-    for (const id of ['newBotId', 'newBotDisplayName', 'newBotUsername']) $('#' + id).value = '';
-    await loadProfiles();
-    await refreshSnapshot({ quiet: true });
-    return result;
-  } }).catch(() => {});
-
-  $('#sendCommandBtn').onclick = async event => {
-    let args;
-    try { args = JSON.parse($('#commandArgs').value || '{}'); } catch { toast('JSON tham số không hợp lệ.', 'error'); return; }
-    if (!args || typeof args !== 'object' || Array.isArray(args)) { toast('Tham số phải là một object JSON.', 'error'); return; }
-    await runAction({ key: 'command-send', button: event.currentTarget, success: 'Lệnh đã được xử lý.', refresh: false, fn: async () => {
-      const result = await api(window.mcbot.sendCommand($('#commandBot').value, { commandKey: $('#commandKey').value, args, confirm: $('#commandConfirm').checked, timeoutMs: Number($('#commandTimeout').value) }));
-      $('#commandOutput').textContent = JSON.stringify(result, null, 2); return result;
-    }}).catch(() => {});
-  };
-  $('#copyCommandBtn').onclick = () => navigator.clipboard.writeText($('#commandOutput').textContent).then(() => toast('Đã sao chép kết quả lệnh.')).catch(error => { reportRendererError(error, 'clipboard-command'); toast('Không sao chép được kết quả.', 'error'); });
-
-  $('#inspectGuiBtn').onclick = event => runAction({ key: 'gui-inspect', button: event.currentTarget, success: 'Đã chụp GUI.', refresh: false, fn: async () => {
-    const slots = $('#guiSlots').value.split(',').map(value => Number(value.trim())).filter(Number.isInteger);
-    state.guiOutput = await api(window.mcbot.inspectGui($('#guiBot').value, { commandKey: $('#guiCommand').value, slots, timeoutMs: Number($('#guiTimeout').value) }));
-    $('#guiOutput').textContent = JSON.stringify(state.guiOutput, null, 2);
-    return { success: true };
-  }}).catch(() => {});
-  $('#copyGuiBtn').onclick = () => navigator.clipboard.writeText($('#guiOutput').textContent).then(() => toast('Đã sao chép JSON GUI.')).catch(error => { reportRendererError(error, 'clipboard-gui'); toast('Không sao chép được JSON GUI.', 'error'); });
-
-  for (const id of ['logLevel', 'logBot']) $('#' + id).addEventListener('change', () => { localStorage.setItem(`mcbot.${id}`, $('#' + id).value); renderLogs(); });
-  $('#logSearch').addEventListener('input', scheduleLogRender);
-  $('#logPause').addEventListener('change', () => { if (!$('#logPause').checked) renderLogs(); updateLogUnread(); });
-  $('#logAutoScroll').addEventListener('change', () => { localStorage.setItem('mcbot.logAutoScroll', $('#logAutoScroll').checked ? '1' : '0'); if ($('#logAutoScroll').checked) renderLogs(); });
-  $('#clearLogView').onclick = () => { state.logs = []; state.logUnread = 0; renderLogs(); };
-  $('#openDetailedLogs').onclick = () => runAction({ key: 'open-detailed-logs', refresh: false, fn: () => api(window.mcbot.openLogFolder()) }).catch(() => {});
-  $('#logConsole').addEventListener('scroll', () => { const el = $('#logConsole'); if (el.scrollHeight - el.scrollTop - el.clientHeight > 100 && $('#logAutoScroll').checked) { $('#logAutoScroll').checked = false; localStorage.setItem('mcbot.logAutoScroll', '0'); } });
-
-  $('#refreshDiagnostics').onclick = refreshDiagnostics;
-  $('#diagnosticList').addEventListener('click', async event => { const item = event.target.closest('[data-diagnostic]'); if (!item) return; try { $('#diagnosticOutput').textContent = JSON.stringify(await api(window.mcbot.readDiagnostic(item.dataset.diagnostic)), null, 2); } catch (error) { toast(error.message, 'error'); } });
-  $('#exportSupport').onclick = async event => {
-    try {
-      const preview = await api(window.mcbot.supportBundlePreview());
-      const accepted = await confirmInApp({ title: 'Xem trước gói hỗ trợ', message: `${preview.entryCount} mục · ${preview.totalBytes} byte · riêng tư: ${preview.privacy?.default || 'PSEUDONYMIZED'}${preview.warnings?.length ? `\n${preview.warnings.length} cảnh báo sẽ được ghi trong manifest.` : ''}` });
-      if (!accepted) return;
-      await runAction({ key: 'support-export', button: event.currentTarget, success: 'Đã xuất gói hỗ trợ.', refresh: false, fn: () => api(window.mcbot.exportSupportBundle({ previewId: preview.previewId })) });
-    } catch (error) { toast(error.message, 'error'); }
-  };
-  $('#openSupport').onclick = () => runAction({ key: 'open-support', success: null, refresh: false, fn: () => api(window.mcbot.openSupportFolder()) }).catch(() => {});
-
-  $('#openProject').onclick = () => runAction({ key: 'open-project', refresh: false, fn: () => api(window.mcbot.openProjectFolder()) }).catch(() => {});
-  $('#openLogs').onclick = () => runAction({ key: 'open-logs', refresh: false, fn: () => api(window.mcbot.openLogFolder()) }).catch(() => {});
-  $('#openBackups').onclick = () => runAction({ key: 'open-backups', refresh: false, fn: () => api(window.mcbot.openBackupFolder()) }).catch(() => {});
-  $('#backupConfig').onclick = event => runAction({ key: 'backup-config', button: event.currentTarget, success: 'Đã sao lưu toàn bộ cấu hình với manifest và hash.', refresh: false, fn: async () => { const result = await api(window.mcbot.backupConfig()); await loadBackupCatalog(); return result; } }).catch(() => {});
-  $('#refreshBackups').onclick = () => loadBackupCatalog().catch(error => toast(error.message, 'error'));
-  $('#backupCatalog').addEventListener('click', async event => {
-    const button = event.target.closest('[data-backup-preview]'); if (!button) return;
-    try {
-      const preview = await api(window.mcbot.previewConfigRestore(button.dataset.backupPreview));
-      const summary = preview.changes.filter(change => change.action !== 'UNCHANGED').map(change => `${change.action}: ${change.path}`).slice(0, 30).join('\n') || 'Không có file thay đổi.';
-      if (!await confirmInApp({ title:'Khôi phục backup cấu hình?', message:`${summary}\n\nBackend sẽ dừng, restore được verify đầy đủ và tự rollback nếu lỗi.`, destructive:true })) return;
-      await api(window.mcbot.restoreConfigBackup(button.dataset.backupPreview));
-      toast('Đã khôi phục và xác minh backup cấu hình.');
-      await Promise.all([refreshSnapshot({ quiet:true }), loadBackupCatalog()]);
-    } catch (error) { toast(error.message, 'error'); }
-  });
-
-  $('#startBackend').onclick = event => runAction({ key: 'backend', button: event.currentTarget, success: 'Hệ thống nền đã khởi động.', fn: () => api(window.mcbot.backendStart()) }).then(loadStaticData).catch(() => {});
-  $('#stopBackend').onclick = async event => { if (!await confirmInApp({ title:'Dừng hệ thống nền?', message:'Mọi tiến trình bot và kết nối sẽ dừng.', destructive:true })) return; runAction({ key: 'backend', button: event.currentTarget, success: 'Hệ thống nền đã dừng.', fn: () => api(window.mcbot.backendStop()) }).catch(() => {}); };
-  $('#restartBackend').onclick = event => runAction({ key: 'backend', button: event.currentTarget, success: 'Hệ thống nền đã khởi động lại.', fn: () => api(window.mcbot.backendRestart()) }).then(loadStaticData).catch(() => {});
-  $('#emergencyStop').onclick = async event => {
-    const count = (state.snapshot?.bots || []).length;
-    if (!await confirmInApp({ title: 'Dừng khẩn cấp toàn bộ fleet?', message: `Sẽ thu hồi chế độ, khóa tự kết nối lại và ngắt ${count} bot. Kết quả từng bot sẽ được kiểm tra.`, destructive: true })) return;
-    try {
-      const envelope = await window.mcbot.fleetAction('emergency-stop');
-      if (!envelope?.success) throw new Error(envelope?.error?.message || 'Không gọi được dừng khẩn cấp.');
-      const result = envelope.data;
-      if (result.outcome === 'SUCCESS') toast(`Đã dừng an toàn ${result.terminalCount}/${result.botCount} bot.`);
-      else toast(`Dừng khẩn cấp ${result.outcome}: ${result.terminalCount}/${result.botCount} bot đã terminal. Hãy xem Chẩn đoán và thử lại bot còn lỗi.`, 'warn');
-      await refreshSnapshot({ quiet: true });
-    } catch (error) { toast(error.message, 'error'); reportRendererError(error, 'action:fleet:emergency-stop'); }
-  };
-
-  $('#secretStatusBtn').onclick = async () => { try { const status = await api(window.mcbot.secretStatus()); $('#secretStatusText').textContent = `Trạng thái: ${status.state} · Mã hóa: ${status.encryptionAvailable ? 'OK' : 'KHÔNG KHẢ DỤNG'} · Đã cấu hình: ${status.keys.join(', ') || 'chưa có'}${status.failedKeys?.length ? ` · Giải mã lỗi: ${status.failedKeys.join(', ')}` : ''}${status.remediation ? ` · ${status.remediation}` : ''}`; } catch (error) { toast(error.message, 'error'); } };
-  $('#resetSecretStore').onclick = async event => {
-    if (!await confirmInApp({ title: 'Reset riêng kho dữ liệu bí mật?', message: 'Thao tác này chỉ xóa tệp secret đã mã hóa. Hồ sơ bot, cấu hình, log và dữ liệu runtime khác được giữ nguyên. Bạn phải nhập lại các secret cần dùng.', destructive: true })) return;
-    runAction({ key: 'reset-secret-store', button: event.currentTarget, success: 'Đã reset riêng kho dữ liệu bí mật.', refresh: false, fn: () => api(window.mcbot.resetSecretStore()) }).catch(() => {});
-  };
-  $('#clearBotPassword').onclick = async event => {
-    const selectedBot = $('#secretBotSelect').value.trim();
-    if (!selectedBot) return toast('Chưa chọn bot.', 'warn');
-    if (!await confirmInApp({ title:`Xóa mật khẩu ${selectedBot}?`, message:'Hồ sơ bot và dữ liệu khác được giữ nguyên.', destructive:true })) return;
-    const key = `MCBOT_${selectedBot.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_PASSWORD`;
-    runAction({ key: `clear-secret:${key}`, button: event.currentTarget, success: 'Đã xóa mật khẩu bot. Khởi động lại hệ thống nền để áp dụng.', refresh: false, fn: () => api(window.mcbot.clearSecret(key)) }).catch(() => {});
-  };
-  $('#clearDiscordSecrets').onclick = async event => {
-    if (!await confirmInApp({ title:'Xóa toàn bộ secret Discord?', message:'Token, Application ID, Guild ID và allowlist đã lưu sẽ bị xóa.', destructive:true })) return;
-    runAction({ key: 'clear-discord-secrets', button: event.currentTarget, success: 'Đã xóa dữ liệu bí mật Discord. Khởi động lại hệ thống nền để áp dụng.', refresh: false, fn: async () => {
-      for (const key of ['DISCORD_TOKEN', 'DISCORD_APPLICATION_ID', 'DISCORD_GUILD_ID', 'DISCORD_ALLOWED_USER_IDS', 'DISCORD_CONTROL_CHANNEL_ID', 'DISCORD_CONFIG_CHANNEL_ID', 'DISCORD_ERRORS_CHANNEL_ID']) await api(window.mcbot.clearSecret(key));
-      return { success: true };
-    } }).catch(() => {});
-  };
-  $('#saveSecrets').onclick = event => runAction({ key: 'save-secrets', button: event.currentTarget, success: 'Đã lưu dữ liệu bí mật. Khởi động lại hệ thống nền để áp dụng.', refresh: false, fn: async () => {
-    const entries = [['DISCORD_TOKEN', $('#secretDiscordToken').value.trim()], ['DISCORD_APPLICATION_ID', $('#secretDiscordAppId').value.trim()], ['DISCORD_GUILD_ID', $('#secretDiscordGuildId').value.trim()], ['DISCORD_ALLOWED_USER_IDS', $('#secretDiscordAllowed').value.trim()]];
-    for (const [key, value] of entries) if (value) await api(window.mcbot.setSecret(key, value));
-    const selectedBot = $('#secretBotSelect').value.trim(); const password = $('#secretBotPassword').value;
-    const key = selectedBot ? `MCBOT_${selectedBot.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_PASSWORD` : '';
-    if (key && password) await api(window.mcbot.setSecret(key, password));
-    for (const id of ['secretDiscordToken', 'secretDiscordAppId', 'secretDiscordGuildId', 'secretDiscordAllowed', 'secretBotPassword']) $('#' + id).value = '';
-    return { success: true };
-  }}).catch(() => {});
-
-  $('#selectLocalUpdate').onclick = event => runAction({ key: 'local-update-select', button: event.currentTarget, success: null, refresh: false, fn: async () => {
-    state.localUpdate = await api(window.mcbot.selectLocalUpdateZip());
-    renderUpdateStatus();
-    if (state.localUpdate?.phase === 'READY') toast(`Đã kiểm tra gói MCbot ${state.localUpdate.selected?.version}.`);
-    return state.localUpdate;
-  }}).catch(() => {});
-  $('#clearLocalUpdate').onclick = event => runAction({ key: 'local-update-clear', button: event.currentTarget, success: 'Đã bỏ gói ZIP.', refresh: false, fn: async () => {
-    state.localUpdate = await api(window.mcbot.clearLocalUpdateZip());
-    renderUpdateStatus();
-    return state.localUpdate;
-  }}).catch(() => {});
-  $('#installLocalUpdate').onclick = async event => {
-    const version = state.localUpdate?.selected?.version || 'mới';
-    if (!await confirmInApp({ title:`Cập nhật lên ${version}?`, message:'MCbot sẽ sao lưu cấu hình, dừng bot/chế độ, thoát và áp dụng gói ZIP đã xác minh.', destructive:true })) return;
-    runAction({ key: 'local-update-install', button: event.currentTarget, success: 'Đã giao gói cập nhật cho tiến trình updater.', refresh: false, fn: () => api(window.mcbot.installLocalUpdateZip()) }).catch(() => {});
-  };
-
-  $('#savePreferences').onclick = event => runAction({ key: 'save-preferences', button: event.currentTarget, success: 'Đã lưu tùy chọn phần mềm.', refresh: false, fn: async () => {
-    state.preferences = await api(window.mcbot.setPreferences({ closeToTray: $('#prefCloseToTray').checked, notifyErrors: $('#prefNotifyErrors').checked, startBackendOnLaunch: $('#prefAutoStart').checked, preventSystemSleepWhileActive: $('#prefPreventSleep').checked, launchAtLogin: $('#prefLaunchAtLogin').checked, snapshotIntervalMs: Number($('#prefSnapshotInterval').value), experienceLevel:$('#prefExperienceLevel').value, colorTheme:$('#prefColorTheme').value }));
-    applyPresentationPreferences();
-    return { success: true };
-  }}).catch(() => {});
-
-  $('#loadCollectorConfig').onclick = loadCollectorConfig;
-  $('#collectorConfigBot').onchange = loadCollectorConfig;
-  $('#saveCollectorConfig').onclick = event => runAction({ key: 'collector-config', button: event.currentTarget, success: 'Đã lưu cấu hình Collector+B5.', refresh: false, fn: () => api(window.mcbot.updateCollectorConfig($('#collectorConfigBot').value, { pickupLocation: { x: Number($('#collectorX').value), y: Number($('#collectorY').value), z: Number($('#collectorZ').value) }, craftLoopDelayMs: Number($('#collectorDelay').value), pollSeconds: Number($('#collectorPoll').value), reanchorRadius: Number($('#collectorRadius').value) })) }).catch(() => {});
-  $('#loadFishingConfig').onclick = loadFishingConfig;
-  $('#fishingConfigBot').onchange = loadFishingConfig;
-  $('#fishingArea').onchange = fillFishingArea;
-  $('#saveFishingConfig').onclick = event => runAction({ key: 'fishing-config', button: event.currentTarget, success: 'Đã lưu cấu hình câu cá.', refresh: false, fn: () => api(window.mcbot.updateFishingArea($('#fishingConfigBot').value, { areaId: $('#fishingArea').value, x: Number($('#fishingX').value), y: Number($('#fishingY').value), z: Number($('#fishingZ').value), pitchDegrees: Number($('#fishingPitch').value) })) }).catch(() => {});
-
-  $('#botDetailSelect').onchange = renderBotDetail;
-  $('#inspectorBotSelect').onchange = () => renderInspector().catch(() => {});
-  $('#inspectorRefresh').onclick = () => renderInspector().catch(() => {});
-  for (const id of ['eventSubsystem', 'eventSeverity', 'eventBot']) $('#' + id).addEventListener('change', renderEventStream);
-  $('#eventSearch').addEventListener('input', () => requestAnimationFrame(renderEventStream));
-  for (const id of ['eventGeneration', 'eventAttempt', 'eventOperation']) $('#' + id)?.addEventListener('input', () => requestAnimationFrame(renderEventStream));
-  $('#eventPause').addEventListener('change', () => { if (!$('#eventPause').checked) renderEventStream(); });
-  $('#eventAutoScroll').addEventListener('change', renderEventStream);
-  $('#clearEventView').onclick = clearEventView;
-  $('#eventConsole').addEventListener('click', event => {
-    const button = event.target.closest('[data-event-copy]');
-    if (!button) return;
-    copyEventRecord(button.dataset.eventCopy).catch(error => { reportRendererError(error, 'clipboard-event'); toast('Không sao chép được sự kiện.', 'error'); });
-  });
-  $('#incidentDebugList').addEventListener('click', event => {
-    const item = event.target.closest('[data-incident-debug-id]');
-    if (!item) return;
-    window.MCbotRendererStore.selectIncidentDebug(state, item.dataset.incidentDebugId);
-    renderIncidentDebug();
-    renderIncidentDebugDetail().catch(() => {});
-  });
-  $('#refreshIncidentDebug').onclick = () => loadIncidents().then(() => { renderIncidentDebug(); return renderIncidentDebugDetail(); }).catch(error => toast(error.message, 'error'));
-  $('#runtimeStateRefresh').onclick = () => refreshSnapshot({ quiet: true }).then(renderRuntimeState);
-  $('#runtimeStateCopy').onclick = () => navigator.clipboard.writeText($('#runtimeStateOutput').textContent || '').then(() => toast('Đã sao chép snapshot JSON.')).catch(error => toast(error.message, 'error'));
-  $('#b5DebugBotSelect').onchange = () => renderB5Debug().catch(() => {});
-  $('#b5DebugRefresh').onclick = () => loadB5Journey().then(renderB5Debug).catch(error => toast(error.message, 'error'));
-  $('#configDebugLoad').onclick = () => loadConfigDebug().catch(error => toast(error.message, 'error'));
-
-  document.addEventListener('keydown', event => {
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
-      event.preventDefault(); openCommandPalette().catch(error => toast(error.message, 'error'));
-    } else if ((event.ctrlKey || event.metaKey) && !event.shiftKey && /^[1-9]$/.test(event.key)) {
-      event.preventDefault(); switchPage(Object.keys(pageTitles)[Number(event.key) - 1]);
-    } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'r') {
-      event.preventDefault(); refreshSnapshot();
-    } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'l') {
-      event.preventDefault(); switchPage('logs');
-    }
-  });
-  document.addEventListener('input', event => { const panel = event.target?.closest?.('[data-craft-request-bot]'); if (panel) captureCraftingDraft(panel); });
-  document.addEventListener('change', event => { const panel = event.target?.closest?.('[data-craft-request-bot]'); if (panel) captureCraftingDraft(panel); });
-}
+// Event bindings: the legacy bindEvents body lives in core/RendererEventBindings.js.
+// The facade keeps this alias so initialize() behavior is unchanged.
+const { bindEvents } = window.MCbotRendererEventBindings.create({
+  document, state, $, api, toast, esc, pageTitles,
+  handleBotAction, handleFleetAction, switchPage, switchDevPage,
+  openCommandPalette, renderCommandPalette, renderFirstRun, renderHealth,
+  renderIncidents, loadIncidents, renderB5Journey, loadB5Journey,
+  renderModes, renderBotDetail, renderDevOverview, renderInspector,
+  renderEventStream, scheduleEventRender, copyEventRecord, renderIncidentDebug,
+  renderIncidentDebugDetail, renderRuntimeState, renderB5Debug, loadConfigDebug,
+  renderProfiles, loadProfiles, loadCommands, syncSelectors, loadStaticData,
+  loadSkyCommands, renderSkyCommands, clearSkyCommandEditor, saveSkyCommandFromEditor,
+  renderLogs, scheduleLogRender, updateLogUnread, refreshDiagnostics,
+  loadCollectorConfig, loadFishingConfig, fillFishingArea, renderUpdateStatus,
+  loadConfigurationCatalog, loadAdvancedConfig, previewAdvancedConfig, saveAdvancedConfig,
+  undoAdvancedConfig, renderBackupCatalog, loadBackupCatalog, loadB5PureConfig,
+  saveB5PureConfig, loadB5Rules, syncB2InputSourceUi, saveB5Rules,
+  loadStorageProtection, saveStorageProtection, defaultModuleStep, newCustomDraft,
+  modulePayload, renderWorkflowList, draftFromBuilder, readSteps, fillCustomBuilder,
+  renderModulePalette, customModeEntryId, loadCustomModeCatalog, changeWorkflowStep,
+  runAction, refreshSnapshot, confirmInApp, reportRendererError, captureCraftingDraft
+});
 
 function restoreLocalPreferences() {
   $('#logLevel').value = localStorage.getItem('mcbot.logLevel') || 'all';

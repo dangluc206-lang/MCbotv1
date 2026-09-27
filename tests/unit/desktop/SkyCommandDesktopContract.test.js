@@ -7,6 +7,10 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '../../..');
 const renderer = fs.readFileSync(path.join(ROOT, 'src/desktop/renderer/app.js'), 'utf8');
+// The config-group label 'Lệnh riêng theo Sky' moved from app.js into the
+// renderer's config-group catalog during the app.js decomposition; the
+// expectation (renderer surfaces a Vietnamese label for skyCommands) is unchanged.
+const configGroups = fs.readFileSync(path.join(ROOT, 'src/desktop/renderer/pages/ConfigGroupCatalog.js'), 'utf8');
 const html = fs.readFileSync(path.join(ROOT, 'src/desktop/renderer/index.html'), 'utf8');
 const preload = fs.readFileSync(path.join(ROOT, 'src/desktop/preload.js'), 'utf8');
 const main = fs.readFileSync(path.join(ROOT, 'src/desktop/main.js'), 'utf8');
@@ -22,7 +26,7 @@ test('desktop exposes scoped Sky command registration, deletion and send control
     assert.match(main, /mcbot:sky-commands:save/);
     assert.match(main, /mcbot:sky-commands:delete/);
     assert.match(main, /mcbot:sky-commands:send/);
-    assert.match(renderer, /Lệnh riêng theo Sky/);
+    assert.match(configGroups, /Lệnh riêng theo Sky/);
 });
 
 test('GUI inspector excludes scoped Sky commands while command center can show them', () => {
