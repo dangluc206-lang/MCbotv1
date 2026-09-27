@@ -10,6 +10,18 @@ class ServerFeatureFacade {
     minerals() { return this.#require('minerals'); }
     smelting() { return this.#require('smelting'); }
     crafting() { return this.#require('crafting'); }
+    craftingPlanning() { return this.#require('craftingPlanning'); }
+    craftingAutomation() { return this.#require('craftingAutomation'); }
+    craftingTrace() {
+        if (this.features.craftingTrace) return this.features.craftingTrace;
+        return this.#require('b5TraceRecorder');
+    }
+    // ponytail: generic crafting trace delegates to the same recorder instance the
+    // legacy b5Trace() path exposes; dual getters keep both contracts green.
+    b5Trace() {
+        if (this.features.b5TraceRecorder) return this.features.b5TraceRecorder;
+        return this.#require('craftingTrace');
+    }
     b5Planning() { return this.#require('b5Planning'); }
     b5Automation() { return this.#require('b5Automation'); }
     island() { return this.#require('island'); }

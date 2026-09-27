@@ -4,7 +4,8 @@ const Operation = require('../../../operations/Operation');
 
 // Only material-service actions may be wrapped; this keeps the factory from
 // becoming an arbitrary-method dispatcher.
-const ALLOWED_ACTIONS = Object.freeze(['protectForB5Batch', 'preprocessForCraft']);
+// protectForBatch is the generic name; protectForB5Batch is the legacy alias.
+const ALLOWED_ACTIONS = Object.freeze(['protectForBatch', 'protectForB5Batch', 'preprocessForCraft']);
 
 /**
  * Builds a managed Operation for one B1 material-service action (protection

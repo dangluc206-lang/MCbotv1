@@ -29,17 +29,21 @@ function serviceFixture() {
 test('B5 service reconfigure propagates one cycle-boundary config to all extracted coordinators', () => {
     const { service, b2Input, plan } = serviceFixture();
     const next = { targetId: 'super_alloy', b2InputSource: 'inventory', inventorySafetyEmptySlots: 3 };
-    service.reconfigure(next);
-    assert.equal(service.config, next);
-    assert.equal(service.inventoryState.config, next);
-    assert.equal(service.recipeResolver.config, next);
-    assert.equal(plan.config, next);
+    const stored = service.reconfigure(next);
+    // Slice 4/7: legacy b2InputSource is mapped to generic inputSource once at the
+    // boundary; stored config stays generic-only while behavior (inventory) matches.
+    assert.equal(stored.inputSource, 'inventory');
+    assert.equal('b2InputSource' in stored, false);
+    assert.equal(service.config, stored);
+    assert.equal(service.inventoryState.config, stored);
+    assert.equal(service.recipeResolver.config, stored);
+    assert.equal(plan.config, stored);
     assert.equal(b2Input.source, 'inventory');
-    assert.equal(service.b1Inventory.config, next);
-    assert.equal(service.finalCraft.config, next);
-    assert.equal(service.intermediate.config, next);
-    assert.equal(service.reserveChain.config, next);
-    assert.equal(service.cycle.config, next);
+    assert.equal(service.b1Inventory.config, stored);
+    assert.equal(service.finalCraft.config, stored);
+    assert.equal(service.intermediate.config, stored);
+    assert.equal(service.reserveChain.config, stored);
+    assert.equal(service.cycle.config, stored);
 });
 
 test('runtime decorator delegates reconfigure to the service boundary exactly once', () => {

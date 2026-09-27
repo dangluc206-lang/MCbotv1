@@ -15,7 +15,8 @@ class B5PlanningFlow {
         const plannedB2Exact = Math.max(0, Number(chain.b2Crafts || 0));
         const plannedB3 = Math.max(0, Number(chain.b3Crafts || 0));
         const b2BatchSize = Math.max(1, Number(this.config?.quantityOptimization?.b2BatchSize || 64));
-        const b2InputSource = this.config?.b2InputSource === 'inventory' ? 'inventory' : 'storage';
+        // Generic `inputSource` wins; legacy `b2InputSource` kept for compat consumers.
+        const b2InputSource = (this.config?.inputSource ?? this.config?.b2InputSource) === 'inventory' ? 'inventory' : 'storage';
         const useAllForB2 = b2InputSource === 'storage'
             && this.config?.quantityOptimization?.enabled !== false
             && this.config?.quantityOptimization?.useAllForB2 === true;

@@ -334,7 +334,8 @@ class DesktopController {
     // Renderer renders modes.crafting.details; trace carries replay fixture.
     b5Trace(botId) {
         const runtime = this.#runtime(botId);
-        const recorder = runtime.getService?.('b5TraceRecorder');
+        // Generic recorder is the same instance; either service name resolves it.
+        const recorder = runtime.getService?.('craftingTrace') || runtime.getService?.('b5TraceRecorder');
         const bot = this.snapshot().bots.find(item => item.botId === botId) || null;
         return {
             contract: 'dev-b5-trace-v1',
@@ -620,7 +621,9 @@ class DesktopController {
         }
         const b5Replays = this.bundle?.application?.listRuntimes?.().map(runtime => ({
             botId: runtime.botId,
-            fixture: runtime.getService?.('b5TraceRecorder')?.latestReplayFixture?.() || null
+            // Generic recorder is the same instance; either service name resolves it.
+            fixture: runtime.getService?.('craftingTrace')?.latestReplayFixture?.()
+                || runtime.getService?.('b5TraceRecorder')?.latestReplayFixture?.() || null
         })).filter(entry => entry.fixture) || [];
         for (const [index, replay] of b5Replays.entries()) {
             entries.push({ path: `evidence/replay-b5-${String(index + 1).padStart(3, '0')}.json`, value: replay, optional: true });

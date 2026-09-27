@@ -483,7 +483,11 @@ class CollectorB5ModeService {
             if (this.batchProtectionRequired) {
                 this.phase = 'STORAGE_PROTECTION';
                 this.#logActivity('B5: Đang bảo vệ kho trước đợt chế.');
-                const protectedStorage = await this.b1Materials.protectForB5Batch({
+                // Generic batch boundary (legacy alias kept on the service).
+                const protect = this.b1Materials.protectForBatch
+                    ? (...args) => this.b1Materials.protectForBatch(...args)
+                    : (...args) => this.b1Materials.protectForB5Batch(...args);
+                const protectedStorage = await protect({
                     ...cycleOptions,
                 });
                 this.#assertCycleGeneration(generation, 'storage-protection-complete');

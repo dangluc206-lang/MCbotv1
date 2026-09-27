@@ -96,8 +96,9 @@ const CraftingChainPlanner = require("../planning/crafting/CraftingChainPlanner"
 const B5ExecutionPlanner = require("../planning/crafting/B5ExecutionPlanner");
 const CraftPlanningService = require("../server-features/crafting/CraftPlanningService");
 const B5PlanningService = require("../server-features/crafting/B5PlanningService");
-const B5TraceRecorder = require("../server-features/crafting/b5/trace/B5TraceRecorder");
-const B5AutomationService = require("../server-features/crafting/B5AutomationService");
+const CraftTraceRecorder = require("../server-features/crafting/CraftTraceRecorder");
+const CraftAutomationService = require("../server-features/crafting/CraftAutomationService");
+const CraftReadService = require("../server-features/crafting/CraftReadService");
 const B5AutomationRuntimeDecorator = require("../server-features/crafting/B5AutomationRuntimeDecorator");
 const IslandTeleportOperation = require("../server-features/island/IslandTeleportOperation");
 const IslandService = require("../server-features/island/IslandService");
@@ -557,12 +558,15 @@ function registerBotServices({ profile, configuration, shared }) {
     craftingItemRegistry,
   });
   const b5ExecutionPlanner = new B5ExecutionPlanner();
-  const b5TraceRecorder = new B5TraceRecorder({
+  // Generic trace authority owns the recorder class; the legacy b5-trace name
+  // is an alias-first exposure of the same instance (no impl split).
+  const craftTraceRecorder = new CraftTraceRecorder({
     botId,
     serverProfile,
     historyLimit: 100,
     logger,
   });
+  const b5TraceRecorder = craftTraceRecorder;
   // Generic crafting planning authority: every request carries its own target, the
   // service reads /kho + /pv 2 + inventory and classifies stages from tier data.
   // Config keys are the profile's crafting policy mapped to generic policy names.
@@ -592,7 +596,13 @@ function registerBotServices({ profile, configuration, shared }) {
     targetId: b5Config.targetId,
     executionPlanner: b5ExecutionPlanner,
   });
-  const b5AutomationCore = new B5AutomationService({
+  // Generic crafting read authority (slice 2): thin wrapper over the planning
+  // read capabilities (/kho + /pv 2 + inventory, TTL 5s). Same read flows,
+  // same TTL, no behavior change; B5ReadFlow keeps working untouched.
+  const craftRead = new CraftReadService({ planning: craftPlanning });
+  // Generic crafting automation authority (slice 4): same engine, generic class
+  // path. The legacy b5-automation name stays dual-exposed on the same instance.
+  const b5AutomationCore = new CraftAutomationService({
     planningService: b5Planning,
     crafting,
     personalVault,
@@ -798,6 +808,10 @@ function registerBotServices({ profile, configuration, shared }) {
     crafting,
     b5Planning,
     b5Automation,
+    craftingPlanning: craftPlanning,
+    craftingAutomation: b5Automation,
+    craftingTrace: craftTraceRecorder,
+    b5TraceRecorder,
     island,
     dungeon,
     skyblock,
@@ -883,6 +897,7 @@ function registerBotServices({ profile, configuration, shared }) {
     "crafting-planning": craftPlanning,
     "crafting-automation": b5Automation,
     "crafting-trace": b5TraceRecorder,
+    "crafting-read": craftRead,
   };
   new CapabilityInstaller({ registry: capabilityRegistry }).install(
     capabilities,
@@ -1101,6 +1116,11 @@ function registerBotServices({ profile, configuration, shared }) {
       b5Automation,
       b5ExecutionPlanner,
       b5TraceRecorder,
+      craftPlanning,
+      craftRead,
+      craftingPlanning: craftPlanning,
+      craftingAutomation: b5Automation,
+      craftingTrace: craftTraceRecorder,
       collectorB5Mode: collectorB5ModeAdapter,
       craftingMode,
       fishingMode: fishingModeAdapter,

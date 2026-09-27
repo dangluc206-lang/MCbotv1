@@ -20,6 +20,20 @@ const B5ReserveChainCoordinator = require('./b5/B5ReserveChainCoordinator');
 const B5CycleCoordinator = require('./b5/B5CycleCoordinator');
 const PersonalVaultStorageFlow = require('../personal-vault/PersonalVaultStorageFlow');
 
+// ponytail: automation reconfigure accepts both generic `inputSource` and legacy
+// `b2InputSource` so the cycle boundary can forward one config object; generic wins,
+// legacy names are mapped then dropped, and the stored config stays generic-only.
+function normalizeAutomationConfig(next = {}, current = {}) {
+    const source = next || {};
+    const merged = {
+        ...current,
+        ...source,
+        inputSource: source.inputSource ?? source.b2InputSource ?? current?.inputSource
+    };
+    delete merged.b2InputSource;
+    return Object.freeze(merged);
+}
+
 class B5AutomationService {
     constructor({
         planningService,
@@ -66,7 +80,7 @@ class B5AutomationService {
             storage: flows.storage || new B5StorageFlow({ b1Materials }),
             b2Input: flows.b2Input || new B2InputAcquisitionFlow({
                 storage,
-                source: config?.b2InputSource === 'inventory' ? 'inventory' : 'storage'
+                source: (config?.inputSource ?? config?.b2InputSource) === 'inventory' ? 'inventory' : 'storage'
             }),
             deposit: flows.deposit || new PersonalVaultStorageFlow({ personalVault, config: { verify: true } }),
             withdraw: flows.withdraw || new B5WithdrawFlow({ personalVault }),
@@ -140,12 +154,12 @@ class B5AutomationService {
     }
 
     reconfigure(config = {}) {
-        const next = config || {};
+        const next = normalizeAutomationConfig(config, this.config);
         this.config = next;
         this.inventoryState.config = next;
         this.recipeResolver.config = next;
         this.flows.plan.reconfigure?.(next);
-        this.flows.b2Input.reconfigure?.({ source: next.b2InputSource === 'inventory' ? 'inventory' : 'storage' });
+        this.flows.b2Input.reconfigure?.({ source: next.inputSource === 'inventory' ? 'inventory' : 'storage' });
         this.b1Inventory.reconfigure(next);
         this.finalCraft.reconfigure(next);
         this.intermediate.reconfigure(next);
@@ -326,5 +340,7 @@ class B5AutomationService {
 
 
 }
+
+B5AutomationService.normalizeAutomationConfig = normalizeAutomationConfig;
 
 module.exports = B5AutomationService;

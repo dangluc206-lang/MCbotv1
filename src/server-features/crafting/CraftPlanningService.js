@@ -71,6 +71,11 @@ class CraftPlanningService {
         });
     }
 
+    reconfigure(config = {}) {
+        this.config = normalizePlanningConfig(config, this.config);
+        return this;
+    }
+
     plan(targetId, amount, available = {}) {
         return this.planner.plan(this.#requiredTarget(targetId), amount, available);
     }
@@ -530,6 +535,33 @@ class CraftPlanningService {
         }
         return null;
     }
+}
+
+function pick(value, fallback) {
+    return value === undefined ? fallback : value;
+}
+
+function normalizePlanningConfig(next = {}, current = {}) {
+    const source = next || {};
+    // Accept both generic policy names and legacy B5 rule names so the cycle
+    // boundary can forward one config object to planning + automation.
+    // Generic keys win when both are present; otherwise keep current value.
+    // Legacy B5 key names are mapped and then dropped so the generic
+    // service config never carries product-specific vocabulary.
+    const merged = {
+        ...current,
+        ...source,
+        supplyMode: pick(source.supplyMode ?? source.b1SupplyMode, current.supplyMode),
+        inputSource: pick(source.inputSource ?? source.b2InputSource, current.inputSource),
+        vaultBackpressure: pick(
+            source.vaultBackpressure ?? source.personalVaultBackpressure,
+            current.vaultBackpressure
+        )
+    };
+    delete merged.b1SupplyMode;
+    delete merged.b2InputSource;
+    delete merged.personalVaultBackpressure;
+    return Object.freeze(merged);
 }
 
 module.exports = CraftPlanningService;

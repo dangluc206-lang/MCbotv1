@@ -39,7 +39,7 @@ class B5TraceRecorder {
         this.history = [];
     }
 
-    recordResult(result, { mode = 'production', amount = 1 } = {}) {
+    recordResult(result, { mode = 'production', amount = 1, targetId = null } = {}) {
         const data = result?.data || null;
         const trace = Array.isArray(result?.meta?.trace) ? result.meta.trace.map(compactStep).filter(Boolean) : [];
         const blockers = Array.isArray(data?.blockingReasons) ? data.blockingReasons : [];
@@ -49,12 +49,16 @@ class B5TraceRecorder {
             profile: { id: this.serverProfile?.id || result?.meta?.serverProfileId, revision: this.serverProfile?.revision || result?.meta?.serverProfileRevision || 'unknown' },
             policy: { id: 'b5-execution-planner', revision: `v${plan?.version || 1}` }
         }) : null;
+        const resolvedTarget = String(targetId ?? data?.targetId ?? '').trim() || null;
+        // Legacy trace id shape stays the primary id (compat: b5Trace/latest,
+        // renderer journey, replay fixtures). Generic id is exposed alongside.
         const traceId = `${this.botId}:b5:${++this.sequence}`;
+        const craftTraceId = traceId.replace(':b5:', ':craft:');
         const traceEnvelope = TraceEnvelope.create({
             traceId, botId: this.botId, connectionGeneration: result?.meta?.connectionGeneration ?? null,
             operationId: result?.meta?.operationId || null, correlationId: result?.meta?.correlationId || result?.meta?.operationId || null,
             decisionDigest: replayEnvelope?.digest || null, kind: 'b5-cycle', code: result?.success === false ? (result?.error?.code || result?.status || 'FAILED') : 'SUCCESS',
-            details: { mode, amount: Number(amount || 1), productive: Boolean(data?.productive), complete: Boolean(data?.completedTarget || data?.complete) }
+            details: { mode, amount: Number(amount || 1), targetId: resolvedTarget, productive: Boolean(data?.productive), complete: Boolean(data?.completedTarget || data?.complete) }
         });
         const record = Object.freeze({
             traceId,
@@ -81,6 +85,10 @@ class B5TraceRecorder {
             traceEnvelope,
             actionSummary: data?.actionSummary || null,
             steps: Object.freeze(trace),
+            // Generic trace id for the same cycle; legacy `traceId` stays primary
+            // so existing b5Trace/latest + replay consumers see zero drift.
+            craftTraceId,
+            targetId: resolvedTarget,
             error: result?.success === false ? {
                 code: result?.error?.code || result?.status || null,
                 message: result?.message || result?.error?.message || null

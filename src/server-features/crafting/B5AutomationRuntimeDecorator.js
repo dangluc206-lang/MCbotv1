@@ -14,13 +14,15 @@ class B5AutomationRuntimeDecorator {
     runMaintenance(...args) { return this.#measure(() => this.service.runMaintenance(...args)); }
 
     reconfigure(config = {}) {
+        // Delegate normalization to the service so decorator + service store the
+        // same generic-only config (generic `inputSource` wins over legacy).
+        if (typeof this.service.reconfigure === 'function') return this.service.reconfigure(config);
         const next = config || {};
-        if (typeof this.service.reconfigure === 'function') return this.service.reconfigure(next);
         this.service.config = next;
         this.service.inventoryState.config = next;
         this.service.recipeResolver.config = next;
         this.service.flows.plan.reconfigure?.(next);
-        this.service.flows.b2Input.reconfigure?.({ source: next.b2InputSource === 'inventory' ? 'inventory' : 'storage' });
+        this.service.flows.b2Input.reconfigure?.({ source: (next.inputSource ?? next.b2InputSource) === 'inventory' ? 'inventory' : 'storage' });
         return next;
     }
 

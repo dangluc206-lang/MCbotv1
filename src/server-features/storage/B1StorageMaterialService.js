@@ -134,7 +134,7 @@ class B1StorageMaterialService {
     }
 
     /**
-     * Single B5 batch boundary for /kho.
+     * Single batch boundary for /kho (generic name).
      *
      * Order is intentionally fixed and has no pressure/burst/click policy:
      *   fresh /kho -> smelt raw iron/gold -> compact every B1 family ->
@@ -144,8 +144,13 @@ class B1StorageMaterialService {
      * Stone is never smelted because only the allowlisted iron/gold recipes can
      * enter this service. Craft-time code must never call this method mid-batch.
      */
-    protectForB5Batch(options = {}) {
+    protectForBatch(options = {}) {
         return this.batchProtection.protect(options);
+    }
+
+    /** Legacy alias: same boundary, same instance, no impl split. */
+    protectForB5Batch(options = {}) {
+        return this.protectForBatch(options);
     }
 
     preprocessForCraft(options = {}) {
