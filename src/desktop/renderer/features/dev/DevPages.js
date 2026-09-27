@@ -112,6 +112,11 @@
   // correlation: incidentId, botId, generation, attemptEpoch*, modeId, operationId.
   // (*attemptEpoch lives on events/logs, not on the incident index.)
 
+  function incidentEvidenceNav(safeIndex, total) {
+    if (!total) return '';
+    return `<div class="actions incident-evidence-nav"><button class="button ghost small" data-evidence-prev ${safeIndex <= 0 ? 'disabled' : ''}>← Prev evidence</button><span class="log-meta">artifact ${safeIndex + 1}/${total}</span><button class="button ghost small" data-evidence-next ${safeIndex >= total - 1 ? 'disabled' : ''}>Next evidence →</button></div>`;
+  }
+
   function incidentTimeline(incident, diagnostic, options = {}) {
     const entries = [];
     entries.push(['Incident', `${incident.code || incident.id} · severity ${incident.severity || '—'} · state ${incident.state}`]);
@@ -274,7 +279,7 @@
   }
 
   return Object.freeze({
-    stateView, fleetRows, botDetail, logLine, incidentTimeline,
+    stateView, fleetRows, botDetail, logLine, incidentTimeline, incidentEvidenceNav,
     inspectorView, eventStream, eventLine, logStream, runtimeStateView,
     b5DebugView, diagnosticsView, configDebugView
   });

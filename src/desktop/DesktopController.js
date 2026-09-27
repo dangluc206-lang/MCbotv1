@@ -26,6 +26,10 @@ const BotProfileUseCases = require('./use-cases/BotProfileUseCases');
 const ModeConfigurationUseCases = require('./use-cases/ModeConfigurationUseCases');
 const FleetControlUseCases = require('./use-cases/FleetControlUseCases');
 const CraftingRequestUseCases = require('./use-cases/CraftingRequestUseCases');
+const ProfileDomain = require('./domains/ProfileDomain');
+const FleetDomain = require('./domains/FleetDomain');
+const IncidentDomain = require('./domains/IncidentDomain');
+const ObservabilityDomain = require('./domains/ObservabilityDomain');
 const { plainError, resultPayload } = require('./contracts/DesktopResult');
 
 const SUPPORT_PREVIEW_TTL_MS = 60000;
@@ -102,6 +106,21 @@ class DesktopController {
         this.craftingRequestUseCases = new CraftingRequestUseCases({
             bundleProvider: () => this.bundle,
             requireRunning: () => this.#requireRunning()
+        });
+        // Decomposition: thin domains over existing use-cases/stores (no logic move).
+        // DesktopController stays a facade; IPC signatures unchanged.
+        this.profileDomain = new ProfileDomain({ botProfileUseCases: this.botProfileUseCases });
+        this.fleetDomain = new FleetDomain({
+            fleetControlUseCases: this.fleetControlUseCases,
+            craftingRequestUseCases: this.craftingRequestUseCases
+        });
+        this.incidentDomain = new IncidentDomain({
+            incidentIndexStore: this.incidentIndexStore,
+            artifactsProvider: () => this.#runtimeFailureArtifacts(),
+            publishLog: (record, options) => this.#publishLog(record, options)
+        });
+        this.observabilityDomain = new ObservabilityDomain({
+            artifactsProvider: () => this.#runtimeFailureArtifacts()
         });
     }
 
@@ -336,41 +355,19 @@ class DesktopController {
     }
 
     async incidents({ limit = 100, states = null, botId = null } = {}) {
-        await this.incidentIndexStore.load();
-        const artifacts = this.#runtimeFailureArtifacts().list({ limit: Math.min(100, Number(limit) || 100), botId, hydrateMetadata: true });
-        for (const artifact of artifacts.items || []) {
-            try {
-                const record = this.#runtimeFailureArtifacts().read(artifact.id);
-                await this.incidentIndexStore.ingest(record, { artifactId: artifact.id });
-            } catch (error) {
-                this.#publishLog({ timestamp: VietnamTime.iso(), level: 'warn', scope: 'IncidentCenter', message: 'Không thể lập chỉ mục một runtime failure artifact.', meta: { artifactId: artifact.id, code: error?.code || null } }, { persist: false });
-            }
-        }
-        return { contract: IncidentIndexStore.CONTRACT, items: this.incidentIndexStore.snapshot({ limit, states, botId }), warnings: artifacts.warnings || [] };
+        return this.incidentDomain.list({ limit, states, botId });
     }
 
     async incident(id) {
-        await this.incidents({ limit: 100 });
-        const incident = this.incidentIndexStore.find(id);
+        // Keep stub-friendly: facade incidents() may be mocked; enrich only.
+        const list = await this.incidents({ limit: 100 });
+        const incident = (list.items || []).find(item => item.id === id) || this.incidentIndexStore.find(id);
         if (!incident) throw Object.assign(new Error('Incident does not exist.'), { code: 'DESKTOP_INCIDENT_NOT_FOUND' });
-        // Dev UI incident-debug multi-evidence nav: first/last generation plus
-        // the distinct operationIds seen across the timeline. No bypass API.
-        const generations = (incident.timeline || [])
-            .map(entry => Number(entry?.generation))
-            .filter(value => Number.isInteger(value));
-        const operationIds = [...new Set((incident.timeline || [])
-            .map(entry => String(entry?.operationId || entry?.correlationId || '').trim())
-            .filter(Boolean))];
-        return {
-            ...incident,
-            firstGeneration: generations.length ? generations[0] : (incident.generation ?? null),
-            lastGeneration: generations.length ? generations[generations.length - 1] : (incident.generation ?? null),
-            operationIds
-        };
+        return this.incidentDomain.enrich(incident);
     }
 
     async transitionIncident(id, state, options = {}) {
-        return this.incidentIndexStore.transition(id, state, options);
+        return this.incidentDomain.transition(id, state, options);
     }
 
     async executeIncidentAction(id, action, request = {}) {
@@ -435,19 +432,19 @@ class DesktopController {
         return this.backupCatalogService.restore(id, { verifyTarget: () => this.#validateConfigurationTree() });
     }
 
-    listProfiles() { return this.botProfileUseCases.list(); }
-    updateProfile(botId, fields) { return this.botProfileUseCases.update(botId, fields); }
-    createProfile(fields = {}) { return this.botProfileUseCases.create(fields); }
-    cloneProfile(botId, newId) { return this.botProfileUseCases.clone(botId, newId); }
-    deleteProfile(botId) { return this.botProfileUseCases.remove(botId); }
+    listProfiles() { return this.profileDomain.list(); }
+    updateProfile(botId, fields) { return this.profileDomain.update(botId, fields); }
+    createProfile(fields = {}) { return this.profileDomain.create(fields); }
+    cloneProfile(botId, newId) { return this.profileDomain.clone(botId, newId); }
+    deleteProfile(botId) { return this.profileDomain.remove(botId); }
 
-    connect(botId) { return this.fleetControlUseCases.connect(botId); }
-    disconnect(botId) { return this.fleetControlUseCases.disconnect(botId); }
-    startMode(botId, mode) { return this.fleetControlUseCases.startMode(botId, mode); }
-    pauseMode(botId) { return this.fleetControlUseCases.pauseMode(botId); }
-    resumeMode(botId) { return this.fleetControlUseCases.resumeMode(botId); }
-    stopMode(botId) { return this.fleetControlUseCases.stopMode(botId); }
-    restartMode(botId) { return this.fleetControlUseCases.restartMode(botId); }
+    connect(botId) { return this.fleetDomain.connect(botId); }
+    disconnect(botId) { return this.fleetDomain.disconnect(botId); }
+    startMode(botId, mode) { return this.fleetDomain.startMode(botId, mode); }
+    pauseMode(botId) { return this.fleetDomain.pauseMode(botId); }
+    resumeMode(botId) { return this.fleetDomain.resumeMode(botId); }
+    stopMode(botId) { return this.fleetDomain.stopMode(botId); }
+    restartMode(botId) { return this.fleetDomain.restartMode(botId); }
 
     async retryB5StorageProtection(botId, request = {}) {
         const runtime = this.#runtime(botId);
@@ -464,16 +461,16 @@ class DesktopController {
     }
 
 
-    craftingItems(botId) { return this.craftingRequestUseCases.items(botId); }
-    setCraftingRequest(botId, request) { return this.craftingRequestUseCases.set(botId, request); }
-    clearCraftingRequest(botId) { return this.craftingRequestUseCases.clear(botId); }
+    craftingItems(botId) { return this.fleetDomain.craftingItems(botId); }
+    setCraftingRequest(botId, request) { return this.fleetDomain.setCraftingRequest(botId, request); }
+    clearCraftingRequest(botId) { return this.fleetDomain.clearCraftingRequest(botId); }
     // Kept for older preload/renderer clients: mcbot:b5:craft-* channels.
     b5CraftItems(botId) { return this.craftingItems(botId); }
     setB5CraftRequest(botId, request) { return this.setCraftingRequest(botId, request); }
     clearB5CraftRequest(botId) { return this.clearCraftingRequest(botId); }
 
-    reconcileFleet(reason = 'desktop-reconcile') { return this.fleetControlUseCases.reconcile(reason); }
-    fleetAction(action) { return this.fleetControlUseCases.fleetAction(action); }
+    reconcileFleet(reason = 'desktop-reconcile') { return this.fleetDomain.reconcile(reason); }
+    fleetAction(action) { return this.fleetDomain.fleetAction(action); }
 
     async sendRegisteredCommand(botId, { commandKey, args = {}, confirm = false, timeoutMs = 5000 } = {}) {
         const runtime = this.#runtime(botId);
@@ -640,7 +637,7 @@ class DesktopController {
         };
     }
 
-    goHome(botId) { return this.fleetControlUseCases.home(botId); }
+    goHome(botId) { return this.fleetDomain.home(botId); }
 
 
     collectorConfig(botId) { return this.modeConfigurationUseCases.collector(botId); }
@@ -882,11 +879,11 @@ class DesktopController {
     }
 
     diagnostics({ limit = 40, botId = null } = {}) {
-        return this.#runtimeFailureArtifacts().list({ limit, botId });
+        return this.observabilityDomain.list({ limit, botId });
     }
 
     readDiagnostic(id) {
-        return this.#runtimeFailureArtifacts().read(id);
+        return this.observabilityDomain.read(id);
     }
 
     #runtimeFailureArtifacts() {

@@ -555,15 +555,13 @@ async function renderIncidentDebugDetail() {
   }
   // P0-5: prev/next qua mọi evidenceRefs bằng readDiagnostic hiện có (không thêm IPC).
   const requested = Number(state.incidentEvidenceIndex || 0);
-  const safeIndex = evidence.length ? Math.max(0, Math.min(evidence.length - 1, requested)) : 0;
+  const safeIndex = window.MCbotRendererStore.clampEvidenceIndex(state, evidence.length) ?? (evidence.length ? Math.max(0, Math.min(evidence.length - 1, requested)) : 0);
   state.incidentEvidenceIndex = safeIndex;
   const diagnostic = evidence.length ? (diagnostics[safeIndex] || null) : null;
-  const evidenceNav = evidence.length
-    ? `<div class="actions incident-evidence-nav"><button class="button ghost small" id="incidentEvidencePrev" ${safeIndex <= 0 ? 'disabled' : ''}>← Prev evidence</button><span class="log-meta">artifact ${safeIndex + 1}/${evidence.length}</span><button class="button ghost small" id="incidentEvidenceNext" ${safeIndex >= evidence.length - 1 ? 'disabled' : ''}>Next evidence →</button></div>`
-    : '';
+  const evidenceNav = window.MCbotDevPages.incidentEvidenceNav(safeIndex, evidence.length);
   detail.innerHTML = evidenceNav + window.MCbotDevPages.incidentTimeline(incident, diagnostic, { evidenceIndex: safeIndex });
-  const prev = $('#incidentEvidencePrev');
-  const next = $('#incidentEvidenceNext');
+  const prev = detail.querySelector('[data-evidence-prev]');
+  const next = detail.querySelector('[data-evidence-next]');
   if (prev) prev.onclick = () => { state.incidentEvidenceIndex = Math.max(0, safeIndex - 1); renderIncidentDebugDetail().catch(() => {}); };
   if (next) next.onclick = () => { state.incidentEvidenceIndex = Math.min(evidence.length - 1, safeIndex + 1); renderIncidentDebugDetail().catch(() => {}); };
 }
@@ -1704,8 +1702,7 @@ function bindEvents() {
   $('#incidentDebugList').addEventListener('click', event => {
     const item = event.target.closest('[data-incident-debug-id]');
     if (!item) return;
-    state.incidentDebugId = item.dataset.incidentDebugId;
-    state.incidentEvidenceIndex = 0;
+    window.MCbotRendererStore.selectIncidentDebug(state, item.dataset.incidentDebugId);
     renderIncidentDebug();
     renderIncidentDebugDetail().catch(() => {});
   });
