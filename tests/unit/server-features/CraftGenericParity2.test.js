@@ -4,10 +4,7 @@ const assert = require('node:assert/strict');
 const CraftPlanningService = require('../../../src/server-features/crafting/CraftPlanningService');
 const B5PlanningService = require('../../../src/server-features/crafting/B5PlanningService');
 const CraftAutomationService = require('../../../src/server-features/crafting/CraftAutomationService');
-const B5AutomationService = require('../../../src/server-features/crafting/B5AutomationService');
 const CraftTraceRecorder = require('../../../src/server-features/crafting/CraftTraceRecorder');
-// ponytail: parity holds through the compat aliases only (same references).
-const B5TraceRecorder = require('../../../src/server-features/crafting/b5/trace/B5TraceRecorder');
 const ServerFeatureFacade = require('../../../src/server-features/ServerFeatureFacade');
 const CraftingRecipeRegistry = require('../../../src/server-features/crafting/CraftingRecipeRegistry');
 const MaterialCalculator = require('../../../src/planning/crafting/MaterialCalculator');
@@ -24,10 +21,9 @@ function createPlanning(inputSource = 'storage', inventoryB1 = 0) {
 
 test('slice6: CraftTraceRecorder keeps legacy id + generic fields', () => {
     const recorder = new CraftTraceRecorder({ botId: 'bot-01', historyLimit: 10 });
-    // Authority inversion: generic owns the implementation (B5 is the alias).
+    // Generic owns the implementation (no B5 alias needed for parity).
     assert.equal(recorder.constructor.name, 'CraftTraceRecorder');
     assert.equal(recorder instanceof CraftTraceRecorder, true);
-    assert.equal(B5TraceRecorder, CraftTraceRecorder);
     const record = recorder.recordResult({
         success: true, status: 'SUCCESS',
         data: { targetId: 'carbon', productive: true, completedTarget: false, blockingReasons: [], actionSummary: {}, plan: null },
@@ -38,8 +34,7 @@ test('slice6: CraftTraceRecorder keeps legacy id + generic fields', () => {
     assert.ok(String(record.craftTraceId).includes(':craft:'));
 });
 test('slice4: CraftAutomationService same engine + fail-closed', async () => {
-    // Authority inversion: generic owns the implementation (B5 is the alias).
-    assert.equal(B5AutomationService, CraftAutomationService);
+    // Generic owns the implementation (no B5 alias needed for parity).
     assert.equal(CraftAutomationService.name, 'CraftAutomationService');
     assert.equal(typeof CraftAutomationService.normalizeAutomationConfig, 'function');
     assert.ok(Object.prototype.hasOwnProperty.call(CraftAutomationService, 'normalizeAutomationConfig'));

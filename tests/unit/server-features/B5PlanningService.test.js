@@ -6,7 +6,6 @@ const CraftingRecipeRegistry = require('../../../src/server-features/crafting/Cr
 const CraftPlanningService = require('../../../src/server-features/crafting/CraftPlanningService');
 const MaterialCalculator = require('../../../src/planning/crafting/MaterialCalculator');
 const CraftingPlanner = require('../../../src/planning/crafting/CraftingPlanner');
-const B5Planner = require('../../../src/planning/crafting/B5Planner');
 const B5PlanningService = require('../../../src/server-features/crafting/B5PlanningService');
 const KhoSnapshot = require('../../../src/server-features/storage/KhoSnapshot');
 const PersonalVaultSnapshot = require('../../../src/server-features/personal-vault/PersonalVaultSnapshot');
@@ -68,13 +67,13 @@ function createService({ loose = 0, blocks = 0, inventoryB1 = 0, existingB5 = 0,
     return new B5PlanningService({ planning: craftPlanning, tiers, targetId: 'b5' });
 }
 
-test('B5Planner never hard-codes a target: targetId must come from config, per-request target wins', () => {
+test('generic planning never hard-codes a target: per-request targetId wins, missing target fails closed', () => {
+    // Generic contract: CraftPlanningService.plan(targetId, ...) requires an explicit target.
     const inner = { plan: (targetId, amount) => ({ targetId, amount }) };
-    assert.throws(() => new B5Planner({ planner: inner }), /targetId is required/);
-    const fromConfig = new B5Planner({ planner: inner, targetId: 'configured_item' });
-    assert.equal(fromConfig.targetId, 'configured_item');
-    assert.equal(fromConfig.plan('requested_item', 2).targetId, 'requested_item');
-    assert.equal(fromConfig.plan(null, 1).targetId, 'configured_item');
+    const planning = new CraftPlanningService({ planner: inner });
+    assert.throws(() => planning.plan(), /targetId is required/);
+    assert.throws(() => planning.plan(null, 1), /targetId is required/);
+    assert.equal(planning.plan('requested_item', 2).targetId, 'requested_item');
 });
 
 test('planning counts compacted B1 blocks as effective material without selling B1 after B2', async () => {

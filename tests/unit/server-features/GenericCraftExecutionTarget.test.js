@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const B5FinalCraftCoordinator = require('../../../src/server-features/crafting/b5/B5FinalCraftCoordinator');
 const B5CycleCoordinator = require('../../../src/server-features/crafting/b5/B5CycleCoordinator');
 const CraftingRequestExecution = require('../../../src/modes/crafting/CraftingRequestExecution');
-const B5StageContract = require('../../../src/server-features/crafting/b5/support/B5StageContract');
+const StageExecutionContract = require('../../../src/server-features/crafting/verification/StageExecutionContract');
 
 function token() { return { throwIfCancelled() {} }; }
 function context() { return { cancellation: { token: token() }, connectionGeneration: 3, trace: null }; }
@@ -24,7 +24,7 @@ function makeCoordinator({ targetId }) {
         titanium: { output: 'titanium', outputAmount: 1, inputs: { intermediate_out: 1 } },
         carbon: { output: 'carbon', outputAmount: 1, inputs: {} }
     };
-    const stageContract = new B5StageContract();
+    const stageContract = new StageExecutionContract();
     for (const method of ['verifyOutput', 'requireSettled', 'handoff']) {
         const original = stageContract[method].bind(stageContract);
         stageContract[method] = args => {

@@ -13,7 +13,7 @@ const ItemNormalizer = require('../../../src/items/ItemNormalizer');
 const ItemMatcher = require('../../../src/items/matching/ItemMatcher');
 const Composite = require('../../../src/items/matching/CompositeItemMatcher');
 const Material = require('../../../src/items/matching/MaterialMatcher');
-const B5TraceRecorder = require('../../../src/server-features/crafting/b5/trace/B5TraceRecorder');
+const CraftTraceRecorder = require('../../../src/server-features/crafting/CraftTraceRecorder');
 
 function resolverFor(items) {
     return new ItemResolver({
@@ -50,7 +50,7 @@ test('WP-103 profile facts are immutable per profile and profile revision is att
     mutable.marker.representations.inventory.rules[0].value = 'diamond';
     assert.equal(profile.requireCatalog('items').marker.representations.inventory.rules[0].value, 'stone');
     assert.throws(() => { profile.requireCatalog('items').marker = {}; }, TypeError);
-    const trace = new B5TraceRecorder({ botId: 'bot-01', serverProfile: profile }).recordResult({ success: true, status: 'SUCCESS', data: {} });
+    const trace = new CraftTraceRecorder({ botId: 'bot-01', serverProfile: profile }).recordResult({ success: true, status: 'SUCCESS', data: {} });
     assert.equal(trace.serverProfileId, 'p');
     assert.equal(trace.serverProfileRevision, 'r-profile-9');
 });

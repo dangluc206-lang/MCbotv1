@@ -244,10 +244,10 @@
         "current B5-specific planning integration"
       ]
     },
-    "src/server-features/crafting/B5AutomationService.js": {
+    "src/server-features/crafting/CraftAutomationService.js": {
       "scope": "bot/server-feature",
       "owns": [
-        "current B5-specific automation compatibility"
+        "generic crafting automation implementation"
       ]
     }
   }

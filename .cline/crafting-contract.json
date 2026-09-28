@@ -298,9 +298,8 @@
   "currentB5Consumer": {
     "mode": "src/modes/crafting/CraftingModeService.js",
     "planning": "src/server-features/crafting/B5PlanningService.js",
-    "automation": "src/server-features/crafting/B5AutomationService.js",
+    "automation": "src/server-features/crafting/CraftAutomationService.js",
     "executionPlanner": "src/planning/crafting/B5ExecutionPlanner.js",
-    "legacyPlanner": "src/planning/crafting/B5Planner.js",
     "importantConstraint": "Do not propagate B5-specific policy into generic crafting classes when removing B5 as the center."
   }
 }

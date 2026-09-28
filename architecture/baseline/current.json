@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "baselineVersion": 1,
   "workPackage": "WP-001",
-  "generatedAt": "2026-09-28T13:43:15.721Z",
+  "generatedAt": "2026-09-28T16:39:31.544Z",
   "releaseVersion": "2.7.67",
   "scope": {
     "root": ".",
@@ -39,12 +39,12 @@
       "inScopeChangedPaths": 0
     },
     "reason": "Standalone source tree; version-control metadata is intentionally not required.",
-    "sourceFingerprintSha256": "e8d9841c866432b0c4bb812f727cdfe6d23f8cad843383cd82fa0fa831ca2fd9"
+    "sourceFingerprintSha256": "01daf14f961f20a495d1e5db4142eee16c4468ef1cea2855680e406dadd8cf3c"
   },
   "counts": {
-    "files": 1034,
-    "source": 433,
-    "tests": 263,
+    "files": 1020,
+    "source": 421,
+    "tests": 261,
     "scripts": 41,
     "configJson": 35,
     "routes": 1
@@ -101,7 +101,7 @@
     },
     {
       "area": "desktop",
-      "files": 73,
+      "files": 72,
       "owner": "src/desktop/",
       "layer": "control-plane-desktop",
       "classification": "CURRENT"
@@ -164,7 +164,7 @@
     },
     {
       "area": "planning",
-      "files": 11,
+      "files": 10,
       "owner": "src/planning/",
       "layer": "pure-planning",
       "classification": "CURRENT"
@@ -178,7 +178,7 @@
     },
     {
       "area": "server-features",
-      "files": 87,
+      "files": 77,
       "owner": "src/server-features/",
       "layer": "server-domain-features",
       "classification": "CURRENT"
@@ -1230,20 +1230,7 @@
       "src/simulation/VirtualClock.js",
       "src/simulation/b5/B5PlannerReplay.js"
     ],
-    "orphanSourceFiles": [
-      "src/desktop/use-cases/B5CraftRequestUseCases.js",
-      "src/planning/crafting/B5Planner.js",
-      "src/server-features/crafting/B5AutomationService.js",
-      "src/server-features/crafting/b1-b3/B1B3CraftingModule.js",
-      "src/server-features/crafting/b1-b3/B1B3InputCoordinator.js",
-      "src/server-features/crafting/b1-b3/B1B3ReadService.js",
-      "src/server-features/crafting/b1-b3/B1B3ReserveCoordinator.js",
-      "src/server-features/crafting/b5/flows/B5DepositFlow.js",
-      "src/server-features/crafting/b5/flows/B5InventoryReadFlow.js",
-      "src/server-features/crafting/b5/flows/B5Pv2ReadFlow.js",
-      "src/server-features/crafting/b5/support/B5StageContract.js",
-      "src/server-features/crafting/b5/trace/B5TraceRecorder.js"
-    ]
+    "orphanSourceFiles": []
   },
   "sideEffects": [
     {
@@ -1566,8 +1553,6 @@
       "src/server-features/crafting/CraftingResultVerifier.js",
       "src/server-features/crafting/CraftingService.js",
       "src/server-features/crafting/CraftingVerificationCoordinator.js",
-      "src/server-features/crafting/b1-b3/B1B3InputCoordinator.js",
-      "src/server-features/crafting/b1-b3/B1B3ReserveCoordinator.js",
       "src/server-features/crafting/b5/B5B1InventoryCoordinator.js",
       "src/server-features/crafting/b5/B5FinalCraftCoordinator.js",
       "src/server-features/crafting/b5/B5ReserveChainCoordinator.js",
@@ -1763,7 +1748,6 @@
         "src/gui/slots/SlotResolver.js",
         "src/gui/slots/SlotValidator.js",
         "src/server-features/crafting/B5AutomationRuntimeDecorator.js",
-        "src/server-features/crafting/B5AutomationService.js",
         "src/server-features/crafting/B5PlanningService.js",
         "src/server-features/crafting/CraftAutomationService.js",
         "src/server-features/crafting/CraftInputAvailability.js",
@@ -1780,10 +1764,6 @@
         "src/server-features/crafting/CraftingService.js",
         "src/server-features/crafting/CraftingVerificationCoordinator.js",
         "src/server-features/crafting/CraftingVerificationService.js",
-        "src/server-features/crafting/b1-b3/B1B3CraftingModule.js",
-        "src/server-features/crafting/b1-b3/B1B3InputCoordinator.js",
-        "src/server-features/crafting/b1-b3/B1B3ReadService.js",
-        "src/server-features/crafting/b1-b3/B1B3ReserveCoordinator.js",
         "src/server-features/crafting/b5/B5B1InventoryCoordinator.js",
         "src/server-features/crafting/b5/B5CycleCoordinator.js",
         "src/server-features/crafting/b5/B5FinalCraftCoordinator.js",
@@ -1791,11 +1771,8 @@
         "src/server-features/crafting/b5/B5ReserveChainCoordinator.js",
         "src/server-features/crafting/b5/flows/B2InputAcquisitionFlow.js",
         "src/server-features/crafting/b5/flows/B5CraftFlow.js",
-        "src/server-features/crafting/b5/flows/B5DepositFlow.js",
-        "src/server-features/crafting/b5/flows/B5InventoryReadFlow.js",
         "src/server-features/crafting/b5/flows/B5KhoReadFlow.js",
         "src/server-features/crafting/b5/flows/B5PlanningFlow.js",
-        "src/server-features/crafting/b5/flows/B5Pv2ReadFlow.js",
         "src/server-features/crafting/b5/flows/B5ReadFlow.js",
         "src/server-features/crafting/b5/flows/B5StorageFlow.js",
         "src/server-features/crafting/b5/flows/B5WithdrawFlow.js",
@@ -1803,8 +1780,6 @@
         "src/server-features/crafting/b5/support/B5InventoryState.js",
         "src/server-features/crafting/b5/support/B5ProgressTracker.js",
         "src/server-features/crafting/b5/support/B5RecipeResolver.js",
-        "src/server-features/crafting/b5/support/B5StageContract.js",
-        "src/server-features/crafting/b5/trace/B5TraceRecorder.js",
         "src/server-features/crafting/verification/CraftingVerificationAttempt.js",
         "src/server-features/crafting/verification/CraftingVerificationEvidence.js",
         "src/server-features/crafting/verification/StageExecutionContract.js",
@@ -1877,7 +1852,6 @@
       ],
       "sourceLocations": [
         "src/planning/crafting/B5ExecutionPlanner.js",
-        "src/planning/crafting/B5Planner.js",
         "src/planning/crafting/CraftStageClassifier.js",
         "src/planning/crafting/CraftingChainPlanner.js",
         "src/planning/crafting/CraftingPlan.js",
@@ -1885,7 +1859,6 @@
         "src/planning/crafting/CraftingStep.js",
         "src/planning/crafting/MaterialCalculator.js",
         "src/server-features/crafting/B5AutomationRuntimeDecorator.js",
-        "src/server-features/crafting/B5AutomationService.js",
         "src/server-features/crafting/B5PlanningService.js",
         "src/server-features/crafting/CraftAutomationService.js",
         "src/server-features/crafting/CraftInputAvailability.js",
@@ -1902,10 +1875,6 @@
         "src/server-features/crafting/CraftingService.js",
         "src/server-features/crafting/CraftingVerificationCoordinator.js",
         "src/server-features/crafting/CraftingVerificationService.js",
-        "src/server-features/crafting/b1-b3/B1B3CraftingModule.js",
-        "src/server-features/crafting/b1-b3/B1B3InputCoordinator.js",
-        "src/server-features/crafting/b1-b3/B1B3ReadService.js",
-        "src/server-features/crafting/b1-b3/B1B3ReserveCoordinator.js",
         "src/server-features/crafting/b5/B5B1InventoryCoordinator.js",
         "src/server-features/crafting/b5/B5CycleCoordinator.js",
         "src/server-features/crafting/b5/B5FinalCraftCoordinator.js",
@@ -1913,11 +1882,8 @@
         "src/server-features/crafting/b5/B5ReserveChainCoordinator.js",
         "src/server-features/crafting/b5/flows/B2InputAcquisitionFlow.js",
         "src/server-features/crafting/b5/flows/B5CraftFlow.js",
-        "src/server-features/crafting/b5/flows/B5DepositFlow.js",
-        "src/server-features/crafting/b5/flows/B5InventoryReadFlow.js",
         "src/server-features/crafting/b5/flows/B5KhoReadFlow.js",
         "src/server-features/crafting/b5/flows/B5PlanningFlow.js",
-        "src/server-features/crafting/b5/flows/B5Pv2ReadFlow.js",
         "src/server-features/crafting/b5/flows/B5ReadFlow.js",
         "src/server-features/crafting/b5/flows/B5StorageFlow.js",
         "src/server-features/crafting/b5/flows/B5WithdrawFlow.js",
@@ -1925,8 +1891,6 @@
         "src/server-features/crafting/b5/support/B5InventoryState.js",
         "src/server-features/crafting/b5/support/B5ProgressTracker.js",
         "src/server-features/crafting/b5/support/B5RecipeResolver.js",
-        "src/server-features/crafting/b5/support/B5StageContract.js",
-        "src/server-features/crafting/b5/trace/B5TraceRecorder.js",
         "src/server-features/crafting/verification/CraftingVerificationAttempt.js",
         "src/server-features/crafting/verification/CraftingVerificationEvidence.js",
         "src/server-features/crafting/verification/StageExecutionContract.js",
@@ -2507,8 +2471,8 @@
     "valid": true,
     "catalog": {
       "schemaVersion": 3,
-      "sourceFiles": 433,
-      "testFiles": 263,
+      "sourceFiles": 421,
+      "testFiles": 261,
       "scriptFiles": 41,
       "sourceReachable": 421,
       "runtimeReachable": 415,
@@ -2518,7 +2482,7 @@
       "officialDocuments": 1,
       "governedDocumentRoots": 0,
       "documentScanExclusions": 3,
-      "pendingWiringSources": 12,
+      "pendingWiringSources": 0,
       "coverage": {
         "include": "src/**/*.js",
         "lines": 80,
@@ -2593,7 +2557,7 @@
       "code": "GENERATION_CANCELLATION_GUARDS_ACTIVE",
       "category": "CURRENT",
       "file": "src/core/events/EventEnvelope.js",
-      "summary": "Generation/cancellation contracts are active with 90 source file(s) carrying generation-guard evidence.",
+      "summary": "Generation/cancellation contracts are active with 88 source file(s) carrying generation-guard evidence.",
       "workPackages": [
         "WP-005"
       ]

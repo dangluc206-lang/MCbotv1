@@ -41,7 +41,7 @@
       "allowedActions": ["inspect-diagnostic", "reconnect-bot"],
       "artifact": "B5 trace with explicit generation",
       "cleanupAssertion": "old result cannot release or mutate new generation",
-      "evidenceTest": "tests/unit/modes/B5CraftModeService.test.js"
+      "evidenceTest": "tests/unit/modes/CraftingModeService.test.js"
     },
     {
       "id": "mode-loop-repeat-throw",

@@ -9,7 +9,6 @@ const CraftingItemRegistry = require('../../../src/items/CraftingItemRegistry');
 const CraftingTargetRegistry = require('../../../src/items/CraftingTargetRegistry');
 const CraftingRequest = require('../../../src/items/CraftingRequest');
 const CraftingRequestUseCases = require('../../../src/desktop/use-cases/CraftingRequestUseCases');
-const B5CraftRequestUseCases = require('../../../src/desktop/use-cases/B5CraftRequestUseCases');
 const DesktopApiContract = require('../../../src/desktop/contracts/DesktopApiContract');
 
 const ITEMS = require('../../../config/items/items.json');
@@ -100,6 +99,6 @@ test('generic IPC channels are declared with the same permission contract', () =
     assert.equal(DesktopApiContract.CATALOG['mcbot:b5:craft-request:clear']?.permission, 'PATCH');
 });
 
-test('B5 use-case stays a compat alias of the generic use-case', () => {
-    assert.ok(new B5CraftRequestUseCases({ bundleProvider: () => ({}), requireRunning: () => {} }) instanceof CraftingRequestUseCases);
+test('generic use-case constructs with bundle provider and running guard', () => {
+    assert.ok(new CraftingRequestUseCases({ bundleProvider: () => ({}), requireRunning: () => {} }) instanceof CraftingRequestUseCases);
 });

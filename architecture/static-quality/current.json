@@ -203,15 +203,6 @@
       "reason": "Generic crafting planning service frozen at measured HEAD size after B5 decoupling; growth is prohibited.",
       "expiresAfter": "crafting planning extraction"
     },
-    "src/server-features/crafting/b1-b3/B1B3ReserveCoordinator.js": {
-      "maxFileLines": 524,
-      "maxFunctionLines": 140,
-      "maxFunctionStatements": 70,
-      "maxCyclomaticComplexity": 40,
-      "owner": "Crafting maintainer",
-      "reason": "B1-B3 reserve coordinator frozen at measured HEAD size as pending generic wiring; growth is prohibited.",
-      "expiresAfter": "b1-b3 generic wiring"
-    },
     "src/server-features/crafting/CraftTraceRecorder.js": {
       "maxFileLines": 115,
       "maxFunctionLines": 64,

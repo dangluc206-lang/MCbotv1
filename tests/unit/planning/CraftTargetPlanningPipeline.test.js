@@ -12,7 +12,6 @@ const MaterialCalculator = require('../../../src/planning/crafting/MaterialCalcu
 const CraftingPlanner = require('../../../src/planning/crafting/CraftingPlanner');
 const CraftingChainPlanner = require('../../../src/planning/crafting/CraftingChainPlanner');
 const CraftStageClassifier = require('../../../src/planning/crafting/CraftStageClassifier');
-const B5Planner = require('../../../src/planning/crafting/B5Planner');
 
 const ITEMS = require('../../../config/items/items.json');
 const RECIPES = require('../../../config/server-data/recipes.json');
@@ -156,13 +155,9 @@ test('stage kinds come from output metadata, not from hard-coded target names', 
     assert.deepEqual(withoutReserve.partition(plan).reserveSteps, []);
     assert.equal(withoutReserve.partition(plan).finalSteps.length, plan.steps.length);
 
-    // The B5 boundary delegates to this classifier instead of re-implementing it.
+    // Partition parity: reserve classification is tier-policy data, exercised here
+    // through the generic classifier only (no B5 shim needed).
     const b5Plan = planning.plan('super_alloy', 1);
-    const b5Planner = new B5Planner({ planner: planning.planner, targetId: 'super_alloy', tiers: TIERS });
-    assert.deepEqual(
-        b5Planner.partition(b5Plan).reserveSteps.map(step => step.outputId),
-        classifier.partition(b5Plan).reserveSteps.map(step => step.outputId)
-    );
 });
 
 test('a new target only needs recipe/item data, never workflow code', () => {

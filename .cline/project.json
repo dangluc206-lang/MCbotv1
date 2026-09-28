@@ -40,9 +40,9 @@
     "electron": "43.4.0"
   },
   "currentTreeCounts": {
-    "totalFiles": 1034,
-    "productionOrSourceJs": 433,
-    "testJs": 263,
+    "totalFiles": 1020,
+    "productionOrSourceJs": 421,
+    "testJs": 261,
     "scriptJs": 41,
     "configJson": 35
   },

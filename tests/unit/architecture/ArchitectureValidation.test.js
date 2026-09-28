@@ -38,7 +38,6 @@ test('every unreachable source file is either reported as an orphan or declared 
     const result = audit();
     assert.equal(result.failures.filter(failure => failure.code === 'SOURCE_ORPHAN').length, 0);
     const declared = catalog.pendingWiringSources.map(entry => entry.file).sort();
-    assert.ok(declared.length > 0, 'pending wiring declarations are required while unwired modules exist');
     assert.ok(catalog.pendingWiringSources.every(entry => entry.owner?.trim() && entry.reason?.trim()), 'every declaration needs owner and reason evidence');
     const warned = result.warnings
         .filter(warning => warning.code === 'SOURCE_PENDING_WIRING')

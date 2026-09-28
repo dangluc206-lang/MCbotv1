@@ -184,10 +184,9 @@
       "files": [
         "src/modes/crafting/CraftingModeService.js",
         "src/server-features/crafting/B5PlanningService.js",
-        "src/server-features/crafting/B5AutomationService.js",
+        "src/server-features/crafting/CraftAutomationService.js",
         "src/server-features/crafting/B5AutomationRuntimeDecorator.js",
         "src/planning/crafting/B5ExecutionPlanner.js",
-        "src/planning/crafting/B5Planner.js",
         "src/server-features/crafting/b5/B5CycleCoordinator.js",
         "src/server-features/crafting/b5/B5FinalCraftCoordinator.js"
       ],

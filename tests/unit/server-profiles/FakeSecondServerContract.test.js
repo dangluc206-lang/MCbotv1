@@ -10,7 +10,7 @@ const CommandRegistry = require('../../../src/commands/CommandRegistry');
 const CommandResolver = require('../../../src/commands/CommandResolver');
 const CommandService = require('../../../src/commands/CommandService');
 const SkyblockJoinOperation = require('../../../src/server-features/skyblock/SkyblockJoinOperation');
-const B5TraceRecorder = require('../../../src/server-features/crafting/b5/trace/B5TraceRecorder');
+const CraftTraceRecorder = require('../../../src/server-features/crafting/CraftTraceRecorder');
 const fixture = require('../../fixtures/server-profiles/fake-second-server');
 
 function fakeProfile() { return new ServerProfile(fixture); }
@@ -47,7 +47,7 @@ test('WP-105 mixed profiles isolate immutable knowledge and capture revision in 
     assert.equal(registry.require('miner').requireCatalog('commands').storage, '/kho');
     assert.equal(registry.require('fake-second').requireCatalog('commands').storage, '/vault open');
     assert.notEqual(registry.require('miner').catalogs, registry.require('fake-second').catalogs);
-    const trace = new B5TraceRecorder({ botId: 'fake-bot', serverProfile: fake }).recordResult({ success: true, status: 'SUCCESS', data: {} });
+    const trace = new CraftTraceRecorder({ botId: 'fake-bot', serverProfile: fake }).recordResult({ success: true, status: 'SUCCESS', data: {} });
     assert.equal(trace.serverProfileRevision, fixture.revision);
 });
 
