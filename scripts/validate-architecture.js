@@ -258,7 +258,10 @@ function audit() {
                 add('BOUNDARY_FILE_MISSING', `${boundary.id} references a missing file.`, relative(file));
                 continue;
             }
-            const source = sourceText.get(file) || stripComments(fs.readFileSync(file, 'utf8'));
+            let source = sourceText.get(file) || stripComments(fs.readFileSync(file, 'utf8'));
+            for (const allowed of boundary.allowedPatterns || []) {
+                source = source.replace(new RegExp(allowed, 'g'), '');
+            }
             for (const expression of boundary.forbiddenPatterns || []) {
                 if (new RegExp(expression).test(source)) {
                     add('BOUNDARY_VIOLATION', `${boundary.id} matched forbidden pattern ${expression}`, relative(file));

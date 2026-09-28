@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const B5FinalCraftCoordinator = require('../../../src/server-features/crafting/b5/B5FinalCraftCoordinator');
 const B5ReserveChainCoordinator = require('../../../src/server-features/crafting/b5/B5ReserveChainCoordinator');
-const B5StageContract = require('../../../src/server-features/crafting/b5/support/B5StageContract');
+const StageExecutionContract = require('../../../src/server-features/crafting/verification/StageExecutionContract');
 
 function token() { return { throwIfCancelled() {} }; }
 function context() { return { cancellation: { token: token() }, connectionGeneration: 2, trace: null }; }
@@ -47,7 +47,7 @@ function makeFinal({ settleCounts = [] } = {}) {
     const coordinator = new B5FinalCraftCoordinator({
         recipeRegistry, inventoryState: inventory, progressTracker,
         withdrawFlow: { async withdraw() {} }, craftFlow, config: { targetId: 'b5out' },
-        runStep, childOptions, quantityTrace() {}, verificationService: new B5StageContract()
+        runStep, childOptions, quantityTrace() {}, verificationService: new StageExecutionContract()
     });
     return { coordinator, get settleCalls() { return settleCalls; } };
 }

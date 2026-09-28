@@ -108,7 +108,68 @@
       ]
     }
   ],
+  "compatibilityBoundaries": {
+    "craftingB5Compat": {
+      "owner": "crafting",
+      "aliasFiles": [
+        "src/server-features/crafting/B5AutomationService.js",
+        "src/server-features/crafting/b5/trace/B5TraceRecorder.js",
+        "src/server-features/crafting/b5/support/B5StageContract.js",
+        "src/desktop/use-cases/B5CraftRequestUseCases.js"
+      ],
+      "activeB5Implementation": [
+        "src/server-features/crafting/B5PlanningService.js",
+        "src/server-features/crafting/B5AutomationRuntimeDecorator.js",
+        "src/server-features/crafting/b5/B5B1InventoryCoordinator.js",
+        "src/server-features/crafting/b5/B5CycleCoordinator.js",
+        "src/server-features/crafting/b5/B5FinalCraftCoordinator.js",
+        "src/server-features/crafting/b5/B5IntermediateCoordinator.js",
+        "src/server-features/crafting/b5/B5ReserveChainCoordinator.js",
+        "src/server-features/crafting/b5/flows/B5ReadFlow.js",
+        "src/server-features/crafting/b5/flows/B5PlanningFlow.js",
+        "src/server-features/crafting/b5/flows/B5StorageFlow.js",
+        "src/server-features/crafting/b5/flows/B5WithdrawFlow.js",
+        "src/server-features/crafting/b5/flows/B5CraftFlow.js",
+        "src/server-features/crafting/b5/flows/B5KhoReadFlow.js",
+        "src/server-features/crafting/b5/flows/B2InputAcquisitionFlow.js",
+        "src/server-features/crafting/b5/support/B5ActionDiagnostics.js",
+        "src/server-features/crafting/b5/support/B5InventoryState.js",
+        "src/server-features/crafting/b5/support/B5ProgressTracker.js",
+        "src/server-features/crafting/b5/support/B5RecipeResolver.js"
+      ]
+    }
+  },
   "boundaries": [
+    {
+      "id": "generic-crafting-authority",
+      "files": [
+        "src/server-features/crafting/CraftPlanningService.js",
+        "src/server-features/crafting/CraftReadService.js",
+        "src/server-features/crafting/CraftAutomationService.js",
+        "src/server-features/crafting/CraftTraceRecorder.js",
+        "src/server-features/crafting/CraftingService.js",
+        "src/server-features/crafting/CraftingOperation.js",
+        "src/server-features/crafting/CraftingResultVerifier.js",
+        "src/server-features/crafting/CraftingVerificationCoordinator.js",
+        "src/server-features/crafting/CraftingVerificationService.js",
+        "src/server-features/crafting/CraftingOutcomeClassifier.js",
+        "src/server-features/crafting/verification/StageExecutionContract.js"
+      ],
+      "allowedPatterns": [
+        "require\\(['\"]\\.\\/B5AutomationService['\"]\\)",
+        "require\\(['\"]\\.\\/b5\\/trace\\/B5TraceRecorder['\"]\\)"
+      ],
+      "forbiddenPatterns": [
+        "B5PlanningService",
+        "B5Planner",
+        "B5ExecutionPlanner",
+        "b5/support/B5StageContract",
+        "crafting/b5/B5",
+        "crafting/b5/flows/B5",
+        "crafting/b5/support/B5",
+        "planning/crafting/B5"
+      ]
+    },
     {
       "id": "fishing-mode-no-raw-client",
       "files": [
@@ -158,6 +219,16 @@
       "reason": "Deprecated IPC compat alias for mcbot:b5:craft-*; required only by compat tests while the renderer migration lands. Uses a lazy require so it never forms a runtime import cycle with the generic use-case."
     },
     {
+      "file": "src/server-features/crafting/B5AutomationService.js",
+      "owner": "crafting",
+      "reason": "Compat alias re-exporting CraftAutomationService; kept requireable while collector-B5 and crafting parity tests migrate to the generic import path."
+    },
+    {
+      "file": "src/server-features/crafting/b5/trace/B5TraceRecorder.js",
+      "owner": "crafting",
+      "reason": "Compat alias re-exporting CraftTraceRecorder; kept requireable while B5 trace/replay parity tests migrate to the generic import path."
+    },
+    {
       "file": "src/server-features/crafting/b1-b3/B1B3CraftingModule.js",
       "owner": "crafting",
       "reason": "B1-B3 stage module extracted by the generic crafting refactor; the composition root still wires the B5 coordinators, and only tests/unit/overlay/B1B3Boundary.test.js consumes this module today."
@@ -195,7 +266,7 @@
     {
       "file": "src/server-features/crafting/b5/support/B5StageContract.js",
       "owner": "crafting",
-      "reason": "Stage contract consumed by the crafting test harnesses (B5CraftModeService, overlay and server-features suites); the runtime composition root injects server-features/crafting/verification/StageExecutionContract.js instead."
+      "reason": "Compat alias re-exporting verification/StageExecutionContract; no test requires the B5 path anymore, kept only until the alias file is removed."
     },
     {
       "file": "src/planning/crafting/B5Planner.js",

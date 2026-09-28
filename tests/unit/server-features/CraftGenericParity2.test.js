@@ -6,6 +6,7 @@ const B5PlanningService = require('../../../src/server-features/crafting/B5Plann
 const CraftAutomationService = require('../../../src/server-features/crafting/CraftAutomationService');
 const B5AutomationService = require('../../../src/server-features/crafting/B5AutomationService');
 const CraftTraceRecorder = require('../../../src/server-features/crafting/CraftTraceRecorder');
+// ponytail: parity holds through the compat aliases only (same references).
 const B5TraceRecorder = require('../../../src/server-features/crafting/b5/trace/B5TraceRecorder');
 const ServerFeatureFacade = require('../../../src/server-features/ServerFeatureFacade');
 const CraftingRecipeRegistry = require('../../../src/server-features/crafting/CraftingRecipeRegistry');
@@ -23,7 +24,10 @@ function createPlanning(inputSource = 'storage', inventoryB1 = 0) {
 
 test('slice6: CraftTraceRecorder keeps legacy id + generic fields', () => {
     const recorder = new CraftTraceRecorder({ botId: 'bot-01', historyLimit: 10 });
-    assert.ok(recorder instanceof B5TraceRecorder);
+    // Authority inversion: generic owns the implementation (B5 is the alias).
+    assert.equal(recorder.constructor.name, 'CraftTraceRecorder');
+    assert.equal(recorder instanceof CraftTraceRecorder, true);
+    assert.equal(B5TraceRecorder, CraftTraceRecorder);
     const record = recorder.recordResult({
         success: true, status: 'SUCCESS',
         data: { targetId: 'carbon', productive: true, completedTarget: false, blockingReasons: [], actionSummary: {}, plan: null },
@@ -34,7 +38,11 @@ test('slice6: CraftTraceRecorder keeps legacy id + generic fields', () => {
     assert.ok(String(record.craftTraceId).includes(':craft:'));
 });
 test('slice4: CraftAutomationService same engine + fail-closed', async () => {
-    assert.equal(Object.getPrototypeOf(CraftAutomationService), B5AutomationService);
+    // Authority inversion: generic owns the implementation (B5 is the alias).
+    assert.equal(B5AutomationService, CraftAutomationService);
+    assert.equal(CraftAutomationService.name, 'CraftAutomationService');
+    assert.equal(typeof CraftAutomationService.normalizeAutomationConfig, 'function');
+    assert.ok(Object.prototype.hasOwnProperty.call(CraftAutomationService, 'normalizeAutomationConfig'));
     const automation = new CraftAutomationService({
         planningService: { async inspectAdditional() { throw new Error('x'); }, async inspectAdditionalFresh() { throw new Error('x'); } },
         crafting: { async craft() { throw new Error('x'); } },
@@ -52,15 +60,16 @@ test('slice4: CraftAutomationService same engine + fail-closed', async () => {
 });
 test('slice6: facade craftingTrace/b5Trace same instance', () => {
     const recorder = new CraftTraceRecorder({ botId: 'bot-01' });
+    assert.equal(recorder.constructor.name, 'CraftTraceRecorder');
     const facade = new ServerFeatureFacade({ craftingTrace: recorder });
     assert.equal(facade.craftingTrace(), recorder);
     assert.equal(facade.b5Trace(), recorder);
 });
 test('slice4: automation reconfigure maps legacy input source', () => {
-    const normalized = B5AutomationService.normalizeAutomationConfig({ b2InputSource: 'inventory', inputSource: 'storage' }, { inputSource: 'storage' });
+    const normalized = CraftAutomationService.normalizeAutomationConfig({ b2InputSource: 'inventory', inputSource: 'storage' }, { inputSource: 'storage' });
     assert.equal(normalized.inputSource, 'storage');
     assert.equal('b2InputSource' in normalized, false);
-    assert.equal(B5AutomationService.normalizeAutomationConfig({ b2InputSource: 'inventory' }, {}).inputSource, 'inventory');
+    assert.equal(CraftAutomationService.normalizeAutomationConfig({ b2InputSource: 'inventory' }, {}).inputSource, 'inventory');
 });
 test('slice3: legacy B5 view plans request targetId', async () => {
     const planning = createPlanning('inventory', 64);

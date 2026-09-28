@@ -1,9 +1,9 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const B5AutomationService = require('../../../src/server-features/crafting/B5AutomationService');
+const B5AutomationService = require('../../../src/server-features/crafting/CraftAutomationService');
 const B5AutomationRuntimeDecorator = require('../../../src/server-features/crafting/B5AutomationRuntimeDecorator');
-const B5StageContract = require('../../../src/server-features/crafting/b5/support/B5StageContract');
+const StageExecutionContract = require('../../../src/server-features/crafting/verification/StageExecutionContract');
 
 function serviceFixture() {
     const b2Input = {
@@ -21,7 +21,7 @@ function serviceFixture() {
         inventoryCounter: { count() { return 0; } },
         recipeRegistry: { require() { return { inputs: {} }; } },
         operationManager: { run() {} }, config: { targetId: 'super_alloy', b2InputSource: 'storage' }, flows,
-        craftingVerificationService: new B5StageContract()
+        craftingVerificationService: new StageExecutionContract()
     });
     return { service, b2Input, plan };
 }

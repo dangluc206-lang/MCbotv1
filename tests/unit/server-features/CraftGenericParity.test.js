@@ -10,6 +10,7 @@ const B5PlanningService = require('../../../src/server-features/crafting/B5Plann
 const CraftAutomationService = require('../../../src/server-features/crafting/CraftAutomationService');
 const B5AutomationService = require('../../../src/server-features/crafting/B5AutomationService');
 const CraftTraceRecorder = require('../../../src/server-features/crafting/CraftTraceRecorder');
+// ponytail: parity holds through the compat aliases only (same references).
 const B5TraceRecorder = require('../../../src/server-features/crafting/b5/trace/B5TraceRecorder');
 const B1StorageMaterialService = require('../../../src/server-features/storage/B1StorageMaterialService');
 const ServerFeatureFacade = require('../../../src/server-features/ServerFeatureFacade');

@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const B5TraceRecorder = require('../../../src/server-features/crafting/b5/trace/B5TraceRecorder');
+const B5TraceRecorder = require('../../../src/server-features/crafting/CraftTraceRecorder');
 
 test('B5 trace recorder keeps a compact replayable cycle summary', () => {
     const recorder = new B5TraceRecorder({ botId: 'bot-01', historyLimit: 10 });

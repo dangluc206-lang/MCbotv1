@@ -4,8 +4,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const Result = require('../../../src/shared/result/Result');
 const FlowError = require('../../../src/shared/errors/FlowError');
-const B5AutomationService = require('../../../src/server-features/crafting/B5AutomationService');
-const B5StageContract = require('../../../src/server-features/crafting/b5/support/B5StageContract');
+const B5AutomationService = require('../../../src/server-features/crafting/CraftAutomationService');
+const StageExecutionContract = require('../../../src/server-features/crafting/verification/StageExecutionContract');
 const B2InputAcquisitionFlow = require('../../../src/server-features/crafting/b5/flows/B2InputAcquisitionFlow');
 const B5PlanningFlow = require('../../../src/server-features/crafting/b5/flows/B5PlanningFlow');
 const Operation = require('../../../src/operations/Operation');
@@ -18,7 +18,7 @@ const OperationTimeoutPolicy = require('../../../src/operations/OperationTimeout
 // counts; the real contract verifies whenever evidence exists and only
 // tolerates missing mock evidence (see tests/unit/overlay/B5* for the strict
 // verification behavior).
-class HarnessContract extends B5StageContract {
+class HarnessContract extends StageExecutionContract {
     verifyOutput(options) {
         // Quantity-logic fixtures craft through mocks that carry no output
         // evidence (before/after both 0); only positive observed deltas are

@@ -212,14 +212,14 @@
       "reason": "B1-B3 reserve coordinator frozen at measured HEAD size as pending generic wiring; growth is prohibited.",
       "expiresAfter": "b1-b3 generic wiring"
     },
-    "src/server-features/crafting/b5/trace/B5TraceRecorder.js": {
+    "src/server-features/crafting/CraftTraceRecorder.js": {
       "maxFileLines": 115,
       "maxFunctionLines": 64,
       "maxFunctionStatements": 19,
       "maxCyclomaticComplexity": 52,
-      "owner": "B5 diagnostics maintainer",
-      "reason": "Legacy trace normalization is branch-heavy and frozen.",
-      "expiresAfter": "trace envelope normalizer extraction"
+      "owner": "Crafting maintainer",
+      "reason": "Generic trace authority owns the recorder implementation (legacy b5 id + craft id dual exposure); frozen pending trace id migration.",
+      "expiresAfter": "trace id migration"
     },
     "src/server-features/storage/KhoCapacityReader.js": {
       "maxFileLines": 132,
