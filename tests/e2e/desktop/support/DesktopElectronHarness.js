@@ -65,10 +65,21 @@ function titleExpression(shell, expected) {
 
 // Reachability check: the control must exist and the owning shell title must
 // switch to the PageCatalog title for that page.
+// Modes keeps its lifecycle entry points visible: connection + mode cards
+// (modeCards) are asserted on the Modes page; the DEV-gated advanced config
+// collapses behind <details> must stay closed so the User UI stays simple.
 async function openNavPage(webContents, pageId) {
     const selector = `#nav .nav-item[data-page="${pageId}"], #devNav .dev-nav-item[data-dev-page="${pageId}"]`;
     if (!await clickSelector(webContents, selector)) throw new Error(`Nav control not found for page: ${pageId}`);
     await waitFor(webContents, titleExpression(DEV_PAGES.includes(pageId) ? 'dev' : 'user', PageCatalog[pageId].title));
+    if (pageId === 'modes') {
+        await waitFor(webContents, `Boolean(document.querySelector('#modeCards'))`);
+        await waitFor(webContents, `Boolean(document.querySelector('#b5Journey'))`);
+        await waitFor(webContents, `document.querySelector('.user-advanced-config')?.open!==true`);
+    }
+    if (pageId === 'settings') {
+        await waitFor(webContents, `Boolean(document.querySelector('#startBackend'))&&Boolean(document.querySelector('#restartBackend'))&&Boolean(document.querySelector('#stopBackend'))`);
+    }
 }
 
 async function openPalettePage(webContents, pageId) {

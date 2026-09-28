@@ -1093,13 +1093,6 @@ function renderWorkflowList(targetId, steps, section) {
 }
 
 function draftFromBuilder() {
-  const readSteps = section => {
-    const root = section === 'start' ? $('#customStartSteps') : section === 'stop' ? $('#customStopSteps') : $('#customLoopSteps');
-    return [...root.querySelectorAll(':scope > .workflow-step')].map(row => {
-      const type = row.querySelector('.step-type').value;
-      return window.MCbotTypedModuleEditor.read(row, type);
-    });
-  };
   return {
     id: $('#customModeId').value.trim(),
     label: $('#customModeLabel').value.trim(),
@@ -1108,11 +1101,19 @@ function draftFromBuilder() {
     primary: true,
     durable: true,
     workflow: {
-      start: readSteps('start'),
-      loop: { enabled: true, intervalMs: Number($('#customModeLoopDelay').value || 1000), continueOnError: false, steps: readSteps('loop') },
-      stop: readSteps('stop')
+      start: readCustomSteps('start'),
+      loop: { enabled: true, intervalMs: Number($('#customModeLoopDelay').value || 1000), continueOnError: false, steps: readCustomSteps('loop') },
+      stop: readCustomSteps('stop')
     }
   };
+}
+
+function readCustomSteps(section) {
+  const root = section === 'start' ? $('#customStartSteps') : section === 'stop' ? $('#customStopSteps') : $('#customLoopSteps');
+  return [...root.querySelectorAll(':scope > .workflow-step')].map(row => {
+    const type = row.querySelector('.step-type').value;
+    return window.MCbotTypedModuleEditor.read(row, type);
+  });
 }
 
 function fillCustomBuilder(definition = null) {
@@ -1186,9 +1187,10 @@ const { bindEvents } = window.MCbotRendererEventBindings.create({
   undoAdvancedConfig, renderBackupCatalog, loadBackupCatalog, loadB5PureConfig,
   saveB5PureConfig, loadB5Rules, syncB2InputSourceUi, saveB5Rules,
   loadStorageProtection, saveStorageProtection, defaultModuleStep, newCustomDraft,
-  modulePayload, renderWorkflowList, draftFromBuilder, readSteps, fillCustomBuilder,
+  modulePayload, renderWorkflowList, draftFromBuilder, readCustomSteps, fillCustomBuilder,
   renderModulePalette, customModeEntryId, loadCustomModeCatalog, changeWorkflowStep,
-  runAction, refreshSnapshot, confirmInApp, reportRendererError, captureCraftingDraft
+  runAction, refreshSnapshot, confirmInApp, reportRendererError, captureCraftingDraft,
+  applyPresentationPreferences, clearEventView
 });
 
 function restoreLocalPreferences() {

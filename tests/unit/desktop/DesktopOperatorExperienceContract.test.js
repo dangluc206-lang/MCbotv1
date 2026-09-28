@@ -21,6 +21,29 @@ test('XP-100 navigation keeps every product surface reachable under four progres
     assert.match(css, /body\[data-experience="standard"\]/);
 });
 
+test('User UI stays Win10-simple: no runtime logic, snapshot-only, clear lifecycle actions', () => {
+    // Modes page is a guided flow: bot select -> connect -> mode -> run -> error handling -> stop.
+    assert.match(html, /Chọn bot → kết nối → chọn chế độ → chạy → xử lý lỗi → dừng/);
+    // Advanced mode tuning collapses behind a DEV-gated <details>, never removed:
+    // DOM ids must stay stable so RendererDomContract cannot regress.
+    assert.match(html, /user-advanced-config[^>]*data-experience="advanced"/);
+    assert.match(html, /Cấu hình chế độ \(nâng cao\)/);
+    assert.match(html, /Chế độ tương thích \(nâng cao\)/);
+    assert.match(html, /id="modeCards"/);
+    assert.match(html, /id="b5Journey"/);
+    // Settings page keeps the lifecycle entry points at the top: start/restart/stop.
+    assert.match(html, /id="startBackend"/);
+    assert.match(html, /id="restartBackend"/);
+    assert.match(html, /id="stopBackend"/);
+    assert.match(html, /Khởi động, dừng, dữ liệu và tùy chọn chính/);
+    // Win10-like flat theme: square corners, no lifted shadows, Segoe UI body font.
+    assert.match(css, /--radius:\s*4px/);
+    assert.match(css, /--shadow:\s*none/);
+    assert.match(css, /"Segoe UI"/);
+    // No new backend surface: no extra script modules, no new IPC channels.
+    assert.doesNotMatch(html, /features\/user\//);
+});
+
 test('XP-101 critical journeys use in-app dialogs, keyboard focus and accessible live regions', () => {
     assert.doesNotMatch(app, /window\.(?:confirm|prompt)\s*\(/);
     assert.match(html, /id="confirmDialog"/);

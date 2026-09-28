@@ -18,6 +18,7 @@
     "src/desktop/renderer/core/DevRouter.js",
     "src/desktop/renderer/core/KeyedDom.js",
     "src/desktop/renderer/core/RendererSnapshotLoop.js",
+    "src/desktop/renderer/core/RendererStore.js",
     "src/desktop/renderer/components/AccessibleDialog.js",
     "src/desktop/renderer/pages/PageCatalog.js",
     "src/desktop/renderer/pages/ConfigGroupCatalog.js",
@@ -33,6 +34,7 @@
     "src/desktop/renderer/features/operator/OperatorPresenter.js",
     "src/desktop/renderer/features/bots/BotCardPresenter.js",
     "src/desktop/renderer/features/dev/DevPages.js",
+    "src/desktop/renderer/core/RendererEventBindings.js",
     "src/desktop/renderer/app.js"
   ],
   "configuration": {

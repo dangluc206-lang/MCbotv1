@@ -113,6 +113,15 @@
       "reason": "Legacy renderer facade retained while page presenters migrate; growth is prohibited.",
       "expiresAfter": "XP-200 page parity closure"
     },
+    "src/desktop/renderer/core/RendererEventBindings.js": {
+      "maxFileLines": 463,
+      "maxFunctionLines": 458,
+      "maxFunctionStatements": 70,
+      "maxCyclomaticComplexity": 40,
+      "owner": "Desktop maintainer",
+      "reason": "bindEvents was extracted verbatim from the app.js facade; 19 bind* section helpers are each within the default budgets. The outer UMD factory span is frozen pending section-module extraction.",
+      "expiresAfter": "renderer event-binding section extraction"
+    },
     "src/desktop/update/RuntimeConfigMigrator.js": {
       "maxFileLines": 2301,
       "maxFunctionLines": 384,
