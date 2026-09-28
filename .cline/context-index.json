@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceTreeSha": "6cd5b58bbe730bbcfacaf4deeb25ab2714cede68",
+  "sourceTreeSha": "07eaf08c33598b8d665819a73a2d1a206118fcfb",
   "usage": "Use this file first. It maps task type to the smallest useful context set.",
   "alwaysRead": [
     ".clinerules/00-core.md",

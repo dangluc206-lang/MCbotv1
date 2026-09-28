@@ -3,8 +3,8 @@
   "source": {
     "repository": "dangluc206-lang/MCbotv1",
     "ref": "main",
-    "treeSha": "6cd5b58bbe730bbcfacaf4deeb25ab2714cede68",
-    "syncBasis": "Resynced to HEAD tree a4acdc9 on 2026-09-26: tree counts recomputed from HEAD tree; context-index refs (tasks/skills/rules) re-checked against working tree and HEAD-tracked files; BOM stripped. Fact content of architecture/ownership/routing/server-profile/crafting-contract keeps its 2026-09-24 verification basis."
+    "treeSha": "07eaf08c33598b8d665819a73a2d1a206118fcfb",
+    "syncBasis": "Resynced to HEAD 1bebf92 (tree 07eaf08c) on 2026-09-28: architecture validator PASS (433 source / 263 test / 41 script, 10 pending wiring, 1 official doc, 3 scan exclusions); static-quality PASS (204 files); baseline regenerated for live tree (1034 files / 433 source / 263 tests / 41 scripts / 35 config). Working-tree inventory includes untracked local files; Git-tracked counts are 987 total with 433 src JS / 263 tests / 41 scripts / 35 config."
   },
   "files": [
     "project.json",

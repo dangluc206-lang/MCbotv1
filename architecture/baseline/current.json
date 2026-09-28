@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "baselineVersion": 1,
   "workPackage": "WP-001",
-  "generatedAt": "2026-09-24T17:10:05.997Z",
+  "generatedAt": "2026-09-28T12:48:26.344Z",
   "releaseVersion": "2.7.67",
   "scope": {
     "root": ".",
@@ -39,12 +39,12 @@
       "inScopeChangedPaths": 0
     },
     "reason": "Standalone source tree; version-control metadata is intentionally not required.",
-    "sourceFingerprintSha256": "b401746e8ffd84877a93aafb14f36367a3c0c7d3aa9690b3903cb028f4a1fba1"
+    "sourceFingerprintSha256": "cca46c28620be0e15c0c032d74d53f6994ddfda45afbb067e1cbdb6992734120"
   },
   "counts": {
-    "files": 940,
-    "source": 420,
-    "tests": 251,
+    "files": 1034,
+    "source": 433,
+    "tests": 263,
     "scripts": 41,
     "configJson": 35,
     "routes": 1
@@ -101,7 +101,7 @@
     },
     {
       "area": "desktop",
-      "files": 63,
+      "files": 73,
       "owner": "src/desktop/",
       "layer": "control-plane-desktop",
       "classification": "CURRENT"
@@ -178,7 +178,7 @@
     },
     {
       "area": "server-features",
-      "files": 84,
+      "files": 87,
       "owner": "src/server-features/",
       "layer": "server-domain-features",
       "classification": "CURRENT"
@@ -215,7 +215,7 @@
           "src/bootstrap/createApplication.js",
           "src/bootstrap/shutdown.js"
         ],
-        "reachableSourceFiles": 338
+        "reachableSourceFiles": 340
       },
       {
         "file": "src/desktop/main.js",
@@ -235,7 +235,7 @@
           "src/desktop/update/local-update-helper.js",
           "src/desktop/use-cases/DesktopRuntimeBootstrap.js"
         ],
-        "reachableSourceFiles": 384
+        "reachableSourceFiles": 390
       },
       {
         "file": "src/desktop/preload.js",
@@ -274,6 +274,18 @@
         "reachableSourceFiles": 1
       },
       {
+        "file": "src/desktop/renderer/core/RendererSnapshotLoop.js",
+        "exists": true,
+        "directLocalDependencies": [],
+        "reachableSourceFiles": 1
+      },
+      {
+        "file": "src/desktop/renderer/core/RendererStore.js",
+        "exists": true,
+        "directLocalDependencies": [],
+        "reachableSourceFiles": 1
+      },
+      {
         "file": "src/desktop/renderer/components/AccessibleDialog.js",
         "exists": true,
         "directLocalDependencies": [],
@@ -281,6 +293,12 @@
       },
       {
         "file": "src/desktop/renderer/pages/PageCatalog.js",
+        "exists": true,
+        "directLocalDependencies": [],
+        "reachableSourceFiles": 1
+      },
+      {
+        "file": "src/desktop/renderer/pages/ConfigGroupCatalog.js",
         "exists": true,
         "directLocalDependencies": [],
         "reachableSourceFiles": 1
@@ -342,7 +360,25 @@
         "reachableSourceFiles": 1
       },
       {
+        "file": "src/desktop/renderer/features/operator/OperatorPresenter.js",
+        "exists": true,
+        "directLocalDependencies": [],
+        "reachableSourceFiles": 1
+      },
+      {
+        "file": "src/desktop/renderer/features/bots/BotCardPresenter.js",
+        "exists": true,
+        "directLocalDependencies": [],
+        "reachableSourceFiles": 1
+      },
+      {
         "file": "src/desktop/renderer/features/dev/DevPages.js",
+        "exists": true,
+        "directLocalDependencies": [],
+        "reachableSourceFiles": 1
+      },
+      {
+        "file": "src/desktop/renderer/core/RendererEventBindings.js",
         "exists": true,
         "directLocalDependencies": [],
         "reachableSourceFiles": 1
@@ -442,6 +478,10 @@
       "src/desktop/configuration/ConfigurationWorkspaceService.js",
       "src/desktop/contracts/DesktopApiContract.js",
       "src/desktop/contracts/DesktopResult.js",
+      "src/desktop/domains/FleetDomain.js",
+      "src/desktop/domains/IncidentDomain.js",
+      "src/desktop/domains/ObservabilityDomain.js",
+      "src/desktop/domains/ProfileDomain.js",
       "src/desktop/events/EventInspectorBridge.js",
       "src/desktop/health/OperatorHealthService.js",
       "src/desktop/incidents/IncidentIndexStore.js",
@@ -459,10 +499,14 @@
       "src/desktop/renderer/core/Html.js",
       "src/desktop/renderer/core/KeyedDom.js",
       "src/desktop/renderer/core/RendererApiClient.js",
+      "src/desktop/renderer/core/RendererEventBindings.js",
       "src/desktop/renderer/core/RendererRouter.js",
+      "src/desktop/renderer/core/RendererSnapshotLoop.js",
+      "src/desktop/renderer/core/RendererStore.js",
       "src/desktop/renderer/features/b5/B5CraftRequestPanel.js",
       "src/desktop/renderer/features/b5/B5JourneyPresenter.js",
       "src/desktop/renderer/features/b5/B5ViewModel.js",
+      "src/desktop/renderer/features/bots/BotCardPresenter.js",
       "src/desktop/renderer/features/builder/TypedModuleEditor.js",
       "src/desktop/renderer/features/connection/ConnectionViewModel.js",
       "src/desktop/renderer/features/crafting/CraftingRequestPanel.js",
@@ -470,6 +514,8 @@
       "src/desktop/renderer/features/incidents/IncidentPresenter.js",
       "src/desktop/renderer/features/incidents/IncidentViewModel.js",
       "src/desktop/renderer/features/modes/ModeViewModel.js",
+      "src/desktop/renderer/features/operator/OperatorPresenter.js",
+      "src/desktop/renderer/pages/ConfigGroupCatalog.js",
       "src/desktop/renderer/pages/PageCatalog.js",
       "src/desktop/update/LocalZipUpdateService.js",
       "src/desktop/update/RuntimeConfigMigrations.js",
@@ -639,7 +685,6 @@
       "src/operations/OperationQueue.js",
       "src/operations/OperationTimeoutPolicy.js",
       "src/planning/crafting/B5ExecutionPlanner.js",
-      "src/planning/crafting/B5Planner.js",
       "src/planning/crafting/CraftStageClassifier.js",
       "src/planning/crafting/CraftingChainPlanner.js",
       "src/planning/crafting/CraftingPlan.js",
@@ -661,8 +706,11 @@
       "src/server-features/crafting/B5AutomationRuntimeDecorator.js",
       "src/server-features/crafting/B5AutomationService.js",
       "src/server-features/crafting/B5PlanningService.js",
+      "src/server-features/crafting/CraftAutomationService.js",
       "src/server-features/crafting/CraftInputAvailability.js",
       "src/server-features/crafting/CraftPlanningService.js",
+      "src/server-features/crafting/CraftReadService.js",
+      "src/server-features/crafting/CraftTraceRecorder.js",
       "src/server-features/crafting/CraftingExecutionSupport.js",
       "src/server-features/crafting/CraftingGuiNavigator.js",
       "src/server-features/crafting/CraftingOperation.js",
@@ -849,6 +897,10 @@
       "src/desktop/configuration/ConfigurationWorkspaceService.js",
       "src/desktop/contracts/DesktopApiContract.js",
       "src/desktop/contracts/DesktopResult.js",
+      "src/desktop/domains/FleetDomain.js",
+      "src/desktop/domains/IncidentDomain.js",
+      "src/desktop/domains/ObservabilityDomain.js",
+      "src/desktop/domains/ProfileDomain.js",
       "src/desktop/events/EventInspectorBridge.js",
       "src/desktop/health/OperatorHealthService.js",
       "src/desktop/incidents/IncidentIndexStore.js",
@@ -866,10 +918,14 @@
       "src/desktop/renderer/core/Html.js",
       "src/desktop/renderer/core/KeyedDom.js",
       "src/desktop/renderer/core/RendererApiClient.js",
+      "src/desktop/renderer/core/RendererEventBindings.js",
       "src/desktop/renderer/core/RendererRouter.js",
+      "src/desktop/renderer/core/RendererSnapshotLoop.js",
+      "src/desktop/renderer/core/RendererStore.js",
       "src/desktop/renderer/features/b5/B5CraftRequestPanel.js",
       "src/desktop/renderer/features/b5/B5JourneyPresenter.js",
       "src/desktop/renderer/features/b5/B5ViewModel.js",
+      "src/desktop/renderer/features/bots/BotCardPresenter.js",
       "src/desktop/renderer/features/builder/TypedModuleEditor.js",
       "src/desktop/renderer/features/connection/ConnectionViewModel.js",
       "src/desktop/renderer/features/crafting/CraftingRequestPanel.js",
@@ -877,6 +933,8 @@
       "src/desktop/renderer/features/incidents/IncidentPresenter.js",
       "src/desktop/renderer/features/incidents/IncidentViewModel.js",
       "src/desktop/renderer/features/modes/ModeViewModel.js",
+      "src/desktop/renderer/features/operator/OperatorPresenter.js",
+      "src/desktop/renderer/pages/ConfigGroupCatalog.js",
       "src/desktop/renderer/pages/PageCatalog.js",
       "src/desktop/update/LocalZipUpdateService.js",
       "src/desktop/update/ReleaseCanaryPolicy.js",
@@ -1048,7 +1106,6 @@
       "src/operations/OperationQueue.js",
       "src/operations/OperationTimeoutPolicy.js",
       "src/planning/crafting/B5ExecutionPlanner.js",
-      "src/planning/crafting/B5Planner.js",
       "src/planning/crafting/CraftStageClassifier.js",
       "src/planning/crafting/CraftingChainPlanner.js",
       "src/planning/crafting/CraftingPlan.js",
@@ -1070,8 +1127,11 @@
       "src/server-features/crafting/B5AutomationRuntimeDecorator.js",
       "src/server-features/crafting/B5AutomationService.js",
       "src/server-features/crafting/B5PlanningService.js",
+      "src/server-features/crafting/CraftAutomationService.js",
       "src/server-features/crafting/CraftInputAvailability.js",
       "src/server-features/crafting/CraftPlanningService.js",
+      "src/server-features/crafting/CraftReadService.js",
+      "src/server-features/crafting/CraftTraceRecorder.js",
       "src/server-features/crafting/CraftingExecutionSupport.js",
       "src/server-features/crafting/CraftingGuiNavigator.js",
       "src/server-features/crafting/CraftingOperation.js",
@@ -1176,6 +1236,7 @@
     ],
     "orphanSourceFiles": [
       "src/desktop/use-cases/B5CraftRequestUseCases.js",
+      "src/planning/crafting/B5Planner.js",
       "src/server-features/crafting/b1-b3/B1B3CraftingModule.js",
       "src/server-features/crafting/b1-b3/B1B3InputCoordinator.js",
       "src/server-features/crafting/b1-b3/B1B3ReadService.js",
@@ -1467,6 +1528,7 @@
       "src/desktop/incidents/IncidentIndexStore.js",
       "src/desktop/projection/OperatorSnapshotProjector.js",
       "src/desktop/renderer/app.js",
+      "src/desktop/renderer/features/bots/BotCardPresenter.js",
       "src/desktop/renderer/features/dev/DevPages.js",
       "src/diagnostics/GuiInspectionService.js",
       "src/diagnostics/GuiSnapshotSerializer.js",
@@ -1610,6 +1672,7 @@
       "connection",
       "crafting",
       "crafting-automation",
+      "crafting-read",
       "crafting-trace",
       "dungeon",
       "fishing",
@@ -1704,8 +1767,11 @@
         "src/server-features/crafting/B5AutomationRuntimeDecorator.js",
         "src/server-features/crafting/B5AutomationService.js",
         "src/server-features/crafting/B5PlanningService.js",
+        "src/server-features/crafting/CraftAutomationService.js",
         "src/server-features/crafting/CraftInputAvailability.js",
         "src/server-features/crafting/CraftPlanningService.js",
+        "src/server-features/crafting/CraftReadService.js",
+        "src/server-features/crafting/CraftTraceRecorder.js",
         "src/server-features/crafting/CraftingExecutionSupport.js",
         "src/server-features/crafting/CraftingGuiNavigator.js",
         "src/server-features/crafting/CraftingOperation.js",
@@ -1823,8 +1889,11 @@
         "src/server-features/crafting/B5AutomationRuntimeDecorator.js",
         "src/server-features/crafting/B5AutomationService.js",
         "src/server-features/crafting/B5PlanningService.js",
+        "src/server-features/crafting/CraftAutomationService.js",
         "src/server-features/crafting/CraftInputAvailability.js",
         "src/server-features/crafting/CraftPlanningService.js",
+        "src/server-features/crafting/CraftReadService.js",
+        "src/server-features/crafting/CraftTraceRecorder.js",
         "src/server-features/crafting/CraftingExecutionSupport.js",
         "src/server-features/crafting/CraftingGuiNavigator.js",
         "src/server-features/crafting/CraftingOperation.js",
@@ -2440,18 +2509,18 @@
     "valid": true,
     "catalog": {
       "schemaVersion": 3,
-      "sourceFiles": 420,
-      "testFiles": 251,
+      "sourceFiles": 433,
+      "testFiles": 263,
       "scriptFiles": 41,
-      "sourceReachable": 411,
-      "runtimeReachable": 405,
+      "sourceReachable": 423,
+      "runtimeReachable": 417,
       "configGroups": 33,
       "connectionEvents": 31,
       "stalePaths": 42,
-      "officialDocuments": 0,
+      "officialDocuments": 1,
       "governedDocumentRoots": 0,
-      "documentScanExclusions": 2,
-      "pendingWiringSources": 9,
+      "documentScanExclusions": 3,
+      "pendingWiringSources": 10,
       "coverage": {
         "include": "src/**/*.js",
         "lines": 80,
@@ -2526,7 +2595,7 @@
       "code": "GENERATION_CANCELLATION_GUARDS_ACTIVE",
       "category": "CURRENT",
       "file": "src/core/events/EventEnvelope.js",
-      "summary": "Generation/cancellation contracts are active with 89 source file(s) carrying generation-guard evidence.",
+      "summary": "Generation/cancellation contracts are active with 90 source file(s) carrying generation-guard evidence.",
       "workPackages": [
         "WP-005"
       ]

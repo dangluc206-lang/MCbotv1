@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceTreeSha": "540ff7d770e4bb0ae9e879aec4f613b796291dc2",
+  "sourceTreeSha": "07eaf08c33598b8d665819a73a2d1a206118fcfb",
   "purpose": "Generic crafting guidance derived from current implementation; B5 is a current consumer, not the generic contract.",
   "genericLifecycle": [
     "INPUT_READY",

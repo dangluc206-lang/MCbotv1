@@ -3,8 +3,8 @@
   "source": {
     "repository": "dangluc206-lang/MCbotv1",
     "ref": "main",
-    "treeSha": "6cd5b58bbe730bbcfacaf4deeb25ab2714cede68",
-    "basis": "current Git tree only; counts verified against HEAD tree (a4acdc9) on 2026-09-26"
+    "treeSha": "07eaf08c33598b8d665819a73a2d1a206118fcfb",
+    "basis": "current Git tree only; counts verified against HEAD 1bebf92 (tree 07eaf08c) on 2026-09-28"
   },
   "project": {
     "name": "mcbot-complete",
@@ -40,9 +40,9 @@
     "electron": "43.4.0"
   },
   "currentTreeCounts": {
-    "totalFiles": 962,
-    "productionOrSourceJs": 420,
-    "testJs": 251,
+    "totalFiles": 1034,
+    "productionOrSourceJs": 433,
+    "testJs": 263,
     "scriptJs": 41,
     "configJson": 35
   },
