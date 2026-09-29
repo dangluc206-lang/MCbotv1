@@ -2,8 +2,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const B5InventoryState = require('../../../src/server-features/crafting/b5/support/B5InventoryState');
-const B5FinalCraftCoordinator = require('../../../src/server-features/crafting/b5/B5FinalCraftCoordinator');
+const CraftInventoryState = require('../../../src/server-features/crafting/support/CraftInventoryState');
+const CraftFinalCraftCoordinator = require('../../../src/server-features/crafting/coordinators/CraftFinalCraftCoordinator');
 const StageExecutionContract = require('../../../src/server-features/crafting/verification/StageExecutionContract');
 
 function ctx() { return { cancellation: { token: { throwIfCancelled() {} } }, connectionGeneration: 7, trace: null }; }
@@ -27,7 +27,7 @@ function makeInventoryState(sequence, unrelatedSequence = []) {
         }
     };
     const counter = { count(snapshot, logicalId) { return logicalId === 'b2' ? Number(snapshot?.items?.[0]?.count || 0) : 0; } };
-    return new B5InventoryState({ inventoryReader: reader, inventoryCounter: counter, config: { stageSettlementTimeoutMs: 200, stageSettlementPollMs: 5, stageSettlementQuietMs: 5, stageSettlementStablePasses: 2 } });
+    return new CraftInventoryState({ inventoryReader: reader, inventoryCounter: counter, config: { stageSettlementTimeoutMs: 200, stageSettlementPollMs: 5, stageSettlementQuietMs: 5, stageSettlementStablePasses: 2 } });
 }
 
 test('settlement ignores unrelated PV2 changes when scoped to bot inventory', async () => {
@@ -49,7 +49,7 @@ test('final B4 stage settlement happens once after all repeated crafts', async (
         async waitForIncrease(_id, before) { return before; },
         async waitForSettledCount(_id, min) { settleCalls += 1; return { settled: true, count: min, elapsedMs: 1, stablePasses: 2, quietForMs: 10 }; }
     };
-    const final = new B5FinalCraftCoordinator({
+    const final = new CraftFinalCraftCoordinator({
         recipeRegistry: { require() { return { output: 'b4out', outputAmount: 1, inputs: {} }; } },
         inventoryState, progressTracker: { set() {}, advance() {} },
         withdrawFlow: { async withdraw() {} },
@@ -69,7 +69,7 @@ test('stage timeout blocks handoff after output is verified', async () => {
         allEnabled() { return false; }, async waitForIncrease(_id, before) { return before; },
         async waitForSettledCount(_id, min) { settleCalls += 1; return { settled: false, timedOut: true, count: min, stablePasses: 1, quietForMs: 1, elapsedMs: 200 }; }
     };
-    const final = new B5FinalCraftCoordinator({
+    const final = new CraftFinalCraftCoordinator({
         recipeRegistry: { require() { return { output: 'b4out', outputAmount: 1, inputs: {} }; } },
         inventoryState, progressTracker: { set() {}, advance() {} }, withdrawFlow: { async withdraw() {} },
         craftFlow: { async craft() { crafts += 1; return { actualCrafts: 1, verification: { before: crafts - 1, after: crafts } }; } },

@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const B5InventoryState = require('../../../src/server-features/crafting/b5/support/B5InventoryState');
+const CraftInventoryState = require('../../../src/server-features/crafting/support/CraftInventoryState');
 
 function makeState(sequenceOrFn, config = {}) {
     let index = 0;
@@ -19,7 +19,7 @@ function makeState(sequenceOrFn, config = {}) {
             return logicalId === 'b2' ? Number(snapshot?.items?.[0]?.count || 0) : 0;
         }
     };
-    return new B5InventoryState({ inventoryReader: reader, inventoryCounter: counter, config });
+    return new CraftInventoryState({ inventoryReader: reader, inventoryCounter: counter, config });
 }
 
 test('waitForSettledCount waits for relevant B2 count to stop changing', async () => {

@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const B5FinalCraftCoordinator = require('../../../src/server-features/crafting/b5/B5FinalCraftCoordinator');
+const CraftFinalCraftCoordinator = require('../../../src/server-features/crafting/coordinators/CraftFinalCraftCoordinator');
 const StageExecutionContract = require('../../../src/server-features/crafting/verification/StageExecutionContract');
 
 class InventoryStateMock {
@@ -26,7 +26,7 @@ function coordinator(inv, craftData = { actualCrafts: 1 }) {
     const progressTracker = { set() {}, advance() {} };
     const runStep = async (_ctx, _meta, fn) => ({ data: await fn() });
     const craftFlow = { async craft() { return { actualCrafts: craftData.actualCrafts }; } };
-    return new B5FinalCraftCoordinator({ recipeRegistry, inventoryState: inv, progressTracker, withdrawFlow: {}, craftFlow, config: { targetId: 'b5', stageSettlementTimeoutMs: 200 }, runStep, childOptions: () => ({}), quantityTrace: () => {}, verificationService: new StageExecutionContract() });
+    return new CraftFinalCraftCoordinator({ recipeRegistry, inventoryState: inv, progressTracker, withdrawFlow: {}, craftFlow, config: { targetId: 'b5', stageSettlementTimeoutMs: 200 }, runStep, childOptions: () => ({}), quantityTrace: () => {}, verificationService: new StageExecutionContract() });
 }
 
 test('craft verifies the output delta for any generic stage before returning', async () => {

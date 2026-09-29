@@ -4,17 +4,17 @@ const Operation = require('../../operations/Operation');
 const Result = require('../../shared/result/Result');
 const Status = require('../../shared/result/Status');
 const FlowError = require('../../shared/errors/FlowError');
-const B5ReadFlow = require('./b5/flows/B5ReadFlow');
+const CraftReadFlow = require('./flows/CraftReadFlow');
 const B5PlanningFlow = require('./b5/flows/B5PlanningFlow');
 const B5StorageFlow = require('./b5/flows/B5StorageFlow');
-const B5WithdrawFlow = require('./b5/flows/B5WithdrawFlow');
-const B5CraftFlow = require('./b5/flows/B5CraftFlow');
+const CraftWithdrawFlow = require('./flows/CraftWithdrawFlow');
+const CraftCraftFlow = require('./flows/CraftCraftFlow');
 const B2InputAcquisitionFlow = require('./b5/flows/B2InputAcquisitionFlow');
-const B5ProgressTracker = require('./b5/support/B5ProgressTracker');
-const B5InventoryState = require('./b5/support/B5InventoryState');
-const B5RecipeResolver = require('./b5/support/B5RecipeResolver');
+const CraftProgressTracker = require('./support/CraftProgressTracker');
+const CraftInventoryState = require('./support/CraftInventoryState');
+const CraftRecipeResolver = require('./support/CraftRecipeResolver');
 const B5B1InventoryCoordinator = require('./b5/B5B1InventoryCoordinator');
-const B5FinalCraftCoordinator = require('./b5/B5FinalCraftCoordinator');
+const CraftFinalCraftCoordinator = require('./coordinators/CraftFinalCraftCoordinator');
 const B5IntermediateCoordinator = require('./b5/B5IntermediateCoordinator');
 const B5ReserveChainCoordinator = require('./b5/B5ReserveChainCoordinator');
 const B5CycleCoordinator = require('./b5/B5CycleCoordinator');
@@ -71,11 +71,11 @@ class CraftAutomationService {
             config,
             logger
         });
-        this.progressTracker = new B5ProgressTracker({ logger });
-        this.inventoryState = new B5InventoryState({ inventoryReader, inventoryCounter, config });
-        this.recipeResolver = new B5RecipeResolver({ recipeRegistry, config, logger });
+        this.progressTracker = new CraftProgressTracker({ logger });
+        this.inventoryState = inventoryState || new CraftInventoryState({ inventoryReader, inventoryCounter, config });
+        this.recipeResolver = new CraftRecipeResolver({ recipeRegistry, config, logger });
         this.flows = Object.freeze({
-            read: flows.read || new B5ReadFlow({ planningService, storage, personalVault, inventoryReader }),
+            read: flows.read || new CraftReadFlow({ planningService, storage, personalVault, inventoryReader }),
             plan: flows.plan || new B5PlanningFlow({ recipeRegistry, config }),
             storage: flows.storage || new B5StorageFlow({ b1Materials }),
             b2Input: flows.b2Input || new B2InputAcquisitionFlow({
@@ -83,10 +83,10 @@ class CraftAutomationService {
                 source: (config?.inputSource ?? config?.b2InputSource) === 'inventory' ? 'inventory' : 'storage'
             }),
             deposit: flows.deposit || new PersonalVaultStorageFlow({ personalVault, config: { verify: true } }),
-            withdraw: flows.withdraw || new B5WithdrawFlow({ personalVault }),
-            craft: flows.craft || new B5CraftFlow({ crafting })
+            withdraw: flows.withdraw || new CraftWithdrawFlow({ personalVault }),
+            craft: flows.craft || new CraftCraftFlow({ crafting })
         });
-        this.finalCraft = new B5FinalCraftCoordinator({
+        this.finalCraft = new CraftFinalCraftCoordinator({
             recipeRegistry,
             inventoryState: this.inventoryState,
             progressTracker: this.progressTracker,

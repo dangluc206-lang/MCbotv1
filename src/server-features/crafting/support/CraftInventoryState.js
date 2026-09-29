@@ -1,8 +1,8 @@
 'use strict';
 
-const Timeout = require('../../../../shared/time/Timeout');
+const Timeout = require('../../../shared/time/Timeout');
 
-class B5InventoryState {
+class CraftInventoryState {
     constructor({ inventoryReader, inventoryCounter, config }) {
         this.inventoryReader = inventoryReader;
         this.inventoryCounter = inventoryCounter;
@@ -206,4 +206,4 @@ class B5InventoryState {
     }
 }
 
-module.exports = B5InventoryState;
+module.exports = CraftInventoryState;

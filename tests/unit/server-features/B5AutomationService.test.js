@@ -224,9 +224,9 @@ test('partial reserve cycle crafts planned B2 before compacting B1 and returning
     assert.equal(calls.includes('compact-coal'), true);
     assert.equal(calls.includes('compact-all'), false, 'normal production must preserve unrelated loose B1 until pressure requires maintenance');
     assert.equal(calls.includes('sell-largest'), false);
-    assert.equal(activityLogs.includes('B5: Đang chuẩn bị B2/B3.'), true);
-    assert.equal(activityLogs.includes('B5: Đang chế B2.'), true);
-    assert.equal(activityLogs.includes('B5: Đang chế B3.'), false, 'B2-only work must not be mislabeled as an actual B3 craft');
+    assert.equal(activityLogs.some(message => message.includes('crafting intermediate')), true);
+    assert.equal(activityLogs.some(message => message.includes('crafting reserve input')), true);
+    assert.equal(activityLogs.some(message => message.includes('reserve output')), false, 'B2-only work must not be mislabeled as an actual reserve-output craft');
 });
 
 test('full B2 inventory frees one slot, then B3 ALL resumes without losing stored B2', async () => {

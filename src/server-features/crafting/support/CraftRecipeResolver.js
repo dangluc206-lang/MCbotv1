@@ -1,8 +1,8 @@
 'use strict';
 
-class B5RecipeResolver {
+class CraftRecipeResolver {
     constructor({ recipeRegistry, config = {}, logger = null } = {}) {
-        if (!recipeRegistry?.require) throw new TypeError('B5RecipeResolver recipeRegistry is required.');
+        if (!recipeRegistry?.require) throw new TypeError('CraftRecipeResolver recipeRegistry is required.');
         this.recipeRegistry = recipeRegistry;
         this.config = config || {};
         this.logger = logger;
@@ -55,8 +55,8 @@ class B5RecipeResolver {
     }
 
     #logLookupFallback(error, recipeId, outputId) {
-        this.logger?.debug?.('B5 recipe lookup skipped an unavailable recipe candidate.', {
-            operation: 'B5RecipeResolver',
+        this.logger?.debug?.('Craft recipe lookup skipped an unavailable recipe candidate.', {
+            operation: 'CraftRecipeResolver',
             step: 'resolve-recipe',
             recipeId,
             outputId,
@@ -69,4 +69,4 @@ class B5RecipeResolver {
     }
 }
 
-module.exports = B5RecipeResolver;
+module.exports = CraftRecipeResolver;

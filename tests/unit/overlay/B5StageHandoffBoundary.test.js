@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const B5FinalCraftCoordinator = require('../../../src/server-features/crafting/b5/B5FinalCraftCoordinator');
+const CraftFinalCraftCoordinator = require('../../../src/server-features/crafting/coordinators/CraftFinalCraftCoordinator');
 const B5ReserveChainCoordinator = require('../../../src/server-features/crafting/b5/B5ReserveChainCoordinator');
 const StageExecutionContract = require('../../../src/server-features/crafting/verification/StageExecutionContract');
 
@@ -44,7 +44,7 @@ function makeFinal({ settleCounts = [] } = {}) {
             return { actualCrafts: 1, verification: { before: outputCount - 1, after: outputCount } };
         }
     };
-    const coordinator = new B5FinalCraftCoordinator({
+    const coordinator = new CraftFinalCraftCoordinator({
         recipeRegistry, inventoryState: inventory, progressTracker,
         withdrawFlow: { async withdraw() {} }, craftFlow, config: { targetId: 'b5out' },
         runStep, childOptions, quantityTrace() {}, verificationService: new StageExecutionContract()

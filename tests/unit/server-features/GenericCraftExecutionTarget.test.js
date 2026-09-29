@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const B5FinalCraftCoordinator = require('../../../src/server-features/crafting/b5/B5FinalCraftCoordinator');
+const CraftFinalCraftCoordinator = require('../../../src/server-features/crafting/coordinators/CraftFinalCraftCoordinator');
 const B5CycleCoordinator = require('../../../src/server-features/crafting/b5/B5CycleCoordinator');
 const CraftingRequestExecution = require('../../../src/modes/crafting/CraftingRequestExecution');
 const StageExecutionContract = require('../../../src/server-features/crafting/verification/StageExecutionContract');
@@ -33,7 +33,7 @@ function makeCoordinator({ targetId }) {
             return original(args);
         };
     }
-    const coordinator = new B5FinalCraftCoordinator({
+    const coordinator = new CraftFinalCraftCoordinator({
         recipeRegistry: { require: id => recipes[id] },
         inventoryState: {
             count() { return outputCount; },

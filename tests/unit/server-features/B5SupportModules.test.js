@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const B5ActionDiagnostics = require('../../../src/server-features/crafting/b5/support/B5ActionDiagnostics');
-const B5RecipeResolver = require('../../../src/server-features/crafting/b5/support/B5RecipeResolver');
+const CraftRecipeResolver = require('../../../src/server-features/crafting/support/CraftRecipeResolver');
 
 test('B5ActionDiagnostics deduplicates blockers and excludes productive/skipped states', () => {
     const actions = [
@@ -28,7 +28,7 @@ test('B5ActionDiagnostics deduplicates blockers and excludes productive/skipped 
     });
 });
 
-test('B5RecipeResolver prefers configured final step and verifies direct B5 readiness', () => {
+test('CraftRecipeResolver prefers configured final step and verifies direct target readiness', () => {
     const recipes = {
         super_alloy: { output: 'super_alloy', inputs: { tungsten: 8, titanium: 16, carbon: 32 } },
         tungsten_recipe: { output: 'tungsten', inputs: { refined_iron_block: 4 } }
@@ -40,7 +40,7 @@ test('B5RecipeResolver prefers configured final step and verifies direct B5 read
         },
         ids() { return Object.keys(recipes); }
     };
-    const resolver = new B5RecipeResolver({ recipeRegistry: registry, config: { targetId: 'super_alloy' } });
+    const resolver = new CraftRecipeResolver({ recipeRegistry: registry, config: { targetId: 'super_alloy' } });
     const resolved = resolver.recipeForOutput('super_alloy', [{ outputId: 'super_alloy', recipeId: 'super_alloy' }]);
     assert.equal(resolved.recipeId, 'super_alloy');
     assert.equal(resolved.recipe, recipes.super_alloy);
@@ -56,7 +56,7 @@ test('B5RecipeResolver prefers configured final step and verifies direct B5 read
     }, 1), false);
 });
 
-test('B5RecipeResolver falls back to registry output scan when direct recipe id is unavailable', () => {
+test('CraftRecipeResolver falls back to registry output scan when direct recipe id is unavailable', () => {
     const registry = {
         require(id) {
             if (id === 'recipe-carbon') return { output: 'carbon', inputs: { refined_coal_block: 8 } };
@@ -64,7 +64,7 @@ test('B5RecipeResolver falls back to registry output scan when direct recipe id 
         },
         ids() { return ['missing-candidate', 'recipe-carbon']; }
     };
-    const resolver = new B5RecipeResolver({ recipeRegistry: registry });
+    const resolver = new CraftRecipeResolver({ recipeRegistry: registry });
     const resolved = resolver.recipeForOutput('carbon', [{ outputId: 'carbon', recipeId: 'stale-carbon-id' }]);
     assert.equal(resolved.recipeId, 'recipe-carbon');
     assert.equal(resolved.recipe.output, 'carbon');
