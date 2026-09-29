@@ -600,10 +600,13 @@ function registerBotServices({ profile, configuration, shared }) {
   // read capabilities (/kho + /pv 2 + inventory, TTL 5s). Same read flows,
   // same TTL, no behavior change; B5ReadFlow keeps working untouched.
   const craftRead = new CraftReadService({ planning: craftPlanning });
-  // Generic crafting automation authority (slice 4): same engine, generic class
-  // path. The legacy b5-automation name stays dual-exposed on the same instance.
+  // Generic crafting automation authority (slice 4, slice 5): same engine, generic class
+  // path. Slice 5: generic automation plans directly with CraftPlanningService.
+  // The B5 compat view (B5PlanningService above) keeps its configured default for
+  // legacy/collector/replay callers only. The legacy b5-automation name stays
+  // dual-exposed on the same instance.
   const b5AutomationCore = new CraftAutomationService({
-    planningService: b5Planning,
+    planningService: craftPlanning,
     crafting,
     personalVault,
     storage,

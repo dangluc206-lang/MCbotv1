@@ -198,9 +198,15 @@ class CraftAutomationService {
      * Generic crafting-automation cycle for the configured default target.
      * Kept for internal callers: the result contract is already generic
      * ({ targetId, completedTarget, completedAmount } from the cycle).
+     * Generic planning (CraftPlanningService) has no default target, so a
+     * generic path without an explicit targetId fails closed before any
+     * side effect; the legacy B5 compat view keeps its own configured
+     * default and is unaffected.
      */
-    run(amount = 1, { cancellationToken = null, operationContext = null, expectedGeneration = null, decompressionPolicy = 'unbounded', decompressionMaxUsageRatio = null, requireKnownCapacity = false } = {}) {
-        return this.#runOperation(amount, { additional: false, cancellationToken, operationContext, expectedGeneration, mode: 'production', craftFinalTarget: true, allowNewB2: true, decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity });
+    run(amount = 1, { targetId = null, cancellationToken = null, operationContext = null, expectedGeneration = null, decompressionPolicy = 'unbounded', decompressionMaxUsageRatio = null, requireKnownCapacity = false } = {}) {
+        const closed = this.#failClosedWhenGenericWithoutTarget(targetId);
+        if (closed) return closed;
+        return this.#runOperation(amount, { additional: false, targetId, cancellationToken, operationContext, expectedGeneration, mode: 'production', craftFinalTarget: true, allowNewB2: true, decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity });
     }
 
     /**
@@ -208,9 +214,15 @@ class CraftAutomationService {
      * Preserved for compatibility callers (mode recovery/maintenance probes).
      * The result still carries the generic completion model below; no caller
      * may assume which item was planned when targetId is omitted.
+     * Generic planning (CraftPlanningService) has no default target, so a
+     * generic path without an explicit targetId fails closed before any
+     * side effect; the legacy B5 compat view keeps its own configured
+     * default and is unaffected.
      */
-    runNext({ cancellationToken = null, operationContext = null, expectedGeneration = null, freshInspection = false, recoveryOnly = false, decompressionPolicy = 'unbounded', decompressionMaxUsageRatio = null, requireKnownCapacity = false } = {}) {
-        return this.#runOperation(1, { additional: true, cancellationToken, operationContext, expectedGeneration, mode: 'production', craftFinalTarget: true, allowNewB2: true, freshInspection, recoveryOnly: recoveryOnly === true, decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity });
+    runNext({ targetId = null, cancellationToken = null, operationContext = null, expectedGeneration = null, freshInspection = false, recoveryOnly = false, decompressionPolicy = 'unbounded', decompressionMaxUsageRatio = null, requireKnownCapacity = false } = {}) {
+        const closed = this.#failClosedWhenGenericWithoutTarget(targetId);
+        if (closed) return closed;
+        return this.#runOperation(1, { additional: true, targetId, cancellationToken, operationContext, expectedGeneration, mode: 'production', craftFinalTarget: true, allowNewB2: true, freshInspection, recoveryOnly: recoveryOnly === true, decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity });
     }
 
     /**
@@ -227,21 +239,7 @@ class CraftAutomationService {
     runTarget({ targetId = null, cancellationToken = null, operationContext = null, expectedGeneration = null, freshInspection = false, recoveryOnly = false, decompressionPolicy = 'unbounded', decompressionMaxUsageRatio = null, requireKnownCapacity = false } = {}) {
         const resolvedTarget = String(targetId || '').trim();
         if (!resolvedTarget) {
-            return Result.fail(
-                Status.INVALID_INPUT,
-                'Crafting automation requires an explicit targetId.',
-                new FlowError('Crafting automation requires an explicit targetId; refusing to fall back to any default item.', {
-                    code: 'CRAFT_TARGET_REQUIRED',
-                    subsystem: 'crafting',
-                    operation: 'CraftingAutomation',
-                    step: 'resolve-target',
-                    action: 'validate targetId',
-                    resource: null,
-                    retryable: false,
-                    details: { targetId: targetId ?? null }
-                }),
-                { operation: 'CraftingAutomation', step: 'resolve-target', targetId: null }
-            );
+            return this.#targetRequiredFailure('CraftingAutomation');
         }
         return this.#runOperation(1, {
             additional: true, targetId: resolvedTarget, cancellationToken, operationContext, expectedGeneration, mode: 'production',
@@ -250,9 +248,9 @@ class CraftAutomationService {
         });
     }
 
-    runMaintenance({ cancellationToken = null, operationContext = null, expectedGeneration = null, allowNewB2 = false, decompressionPolicy = 'unbounded', decompressionMaxUsageRatio = null, requireKnownCapacity = false } = {}) {
+    runMaintenance({ targetId = null, cancellationToken = null, operationContext = null, expectedGeneration = null, allowNewB2 = false, decompressionPolicy = 'unbounded', decompressionMaxUsageRatio = null, requireKnownCapacity = false } = {}) {
         return this.#runOperation(1, {
-            additional: true, cancellationToken, operationContext, expectedGeneration,
+            additional: true, targetId, cancellationToken, operationContext, expectedGeneration,
             mode: 'maintenance', craftFinalTarget: false, allowNewB2: allowNewB2 === true,
             decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity
         });
@@ -278,15 +276,23 @@ class CraftAutomationService {
         // contract. The public result is the cycle data
         // ({ targetId, completedTarget, completedAmount } + generic blockers).
         const operationName = mode === 'maintenance' ? 'CraftingStorageMaintenance' : (additional ? 'CraftingAutomationNext' : 'CraftingAutomation');
-        // Compatibility boundary: an omitted targetId resolves to the
-        // configured default only for legacy run/runNext paths. runTarget
-        // never reaches here without an explicit target (fail-closed above),
-        // so generic mode never depends on a default-item fallback.
-        const metadataTarget = String(targetId || '').trim() || this.config?.targetId || null;
+        // The execution target travels with the request/planner/cycle options.
+        // No configured default is consulted here: without an explicit
+        // targetId the cycle fails closed inside #runOperation (generic) or
+        // the compat planning view resolves its configured default (legacy).
+        const resolvedTarget = String(targetId || '').trim() || null;
+        // Slice 5: maintenance never crafts the final target, so it carries no
+        // target requirement; production cycles fail closed without an explicit
+        // request/planner target on the generic planning path. The legacy B5
+        // compat view resolves its own configured default and is unaffected.
+        if (!resolvedTarget && mode !== 'maintenance' && this.#isGenericPlanning()) {
+            return this.#targetRequiredFailure(operationName);
+        }
+        const metadataTarget = resolvedTarget || this.config?.targetId || null;
         const operation = new Operation({
             name: operationName,
             lockKeys: ['gui', 'server-command', 'inventory', 'crafting', 'storage'],
-            execute: context => this.cycle.execute(amount, context, { additional, mode, craftFinalTarget, allowNewB2, freshInspection, recoveryOnly, decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity, targetId })
+            execute: context => this.cycle.execute(amount, context, { additional, mode, craftFinalTarget, allowNewB2, freshInspection, recoveryOnly, decompressionPolicy, decompressionMaxUsageRatio, requireKnownCapacity, targetId: resolvedTarget })
         });
         const result = await this.operationManager.run(operation, {
             operationContext,
@@ -308,6 +314,37 @@ class CraftAutomationService {
     }
 
     #quantityTrace() {}
+
+    // Slice 5: generic planning (CraftPlanningService) exposes plan(targetId,...);
+    // the B5 compat view only exposes inspect*(amount, { targetId }).
+    #isGenericPlanning() {
+        return typeof this.planningService?.plan === 'function'
+            || typeof this.flows?.read?.planningService?.plan === 'function';
+    }
+
+    #targetRequiredFailure(operationName) {
+        return Result.fail(
+            Status.INVALID_INPUT,
+            'Crafting automation requires an explicit targetId.',
+            new FlowError('Crafting automation requires an explicit targetId; refusing to fall back to any default item.', {
+                code: 'CRAFT_TARGET_REQUIRED',
+                subsystem: 'crafting',
+                operation: 'CraftingAutomation',
+                step: 'resolve-target',
+                action: 'validate targetId',
+                resource: null,
+                retryable: false,
+                details: { targetId: null }
+            }),
+            { operation: operationName, step: 'resolve-target', targetId: null }
+        );
+    }
+
+    #failClosedWhenGenericWithoutTarget(targetId) {
+        if (String(targetId || '').trim()) return null;
+        if (!this.#isGenericPlanning()) return null;
+        return this.#targetRequiredFailure('CraftingAutomation');
+    }
 
     #runStep(context, meta, action, options = {}) {
         if (typeof context?.step === 'function') return context.step(meta, action, options);

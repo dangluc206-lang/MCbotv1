@@ -468,7 +468,10 @@ class CollectorB5ModeService {
             }
 
             const generation = this.context.getGeneration();
-            const cycleOptions = { cancellationToken: token, expectedGeneration: generation };
+            // Slice 5: legacy collector path keeps its configured B5 default via the
+            // B5 compat planning view; the generic automation fail-closed guard is
+            // bypassed only through that compat view (no default item in code).
+            const cycleOptions = { cancellationToken: token, expectedGeneration: generation, targetId: this.b5Planning?.targetId || null };
             if (this.preparedGeneration !== generation) {
                 await this.#prepareGeneration(generation, token);
                 this.#assertCycleGeneration(generation, 'prepare-generation-complete');

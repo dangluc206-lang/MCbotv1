@@ -333,7 +333,8 @@ class CraftingModeService extends ManagedMode {
             expectedGeneration: generation,
             freshInspection: true,
             recoveryOnly: Boolean(this.pendingCompletionProvenance),
-            decompressionPolicy: 'unbounded'
+            decompressionPolicy: 'unbounded',
+            targetId: recoveryTarget || cycleRequest?.targetItemId || null
         };
         return { wait: false, cycleOptions, targetId: recoveryTarget || cycleRequest?.targetItemId || null, recoveryTarget };
     }
@@ -351,9 +352,12 @@ class CraftingModeService extends ManagedMode {
             await Timeout.delay(this.config.reconciliation.unresolvedPollMs, { cancellationToken });
             return { wait: true };
         }
+        // Slice 5: generic automation runs on CraftPlanningService and fails
+        // closed without a target; the request/request-execution target is the
+        // sole source (no planning/config fallback is consulted here).
         const result = plan.targetId
             ? await (this.automation.runTarget || this.automation.runNext).call(this.automation, { ...plan.cycleOptions, targetId: plan.targetId })
-            : await this.automation.runNext(plan.cycleOptions);
+            : await this.automation.runTarget.call(this.automation, { ...plan.cycleOptions, targetId: null });
         this.#recordRequestCycle(cycleRequest, result, generation, plan.recoveryTarget);
         return { wait: false, result };
     }
