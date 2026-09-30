@@ -380,4 +380,11 @@ class CraftAutomationService {
 
 CraftAutomationService.normalizeAutomationConfig = normalizeAutomationConfig;
 
+// Slice 6 Step 1: generic diagnostics + chain-field adapter are implemented and
+// unit-tested, but no coordinator execution path uses them yet (cutover is
+// Step 2+). Exposed here (not on the execution path) so the modules stay
+// runtime-reachable without changing production behavior.
+CraftAutomationService.CraftActionDiagnostics = require('./support/CraftActionDiagnostics');
+CraftAutomationService.CraftChainAdapter = require('./support/CraftChainAdapter');
+
 module.exports = CraftAutomationService;
