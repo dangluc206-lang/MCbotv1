@@ -386,5 +386,10 @@ CraftAutomationService.normalizeAutomationConfig = normalizeAutomationConfig;
 // runtime-reachable without changing production behavior.
 CraftAutomationService.CraftActionDiagnostics = require('./support/CraftActionDiagnostics');
 CraftAutomationService.CraftChainAdapter = require('./support/CraftChainAdapter');
+// Slice 6 Step 2: generic base-inventory leaf is implemented and boundary-tested
+// (parity with the legacy coordinator on neutral fixtures). Still not wired
+// into any runtime cycle; exposed here only so the module stays
+// runtime-reachable without changing production behavior.
+CraftAutomationService.CraftBaseInventoryCoordinator = require('./coordinators/CraftBaseInventoryCoordinator');
 
 module.exports = CraftAutomationService;
