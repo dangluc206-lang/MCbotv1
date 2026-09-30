@@ -89,6 +89,26 @@ class CraftIntermediateCoordinator {
         }
         return { inspection, actions, changed: actions.length > 0, promoted };
     }
+    async depositRemainders(data, context, actions = []) {
+        this.progressTracker.set({ running: true, state: 'STORING', currentStep: { kind: 'STORE', id: 'intermediate-output' } });
+        for (const raw of (data && data.chains) || []) {
+            const chain = CraftIntermediateCoordinator.normalize(raw);
+            context.cancellation.token.throwIfCancelled();
+            await this.#depositRemainder(chain.outputId, 'store-irreducible-output', 'deposit output only after all possible direct-input compaction', context, actions, { count: this.inventoryState.count(chain.outputId) });
+            await this.#depositRemainder(chain.intermediateId, 'store-irreducible-intermediate', 'deposit intermediate remainder smaller than one output craft', context, actions, {
+                count: this.inventoryState.count(chain.intermediateId), intermediateId: chain.intermediateId, intermediatePerOutput: chain.intermediatePerOutput
+            });
+        }
+    }
+
+    async #depositRemainder(id, step, action, context, actions, details) {
+        if (Number(details.count || 0) <= 0) return;
+        const result = await this.runStep(context, { subsystem: 'crafting', step, action, resource: id, details },
+            () => this.flows.deposit.deposit(id, this.childOptions(context)));
+        const status = details.intermediateId ? 'intermediate-remainder-stored' : 'output-remainder-stored';
+        actions.push({ status, id, data: result && result.data });
+    }
+
     async compactReadyOutputs(inspection, context, opts) {
         opts = opts || {};
         const done = [];

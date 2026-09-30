@@ -17,6 +17,9 @@ const B5B1InventoryCoordinator = require('./b5/B5B1InventoryCoordinator');
 const CraftFinalCraftCoordinator = require('./coordinators/CraftFinalCraftCoordinator');
 const B5IntermediateCoordinator = require('./b5/B5IntermediateCoordinator');
 const B5ReserveChainCoordinator = require('./b5/B5ReserveChainCoordinator');
+const CraftReserveChainCoordinator = require('./coordinators/CraftReserveChainCoordinator');
+const CraftCycleCoordinator = require('./coordinators/CraftCycleCoordinator');
+const CraftQuantityPolicy = require('./support/CraftQuantityPolicy');
 const B5CycleCoordinator = require('./b5/B5CycleCoordinator');
 const PersonalVaultStorageFlow = require('../personal-vault/PersonalVaultStorageFlow');
 
@@ -51,6 +54,7 @@ class CraftAutomationService {
         logger = null,
         flows = {},
         inventoryState,
+        quantity = null,
         craftingVerificationService
     }) {
         if (!craftingVerificationService) {
@@ -74,6 +78,9 @@ class CraftAutomationService {
         this.progressTracker = new CraftProgressTracker({ logger });
         this.inventoryState = inventoryState || new CraftInventoryState({ inventoryReader, inventoryCounter, config });
         this.recipeResolver = new CraftRecipeResolver({ recipeRegistry, config, logger });
+        // Generic quantity authority: injected by the composition root or derived
+        // from config once (legacy B-chain key names are mapped at fromConfig).
+        this.quantity = quantity || CraftQuantityPolicy.fromConfig(config);
         this.flows = Object.freeze({
             read: flows.read || new CraftReadFlow({ planningService, storage, personalVault, inventoryReader }),
             plan: flows.plan || new B5PlanningFlow({ recipeRegistry, config }),
@@ -151,6 +158,30 @@ class CraftAutomationService {
             childOptions: (...args) => this.#childOptions(...args),
             status: () => this.status()
         });
+        // Slice 6 Step 5 (boundary work, cutover pending): the generic cycle core
+        // and the generic quantity policy are implemented and boundary-tested.
+        // They are not on the runtime path yet: the generic coordinators they
+        // call still diverge from the locked legacy behavior on 11 cycle
+        // scenarios (quantity/space/compaction), so the cutover stays open until
+        // those twins reach parity. Exposed here only so the modules stay
+        // runtime-reachable without changing production behavior.
+        this.genericCycle = new CraftCycleCoordinator({
+            flows: this.flows,
+            inventoryState: this.inventoryState,
+            recipeResolver: this.recipeResolver,
+            progressTracker: this.progressTracker,
+            intermediate: this.intermediate,
+            reserveChain: this.reserveChain,
+            baseInventory: this.b1Inventory,
+            finalCraft: this.finalCraft,
+            recipeRegistry,
+            quantity: this.quantity,
+            config,
+            logger,
+            runStep: (...args) => this.#runStep(...args),
+            childOptions: (...args) => this.#childOptions(...args),
+            status: () => this.status()
+        });
     }
 
     reconfigure(config = {}) {
@@ -165,6 +196,9 @@ class CraftAutomationService {
         this.intermediate.reconfigure(next);
         this.reserveChain.reconfigure(next);
         this.cycle.reconfigure(next);
+        this.quantity = CraftQuantityPolicy.fromConfig(next);
+        this.genericCycle.quantity = this.quantity;
+        this.genericCycle.reconfigure(next);
         return next;
     }
 
@@ -398,5 +432,10 @@ CraftAutomationService.CraftBaseInventoryCoordinator = require('./coordinators/C
 CraftAutomationService.CraftReserveChainCoordinator = require('./coordinators/CraftReserveChainCoordinator');
 // Slice 6 Step 4 (work in progress): generic intermediate core, boundary-tested only.
 CraftAutomationService.CraftIntermediateCoordinator = require('./coordinators/CraftIntermediateCoordinator');
+// Slice 6 Step 5 (boundary work, cutover pending): generic cycle core + generic
+// quantity policy. Exposed here (not on the execution path) so the modules stay
+// runtime-reachable without changing production behavior.
+CraftAutomationService.CraftCycleCoordinator = CraftCycleCoordinator;
+CraftAutomationService.CraftQuantityPolicy = CraftQuantityPolicy;
 
 module.exports = CraftAutomationService;
