@@ -1,0 +1,225 @@
+'use strict';
+
+// Generic intermediate coordinator (Slice 6 Step 4). Mechanics own promotion
+// loop, compact-ready, deposit/recount, space handling, cancellation, progress
+// and error codes. Ordering/ratio policy is injected (finalStepOrder /
+// spaceCandidateOrder); no B5 table lives in the core. Legacy chains are
+// normalized once at the boundary; core never reads legacy keys.
+const FlowError = require('../../../shared/errors/FlowError');
+const { fromLegacyChain } = require('../support/CraftChainAdapter');
+
+class CraftIntermediateCoordinator {
+    constructor(o) {
+        o = o || {};
+        this.flows = o.flows;
+        this.inventoryState = o.inventoryState;
+        this.inventoryCounter = o.inventoryCounter || null;
+        this.recipeResolver = o.recipeResolver;
+        this.progressTracker = o.progressTracker;
+        this.finalCraft = o.finalCraft;
+        this.config = o.config;
+        this.runStep = o.runStep;
+        this.childOptions = o.childOptions;
+        this.finalStepOrder = o.finalStepOrder || null;
+        this.spaceCandidateOrder = o.spaceCandidateOrder || null;
+        this.reserveChain = null;
+    }
+
+    reconfigure(c) { this.config = c || {}; return this; }
+
+    setReserveCoordinator(r) { this.reserveChain = r; return this; }
+    async promoteOwned(first, inspect, context, opts) {
+        opts = opts || {};
+        const stop = opts.stopAtTargetReady !== false;
+        let inspection = this.requireInspection(first, 'B5 promotion inspection failed.');
+        const actions = [];
+        for (let guard = 0; guard < 8; guard += 1) {
+            context.cancellation.token.throwIfCancelled();
+            if (stop && this.recipeResolver.isTargetDirectlyReady(inspection.data, 1)) break;
+            let changed = false;
+            const targetId = (inspection.data && inspection.data.fullPlan && inspection.data.fullPlan.targetId) || null;
+            const compacted = await this.compactReadyOutputs(inspection, context, { stopAtTargetReady: stop, targetId });
+            if (compacted.length > 0) {
+                changed = true;
+                actions.push({ status: 'b3-promoted-to-b4', data: compacted });
+                inspection = this.requireInspection(await inspect(), 'B5 promotion re-inspection failed.');
+                if (stop && this.recipeResolver.isTargetDirectlyReady(inspection.data, 1)) break;
+            }
+            const promotion = await this.promoteIntermediatePass(inspection, inspect, context, { stopAtTargetReady: stop });
+            inspection = promotion.inspection;
+            actions.push(...promotion.actions);
+            changed = changed || promotion.changed;
+            if (stop && this.recipeResolver.isTargetDirectlyReady(inspection.data, 1)) break;
+            if (!changed || !promotion.promoted) break;
+        }
+        return { inspection, actions };
+    }
+    async promoteIntermediatePass(first, inspect, context, opts) {
+        opts = opts || {};
+        const stop = opts.stopAtTargetReady !== false;
+        let inspection = first;
+        const actions = [];
+        let promoted = false;
+        const chains = (inspection.data && inspection.data.chains ? inspection.data.chains : []).map((c) => CraftIntermediateCoordinator.normalize(c));
+        for (const chain of chains) {
+            context.cancellation.token.throwIfCancelled();
+            const per = Math.max(1, Number(chain.intermediatePerOutput || 1));
+            const ownedInv = Math.max(Number(chain.inventoryIntermediate || 0), Number(this.inventoryState.count(chain.intermediateId) || 0));
+            const owned = Math.max(0, Number(chain.vaultIntermediate || 0) + ownedInv);
+            const crafts = Math.floor(owned / per);
+            if (crafts <= 0) continue;
+            if (!this.reserveChain || !this.reserveChain.prepare) throw new Error('B5 reserve coordinator is unavailable.');
+            this.progressTracker.set({ running: true, state: 'PROMOTING_B2', currentStep: { kind: 'B2/B3', id: chain.outputId, crafts } });
+            const targetId = (inspection.data && inspection.data.fullPlan && inspection.data.fullPlan.targetId) || null;
+            const result = await this.reserveChain.prepare({ ...chain, intermediateCrafts: 0, outputCrafts: crafts, readyToReserve: true }, context, { deferIntermediateDeposit: true, allChains: chains, targetId });
+            if (result && result.deferredForSpace) {
+                actions.push({ status: 'b2-pv2-parked-for-space', intermediateId: chain.intermediateId, outputId: chain.outputId, data: result });
+                inspection = this.requireInspection(await inspect(), 'B5 promotion re-inspection failed.');
+                break;
+            }
+            if (result && result.waitingForMaterial) {
+                actions.push({ status: 'b2-waiting-material', intermediateId: chain.intermediateId, outputId: chain.outputId, data: result });
+                inspection = this.requireInspection(await inspect(), 'B5 promotion re-inspection failed.');
+                break;
+            }
+            promoted = true;
+            actions.push({ status: 'b2-promoted-to-b3', intermediateId: chain.intermediateId, outputId: chain.outputId, crafts, data: result });
+            inspection = this.requireInspection(await inspect(), 'B5 promotion re-inspection failed.');
+            if (stop && this.recipeResolver.isTargetDirectlyReady(inspection.data, 1)) break;
+        }
+        return { inspection, actions, changed: actions.length > 0, promoted };
+    }
+    async compactReadyOutputs(inspection, context, opts) {
+        opts = opts || {};
+        const done = [];
+        const steps = this.finalStepsInPolicyOrder(inspection, opts.targetId || null);
+        const finalSteps = (inspection.data && inspection.data.finalSteps) || [];
+        for (const step of steps) {
+            context.cancellation.token.throwIfCancelled();
+            const recipe = this.recipeResolver.recipeForOutput(step.outputId, finalSteps);
+            if (!recipe || !recipe.recipe) continue;
+            const perInput = Object.entries(recipe.recipe.inputs || {}).filter((entry) => Number(entry[1]) > 0);
+            if (perInput.length === 0) continue;
+            const maxCraftable = Math.min(...perInput.map(([id, per]) => Math.floor(Number(this.inventoryState.count(id) || 0) / Number(per))));
+            const ready = Math.max(0, Math.min(Number(step.crafts || 0), maxCraftable));
+            if (ready <= 0) continue;
+            this.progressTracker.set({ running: true, state: 'PROMOTING_B3', currentStep: { kind: 'B3/B4', id: step.outputId, crafts: ready } });
+            const crafted = await this.finalCraft.craft(recipe.recipeId, ready, context, step.outputId, { stage: 'B4', nextStage: 'B5' });
+            if (Number(this.inventoryState.actualCrafts(crafted, ready) || 0) <= 0) continue;
+            await this.runStep(context, { subsystem: 'crafting', step: 'deposit-b4-after-promotion', action: 'deposit fresh B4 intermediates to /pv 2 to keep one free slot', resource: step.outputId },
+                () => this.flows.deposit.depositRemainders(this.childOptions(context)));
+            done.push({ status: 'b4-compact-ready', outputId: step.outputId, recipeId: recipe.recipeId, ready, data: crafted });
+        }
+        return done;
+    }
+
+    finalStepsInPolicyOrder(inspection, targetId) {
+        const steps = [...(((inspection.data && inspection.data.finalSteps) || []))];
+        if (typeof this.finalStepOrder === 'function') return this.finalStepOrder(steps, inspection, targetId) || steps;
+        return steps;
+    }
+
+    async ensureFreeIntermediateSlots(chain, context, minFreeSlots, opts) {
+        chain = CraftIntermediateCoordinator.normalize(chain);
+        opts = opts || {};
+        this.progressTracker.set({ running: true, state: 'FREEING_SPACE', currentStep: { kind: 'SPACE', id: chain.outputId } });
+        let snapshot = this.inventoryState.spaceSnapshot();
+        const state = { depositedB2Count: 0, emergencyParkedCurrentB2: false, attempts: 0, attemptedIds: new Set() };
+        if (Number(snapshot.emptySlotCount || 0) >= Number(minFreeSlots || 0)) return this.spaceResult(snapshot, state);
+        const preserve = opts.preserveAtLeastIntermediate !== undefined ? opts.preserveAtLeastIntermediate : (opts.preserveAtLeastB2 !== undefined ? opts.preserveAtLeastB2 : 0);
+        snapshot = await this.emergencyParkOwned(chain, context, minFreeSlots, preserve, snapshot, state);
+        if (Number(snapshot.emptySlotCount || 0) >= Number(minFreeSlots || 0)) return this.spaceResult(snapshot, state);
+        const targetId = opts.targetId || null;
+        const candidates = this.spaceReleaseCandidates(chain, opts.allChains || [], { preserveAtLeastIntermediate: preserve, targetId });
+        for (const id of candidates) {
+            snapshot = await this.offloadCandidate(id, chain, context, minFreeSlots, state);
+            if (Number(snapshot.emptySlotCount || 0) >= Number(minFreeSlots || 0)) return this.spaceResult(snapshot, state);
+        }
+        this.throwNoSpace(chain, context, minFreeSlots, opts.reason || null, preserve, snapshot, state);
+    }
+
+
+    async emergencyParkOwned(chain, context, minFreeSlots, preserve, snapshot, state) {
+        const counter = (this.inventoryCounter && typeof this.inventoryCounter.count === 'function') ? this.inventoryCounter.count.bind(this.inventoryCounter) : null;
+        const before = this.inventoryState.count(chain.intermediateId);
+        const after = counter ? counter(snapshot, chain.intermediateId) : before;
+        if (before <= 0 || after - 64 < preserve) return snapshot;
+        const parked = await this.runStep(context, { subsystem: 'crafting', step: 'deposit-current-b2', action: 'park one stack of current B2 in /pv 2 to free a slot', resource: chain.intermediateId,
+            details: { before, preserveAtLeastIntermediate: preserve, preserveAtLeastB2: preserve, minFreeSlots, emptySlotCount: snapshot.emptySlotCount } },
+            () => this.flows.deposit.deposit(chain.intermediateId, this.childOptions(context, { maxStacks: 1 })));
+        if (parked && parked.success === false) return snapshot;
+        const afterCount = this.inventoryState.count(chain.intermediateId);
+        const movedFromDelta = Math.max(0, before - afterCount);
+        const movedFromStacks = Math.max(0, Number((parked && parked.data && parked.data.movedStacks) || 0)) * 64;
+        const moved = movedFromDelta || movedFromStacks;
+        if (moved <= 0) return snapshot;
+        state.depositedB2Count += moved;
+        state.emergencyParkedCurrentB2 = true;
+        return this.inventoryState.waitForFreeSlots(minFreeSlots, context.cancellation.token);
+    }
+
+    async offloadCandidate(logicalId, chain, context, minFreeSlots, state) {
+        context.cancellation.token.throwIfCancelled();
+        if (!logicalId || state.attemptedIds.has(logicalId)) return this.inventoryState.spaceSnapshot();
+        state.attemptedIds.add(logicalId);
+        const before = this.inventoryState.count(logicalId);
+        if (before <= 0) return this.inventoryState.spaceSnapshot();
+        state.attempts += 1;
+        const result = await this.flows.deposit.deposit(logicalId, this.childOptions(context, { maxStacks: 1 }));
+        if (result && result.success === false) return this.inventoryState.spaceSnapshot();
+        const after = this.inventoryState.count(logicalId);
+        if (logicalId === chain.intermediateId) state.depositedB2Count += Math.max(0, before - after);
+        return this.inventoryState.waitForFreeSlots(minFreeSlots, context.cancellation.token);
+    }
+    spaceReleaseCandidates(chain, allChains, opts) {
+        opts = opts || {};
+        if (typeof this.spaceCandidateOrder === 'function') {
+            const custom = this.spaceCandidateOrder(chain, allChains, opts);
+            if (Array.isArray(custom)) return custom.filter((id) => String(id || '').trim());
+        }
+        const candidates = [];
+        const push = (id) => { const v = String(id || '').trim(); if (v && !candidates.includes(v)) candidates.push(v); };
+        const activeTarget = String(opts.targetId || '').trim() || null;
+        const targetRecipe = activeTarget ? this.recipeResolver.recipeForOutput(activeTarget) : null;
+        const inputs = (targetRecipe && targetRecipe.recipe && targetRecipe.recipe.inputs) || {};
+        for (const id of Object.keys(inputs)) push(id);
+        push(chain.outputId);
+        for (const c of allChains || []) { const g = CraftIntermediateCoordinator.normalize(c); if (g.outputId !== chain.outputId) push(g.outputId); }
+        for (const c of allChains || []) { const g = CraftIntermediateCoordinator.normalize(c); if (g.intermediateId !== chain.intermediateId) push(g.intermediateId); }
+        if (this.inventoryState.count(chain.intermediateId) - 64 >= (opts.preserveAtLeastIntermediate || 0)) push(chain.intermediateId);
+        return candidates;
+    }
+
+    throwNoSpace(chain, context, minFreeSlots, reason, preserve, snapshot, state) {
+        throw new FlowError('Cannot reserve ' + minFreeSlots + ' empty inventory slot(s) for ' + chain.outputId + '.', {
+            code: 'CRAFT_INTERMEDIATE_NO_SPACE', subsystem: 'crafting', step: 'free-intermediate-slot', action: reason || 'reserve inventory output slot',
+            resource: chain.outputId, retryable: true, trace: context.trace,
+            details: { minFreeSlots, emptySlotCount: snapshot.emptySlotCount, intermediateCount: this.inventoryState.count(chain.intermediateId), outputCount: this.inventoryState.count(chain.outputId),
+                preserveAtLeastIntermediate: preserve, preserveAtLeastB2: preserve, attemptedIds: [...state.attemptedIds], attempts: state.attempts, emergencyParkedCurrentB2: state.emergencyParkedCurrentB2 }
+        });
+    }
+
+    spaceResult(snapshot, state) {
+        return { snapshot, depositedB2Count: state.depositedB2Count, emergencyParkedCurrentB2: state.emergencyParkedCurrentB2 };
+    }
+
+    requireInspection(result, message) {
+        if (result && result.success === false) throw result.error || new Error(result.message || message);
+        return result;
+    }
+
+    static normalize(chain) {
+        const c = chain && typeof chain === 'object' ? chain : {};
+        if (typeof c.intermediateId === 'string' && typeof c.outputId === 'string'
+            && !('b2Id' in c) && !('b3Id' in c) && !('b2RecipeId' in c) && !('b3RecipeId' in c)) return c;
+        return fromLegacyChain(c);
+    }
+
+}
+// Legacy alias kept for Step 4 boundary parity only: same-shape compact entry
+// point used by the legacy coordinator name.
+CraftIntermediateCoordinator.prototype.compactReadyB4 = function (inspection, inspect, context, opts) {
+    opts = opts || {};
+    return this.compactReadyOutputs(inspection, context, { stopAtTargetReady: opts.stopAtTargetReady, targetId: opts.targetId || null });
+};
+module.exports = CraftIntermediateCoordinator;

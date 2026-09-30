@@ -396,5 +396,7 @@ CraftAutomationService.CraftBaseInventoryCoordinator = require('./coordinators/C
 // into any runtime cycle; exposed here only so the module stays
 // runtime-reachable without changing production behavior.
 CraftAutomationService.CraftReserveChainCoordinator = require('./coordinators/CraftReserveChainCoordinator');
+// Slice 6 Step 4 (work in progress): generic intermediate core, boundary-tested only.
+CraftAutomationService.CraftIntermediateCoordinator = require('./coordinators/CraftIntermediateCoordinator');
 
 module.exports = CraftAutomationService;
