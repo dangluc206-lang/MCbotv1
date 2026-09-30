@@ -391,5 +391,10 @@ CraftAutomationService.CraftChainAdapter = require('./support/CraftChainAdapter'
 // into any runtime cycle; exposed here only so the module stays
 // runtime-reachable without changing production behavior.
 CraftAutomationService.CraftBaseInventoryCoordinator = require('./coordinators/CraftBaseInventoryCoordinator');
+// Slice 6 Step 3: generic reserve core is implemented and boundary-tested
+// (parity with the legacy coordinator on neutral fixtures). Still not wired
+// into any runtime cycle; exposed here only so the module stays
+// runtime-reachable without changing production behavior.
+CraftAutomationService.CraftReserveChainCoordinator = require('./coordinators/CraftReserveChainCoordinator');
 
 module.exports = CraftAutomationService;
