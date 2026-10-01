@@ -101,9 +101,15 @@ class CraftReserveChainCoordinator {
         }
         let inventory = view.inventory;
         let intermediateCount = view.intermediateCount;
-        if (state.pendingStageSettlement) {
-            inventory = this.inventoryState.snapshot();
+        if (Number(inventory.emptySlotCount || 0) < state.minFreeForOutputAll) {
+            const freed = await this.spaceFreer.ensureFreeIntermediateSlots(chain, context, state.minFreeForOutputAll, {
+                reason: 'reserve one output slot before B2->B3 ALL', preserveAtLeastIntermediate: chain.intermediatePerOutput,
+                preferCurrentIntermediate: chain.useAllForIntermediate === true, allChains: state.allChains, targetId: state.targetId
+            });
+            inventory = freed.snapshot;
+            state.vaultIntermediateRemaining += freed.depositedB2Count;
             intermediateCount = this.inventoryCounter.count(inventory, chain.intermediateId);
+            if (freed.emergencyParkedCurrentB2 && intermediateCount < chain.intermediatePerOutput) return { result: this.spaceDeferred(chain, state, freed) };
         }
         if (intermediateCount < chain.intermediatePerOutput) return { done: true };
         const useAllForOutput = typeof this.inventoryState.allEnabled === 'function'
@@ -131,12 +137,15 @@ class CraftReserveChainCoordinator {
         return { done: true };
     }
     async tryWithdrawOwned(chain, state, view, context) {
-        if (!(state.vaultIntermediateRemaining > 0 && Number(view.inventory.emptySlotCount || 0) >= state.minFreeForOutputAll)) return false;
+        if (!(state.outputRemaining > 0 && state.vaultIntermediateRemaining > 0 && Number(view.inventory.emptySlotCount || 0) > state.minFreeForOutputAll)) return false;
         if (state.pendingStageSettlement && state.pendingStageSettlement.stage === 'B2') {
             await this.settlePending(state, chain, context, 'B3');
         }
+        const freeStackSlots = Math.max(0, Number(view.inventory.emptySlotCount || 0) - state.minFreeForOutputAll);
+        const intermediateStillUseful = Math.max(0, state.outputRemaining * chain.intermediatePerOutput - view.intermediateCount);
+        const wantedStacks = Math.max(1, Math.ceil(Math.min(state.vaultIntermediateRemaining, intermediateStillUseful || state.vaultIntermediateRemaining) / 64));
+        const maxStacks = Math.max(1, Math.min(freeStackSlots, wantedStacks));
         const before = this.inventoryCounter.count(view.inventory, chain.intermediateId);
-        const maxStacks = Math.max(1, Math.ceil(state.vaultIntermediateRemaining / 64));
         await this.runStep(context, {
             subsystem: 'crafting', step: 'withdraw-existing-b2', action: 'withdraw B2 from /pv 2 while reserving one empty slot', resource: chain.intermediateId,
             details: { vaultIntermediateRemaining: state.vaultIntermediateRemaining, intermediateCount: view.intermediateCount, outputRemaining: state.outputRemaining, maxStacks,

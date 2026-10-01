@@ -24,10 +24,16 @@ class CraftQuantityPolicy {
         config = config || {};
         const q = config.quantity || config.quantityOptimization || {};
         const pick = (a, b) => (a !== undefined ? a : b);
+        const inputSource = pick(config.inputSource, config.b2InputSource) === 'inventory' ? 'inventory' : 'storage';
+        const enabled = q.enabled !== false;
+        // Match B5PlanningFlow: B2 ALL only applies to storage-sourced input.
+        // Inventory source disables it even when the flag is true.
+        const useAllForIntermediate = enabled && inputSource === 'storage'
+            && pick(q.useAllForIntermediate, q.useAllForB2) === true;
         return new CraftQuantityPolicy({
             quantity: {
                 enabled: q.enabled,
-                useAllForIntermediate: pick(q.useAllForIntermediate, q.useAllForB2),
+                useAllForIntermediate,
                 useAllForOutput: pick(q.useAllForOutput, q.useAllForB3),
                 useAllForDirectInputWhenExact: pick(q.useAllForDirectInputWhenExact, q.useAllForB4WhenExact),
                 useAllForTarget: pick(q.useAllForTarget, q.useAllForB5),
@@ -35,7 +41,7 @@ class CraftQuantityPolicy {
             },
             outputAllMinEmptySlots: pick(config.outputAllMinEmptySlots, config.b3AllMinEmptySlots),
             inventorySafetyEmptySlots: config.inventorySafetyEmptySlots,
-            inputSource: pick(config.inputSource, config.b2InputSource)
+            inputSource
         });
     }
     loopGuardCode(o) {

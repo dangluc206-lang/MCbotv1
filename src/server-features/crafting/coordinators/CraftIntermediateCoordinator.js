@@ -144,18 +144,19 @@ class CraftIntermediateCoordinator {
         opts = opts || {};
         this.progressTracker.set({ running: true, state: 'FREEING_SPACE', currentStep: { kind: 'SPACE', id: chain.outputId } });
         let snapshot = this.inventoryState.spaceSnapshot();
-        const state = { depositedB2Count: 0, emergencyParkedCurrentB2: false, attempts: 0, attemptedIds: new Set() };
+        const state = { depositedB2Count: 0, emergencyParkedCurrentB2: false, attempts: 0, attemptedIds: new Set(), preserveAtLeastIntermediate: 0 };
         if (Number(snapshot.emptySlotCount || 0) >= Number(minFreeSlots || 0)) return this.spaceResult(snapshot, state);
         const preserve = opts.preserveAtLeastIntermediate !== undefined ? opts.preserveAtLeastIntermediate : (opts.preserveAtLeastB2 !== undefined ? opts.preserveAtLeastB2 : 0);
-        snapshot = await this.emergencyParkOwned(chain, context, minFreeSlots, preserve, snapshot, state);
+        state.preserveAtLeastIntermediate = Math.max(0, Number(preserve || 0));
+        snapshot = await this.emergencyParkOwned(chain, context, minFreeSlots, state.preserveAtLeastIntermediate, snapshot, state);
         if (Number(snapshot.emptySlotCount || 0) >= Number(minFreeSlots || 0)) return this.spaceResult(snapshot, state);
         const targetId = opts.targetId || null;
-        const candidates = this.spaceReleaseCandidates(chain, opts.allChains || [], { preserveAtLeastIntermediate: preserve, targetId });
+        const candidates = this.spaceReleaseCandidates(chain, opts.allChains || [], { preserveAtLeastIntermediate: state.preserveAtLeastIntermediate, targetId });
         for (const id of candidates) {
-            snapshot = await this.offloadCandidate(id, chain, context, minFreeSlots, state);
+            snapshot = await this.offloadCandidate(id, chain, context, minFreeSlots, state, state.preserveAtLeastIntermediate || 0);
             if (Number(snapshot.emptySlotCount || 0) >= Number(minFreeSlots || 0)) return this.spaceResult(snapshot, state);
         }
-        this.throwNoSpace(chain, context, minFreeSlots, opts.reason || null, preserve, snapshot, state);
+        this.throwNoSpace(chain, context, minFreeSlots, opts.reason || null, state.preserveAtLeastIntermediate, snapshot, state);
     }
 
 
@@ -178,12 +179,12 @@ class CraftIntermediateCoordinator {
         return this.inventoryState.waitForFreeSlots(minFreeSlots, context.cancellation.token);
     }
 
-    async offloadCandidate(logicalId, chain, context, minFreeSlots, state) {
+    async offloadCandidate(logicalId, chain, context, minFreeSlots, state, preserveAtLeastIntermediate = 0) {
         context.cancellation.token.throwIfCancelled();
         if (!logicalId || state.attemptedIds.has(logicalId)) return this.inventoryState.spaceSnapshot();
         state.attemptedIds.add(logicalId);
         const before = this.inventoryState.count(logicalId);
-        if (before <= 0) return this.inventoryState.spaceSnapshot();
+        if (before <= 0 || (logicalId === chain.intermediateId && before - 64 < preserveAtLeastIntermediate)) return this.inventoryState.spaceSnapshot();
         state.attempts += 1;
         const result = await this.flows.deposit.deposit(logicalId, this.childOptions(context, { maxStacks: 1 }));
         if (result && result.success === false) return this.inventoryState.spaceSnapshot();
