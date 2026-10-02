@@ -148,23 +148,27 @@ class CraftIntermediateCoordinator {
         if (Number(snapshot.emptySlotCount || 0) >= Number(minFreeSlots || 0)) return this.spaceResult(snapshot, state);
         const preserve = opts.preserveAtLeastIntermediate !== undefined ? opts.preserveAtLeastIntermediate : (opts.preserveAtLeastB2 !== undefined ? opts.preserveAtLeastB2 : 0);
         state.preserveAtLeastIntermediate = Math.max(0, Number(preserve || 0));
-        snapshot = await this.emergencyParkOwned(chain, context, minFreeSlots, state.preserveAtLeastIntermediate, snapshot, state);
-        if (Number(snapshot.emptySlotCount || 0) >= Number(minFreeSlots || 0)) return this.spaceResult(snapshot, state);
+        const prefer = opts.preferCurrentIntermediate !== undefined ? opts.preferCurrentIntermediate !== false
+            : (opts.preferCurrentB2 !== undefined ? opts.preferCurrentB2 !== false : true);
+        if (prefer) {
+            snapshot = await this.emergencyParkOwned(chain, context, minFreeSlots, state.preserveAtLeastIntermediate, snapshot, state);
+            if (Number(snapshot.emptySlotCount || 0) >= Number(minFreeSlots || 0)) return this.spaceResult(snapshot, state);
+        }
         const targetId = opts.targetId || null;
         const candidates = this.spaceReleaseCandidates(chain, opts.allChains || [], { preserveAtLeastIntermediate: state.preserveAtLeastIntermediate, targetId });
         for (const id of candidates) {
+            if (Number(snapshot.emptySlotCount || 0) >= Number(minFreeSlots || 0)) break;
             snapshot = await this.offloadCandidate(id, chain, context, minFreeSlots, state, state.preserveAtLeastIntermediate || 0);
             if (Number(snapshot.emptySlotCount || 0) >= Number(minFreeSlots || 0)) return this.spaceResult(snapshot, state);
         }
-        this.throwNoSpace(chain, context, minFreeSlots, opts.reason || null, state.preserveAtLeastIntermediate, snapshot, state);
+        if (Number(snapshot.emptySlotCount || 0) < Number(minFreeSlots || 0)) snapshot = await this.emergencyParkOwned(chain, context, minFreeSlots, state.preserveAtLeastIntermediate, snapshot, state, false);
+        if (Number(snapshot.emptySlotCount || 0) < Number(minFreeSlots || 0)) this.throwNoSpace(chain, context, minFreeSlots, opts.reason || null, state.preserveAtLeastIntermediate, snapshot, state);
     }
 
 
-    async emergencyParkOwned(chain, context, minFreeSlots, preserve, snapshot, state) {
-        const counter = (this.inventoryCounter && typeof this.inventoryCounter.count === 'function') ? this.inventoryCounter.count.bind(this.inventoryCounter) : null;
+    async emergencyParkOwned(chain, context, minFreeSlots, preserve, snapshot, state, requireStack = true) {
         const before = this.inventoryState.count(chain.intermediateId);
-        const after = counter ? counter(snapshot, chain.intermediateId) : before;
-        if (before <= 0 || after - 64 < preserve) return snapshot;
+        if (before <= 0 || (requireStack && before < 64)) return snapshot;
         const parked = await this.runStep(context, { subsystem: 'crafting', step: 'deposit-current-b2', action: 'park one stack of current B2 in /pv 2 to free a slot', resource: chain.intermediateId,
             details: { before, preserveAtLeastIntermediate: preserve, preserveAtLeastB2: preserve, minFreeSlots, emptySlotCount: snapshot.emptySlotCount } },
             () => this.flows.deposit.deposit(chain.intermediateId, this.childOptions(context, { maxStacks: 1 })));
