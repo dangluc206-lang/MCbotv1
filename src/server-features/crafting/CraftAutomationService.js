@@ -14,7 +14,9 @@ const CraftProgressTracker = require('./support/CraftProgressTracker');
 const CraftInventoryState = require('./support/CraftInventoryState');
 const CraftRecipeResolver = require('./support/CraftRecipeResolver');
 const B5B1InventoryCoordinator = require('./b5/B5B1InventoryCoordinator');
+const CraftBaseInventoryCoordinator = require('./coordinators/CraftBaseInventoryCoordinator');
 const CraftFinalCraftCoordinator = require('./coordinators/CraftFinalCraftCoordinator');
+const CraftIntermediateCoordinator = require('./coordinators/CraftIntermediateCoordinator');
 const B5IntermediateCoordinator = require('./b5/B5IntermediateCoordinator');
 const B5ReserveChainCoordinator = require('./b5/B5ReserveChainCoordinator');
 const CraftReserveChainCoordinator = require('./coordinators/CraftReserveChainCoordinator');
@@ -143,6 +145,7 @@ class CraftAutomationService {
             quantityTrace: (...args) => this.#quantityTrace(...args)
         });
         this.intermediate.setReserveCoordinator(this.reserveChain);
+        this.#buildGenericStack({ config, logger, inventoryCounter, recipeRegistry, craftingVerificationService });
         this.cycle = new B5CycleCoordinator({
             flows: this.flows,
             inventoryState: this.inventoryState,
@@ -170,11 +173,12 @@ class CraftAutomationService {
             inventoryState: this.inventoryState,
             recipeResolver: this.recipeResolver,
             progressTracker: this.progressTracker,
-            intermediate: this.intermediate,
-            reserveChain: this.reserveChain,
-            baseInventory: this.b1Inventory,
+            intermediate: this.genericIntermediate,
+            reserveChain: this.genericReserveChain,
+            baseInventory: this.genericBaseInventory,
+            b1Inventory: this.genericBaseInventory,
             finalCraft: this.finalCraft,
-            recipeRegistry,
+            recipeRegistry: this.recipeRegistry,
             quantity: this.quantity,
             config,
             logger,
@@ -182,6 +186,7 @@ class CraftAutomationService {
             childOptions: (...args) => this.#childOptions(...args),
             status: () => this.status()
         });
+        this.genericCycle.b1Inventory = this.genericCycle.baseInventory;
     }
 
     reconfigure(config = {}) {
@@ -197,8 +202,11 @@ class CraftAutomationService {
         this.reserveChain.reconfigure(next);
         this.cycle.reconfigure(next);
         this.quantity = CraftQuantityPolicy.fromConfig(next);
+        this.genericBaseInventory.reconfigure?.(next);
+        this.genericReserveChain.reconfigure?.(next);
+        this.genericIntermediate.reconfigure?.(next);
         this.genericCycle.quantity = this.quantity;
-        this.genericCycle.reconfigure(next);
+        this.genericCycle.reconfigure?.(next);
         return next;
     }
 
@@ -409,6 +417,54 @@ class CraftAutomationService {
         };
     }
 
+
+    #buildGenericStack({ config, logger, inventoryCounter, recipeRegistry, craftingVerificationService }) {
+        // ACT A: detached generic coordinator stack (composition-only). Production stays on this.cycle (B5).
+        this.genericIntermediate = new CraftIntermediateCoordinator({
+            flows: this.flows,
+            inventoryState: this.inventoryState,
+            inventoryCounter,
+            recipeResolver: this.recipeResolver,
+            progressTracker: this.progressTracker,
+            finalCraft: this.finalCraft,
+            config,
+            runStep: (...args) => this.#runStep(...args),
+            childOptions: (...args) => this.#childOptions(...args)
+        });
+        this.genericBaseInventory = new CraftBaseInventoryCoordinator({
+            storageFlow: this.flows.storage,
+            inputAcquisition: this.flows.b2Input,
+            b2Input: this.flows.b2Input,
+            inventoryState: this.inventoryState,
+            recipeRegistry,
+            config,
+            logger,
+            runStep: (...args) => this.#runStep(...args),
+            childOptions: (...args) => this.#childOptions(...args),
+            ensureFreeIntermediateSlots: (...args) => this.genericIntermediate.ensureFreeIntermediateSlots(...args),
+            verificationService: craftingVerificationService
+        });
+        this.genericBaseInventory.b1Inventory = this.genericBaseInventory.baseInventory;
+        this.genericReserveChain = new CraftReserveChainCoordinator({
+            flows: this.flows,
+            inventoryState: this.inventoryState,
+            inventoryCounter,
+            progressTracker: this.progressTracker,
+            finalCraft: this.finalCraft,
+            baseInventory: this.genericBaseInventory,
+            b1Inventory: this.genericBaseInventory,
+            spaceFreer: this.genericIntermediate,
+            intermediate: this.genericIntermediate,
+            config,
+            logger,
+            runStep: (...args) => this.#runStep(...args),
+            childOptions: (...args) => this.#childOptions(...args),
+            quantityTrace: (...args) => this.#quantityTrace(...args)
+        });
+        this.genericReserveChain.b1Inventory = this.genericReserveChain.baseInventory;
+        this.genericReserveChain.intermediate = this.genericReserveChain.spaceFreer;
+        this.genericIntermediate.setReserveCoordinator(this.genericReserveChain);
+    }
 
 }
 
