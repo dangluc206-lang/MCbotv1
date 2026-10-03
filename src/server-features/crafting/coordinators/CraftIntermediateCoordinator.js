@@ -2,9 +2,12 @@
 
 // Generic intermediate coordinator (Slice 6 Step 4). Mechanics own promotion
 // loop, compact-ready, deposit/recount, space handling, cancellation, progress
-// and error codes. Ordering/ratio policy is injected (finalStepOrder /
-// spaceCandidateOrder); no B5 table lives in the core. Legacy chains are
-// normalized once at the boundary; core never reads legacy keys.
+// and error codes. Ratio-biased surplus sharing (fill the target shortage, then
+// top up the least-covered output until the shared input runs out) is generic
+// mechanics driven by the target recipe; ordering/ratio policy is injected
+// (finalStepOrder / spaceCandidateOrder / surplusOrder), so no B5 table lives in
+// the core. Legacy chains are normalized once at the boundary; core never reads
+// legacy keys.
 const FlowError = require('../../../shared/errors/FlowError');
 const { fromLegacyChain } = require('../support/CraftChainAdapter');
 
@@ -22,6 +25,7 @@ class CraftIntermediateCoordinator {
         this.childOptions = o.childOptions;
         this.finalStepOrder = o.finalStepOrder || null;
         this.spaceCandidateOrder = o.spaceCandidateOrder || null;
+        this.surplusOrder = o.surplusOrder || null;
         this.reserveChain = null;
     }
 
@@ -38,7 +42,7 @@ class CraftIntermediateCoordinator {
             if (stop && this.recipeResolver.isTargetDirectlyReady(inspection.data, 1)) break;
             let changed = false;
             const targetId = (inspection.data && inspection.data.fullPlan && inspection.data.fullPlan.targetId) || null;
-            const compacted = await this.compactReadyOutputs(inspection, context, { stopAtTargetReady: stop, targetId });
+            const compacted = await this.compactReadyOutputs(inspection, context, { stopAtTargetReady: stop, targetId, inspect });
             if (compacted.length > 0) {
                 changed = true;
                 actions.push({ status: 'b3-promoted-to-b4', data: compacted });
@@ -112,15 +116,32 @@ class CraftIntermediateCoordinator {
     async compactReadyOutputs(inspection, context, opts) {
         opts = opts || {};
         const done = [];
-        const steps = this.finalStepsInPolicyOrder(inspection, opts.targetId || null);
-        const finalSteps = (inspection.data && inspection.data.finalSteps) || [];
+        const data = inspection.data || {};
+        const targetId = opts.targetId || null;
+        const finalSteps = data.finalSteps || [];
+        const targetRecipe = targetId ? this.recipeResolver.recipeForOutput(targetId, finalSteps) : null;
+        if (targetRecipe && targetRecipe.recipe) {
+            const b4Ids = this.surplusIds(targetRecipe, finalSteps);
+            if (b4Ids.length > 0) {
+                const compacted = await this.compactBalancedSurplus(b4Ids, inspection, context, targetRecipe, { stopAtTargetReady: opts.stopAtTargetReady !== false, inspect: opts.inspect || null });
+                if (compacted.length > 0) {
+                    for (const entry of compacted) {
+                        await this.runStep(context, { subsystem: 'crafting', step: 'deposit-b4-after-promotion', action: 'deposit fresh B4 intermediates to /pv 2 to keep one free slot', resource: entry.outputId },
+                            () => this.flows.deposit.depositRemainders(this.childOptions(context)));
+                        done.push({ status: 'b4-compact-ready', outputId: entry.outputId, recipeId: entry.recipeId, ready: entry.crafts, phase: entry.phase });
+                    }
+                    return done;
+                }
+            }
+        }
+        const steps = this.finalStepsInPolicyOrder(inspection, targetId);
         for (const step of steps) {
             context.cancellation.token.throwIfCancelled();
             const recipe = this.recipeResolver.recipeForOutput(step.outputId, finalSteps);
             if (!recipe || !recipe.recipe) continue;
             const perInput = Object.entries(recipe.recipe.inputs || {}).filter((entry) => Number(entry[1]) > 0);
             if (perInput.length === 0) continue;
-            const maxCraftable = Math.min(...perInput.map(([id, per]) => Math.floor(Number(this.inventoryState.count(id) || 0) / Number(per))));
+            const maxCraftable = Math.min(...perInput.map(([id, per]) => Math.floor(this.availableCount(inspection, id) / Number(per))));
             const ready = Math.max(0, Math.min(Number(step.crafts || 0), maxCraftable));
             if (ready <= 0) continue;
             this.progressTracker.set({ running: true, state: 'PROMOTING_B3', currentStep: { kind: 'B3/B4', id: step.outputId, crafts: ready } });
@@ -131,6 +152,94 @@ class CraftIntermediateCoordinator {
             done.push({ status: 'b4-compact-ready', outputId: step.outputId, recipeId: recipe.recipeId, ready, data: crafted });
         }
         return done;
+    }
+
+    surplusIds(targetRecipe, finalSteps) {
+        const ids = Object.keys((targetRecipe && targetRecipe.recipe && targetRecipe.recipe.inputs) || {})
+            .filter((id) => Number(targetRecipe.recipe.inputs[id]) > 0 && this.recipeResolver.recipeForOutput(id, finalSteps));
+        if (typeof this.surplusOrder === 'function') {
+            const order = this.surplusOrder(ids.slice(), targetRecipe, finalSteps);
+            if (Array.isArray(order)) {
+                const ranked = [...order, ...ids].filter((id, index, all) => ids.includes(id) && all.indexOf(id) === index);
+                if (ranked.length === ids.length) return ranked;
+            }
+        }
+        return ids;
+    }
+
+    availableCount(inspection, id) {
+        // Availability source mirrors the owner of the observation: the planner's
+        // nonStorageAvailable when present, otherwise the live inventory. Both are
+        // the same physical view; the fallback keeps no-planner fixtures working.
+        const nonStorage = inspection && inspection.data && inspection.data.nonStorageAvailable;
+        if (nonStorage && typeof nonStorage === 'object' && Object.keys(nonStorage).length > 0) {
+            return Math.max(0, Number(nonStorage[id] || 0));
+        }
+        return Math.max(0, Number(this.inventoryState.count(id) || 0));
+    }
+
+    surplusCandidate(outputId, inspection, targetRecipe) {
+        const recipeEntry = this.recipeResolver.recipeForOutput(outputId, (inspection.data && inspection.data.finalSteps) || []);
+        if (!recipeEntry || !recipeEntry.recipe) return null;
+        const entries = Object.entries(recipeEntry.recipe.inputs || {}).filter((entry) => Number(entry[1]) > 0);
+        if (entries.length === 0) return null;
+        let craftableNow = Number.MAX_SAFE_INTEGER;
+        for (const [id, perCraft] of entries) craftableNow = Math.min(craftableNow, Math.floor(this.availableCount(inspection, id) / Number(perCraft)));
+        const perTarget = Math.max(0, Number(targetRecipe.recipe.inputs[outputId] || 0));
+        const existing = this.availableCount(inspection, outputId);
+        return {
+            outputId, recipeId: recipeEntry.recipeId, perTarget, existing, craftableNow: Math.max(0, Number.isFinite(craftableNow) ? Math.floor(craftableNow) : 0),
+            coverage: perTarget > 0 ? existing / perTarget : Number.POSITIVE_INFINITY
+        };
+    }
+
+    async craftSurplus(candidate, crafts, phase, inspection, inspect, context, compacted) {
+        this.progressTracker.set({ running: true, state: 'PROMOTING_B3', currentStep: { kind: 'B3/B4', id: candidate.outputId, crafts } });
+        const crafted = await this.finalCraft.craft(candidate.recipeId, crafts, context, candidate.outputId, { stage: 'B4', nextStage: 'B5' });
+        const actual = Number(this.inventoryState.actualCrafts(crafted, crafts) || 0);
+        if (actual <= 0) return inspection;
+        compacted.push({ outputId: candidate.outputId, recipeId: candidate.recipeId, crafts: actual, phase });
+        return typeof inspect === 'function'
+            ? this.requireInspection(await inspect(), 'B5 inspection failed after B4 compaction.')
+            : inspection;
+    }
+
+    async fillSurplusShortage(outputId, inspection, inspect, context, targetRecipe, compacted, opts) {
+        for (let guard = 0; guard < 128; guard += 1) {
+            context.cancellation.token.throwIfCancelled();
+            if (opts.stopAtTargetReady && this.recipeResolver.isTargetDirectlyReady(inspection.data, 1)) return inspection;
+            const candidate = this.surplusCandidate(outputId, inspection, targetRecipe);
+            if (!candidate || candidate.craftableNow <= 0) return inspection;
+            const crafts = Math.floor(Math.min(candidate.craftableNow, Math.max(0, candidate.perTarget - candidate.existing)));
+            if (crafts <= 0) return inspection;
+            inspection = await this.craftSurplus(candidate, crafts, 'b5-priority', inspection, inspect, context, compacted);
+        }
+        return inspection;
+    }
+
+    async compactBalancedSurplus(b4Ids, initialInspection, context, targetRecipe, opts) {
+        opts = opts || {};
+        const inspect = typeof opts.inspect === 'function' ? opts.inspect : null;
+        const compacted = [];
+        let inspection = initialInspection;
+        for (const outputId of b4Ids) {
+            inspection = await this.fillSurplusShortage(outputId, inspection, inspect, context, targetRecipe, compacted, opts);
+            if (opts.stopAtTargetReady && this.recipeResolver.isTargetDirectlyReady(inspection.data, 1)) return compacted;
+        }
+        for (let guard = 0; guard < 512; guard += 1) {
+            context.cancellation.token.throwIfCancelled();
+            if (opts.stopAtTargetReady && this.recipeResolver.isTargetDirectlyReady(inspection.data, 1)) break;
+            const candidates = b4Ids
+                .map((id) => this.surplusCandidate(id, inspection, targetRecipe))
+                .filter((candidate) => candidate && candidate.craftableNow > 0 && candidate.perTarget > 0)
+                .sort((a, b) => a.coverage - b.coverage || b.perTarget - a.perTarget || a.outputId.localeCompare(b.outputId));
+            const candidate = candidates[0];
+            if (!candidate) break;
+            const crafts = Math.floor(Math.min(candidate.craftableNow, Math.max(1, Math.min(32, candidate.perTarget))));
+            if (crafts <= 0) break;
+            inspection = await this.craftSurplus(candidate, crafts, 'storage-compaction-balanced', inspection, inspect, context, compacted);
+        }
+        return compacted;
     }
 
     finalStepsInPolicyOrder(inspection, targetId) {
@@ -245,6 +354,6 @@ class CraftIntermediateCoordinator {
 // point used by the legacy coordinator name.
 CraftIntermediateCoordinator.prototype.compactReadyB4 = function (inspection, inspect, context, opts) {
     opts = opts || {};
-    return this.compactReadyOutputs(inspection, context, { stopAtTargetReady: opts.stopAtTargetReady, targetId: opts.targetId || null });
+    return this.compactReadyOutputs(inspection, context, { stopAtTargetReady: opts.stopAtTargetReady, targetId: opts.targetId || null, inspect });
 };
 module.exports = CraftIntermediateCoordinator;

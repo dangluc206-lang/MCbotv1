@@ -215,6 +215,57 @@ test('step4: legacy-vs-generic parity on neutral fixtures', async () => {
     assert.deepEqual(gOut.actions.map((a) => a.status), lOut.actions.map((a) => a.status));
 });
 
+test('step4: B4 surplus sharing follows per-target ratios (ACT D1 parity)', async () => {
+    // ACT D1: ratio-biased surplus sharing is generic mechanics, not a B5 table.
+    // Shared input is scarce, so the generic core must top up the least-covered
+    // B4 output until 12 shared units run out, never draining the first recipe.
+    const run = async (Cls) => {
+        const owned = { a: 0, b: 0, c: 0 };
+        let shared = 12;
+        const order = [];
+        const recipes = {
+            a: { output: 'a', inputs: { shared: 1 } },
+            b: { output: 'b', inputs: { shared: 1 } },
+            c: { output: 'c', inputs: { unavailable: 1 } },
+            target: { output: 'target', inputs: { a: 1, b: 2, c: 1 } }
+        };
+        const snapshot = () => ({ personalVault: { totals: { ...owned }, emptySlotCount: 20, items: [] },
+            personalVaultPressure: { allowNewIntermediates: true },
+            inventoryTotals: {}, nonStorageAvailable: { ...owned, shared, unavailable: 0 },
+            fullPlan: { targetId: 'target', feasible: false }, finalSteps: [], chains: [], progress: {} });
+        const inspect = async () => ({ success: true, data: snapshot() });
+        const finalCraft = { async execute(steps) {
+            for (const step of steps || []) finalCraft.craft(step.recipeId, step.crafts);
+            return { data: { steps } };
+        },
+        async craft(recipeId, quantity) {
+            for (let i = 0; i < Number(quantity || 0); i += 1) { order.push(recipeId); shared -= 1; owned[recipeId] += 1; }
+            return { actualCrafts: Number(quantity || 0) };
+        } };
+        const coordinator = new Cls({
+            flows: { deposit: { async deposit() { return { success: true }; }, async depositRemainders() { return { success: true }; } } },
+            inventoryState: { count: (id) => Number(({ shared, ...owned })[id] || 0), actualCrafts: (d, q) => (d && typeof d.actualCrafts === 'number' ? d.actualCrafts : Number(q || 0)) },
+            inventoryCounter: { count: () => 0 },
+            recipeResolver: { isTargetDirectlyReady: () => false, recipeForOutput: (id) => (recipes[id] ? { recipeId: id, recipe: recipes[id] } : null) },
+            progressTracker: { set() {}, sync() {}, advance() {} },
+            finalCraft,
+            config: {},
+            runStep: async (_c, _m, fn) => ({ data: await fn() }),
+            childOptions: (_c, o) => o || {}
+        });
+        const first = { success: true, data: snapshot() };
+        await coordinator.promoteOwned(first, inspect, ctx(), { stopAtTargetReady: false });
+        return { order, owned };
+    };
+    const g = await run(Generic);
+    const l = await run(Legacy);
+    assert.deepEqual(g.order.slice(0, 6), ['a', 'b', 'b', 'b', 'b', 'a']);
+    assert.deepEqual(g.order, l.order, 'generic surplus order must match the legacy owner');
+    assert.deepEqual(g.owned, l.owned, 'generic surplus totals must match the legacy owner');
+    assert.equal(g.owned.b / 2 >= g.owned.a - 1, true);
+    assert.equal(g.owned.b / 2 <= g.owned.a + 1, true);
+});
+
 test('step4: no chain-specific keys leak; static contract holds', () => {
     const src = require('node:fs').readFileSync('src/server-features/crafting/coordinators/CraftIntermediateCoordinator.js', 'utf8');
     for (const key of ['chain.b2Id', 'chain.b3Id', 'chain.b2Crafts', 'chain.b3Crafts', 'chain.vaultB2', 'chain.vaultB3', 'chain.b3InputPerCraft', 'chain.b2OutputAmount', 'b5Planning', 'B5StorageFlow']) {
