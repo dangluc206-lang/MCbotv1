@@ -272,6 +272,7 @@ class CraftIntermediateCoordinator {
         }
         if (Number(snapshot.emptySlotCount || 0) < Number(minFreeSlots || 0)) snapshot = await this.emergencyParkOwned(chain, context, minFreeSlots, state.preserveAtLeastIntermediate, snapshot, state, false);
         if (Number(snapshot.emptySlotCount || 0) < Number(minFreeSlots || 0)) this.throwNoSpace(chain, context, minFreeSlots, opts.reason || null, state.preserveAtLeastIntermediate, snapshot, state);
+        return this.spaceResult(snapshot, state);
     }
 
 

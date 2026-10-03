@@ -266,6 +266,24 @@ test('step4: B4 surplus sharing follows per-target ratios (ACT D1 parity)', asyn
     assert.equal(g.owned.b / 2 <= g.owned.a + 1, true);
 });
 
+test('step4: space success via fallback park returns stable contract (ACT D2)', async () => {
+    // ACT D2: fallback emergency park (prefer=false path) must resolve to the
+    // stable contract instead of falling through to undefined.snapshot.
+    const chain = neutralChain();
+    const h = harnessFor(Generic, { counts: { [MID]: 64 }, overrides: { emptySlots: 0,
+        depositImpl: () => { h.store[MID] = 0; return { success: true, data: { movedStacks: 1 } }; },
+        waitFreeImpl: null } });
+    h.inventoryState.waitForFreeSlots = async (min) => { h.calls.push('wait-free:' + min); return { emptySlotCount: Math.max(Number(min || 0), 1) }; };
+    const out = await h.coordinator.ensureFreeIntermediateSlots(chain, ctx(), 1, {
+        reason: 'act-d2-fallback', preferCurrentIntermediate: false, preserveAtLeastIntermediate: 16, allChains: [chain]
+    });
+    assert.ok(out && out.snapshot, 'fallback path must return a snapshot');
+    assert.equal(out.depositedB2Count, 64);
+    assert.equal(out.emergencyParkedCurrentB2, true);
+    assert.ok(Number(out.snapshot.emptySlotCount || 0) >= 1);
+    assert.ok(h.calls.includes('deposit:' + MID));
+});
+
 test('step4: no chain-specific keys leak; static contract holds', () => {
     const src = require('node:fs').readFileSync('src/server-features/crafting/coordinators/CraftIntermediateCoordinator.js', 'utf8');
     for (const key of ['chain.b2Id', 'chain.b3Id', 'chain.b2Crafts', 'chain.b3Crafts', 'chain.vaultB2', 'chain.vaultB3', 'chain.b3InputPerCraft', 'chain.b2OutputAmount', 'b5Planning', 'B5StorageFlow']) {
