@@ -216,3 +216,26 @@ test('step3: stalled input throws CRAFT_RESERVE_INPUT_STALLED', async () => {
     await assert.rejects(h.coordinator.prepare(h.chain, ctx(), { deferIntermediateDeposit: true }),
         err => err?.code === 'CRAFT_RESERVE_INPUT_STALLED');
 });
+test('step3 E-pre2: output ALL satisfying target cancels stale remaining intermediate work', async () => {
+    // Generic parity with legacy B3 branch (b3Remaining==0 => b2Remaining=0).
+    // Neutral fixture: 128 planned intermediate, 4 planned output, ALL output.
+    // Expected: intermediate:64 -> output:ALL -> stop (no second intermediate).
+    const neutral = { base: 'coal', intermediate: 'mid', output: 'out',
+        intermediateRecipe: 'mid-r', outputRecipe: 'out-r', intermediatePerOutput: 16,
+        intermediateCrafts: 128, outputCrafts: 4 };
+    const cfg = { quantityOptimization: { enabled: true, useAllForB3: true } };
+    const g = harnessFor(Generic, neutral, { config: cfg });
+    const result = await g.coordinator.prepare(g.chain, ctx(), { deferIntermediateDeposit: true });
+    const crafts = g.calls.filter((c) => c.startsWith('craft:'));
+    assert.deepEqual(crafts, ['craft:mid-r:64', 'craft:out-r:ALL']);
+    assert.equal(result.intermediateId, 'mid');
+    assert.equal(result.outputId, 'out');
+    assert.equal(result.deferred, true);
+    // No unintended side effects: deferred pass performs no deposit, no stall.
+    assert.ok(!g.calls.some((c) => c.startsWith('deposit')));
+    // Legacy parity on the same neutral shape: identical craft order.
+    const l = harnessFor(Legacy, neutral, { config: cfg, legacyKeys: true });
+    await l.coordinator.prepare(l.chain, ctx(), { deferIntermediateDeposit: true });
+    const norm = (calls) => calls.map((c) => c.replaceAll('mid-r', 'R2').replaceAll('out-r', 'R3'));
+    assert.deepEqual(norm(g.calls), norm(l.calls));
+});

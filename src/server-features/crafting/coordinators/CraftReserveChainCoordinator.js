@@ -130,6 +130,12 @@ class CraftReserveChainCoordinator {
         const actualCrafts = this.inventoryState.actualCrafts(crafted, quantity);
         if (actualCrafts <= 0) this.zeroOutput(chain, state, quantity, crafted, intermediateCount, context);
         state.outputRemaining = Math.max(0, state.outputRemaining - actualCrafts);
+        // ponytail: stale planned intermediate work is cancelled once output is
+        // fulfilled (mirrors legacy B3 branch zeroing b2Remaining); vault-owned
+        // stock is left untouched — withdraw gate already requires outputRemaining>0.
+        // Ceiling: plan-level replan still owns cross-chain target-ready; upgrade
+        // there if multi-chain cancellation is ever needed.
+        if (state.outputRemaining === 0) state.intermediateRemaining = 0;
         state.pendingStageSettlement = {
             stage: 'B3', logicalId: chain.outputId,
             minimumCount: Number.isFinite(Number(crafted && crafted.stageContract && crafted.stageContract.after)) ? Number(crafted.stageContract.after) : 0, expectedDelta: 1
