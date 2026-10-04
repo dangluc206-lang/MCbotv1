@@ -80,7 +80,11 @@ class CraftQuantityPolicy {
         const plannedOut = Math.max(0, Number(o.plannedOutput || 0));
         const per = Math.max(0, Number(o.basePerIntermediate || 0));
         const immediate = Math.max(0, Number(o.immediatelyCraftable || 0));
-        const total = Math.max(0, Number(o.totalEffective || 0));
+        // ACT D3: legacy B5PlanningFlow resolves totalEffective as
+        // max(storedEffective, storedTotalEffective) inside planChain. The generic
+        // inputs carry the raw chain state, so the same resolve is owned here
+        // once; callers pass raw stored totals, never a pre-resolved max.
+        const total = Math.max(immediate, Number(o.totalEffective || 0));
         const baseNeededFromStorage = Math.max(0, Number(o.baseNeededFromStorage || 0));
         const known = Number.isFinite(total) && per > 0;
         const immediateCrafts = known ? Math.floor(immediate / per) : null;

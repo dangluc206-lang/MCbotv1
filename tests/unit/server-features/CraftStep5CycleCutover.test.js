@@ -12,6 +12,9 @@ const CraftCycleCoordinator = require('../../../src/server-features/crafting/coo
 const CraftQuantityPolicy = require('../../../src/server-features/crafting/support/CraftQuantityPolicy');
 const B5PlanningFlow = require('../../../src/server-features/crafting/b5/flows/B5PlanningFlow');
 const CraftAutomationService = require('../../../src/server-features/crafting/CraftAutomationService');
+const Result = require('../../../src/shared/result/Result');
+const StageExecutionContract = require('../../../src/server-features/crafting/verification/StageExecutionContract');
+const CraftChainAdapter = require('../../../src/server-features/crafting/support/CraftChainAdapter');
 
 const TARGET = 'target-neutral';
 const MID = 'mid-neutral';
@@ -272,6 +275,230 @@ test('step5: no B5 coordinator, planning service or legacy chain key is reachabl
     assert.equal(typeof CraftAutomationService.CraftCycleCoordinator, 'function');
     assert.equal(CraftAutomationService.CraftCycleCoordinator, CraftCycleCoordinator);
     assert.equal(CraftAutomationService.CraftQuantityPolicy, CraftQuantityPolicy);
+});
+
+// ---- ACT D3: B1 prepare/planning parity (legacy B5PlanningFlow vs generic) ----
+// Locked fixture: baseNeededFromStorage 320 / storedEffective 6400 /
+// intermediateCrafts 20 / outputCrafts 1 / intermediatePerOutput 16 /
+// useAllForB2 true / input source storage. Legacy naming is only translated
+// here at the test boundary; the generic contract stays generic.
+const D3_CONFIG = { targetId: 'super_alloy', timeoutMs: 1000, b3AllMinEmptySlots: 1,
+    quantityOptimization: { enabled: true, useAllForB2: true, useAllForB3: true, useAllForB4WhenExact: true, useAllForB5: false } };
+const D3_RECIPE_REGISTRY = { require: id => (id === 'b2-recipe' ? { output: 'b2', inputs: { coal: 16 } } : { output: id, inputs: {} }) };
+const D3_NEXT_ACTION = { PREPARE_B1: 'PREPARE_BASE', CRAFT_B2: 'CRAFT_INTERMEDIATE', CRAFT_B3: 'CRAFT_OUTPUT', WAIT_MATERIAL: 'WAIT_MATERIAL' };
+
+function d3LegacyChain(extra = {}) {
+    return { baseId: 'coal', b2Id: 'b2', b3Id: 'b3', b2RecipeId: 'b2-recipe', b3RecipeId: 'b3-recipe',
+        b2OutputAmount: 1, b3InputPerCraft: 16, rawNeededFromStorage: 320, storedEffective: 6400,
+        readyToReserve: true, b2Crafts: 20, b3Crafts: 1, vaultB2: 0, vaultB3: 0, inventoryB2: 0, inventoryB3: 0, ...extra };
+}
+function d3Cycle(config = D3_CONFIG) {
+    return new CraftCycleCoordinator({
+        flows: {}, inventoryState: {}, recipeResolver: {}, progressTracker: {},
+        intermediate: {}, reserveChain: {}, baseInventory: {}, finalCraft: {},
+        recipeRegistry: D3_RECIPE_REGISTRY, quantity: CraftQuantityPolicy.fromConfig(config), config,
+        runStep: async (_c, _m, fn) => fn(), childOptions: (_c, o) => o || {}, status: () => ({})
+    });
+}
+// Legacy vs generic planChain parity with the intentional nextAction rename mapped.
+function assertD3PlanParity(legacyChain, config = D3_CONFIG) {
+    const legacy = new B5PlanningFlow({ recipeRegistry: D3_RECIPE_REGISTRY, config }).planChain(legacyChain);
+    const generic = d3Cycle(config).planChain(legacyChain);
+    assert.equal(generic.plannedIntermediateExact, legacy.plannedB2Exact, 'plannedIntermediateExact');
+    assert.equal(generic.plannedIntermediate, legacy.plannedB2, 'plannedIntermediate');
+    assert.equal(generic.plannedOutput, legacy.plannedB3, 'plannedOutput');
+    assert.equal(generic.intermediateBatchSize, legacy.b2BatchSize, 'intermediateBatchSize');
+    assert.equal(generic.useAllForIntermediate, legacy.useAllForB2, 'useAllForIntermediate');
+    assert.equal(generic.inputSource, legacy.b2InputSource, 'inputSource');
+    assert.equal(generic.basePerIntermediate, legacy.basePerB2, 'basePerIntermediate resolved via recipeRegistry');
+    assert.equal(generic.requiredRawForStart, legacy.requiredRawForStart, 'requiredRawForStart');
+    assert.equal(generic.immediatelyCraftable, legacy.immediatelyCraftable, 'immediatelyCraftable');
+    assert.equal(generic.totalEffective, legacy.totalEffective, 'totalEffective');
+    assert.equal(generic.totalIntermediateCrafts, legacy.totalB2Crafts, 'totalIntermediateCrafts');
+    assert.equal(generic.decompressionBlocked, legacy.decompressionBlocked, 'decompressionBlocked');
+    assert.equal(generic.nextAction, D3_NEXT_ACTION[legacy.nextAction], 'nextAction (legacy name mapped at the boundary)');
+    return { legacy, generic };
+}
+
+test('d3: legacy planChain vs generic planChain on the locked 6400/320/20/1/16 fixture', () => {
+    const { legacy, generic } = assertD3PlanParity(d3LegacyChain());
+    // Explicit locks on the values the fixture is about.
+    assert.equal(generic.totalEffective, 6400, 'storedTotalEffective absent/zero must not shrink the effective total');
+    assert.equal(generic.totalIntermediateCrafts, 400);
+    assert.equal(generic.plannedIntermediateExact, 20);
+    assert.equal(generic.plannedIntermediate, 20, 'ALL plan keeps the exact 20 instead of collapsing to 0');
+    assert.equal(generic.plannedOutput, 1);
+    assert.equal(generic.intermediateBatchSize, 64);
+    assert.equal(generic.useAllForIntermediate, true);
+    assert.equal(generic.basePerIntermediate, 16);
+    assert.equal(generic.requiredRawForStart, 16, 'ALL start needs exactly one basePerIntermediate unit');
+    assert.equal(generic.immediatelyCraftable, 6400);
+    assert.equal(generic.decompressionBlocked, false);
+    assert.equal(generic.nextAction, 'CRAFT_INTERMEDIATE');
+    assert.equal(legacy.nextAction, 'CRAFT_B2');
+    // The adapter must carry every planning input the generic planChain reads.
+    const adapted = CraftChainAdapter.fromLegacyChain(d3LegacyChain());
+    assert.equal(adapted.storedEffective, 6400);
+    assert.equal(adapted.baseNeededFromStorage, 320);
+    assert.equal(adapted.intermediateCrafts, 20);
+    assert.equal(adapted.intermediatePerOutput, 16);
+});
+
+test('d3: totalEffective resolve parity when storedTotalEffective differs (ACT D3)', () => {
+    const cases = [
+        { name: 'storedEffective > storedTotalEffective', extra: { storedTotalEffective: 100 }, expectedTotal: 6400 },
+        { name: 'storedTotalEffective missing', extra: {}, expectedTotal: 6400 },
+        { name: 'storedTotalEffective = 0', extra: { storedTotalEffective: 0 }, expectedTotal: 6400 },
+        { name: 'storedTotalEffective > storedEffective', extra: { storedTotalEffective: 8192 }, expectedTotal: 8192, expectedBlocked: true }
+    ];
+    for (const c of cases) {
+        const { legacy, generic } = assertD3PlanParity(d3LegacyChain(c.extra));
+        assert.equal(generic.totalEffective, c.expectedTotal, c.name);
+        assert.equal(generic.plannedIntermediate, legacy.plannedB2, c.name);
+        assert.equal(generic.decompressionBlocked, Boolean(c.expectedBlocked), c.name);
+    }
+});
+
+test('d3: inventory source disables intermediate ALL in both planners (ACT D3)', () => {
+    const config = { inputSource: 'inventory',
+        quantityOptimization: { enabled: true, useAllForB2: true, useAllForB3: true, useAllForB4WhenExact: true, useAllForB5: false } };
+    const { legacy, generic } = assertD3PlanParity(d3LegacyChain(), config);
+    assert.equal(legacy.useAllForB2, false);
+    assert.equal(generic.useAllForIntermediate, false);
+    assert.equal(generic.inputSource, 'inventory');
+    assert.equal(generic.plannedIntermediate, 64, 'non-ALL rounds 20 up to one 64 batch backed by full stock');
+    assert.equal(generic.requiredRawForStart, 1024, 'non-ALL start needs planned * basePerIntermediate');
+});
+
+test('d3: requiredRawForStart falls back to baseNeededFromStorage when nothing is planned (ACT D3)', () => {
+    const starved = d3LegacyChain({ storedEffective: 0, storedTotalEffective: 0 });
+    const { legacy, generic } = assertD3PlanParity(starved);
+    assert.equal(generic.plannedIntermediate, 0);
+    assert.equal(generic.plannedOutput, 1);
+    assert.equal(generic.requiredRawForStart, 320);
+    assert.equal(generic.requiredRawForStart, legacy.requiredRawForStart);
+    assert.equal(generic.nextAction, 'CRAFT_OUTPUT');
+    assert.equal(legacy.nextAction, 'CRAFT_B3');
+});
+
+test('d3: chain adapter preserves planning state and drops legacy keys (ACT D3)', () => {
+    const withTotal = CraftChainAdapter.fromLegacyChain(d3LegacyChain({ storedTotalEffective: 364 }));
+    assert.equal(withTotal.storedEffective, 6400);
+    assert.equal(withTotal.storedTotalEffective, 364);
+    assert.equal(withTotal.baseNeededFromStorage, 320);
+    assert.ok(!('rawNeededFromStorage' in withTotal), 'legacy raw key is mapped, not kept');
+    assert.ok(!('b2Crafts' in withTotal) && !('b2Id' in withTotal) && !('b3InputPerCraft' in withTotal), 'no B5-only key enters the generic contract');
+    assert.equal(CraftChainAdapter.isGenericChain(withTotal), true);
+    const adapted = CraftChainAdapter.fromLegacyChain(d3LegacyChain());
+    assert.ok(!('storedTotalEffective' in adapted), 'missing legacy state stays missing deterministically');
+    assert.equal(adapted.storedEffective, 6400);
+});
+
+// Full-service rig on the locked D3 fixture (mirrors the Step 0 B1->B2 ALL
+// baseline body). Runs the legacy cycle via runNext and the generic cycle via
+// genericCycle.execute on identical inputs; both must emit the same call order.
+function d3Rig() {
+    const calls = [];
+    const counts = { b2: 0, b3: 0 };
+    const vault = { carried: 0, inspectCall: 0 };
+    const toD3Legacy = n => ({ baseId: n.base, b2Id: n.intermediate, b3Id: n.output,
+        b2RecipeId: n.intermediateRecipe, b3RecipeId: n.outputRecipe, b2OutputAmount: 1,
+        b3InputPerCraft: n.intermediatePerOutput, rawNeededFromStorage: n.baseNeededFromStorage ?? 0,
+        storedEffective: n.storedEffective ?? 0, storedTotalEffective: n.storedTotalEffective ?? 0,
+        readyToReserve: true, b2Crafts: n.intermediateCrafts ?? 0, b3Crafts: n.outputCrafts ?? 0,
+        vaultB2: n.vaultIntermediate ?? 0, inventoryB2: n.inventoryIntermediate ?? 0, inventoryB3: n.inventoryOutput ?? 0 });
+    const chain = { base: 'coal', intermediate: 'b2', output: 'b3', intermediateRecipe: 'b2-recipe', outputRecipe: 'b3-recipe',
+        intermediatePerOutput: 16, baseNeededFromStorage: 320, storedEffective: 6400,
+        intermediateCrafts: 20, outputCrafts: 1, vaultIntermediate: 0, inventoryIntermediate: 0 };
+    const planningService = { async inspectAdditional() {
+        vault.inspectCall += 1;
+        return Result.ok({ personalVault: { totals: { super_alloy: 0 } },
+            fullPlan: { targetId: 'super_alloy', feasible: false }, finalSteps: [],
+            chains: vault.inspectCall === 1 ? [toD3Legacy(chain)] : [toD3Legacy({ ...chain, baseNeededFromStorage: 0,
+                storedEffective: 0, intermediateCrafts: 0, outputCrafts: Math.floor(counts.b2 / 16),
+                vaultIntermediate: vault.carried, inventoryIntermediate: counts.b2, inventoryOutput: counts.b3 })] });
+    } };
+    const tk = () => ({ throwIfCancelled() {}, onCancelled() { return () => {}; } });
+    const service = new CraftAutomationService({
+        craftingVerificationService: new StageExecutionContract(), planningService,
+        crafting: { async craft(recipeId, quantity, craftOptions = {}) {
+            calls.push(`craft:${recipeId}:${quantity}`);
+            if (recipeId === 'b2-recipe' && quantity === 'ALL') {
+                assert.deepEqual(craftOptions.reconciliationBaseline?.inputs?.coal, { source: 'storage', count: 320 });
+                counts.b2 += 160;
+                return Result.ok({ actualCrafts: 160 });
+            }
+            const crafts = Math.floor(counts.b2 / 16);
+            counts.b2 -= crafts * 16; counts.b3 += crafts;
+            return Result.ok({ actualCrafts: crafts });
+        } },
+        personalVault: {
+            async deposit(id, depositOptions = {}) {
+                calls.push(`deposit:${id}:${depositOptions.maxStacks || 'all'}`);
+                if (id === 'b2' && depositOptions.maxStacks === 1 && counts.b2 >= 64) { counts.b2 -= 64; vault.carried += 64; return Result.ok({ movedStacks: 1 }); }
+                return Result.ok({ movedStacks: 0 });
+            },
+            async withdraw(id) {
+                calls.push(`withdraw:${id}`);
+                if (id === 'b2' && vault.carried >= 64) { vault.carried -= 64; counts.b2 += 64; return Result.ok({ movedStacks: 1 }); }
+                return Result.ok({ movedStacks: 0 });
+            }
+        },
+        storage: {},
+        b1Materials: {
+            async inspectStoragePressure() { calls.push('storage-guard'); throw new Error('mid-craft sale gate must not run'); },
+            async ensureBaseAvailable(_id, required, ensureOptions = {}) { calls.push(`ensure:${required}`); assert.equal(ensureOptions.decompressionPolicy, 'unbounded'); return Result.ok({ ready: true, available: 320 }); },
+            async compact() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); },
+            async compactAll() { return Result.ok({ actualCrafts: 1, verification: { before: 0, after: 1 } }); }
+        },
+        inventoryReader: { readBotInventory: () => ({ source: 'bot-inventory',
+            emptySlotCount: Math.max(0, 3 - Math.ceil(counts.b2 / 64) - Math.ceil(counts.b3 / 64)), counts: { ...counts } }) },
+        inventoryCounter: { count: (snapshot, id) => Number(snapshot.counts?.[id] || 0) },
+        recipeRegistry: D3_RECIPE_REGISTRY,
+        operationManager: { async run(op) { return Result.ok(await op.executor({ cancellation: { token: tk() } })); } },
+        config: D3_CONFIG
+    });
+    return { service, calls, counts, vault, tk };
+}
+
+test('d3: prepareBase NOT_READY stays a waiting result instead of throwing (ACT D3)', async () => {
+    const h = harness({ feasible: false,
+        prepareResult: Result.fail('NOT_READY', 'Not enough effective coal in /kho.', null, { required: 16, effective: 0 }) });
+    const result = await h.cycle.execute(1, ctx(), options());
+    assert.ok(h.calls.includes('prepareBase'), 'prepareBase ran: ' + h.calls.join(','));
+    assert.ok(!h.calls.includes('reserve'), 'no reserve after NOT_READY');
+    assert.ok(result.actions.some((a) => a.status === 'waiting' && a.reason === 'b1-not-ready'), JSON.stringify(result.actions));
+    assert.equal(result.waitingForMaterials, true);
+    assert.equal(result.productive, false);
+});
+
+test('d3: generic #prepareB1 runs the locked ensure:16 -> B2 ALL -> park -> withdraw -> B3 ALL sequence (ACT D3)', async () => {
+    const legacyRun = d3Rig();
+    const legacyResult = await legacyRun.service.runNext({ targetId: 'super_alloy' });
+    assert.equal(legacyResult.success, true);
+
+    const genericRun = d3Rig();
+    const genericResult = await genericRun.service.genericCycle.execute(1,
+        { cancellation: { token: genericRun.tk() }, trace: null },
+        { additional: true, mode: 'production', craftFinalTarget: true, allowNewB2: true, freshInspection: false,
+            recoveryOnly: false, decompressionPolicy: 'unbounded', decompressionMaxUsageRatio: null,
+            requireKnownCapacity: false, targetId: 'super_alloy' });
+
+    assert.deepEqual(genericRun.calls, legacyRun.calls, 'generic sequence must equal legacy sequence on the same input');
+    assert.deepEqual(genericRun.calls, [
+        'ensure:16', 'craft:b2-recipe:ALL', 'deposit:b2:1', 'craft:b3-recipe:ALL',
+        'withdraw:b2', 'craft:b3-recipe:ALL', 'deposit:b3:all'
+    ]);
+    assert.deepEqual(genericRun.calls.filter(c => c.startsWith('craft:')),
+        ['craft:b2-recipe:ALL', 'craft:b3-recipe:ALL', 'craft:b3-recipe:ALL'], 'no wrong craft branch');
+    assert.equal(genericRun.calls.includes('storage-guard'), false, 'mid-craft sale gate never runs');
+    assert.equal(genericRun.counts.b3, legacyRun.counts.b3, 'final B3 parity');
+    assert.equal(genericRun.counts.b3, 10);
+    assert.equal(genericRun.vault.carried, legacyRun.vault.carried, 'parked B2 parity');
+    assert.equal(genericRun.vault.carried, 0);
+    assert.ok(genericResult.actions.some((a) => a.status === 'base-ready'), JSON.stringify(genericResult.actions));
+    assert.ok(genericResult.actions.some((a) => a.status === 'reserved'), JSON.stringify(genericResult.actions));
+    assert.ok(!genericResult.actions.some((a) => a.status === 'waiting'), 'no waiting regression: ' + JSON.stringify(genericResult.actions));
 });
 
 test('step5: cutover audit - production still runs the legacy cycle, generic stack is not wired yet', () => {
