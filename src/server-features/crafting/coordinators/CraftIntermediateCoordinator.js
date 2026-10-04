@@ -127,7 +127,7 @@ class CraftIntermediateCoordinator {
                 if (compacted.length > 0) {
                     for (const entry of compacted) {
                         await this.runStep(context, { subsystem: 'crafting', step: 'deposit-b4-after-promotion', action: 'deposit fresh B4 intermediates to /pv 2 to keep one free slot', resource: entry.outputId },
-                            () => this.flows.deposit.depositRemainders(this.childOptions(context)));
+                            () => this.flows.deposit.deposit(entry.outputId, this.childOptions(context)));
                         done.push({ status: 'b4-compact-ready', outputId: entry.outputId, recipeId: entry.recipeId, ready: entry.crafts, phase: entry.phase });
                     }
                     return done;
@@ -148,7 +148,7 @@ class CraftIntermediateCoordinator {
             const crafted = await this.finalCraft.craft(recipe.recipeId, ready, context, step.outputId, { stage: 'B4', nextStage: 'B5' });
             if (Number(this.inventoryState.actualCrafts(crafted, ready) || 0) <= 0) continue;
             await this.runStep(context, { subsystem: 'crafting', step: 'deposit-b4-after-promotion', action: 'deposit fresh B4 intermediates to /pv 2 to keep one free slot', resource: step.outputId },
-                () => this.flows.deposit.depositRemainders(this.childOptions(context)));
+                () => this.flows.deposit.deposit(step.outputId, this.childOptions(context)));
             done.push({ status: 'b4-compact-ready', outputId: step.outputId, recipeId: recipe.recipeId, ready, data: crafted });
         }
         return done;

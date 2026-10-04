@@ -75,9 +75,10 @@ function harnessFor(Cls, opts) {
         }
     };
     const flows = {
+        // Production-shaped deposit flow: only deposit(logicalId, opts) like
+        // PersonalVaultStorageFlow; no depositRemainders() exists there.
         deposit: {
-            async deposit(id) { calls.push('deposit:' + id); if (overrides.depositImpl) return overrides.depositImpl(id); return { success: true }; },
-            async depositRemainders() { calls.push('depositRemainders'); if (overrides.depositRemaindersImpl) return overrides.depositRemaindersImpl(); return { success: true }; }
+            async deposit(id) { calls.push('deposit:' + id); if (overrides.depositImpl) return overrides.depositImpl(id); return { success: true }; }
         }
     };
     const reserveChain = reserveImpl || { async prepare(chain) { calls.push('reserve:' + chain.outputId + ':' + chain.outputCrafts); return { ok: true }; } };
@@ -140,14 +141,21 @@ test('step4: cancellation aborts the promotion loop', async () => {
     assert.ok(!h.calls.some((c) => c.startsWith('reserve:')));
 });
 
-test('step4: compact-ready crafts capped output and deposits remainders', async () => {
+test('step4: compact-ready crafts capped output and deposits by logical id (E-pre1 production contract)', async () => {
     const data = { chains: [], finalSteps: [{ outputId: OUT, crafts: 5 }] };
-    const h = harnessFor(Generic, { counts: { [MID]: 48 }, inspectionData: [data] });
+    const seen = [];
+    const h = harnessFor(Generic, { counts: { [MID]: 48 }, inspectionData: [data],
+        overrides: { depositImpl: (id) => { seen.push(id); return { success: true }; } } });
+    // E-pre1: production flows.deposit only exposes deposit(logicalId, opts)
+    // like PersonalVaultStorageFlow — no depositRemainders() exists there.
+    assert.equal(typeof h.coordinator.flows.deposit.deposit, 'function');
+    assert.equal(h.coordinator.flows.deposit.depositRemainders, undefined);
     const done = await h.coordinator.compactReadyOutputs(h.first, ctx(), { targetId: null });
     assert.equal(done.length, 1);
     assert.equal(done[0].ready, 3);
     assert.ok(h.calls.some((c) => c === 'craft:' + OUT_RECIPE + ':3:' + OUT));
-    assert.ok(h.calls.includes('depositRemainders'));
+    assert.deepEqual(seen, [OUT], 'compact-ready must deposit the crafted logical id once');
+    assert.ok(h.calls.includes('deposit:' + OUT));
     const alias = await h.coordinator.compactReadyB4(h.first, h.inspect, ctx(), { targetId: null });
     assert.equal(alias.length, 1);
 });
