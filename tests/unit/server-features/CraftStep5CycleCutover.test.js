@@ -395,8 +395,9 @@ test('d3: chain adapter preserves planning state and drops legacy keys (ACT D3)'
 });
 
 // Full-service rig on the locked D3 fixture (mirrors the Step 0 B1->B2 ALL
-// baseline body). Runs the legacy cycle via runNext and the generic cycle via
-// genericCycle.execute on identical inputs; both must emit the same call order.
+// baseline body). Runs the legacy cycle via legacyCycle.execute (compatibility
+// reference) and the production generic cycle via cycle.execute on identical
+// inputs; both must emit the same call order.
 function d3Rig() {
     const calls = [];
     const counts = { b2: 0, b3: 0 };
@@ -474,11 +475,16 @@ test('d3: prepareBase NOT_READY stays a waiting result instead of throwing (ACT 
 
 test('d3: generic #prepareB1 runs the locked ensure:16 -> B2 ALL -> park -> withdraw -> B3 ALL sequence (ACT D3)', async () => {
     const legacyRun = d3Rig();
-    const legacyResult = await legacyRun.service.runNext({ targetId: 'super_alloy' });
-    assert.equal(legacyResult.success, true);
+    const legacyResult = await legacyRun.service.legacyCycle.execute(1,
+        { cancellation: { token: legacyRun.tk() }, trace: null },
+        { additional: true, mode: 'production', craftFinalTarget: true, allowNewB2: true, freshInspection: false,
+            recoveryOnly: false, decompressionPolicy: 'unbounded', decompressionMaxUsageRatio: null,
+            requireKnownCapacity: false, targetId: 'super_alloy' });
+    assert.equal(Array.isArray(legacyResult.actions), true, 'legacy compatibility reference returns cycle data');
+    assert.ok(legacyResult.actions.some((a) => a.status === 'base-ready'), JSON.stringify(legacyResult.actions));
 
     const genericRun = d3Rig();
-    const genericResult = await genericRun.service.genericCycle.execute(1,
+    const genericResult = await genericRun.service.cycle.execute(1,
         { cancellation: { token: genericRun.tk() }, trace: null },
         { additional: true, mode: 'production', craftFinalTarget: true, allowNewB2: true, freshInspection: false,
             recoveryOnly: false, decompressionPolicy: 'unbounded', decompressionMaxUsageRatio: null,
@@ -501,11 +507,12 @@ test('d3: generic #prepareB1 runs the locked ensure:16 -> B2 ALL -> park -> with
     assert.ok(!genericResult.actions.some((a) => a.status === 'waiting'), 'no waiting regression: ' + JSON.stringify(genericResult.actions));
 });
 
-test('step5: cutover audit - production still runs the legacy cycle, generic stack is not wired yet', () => {
+test('step5: cutover audit - production runs the generic cycle, legacy B5 cycle kept only as compatibility reference', () => {
     const src = fs.readFileSync(path.resolve(__dirname, '../../../src/server-features/crafting/CraftAutomationService.js'), 'utf8');
-    assert.match(src, /this\.cycle = new B5CycleCoordinator\(/);
-    assert.match(src, /this\.genericCycle = new CraftCycleCoordinator\(/);
-    const generic = new CraftAutomationService({
+    assert.match(src, /this\.cycle = new CraftCycleCoordinator\(/);
+    assert.doesNotMatch(src, /this\.cycle = new B5CycleCoordinator\(/);
+    assert.match(src, /this\.legacyCycle = new B5CycleCoordinator\(/);
+    const service = new CraftAutomationService({
         planningService: { async inspectAdditional() {}, async inspectAdditionalFresh() {} },
         crafting: {}, storage: {}, b1Materials: {},
         personalVault: { deposit: async () => ({}), withdraw: async () => ({}), read: async () => ({}) },
@@ -514,7 +521,13 @@ test('step5: cutover audit - production still runs the legacy cycle, generic sta
         operationManager: {}, config: {},
         craftingVerificationService: { requireInputReady() {}, handoff: () => ({}), verifyOutput() {}, requireSettled() {} }
     });
-    assert.equal(generic.quantity.constructor.name, 'CraftQuantityPolicy', 'quantity authority is injected');
-    assert.equal(generic.genericCycle.constructor.name, 'CraftCycleCoordinator');
-    assert.equal(generic.cycle.constructor.name, 'B5CycleCoordinator');
+    assert.equal(service.quantity.constructor.name, 'CraftQuantityPolicy', 'quantity authority is injected');
+    assert.equal(service.cycle.constructor.name, 'CraftCycleCoordinator', 'production cycle is generic');
+    assert.equal(service.legacyCycle.constructor.name, 'B5CycleCoordinator', 'legacy cycle stays as compatibility reference');
+    assert.notEqual(service.cycle, service.legacyCycle);
+    // The production cycle runs the generic stack, not the legacy B5 stack.
+    assert.equal(service.cycle.intermediate.constructor.name, 'CraftIntermediateCoordinator');
+    assert.equal(service.cycle.reserveChain.constructor.name, 'CraftReserveChainCoordinator');
+    assert.equal(service.cycle.baseInventory.constructor.name, 'CraftBaseInventoryCoordinator');
+    assert.equal(service.legacyCycle.intermediate.constructor.name, 'B5IntermediateCoordinator');
 });

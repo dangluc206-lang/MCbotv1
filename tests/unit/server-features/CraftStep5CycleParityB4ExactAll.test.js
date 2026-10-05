@@ -1,5 +1,6 @@
 'use strict';
-// ACT E-pre3 - B4 exact-ALL parity repro (isolated, no runtime cutover).
+// ACT E-pre3 - B4 exact-ALL parity lock (legacy reference: service.legacyCycle;
+// production execution: service.cycle = generic CraftCycleCoordinator post-E-CUTOVER).
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const Result = require('../../../src/shared/result/Result');
@@ -50,7 +51,7 @@ function opts(){ return { additional:true, mode:'production', craftFinalTarget:t
   decompressionMaxUsageRatio:null, requireKnownCapacity:false, targetId:'super_alloy' }; }
 test('e-pre3: legacy final B4 ALL with no withdraw (locked)', async () => {
   const {service,calls}=rig();
-  const r=await service.cycle.execute(1,ctx(),opts());
+  const r=await service.legacyCycle.execute(1,ctx(),opts());
   assert.equal(r.completedTarget,true);
   assert.deepEqual(calls.filter(c=>c.startsWith('craft:')),['craft:carbon-recipe:ALL','craft:super-alloy-recipe:1']);
   assert.equal(calls.some(c=>c.startsWith('withdraw:')),false,'locked: '+JSON.stringify(calls));
@@ -60,7 +61,7 @@ test('e-pre3: legacy final B4 ALL with no withdraw (locked)', async () => {
 // reservation to the final chain, so both stacks craft ALL with no withdraw.
 test('e-pre3: generic matches legacy final B4 ALL with no withdraw', async () => {
   const {service,calls}=rig();
-  const r=await service.genericCycle.execute(1,ctx(),opts());
+  const r=await service.cycle.execute(1,ctx(),opts());
   assert.equal(r.completedTarget,true);
   assert.deepEqual(calls.filter(c=>c.startsWith('craft:')),['craft:carbon-recipe:ALL','craft:super-alloy-recipe:1']);
   assert.equal(calls.some(c=>c.startsWith('withdraw:')),false,'parity: '+JSON.stringify(calls));

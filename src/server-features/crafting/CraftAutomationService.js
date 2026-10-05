@@ -146,7 +146,11 @@ class CraftAutomationService {
         });
         this.intermediate.setReserveCoordinator(this.reserveChain);
         this.#buildGenericStack({ config, logger, inventoryCounter, recipeRegistry, craftingVerificationService });
-        this.cycle = new B5CycleCoordinator({
+        // ACT E-CUTOVER: legacy B5 cycle is kept ONLY as an explicit
+        // compatibility reference (parity-lock tests and legacy suites call it
+        // directly). No production entry point (run/runNext/runTarget/
+        // runMaintenance) ever executes it.
+        this.legacyCycle = new B5CycleCoordinator({
             flows: this.flows,
             inventoryState: this.inventoryState,
             recipeResolver: this.recipeResolver,
@@ -161,14 +165,12 @@ class CraftAutomationService {
             childOptions: (...args) => this.#childOptions(...args),
             status: () => this.status()
         });
-        // Slice 6 Step 5 (boundary work, cutover pending): the generic cycle core
-        // and the generic quantity policy are implemented and boundary-tested.
-        // They are not on the runtime path yet: the generic coordinators they
-        // call still diverge from the locked legacy behavior on 11 cycle
-        // scenarios (quantity/space/compaction), so the cutover stays open until
-        // those twins reach parity. Exposed here only so the modules stay
-        // runtime-reachable without changing production behavior.
-        this.genericCycle = new CraftCycleCoordinator({
+        // ACT E-CUTOVER: the production execution cycle. Every crafting
+        // operation runs through this generic cycle over the generic
+        // coordinator stack built in #buildGenericStack (generic
+        // intermediate -> reserve chain -> base inventory -> final craft),
+        // with the generic quantity policy as authority.
+        this.cycle = new CraftCycleCoordinator({
             flows: this.flows,
             inventoryState: this.inventoryState,
             recipeResolver: this.recipeResolver,
@@ -186,7 +188,6 @@ class CraftAutomationService {
             childOptions: (...args) => this.#childOptions(...args),
             status: () => this.status()
         });
-        this.genericCycle.b1Inventory = this.genericCycle.baseInventory;
     }
 
     reconfigure(config = {}) {
@@ -200,13 +201,13 @@ class CraftAutomationService {
         this.finalCraft.reconfigure(next);
         this.intermediate.reconfigure(next);
         this.reserveChain.reconfigure(next);
-        this.cycle.reconfigure(next);
+        this.legacyCycle.reconfigure(next);
         this.quantity = CraftQuantityPolicy.fromConfig(next);
         this.genericBaseInventory.reconfigure?.(next);
         this.genericReserveChain.reconfigure?.(next);
         this.genericIntermediate.reconfigure?.(next);
-        this.genericCycle.quantity = this.quantity;
-        this.genericCycle.reconfigure?.(next);
+        this.cycle.quantity = this.quantity;
+        this.cycle.reconfigure?.(next);
         return next;
     }
 
@@ -313,9 +314,10 @@ class CraftAutomationService {
         requireKnownCapacity = false,
         targetId = null
     }) {
-        // Generic crafting-automation operation identity. Internal B5
-        // coordinators/flows below keep their names; they are not the public
-        // contract. The public result is the cycle data
+        // Generic crafting-automation operation identity. Internal coordinator
+        // and flow class names (generic cycle + boundary flows, legacy compat
+        // reference) below are not the public contract. The public result is
+        // the cycle data
         // ({ targetId, completedTarget, completedAmount } + generic blockers).
         const operationName = mode === 'maintenance' ? 'CraftingStorageMaintenance' : (additional ? 'CraftingAutomationNext' : 'CraftingAutomation');
         // The execution target travels with the request/planner/cycle options.
@@ -419,7 +421,9 @@ class CraftAutomationService {
 
 
     #buildGenericStack({ config, logger, inventoryCounter, recipeRegistry, craftingVerificationService }) {
-        // ACT A: detached generic coordinator stack (composition-only). Production stays on this.cycle (B5).
+        // ACT E-CUTOVER: this generic coordinator stack is the production
+        // execution stack behind this.cycle. The legacy B5 coordinators built
+        // above exist only for this.legacyCycle (compatibility reference).
         this.genericIntermediate = new CraftIntermediateCoordinator({
             flows: this.flows,
             inventoryState: this.inventoryState,
@@ -470,27 +474,14 @@ class CraftAutomationService {
 
 CraftAutomationService.normalizeAutomationConfig = normalizeAutomationConfig;
 
-// Slice 6 Step 1: generic diagnostics + chain-field adapter are implemented and
-// unit-tested, but no coordinator execution path uses them yet (cutover is
-// Step 2+). Exposed here (not on the execution path) so the modules stay
-// runtime-reachable without changing production behavior.
+// Generic support/coordination modules on the production execution path
+// (ACT E-CUTOVER): diagnostics, chain adapter, base-inventory, reserve chain,
+// intermediate, cycle and quantity policy are all wired into this.cycle.
 CraftAutomationService.CraftActionDiagnostics = require('./support/CraftActionDiagnostics');
 CraftAutomationService.CraftChainAdapter = require('./support/CraftChainAdapter');
-// Slice 6 Step 2: generic base-inventory leaf is implemented and boundary-tested
-// (parity with the legacy coordinator on neutral fixtures). Still not wired
-// into any runtime cycle; exposed here only so the module stays
-// runtime-reachable without changing production behavior.
 CraftAutomationService.CraftBaseInventoryCoordinator = require('./coordinators/CraftBaseInventoryCoordinator');
-// Slice 6 Step 3: generic reserve core is implemented and boundary-tested
-// (parity with the legacy coordinator on neutral fixtures). Still not wired
-// into any runtime cycle; exposed here only so the module stays
-// runtime-reachable without changing production behavior.
 CraftAutomationService.CraftReserveChainCoordinator = require('./coordinators/CraftReserveChainCoordinator');
-// Slice 6 Step 4 (work in progress): generic intermediate core, boundary-tested only.
 CraftAutomationService.CraftIntermediateCoordinator = require('./coordinators/CraftIntermediateCoordinator');
-// Slice 6 Step 5 (boundary work, cutover pending): generic cycle core + generic
-// quantity policy. Exposed here (not on the execution path) so the modules stay
-// runtime-reachable without changing production behavior.
 CraftAutomationService.CraftCycleCoordinator = CraftCycleCoordinator;
 CraftAutomationService.CraftQuantityPolicy = CraftQuantityPolicy;
 

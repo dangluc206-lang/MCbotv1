@@ -1,5 +1,7 @@
 'use strict';
-// ACT E-pre4 - B4 surplus-ratio allocation parity (isolated, no runtime cutover).
+// ACT E-pre4 - B4 surplus-ratio allocation parity (legacy reference:
+// service.legacyCycle; production execution: service.cycle = generic
+// CraftCycleCoordinator post-E-CUTOVER).
 // Production-shaped feedback: every crafting.craft() call completes exactly one
 // unit (the server craft contract), so a surplus batch only stays in ratio
 // parity when both stacks run it through the final-chain execution owner
@@ -78,9 +80,9 @@ function opts() {
 
 test('e-pre4: generic surplus allocation reproduces the legacy B4 ratio order (production-shaped parity)', async () => {
     const l = surplusRig();
-    await l.service.cycle.execute(1, ctx(), opts());
+    await l.service.legacyCycle.execute(1, ctx(), opts());
     const g = surplusRig();
-    await g.service.genericCycle.execute(1, ctx(), opts());
+    await g.service.cycle.execute(1, ctx(), opts());
     // Legacy order semantics locked: fill priority shortage (a:1, b:2), then
     // top up the least-covered output by ratio (b,b,a) until shared runs dry.
     assert.deepEqual(l.craftOrder.slice(0, 6), ['a', 'b', 'b', 'b', 'b', 'a'], 'legacy order lock: ' + JSON.stringify(l.craftOrder));
@@ -93,9 +95,9 @@ test('e-pre4: generic surplus allocation reproduces the legacy B4 ratio order (p
 
 test('e-pre4: surplus allocation stays in parity with exact-ALL enabled (policy preserved)', async () => {
     const l = surplusRig({ useAllForB4WhenExact: true });
-    await l.service.cycle.execute(1, ctx(), opts());
+    await l.service.legacyCycle.execute(1, ctx(), opts());
     const g = surplusRig({ useAllForB4WhenExact: true });
-    await g.service.genericCycle.execute(1, ctx(), opts());
+    await g.service.cycle.execute(1, ctx(), opts());
     assert.deepEqual(g.craftOrder, l.craftOrder, 'exact-ALL variant order parity: ' + JSON.stringify(g.craftOrder));
     assert.deepEqual(g.owned, l.owned, 'exact-ALL variant totals parity');
     assert.deepEqual(g.craftOrder.slice(0, 6), ['a', 'b', 'b', 'b', 'b', 'a'], 'ratio order stays locked under exact-ALL');
