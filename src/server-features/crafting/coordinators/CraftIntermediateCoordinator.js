@@ -122,8 +122,13 @@ class CraftIntermediateCoordinator {
         const targetRecipe = targetId ? this.recipeResolver.recipeForOutput(targetId, finalSteps) : null;
         if (targetRecipe && targetRecipe.recipe) {
             const b4Ids = this.surplusIds(targetRecipe, finalSteps);
-            if (b4Ids.length > 0) {
-                const compacted = await this.compactBalancedSurplus(b4Ids, inspection, context, targetRecipe, { stopAtTargetReady: opts.stopAtTargetReady !== false, inspect: opts.inspect || null });
+            // ponytail: promotion compacts surplus; exact-ALL final reservations stay
+            // with the final chain (owns ALL/ensureInputs/verification). Ceiling: if a
+            // future policy wants promotion to own exact reservations, move this guard
+            // into a policy hook instead of widening the core.
+            const promotableIds = b4Ids.filter((id) => !this.isExactAllFinalReservation(id, inspection, finalSteps, targetId));
+            if (promotableIds.length > 0) {
+                const compacted = await this.compactBalancedSurplus(promotableIds, inspection, context, targetRecipe, { stopAtTargetReady: opts.stopAtTargetReady !== false, inspect: opts.inspect || null });
                 if (compacted.length > 0) {
                     for (const entry of compacted) {
                         await this.runStep(context, { subsystem: 'crafting', step: 'deposit-b4-after-promotion', action: 'deposit fresh B4 intermediates to /pv 2 to keep one free slot', resource: entry.outputId },
@@ -137,6 +142,9 @@ class CraftIntermediateCoordinator {
         const steps = this.finalStepsInPolicyOrder(inspection, targetId);
         for (const step of steps) {
             context.cancellation.token.throwIfCancelled();
+            // ponytail: same exact-ALL reservation guard as the surplus branch —
+            // planner-reserved final crafts stay with the final chain.
+            if (this.isExactAllFinalReservation(step.outputId, inspection, finalSteps, targetId)) continue;
             const recipe = this.recipeResolver.recipeForOutput(step.outputId, finalSteps);
             if (!recipe || !recipe.recipe) continue;
             const perInput = Object.entries(recipe.recipe.inputs || {}).filter((entry) => Number(entry[1]) > 0);
@@ -152,6 +160,32 @@ class CraftIntermediateCoordinator {
             done.push({ status: 'b4-compact-ready', outputId: step.outputId, recipeId: recipe.recipeId, ready, data: crafted });
         }
         return done;
+    }
+
+    isExactAllFinalReservation(outputId, inspection, finalSteps, targetId) {
+        const target = String(targetId || '').trim();
+        const out = String(outputId || '').trim();
+        if (!target || !out || out === target) return false;
+        // ponytail: mirror the final-chain exact-ALL gate; when the flag is off the
+        // final chain would not use ALL, so promotion must not skip either.
+        if (typeof this.inventoryState?.allEnabled === 'function'
+            && !this.inventoryState.allEnabled('useAllForB4WhenExact')) return false;
+        const steps = Array.isArray(finalSteps) ? finalSteps : ((inspection && inspection.data && inspection.data.finalSteps) || []);
+        const step = (steps || []).find((s) => String(s && s.outputId || '') === out && Number(s && s.crafts || 0) > 1);
+        if (!step) return false;
+        const planned = Math.max(0, Number(step.crafts || 0));
+        if (!(planned > 1)) return false;
+        const entry = this.recipeResolver && typeof this.recipeResolver.recipeForOutput === 'function'
+            ? this.recipeResolver.recipeForOutput(out, steps)
+            : null;
+        const recipe = entry && entry.recipe;
+        if (!recipe) return false;
+        const perInput = Object.entries(recipe.inputs || {}).filter((entry) => Number(entry[1]) > 0);
+        if (perInput.length === 0) return false;
+        let max = Number.MAX_SAFE_INTEGER;
+        for (const [id, per] of perInput) max = Math.min(max, Math.floor(this.availableCount(inspection, id) / Number(per)));
+        max = Math.max(0, Number.isFinite(max) ? Math.floor(max) : 0);
+        return max === planned;
     }
 
     surplusIds(targetRecipe, finalSteps) {
