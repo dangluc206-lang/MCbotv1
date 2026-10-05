@@ -128,11 +128,12 @@ class CraftIntermediateCoordinator {
             // into a policy hook instead of widening the core.
             const promotableIds = b4Ids.filter((id) => !this.isExactAllFinalReservation(id, inspection, finalSteps, targetId));
             if (promotableIds.length > 0) {
-                const compacted = await this.compactBalancedSurplus(promotableIds, inspection, context, targetRecipe, { stopAtTargetReady: opts.stopAtTargetReady !== false, inspect: opts.inspect || null });
+                const compacted = await this.compactBalancedSurplus(promotableIds, inspection, context, targetRecipe, { stopAtTargetReady: opts.stopAtTargetReady !== false, inspect: opts.inspect || null, targetId });
                 if (compacted.length > 0) {
+                    // craftSurplus already deposited each fresh surplus output the
+                    // moment it was crafted (legacy surplus timing); the entries
+                    // here only publish the compact-ready contract.
                     for (const entry of compacted) {
-                        await this.runStep(context, { subsystem: 'crafting', step: 'deposit-b4-after-promotion', action: 'deposit fresh B4 intermediates to /pv 2 to keep one free slot', resource: entry.outputId },
-                            () => this.flows.deposit.deposit(entry.outputId, this.childOptions(context)));
                         done.push({ status: 'b4-compact-ready', outputId: entry.outputId, recipeId: entry.recipeId, ready: entry.crafts, phase: entry.phase });
                     }
                     return done;
@@ -227,12 +228,17 @@ class CraftIntermediateCoordinator {
         };
     }
 
-    async craftSurplus(candidate, crafts, phase, inspection, inspect, context, compacted) {
+    async craftSurplus(candidate, crafts, phase, inspection, inspect, context, compacted, targetId = null) {
         this.progressTracker.set({ running: true, state: 'PROMOTING_B3', currentStep: { kind: 'B3/B4', id: candidate.outputId, crafts } });
-        const crafted = await this.finalCraft.craft(candidate.recipeId, crafts, context, candidate.outputId, { stage: 'B4', nextStage: 'B5' });
-        const actual = Number(this.inventoryState.actualCrafts(crafted, crafts) || 0);
-        if (actual <= 0) return inspection;
-        compacted.push({ outputId: candidate.outputId, recipeId: candidate.recipeId, crafts: actual, phase });
+        // Surplus crafts go through the final-chain execution owner, never a raw
+        // single craft() call: execute() applies the quantity policy, ensures
+        // inputs, accounts actualCrafts per unit and settles the stage, so the
+        // observed post-craft state (and therefore the next ratio ranking) stays
+        // identical to the legacy surplus allocator on the same server feedback.
+        await this.finalCraft.execute([{ recipeId: candidate.recipeId, outputId: candidate.outputId, crafts }], context, { targetId });
+        await this.runStep(context, { subsystem: 'crafting', step: 'deposit-b4-after-promotion', action: 'deposit fresh B4 intermediates to /pv 2 to keep one free slot', resource: candidate.outputId },
+            () => this.flows.deposit.deposit(candidate.outputId, this.childOptions(context)));
+        compacted.push({ outputId: candidate.outputId, recipeId: candidate.recipeId, crafts, phase });
         return typeof inspect === 'function'
             ? this.requireInspection(await inspect(), 'B5 inspection failed after B4 compaction.')
             : inspection;
@@ -246,7 +252,7 @@ class CraftIntermediateCoordinator {
             if (!candidate || candidate.craftableNow <= 0) return inspection;
             const crafts = Math.floor(Math.min(candidate.craftableNow, Math.max(0, candidate.perTarget - candidate.existing)));
             if (crafts <= 0) return inspection;
-            inspection = await this.craftSurplus(candidate, crafts, 'b5-priority', inspection, inspect, context, compacted);
+            inspection = await this.craftSurplus(candidate, crafts, 'b5-priority', inspection, inspect, context, compacted, opts.targetId || null);
         }
         return inspection;
     }
@@ -271,7 +277,7 @@ class CraftIntermediateCoordinator {
             if (!candidate) break;
             const crafts = Math.floor(Math.min(candidate.craftableNow, Math.max(1, Math.min(32, candidate.perTarget))));
             if (crafts <= 0) break;
-            inspection = await this.craftSurplus(candidate, crafts, 'storage-compaction-balanced', inspection, inspect, context, compacted);
+            inspection = await this.craftSurplus(candidate, crafts, 'storage-compaction-balanced', inspection, inspect, context, compacted, opts.targetId || null);
         }
         return compacted;
     }
