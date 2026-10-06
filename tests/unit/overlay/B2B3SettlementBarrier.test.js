@@ -52,8 +52,8 @@ test('waitForSettledCount times out when relevant B2 keeps changing', async () =
 
 test('B2->B3 transition is enforced by the shared stage gate', () => {
     const fs = require('node:fs');
-    const reserve = fs.readFileSync(require.resolve('../../../src/server-features/crafting/b5/B5ReserveChainCoordinator'), 'utf8');
-    const finalCraft = fs.readFileSync(require.resolve('../../../src/server-features/crafting/b5/B5FinalCraftCoordinator'), 'utf8');
+    const reserve = fs.readFileSync(require.resolve('../../../src/server-features/crafting/coordinators/CraftReserveChainCoordinator'), 'utf8');
+    const finalCraft = fs.readFileSync(require.resolve('../../../src/server-features/crafting/coordinators/CraftFinalCraftCoordinator'), 'utf8');
     assert.match(reserve, /stage: 'B2'/);
     assert.match(reserve, /nextStage: 'B3'/);
     assert.match(reserve, /stage: 'B3'/);

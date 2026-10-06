@@ -118,18 +118,12 @@
         "src/server-features/crafting/B5AutomationRuntimeDecorator.js",
         "src/server-features/crafting/b5/B5B1InventoryCoordinator.js",
         "src/server-features/crafting/b5/B5CycleCoordinator.js",
-        "src/server-features/crafting/b5/B5FinalCraftCoordinator.js",
         "src/server-features/crafting/b5/B5IntermediateCoordinator.js",
         "src/server-features/crafting/b5/B5ReserveChainCoordinator.js",
-        "src/server-features/crafting/b5/flows/B5ReadFlow.js",
         "src/server-features/crafting/b5/flows/B5PlanningFlow.js",
         "src/server-features/crafting/b5/flows/B5StorageFlow.js",
-        "src/server-features/crafting/b5/flows/B5WithdrawFlow.js",
-        "src/server-features/crafting/b5/flows/B5CraftFlow.js",
-        "src/server-features/crafting/b5/flows/B5KhoReadFlow.js",
         "src/server-features/crafting/b5/flows/B2InputAcquisitionFlow.js",
-        "src/server-features/crafting/b5/support/B5ActionDiagnostics.js",
-        "src/server-features/crafting/b5/support/B5ProgressTracker.js"
+        "src/server-features/crafting/b5/support/B5ActionDiagnostics.js"
       ]
     }
   },
@@ -202,38 +196,7 @@
       ]
     }
   ],
-  "pendingWiringSources": [
-    {
-      "file": "src/server-features/crafting/b5/B5FinalCraftCoordinator.js",
-      "owner": "crafting",
-      "reason": "Slice 3: generic CraftFinalCraftCoordinator owns the final-chain implementation; legacy B5 file is kept as behavior-identical reference and static-contract reference until Slice 6 removes it with its coordinators."
-    },
-    {
-      "file": "src/server-features/crafting/b5/flows/B5ReadFlow.js",
-      "owner": "crafting",
-      "reason": "Slice 2: generic CraftReadFlow owns the automation read path; legacy B5 read flow remains only as parity-test reference until Slice 6 removes it."
-    },
-    {
-      "file": "src/server-features/crafting/b5/flows/B5WithdrawFlow.js",
-      "owner": "crafting",
-      "reason": "Slice 2: generic CraftWithdrawFlow owns the automation withdraw path; legacy B5 file kept only as reference until Slice 6 removes it."
-    },
-    {
-      "file": "src/server-features/crafting/b5/flows/B5CraftFlow.js",
-      "owner": "crafting",
-      "reason": "Slice 2: generic CraftCraftFlow owns the automation craft path; legacy B5 file kept only as reference until Slice 6 removes it."
-    },
-    {
-      "file": "src/server-features/crafting/b5/flows/B5KhoReadFlow.js",
-      "owner": "crafting",
-      "reason": "Slice 2: generic CraftKhoReadFlow owns the /kho read path; legacy B5 file kept only as reference until Slice 6 removes it."
-    },
-    {
-      "file": "src/server-features/crafting/b5/support/B5ProgressTracker.js",
-      "owner": "crafting",
-      "reason": "Slice 4: generic CraftProgressTracker owns automation progress; legacy B5 tracker kept only as reference until Slice 6 removes it."
-    }
-  ],
+  "pendingWiringSources": [],
   "staleManifest": "scripts/cleanup-stale.js",
   "coverage": {
     "include": "src/**/*.js",

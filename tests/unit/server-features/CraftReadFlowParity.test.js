@@ -1,14 +1,14 @@
 'use strict';
 
-// Slice 2 parity: CraftReadFlow must behave exactly like B5ReadFlow on the
-// legacy planning contract (amount-first, targetId inside options) while also
-// forwarding the target to generic planning (target-first). No behavior drift
-// either way; the caller contract (amount-first) never changes.
+// Slice 2 parity (E-FINAL): CraftReadFlow owns the automation read path.
+// The legacy B5ReadFlow reference file was deleted as dead (no runtime
+// consumer; generic CraftReadFlow is the production path). These tests lock
+// the caller contract (amount-first, targetId inside options) and the
+// generic forwarding (target-first) without a legacy import.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const CraftReadFlow = require('../../../src/server-features/crafting/flows/CraftReadFlow');
-const B5ReadFlow = require('../../../src/server-features/crafting/b5/flows/B5ReadFlow');
 
 function legacyPlanning(calls) {
     return {
@@ -27,18 +27,15 @@ function genericPlanning(calls) {
     };
 }
 
-test('legacy path: CraftReadFlow delegates exactly like B5ReadFlow', async () => {
-    const craftCalls = [];
-    const b5Calls = [];
-    const craft = new CraftReadFlow({ planningService: legacyPlanning(craftCalls) });
-    const b5 = new B5ReadFlow({ planningService: legacyPlanning(b5Calls) });
+test('legacy path: CraftReadFlow keeps the amount-first caller contract', async () => {
+    const calls = [];
+    const craft = new CraftReadFlow({ planningService: legacyPlanning(calls) });
     await craft.inspect(2, { targetId: 'carbon', additional: true });
-    await b5.inspect(2, { targetId: 'carbon', additional: true });
     await craft.inspect(2, { additional: false });
-    await b5.inspect(2, { additional: false });
     await craft.inspectFresh(1, { targetId: 'carbon' });
-    await b5.inspectFresh(1, { targetId: 'carbon' });
-    assert.deepEqual(craftCalls, b5Calls);
+    assert.deepEqual(calls[0], ['additional', 2, { targetId: 'carbon' }]);
+    assert.deepEqual(calls[1], ['inspect', 2, {}]);
+    assert.deepEqual(calls[2], ['fresh', 1, { targetId: 'carbon' }]);
 });
 
 test('legacy path: targetId stays inside options for B5 planning', async () => {
@@ -72,14 +69,12 @@ test('generic path: missing target fails closed via generic planning', async () 
     await assert.rejects(read.inspect(1, { additional: true }), /targetId is required/);
 });
 
-test('direct readers delegate to the same capabilities as B5 thin flows', async () => {
+test('direct readers delegate to the injected storage capability', async () => {
     const khoCalls = [];
     const storage = { read: async options => { khoCalls.push(options); return { success: true }; } };
     const craft = new CraftReadFlow({ planningService: legacyPlanning([]), storage });
-    const b5 = new B5ReadFlow({ planningService: legacyPlanning([]), storage });
     await craft.readKho({ fresh: true });
-    await b5.readKho({ fresh: true });
-    assert.deepEqual(khoCalls.length, 2);
+    assert.deepEqual(khoCalls.length, 1);
     assert.throws(() => new CraftReadFlow({}), /planningService is required/);
     assert.throws(() => new CraftReadFlow({ planningService: legacyPlanning([]) }).readKho(), /not configured/);
 });

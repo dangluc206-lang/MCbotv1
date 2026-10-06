@@ -5,7 +5,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
 const GENERIC_FINAL = require.resolve('../../../src/server-features/crafting/coordinators/CraftFinalCraftCoordinator');
-const LEGACY_FINAL = require.resolve('../../../src/server-features/crafting/b5/B5FinalCraftCoordinator');
+const GENERIC_RESERVE = require.resolve('../../../src/server-features/crafting/coordinators/CraftReserveChainCoordinator');
+const GENERIC_BASE = require.resolve('../../../src/server-features/crafting/coordinators/CraftBaseInventoryCoordinator');
 
 function read(resolved) { return fs.readFileSync(resolved, 'utf8'); }
 
@@ -25,14 +26,20 @@ test('B2 -> B3 and B3 -> B4 use explicit stage handoff contract', () => {
 });
 
 test('final chain owns B4/B5 settlement and handoff contract', () => {
-    // Generic owns the implementation; legacy is kept as a behavior-identical
-    // reference until its last runtime/test consumer migrates (Slice 6 final).
-    for (const source of [read(GENERIC_FINAL), read(LEGACY_FINAL)]) {
-        assert.match(source, /waitForSettledCount/);
-        assert.match(source, /stageContract\.verifyOutput/);
-        assert.match(source, /stageContract\.requireSettled/);
-        assert.match(source, /nextStage/);
-        assert.match(source, /CRAFT_FINAL_TARGET_REQUIRED/);
+    // E-FINAL: generic owns the implementation; the legacy B5 final-chain
+    // reference file was deleted (dead - no runtime/test consumer remains).
+    const source = read(GENERIC_FINAL);
+    assert.match(source, /waitForSettledCount/);
+    assert.match(source, /stageContract\.verifyOutput/);
+    assert.match(source, /stageContract\.requireSettled/);
+    assert.match(source, /nextStage/);
+    assert.match(source, /CRAFT_FINAL_TARGET_REQUIRED/);
+});
+
+test('generic reserve/base coordinators own the stage handoff contract', () => {
+    for (const resolved of [GENERIC_RESERVE, GENERIC_BASE]) {
+        const source = read(resolved);
+        assert.match(source, /stageContract/);
     }
 });
 
