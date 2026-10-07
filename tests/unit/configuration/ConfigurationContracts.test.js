@@ -53,7 +53,7 @@ function assertContractError(mutator, pattern) {
 }
 
 test('all active configuration groups have schemas, validate, and reject unknown top-level entries', () => {
-    assert.equal(ConfigSpecs.length, 34);
+    assert.equal(ConfigSpecs.length, 31);
     for (const spec of ConfigSpecs) {
         assert.equal(typeof spec.schema, 'string', `${spec.key} must declare a schema`);
         const validate = schemas[spec.schema];
@@ -84,16 +84,11 @@ test('craftingTargets references craftable items and resolves to at least one ta
     assert.deepEqual(current.denyItems, []);
 });
 
-test('legacy B5/storage config without B2 input source or withdrawal policy remains valid', () => {
+test('storage config without withdrawal policy remains valid', () => {
     const current = snapshot();
-    const legacyB5 = clone(current.b5);
     const legacyStorage = clone(current.storage);
-    delete legacyB5.b2InputSource;
     delete legacyStorage.withdraw;
-    assert.equal(groupSchemas.b5(legacyB5).valid, true);
     assert.equal(groupSchemas.storage(legacyStorage).valid, true);
-    const invalid = { ...legacyB5, b2InputSource: 'automatic' };
-    assert.equal(groupSchemas.b5(invalid).valid, false);
 });
 
 
@@ -142,16 +137,15 @@ test('cross validation rejects missing command and GUI references and out-of-ran
     assertContractError(value => { value.skyblock.selections.primary.slot = 99; }, /outside skyServerSelect slotCount 63/);
 });
 
-test('cross validation rejects missing item references, duplicate outputs, recipe cycles, and invalid B5 target', () => {
+test('cross validation rejects missing item references, duplicate outputs, recipe cycles', () => {
     assertContractError(value => { value.recipes.super_alloy.output = 'missing_item'; }, /missing item: missing_item/);
     assertContractError(value => { value.recipes.refined_coal.output = value.recipes.super_cobblestone.output; }, /duplicates recipe/);
     assertContractError(value => {
         value.recipes.super_cobblestone.inputs.super_alloy = 1;
     }, /recipe dependency cycle/);
-    assertContractError(value => { value.b5.targetId = 'coal'; }, /must belong to craftingTiers\.B5/);
 });
 
-test('cross validation enforces strong identity coverage and uniqueness for every B2-B5 item', () => {
+test('cross validation enforces strong identity coverage and uniqueness for every craftable item', () => {
     assertContractError(value => {
         delete value.items.tungsten.representations.inventory;
     }, /tungsten must configure strong identity rules for inventory and personal-vault, or set metadata\.strongIdentityPolicy=learn/);
@@ -185,11 +179,7 @@ test('cross validation rejects route, bot/server, fishing-area, and Discord bot 
     assert.match(result.errors.join('\n'), /discord\.defaultBotId references missing bot profile/);
 });
 
-test('cross validation rejects Collector decompression, mode geometry, and overlapping recovery windows', () => {
-    assertContractError(value => {
-        value.collectorB5Mode.b1Decompression.maxUsageRatio = 1.1;
-    }, /maxUsageRatio must be in \(0, 1\]/);
-    assertContractError(value => { value.collectorB5Mode.reanchorRadius = 0.5; }, /reanchorRadius must be >= arrivalRadius/);
+test('cross validation rejects overlapping recovery windows', () => {
     assertContractError(value => {
         value.dailyRecovery.server.hour = value.dailyRecovery.sky.hour;
         value.dailyRecovery.server.minute = value.dailyRecovery.sky.minute + 1;

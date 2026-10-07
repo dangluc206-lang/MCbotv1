@@ -55,7 +55,6 @@ function registerSharedServices({
       guiSlots: configuration.registry.require("guiSlots"),
       items: configuration.registry.require("items"),
       recipes: configuration.registry.require("recipes"),
-      craftingTiers: configuration.registry.require("craftingTiers"),
       craftingTargets: configuration.registry.require("craftingTargets"),
       storage: configuration.registry.require("storage"),
       personalVault: configuration.registry.require("personalVault"),

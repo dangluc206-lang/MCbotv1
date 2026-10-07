@@ -98,9 +98,7 @@ const QuantityStrategy = require("../server-features/crafting/quantity/QuantityS
 const MaterialCalculator = require("../planning/crafting/MaterialCalculator");
 const CraftingPlanner = require("../planning/crafting/CraftingPlanner");
 const CraftingChainPlanner = require("../planning/crafting/CraftingChainPlanner");
-const B5ExecutionPlanner = require("../planning/crafting/B5ExecutionPlanner");
 const CraftPlanningService = require("../server-features/crafting/CraftPlanningService");
-const B5PlanningService = require("../server-features/crafting/B5PlanningService");
 const CraftTraceRecorder = require("../server-features/crafting/CraftTraceRecorder");
 const CraftAutomationService = require("../server-features/crafting/CraftAutomationService");
 const CraftReadService = require("../server-features/crafting/CraftReadService");
@@ -137,7 +135,6 @@ const LegacyModeAdapter = require("../modes/legacy/LegacyModeAdapter");
 const ModeControlService = require("../modes/ModeControlService");
 const ModeContext = require("../modes/ModeContext");
 const ModeSdk = require("../modes/ModeSdk");
-const CollectorB5ModeService = require("../modes/collector-b5/CollectorB5ModeService");
 const CraftingModeService = require("../modes/crafting/CraftingModeService");
 const ComposableModeService = require("../modes/composable/ComposableModeService");
 const FishingModeService = require("../modes/fishing/FishingModeService");
@@ -503,7 +500,9 @@ function registerBotServices({ profile, configuration, shared }) {
     conversionConfig: mineralConversionConfig,
     smeltingConfig,
     recipeConfig: recipeDefinitionsForLearning,
-    targetId: configuration.registry.require("b5").targetId,
+    // G18: no configured default target. Demand weights default to empty;
+    // explicit craft requests carry their own target.
+    targetId: null,
     serverProfile,
     logger,
   });
@@ -557,66 +556,50 @@ function registerBotServices({ profile, configuration, shared }) {
   const craftingItemRegistry = new CraftingItemRegistry({
     itemRegistry: shared.itemRegistry,
     recipeRegistry,
-    tiers: serverProfile.requireCatalog("craftingTiers"),
+    // G18: tiers removed; registry resolves tier-free (display-only).
+    tiers: {},
   });
-  const craftingTiers = serverProfile.requireCatalog("craftingTiers");
   const craftingTargetRegistry = new CraftingTargetRegistry({
     craftingItemRegistry,
     policy: serverProfile.requireCatalog("craftingTargets"),
   });
-  const b5Config = configuration.registry.require("b5");
   const craftingChainPlanner = new CraftingChainPlanner({
     craftingPlanner,
     craftingItemRegistry,
   });
-  const b5ExecutionPlanner = new B5ExecutionPlanner();
-  // Generic trace authority owns the recorder class; the legacy b5-trace name
-  // is an alias-first exposure of the same instance (no impl split).
+  // Generic trace authority (G18: B5 names removed).
   const craftTraceRecorder = new CraftTraceRecorder({
     botId,
     serverProfile,
     historyLimit: 100,
     logger,
   });
-  const b5TraceRecorder = craftTraceRecorder;
   // Generic crafting planning authority: every request carries its own target, the
-  // service reads /kho + /pv 2 + inventory and classifies stages from tier data.
-  // Config keys are the profile's crafting policy mapped to generic policy names.
+  // service reads /kho + /pv 2 + inventory. Generic defaults are code-owned
+  // (no b5.json): storage input source, continuous supply, PV backpressure 3/1.
   const craftPlanning = new CraftPlanningService({
     planner: craftingPlanner,
     materialCalculator,
     recipeRegistry,
-    tiers: craftingTiers,
+    tiers: {},
     storage,
     personalVault,
     inventoryReader,
     inventoryCounter,
     storageMaterials: b1Materials,
     config: {
-      supplyMode: b5Config.b1SupplyMode,
-      inputSource: b5Config.b2InputSource,
-      vaultBackpressure: b5Config.personalVaultBackpressure,
+      supplyMode: 'continuous',
+      inputSource: 'storage',
+      vaultBackpressure: { minEmptySlots: 3, hardMinEmptySlots: 1 },
     },
     dataMaxAgeMs: Number(observationConfig.semanticCacheMs || 5000),
   });
-  // B5 stays a compatibility boundary for its own consumers only (B5 automation,
-  // collector-B5, replay/trace); it is no longer the implementation behind
-  // "crafting-planning".
-  const b5Planning = new B5PlanningService({
-    planning: craftPlanning,
-    tiers: craftingTiers,
-    targetId: b5Config.targetId,
-    executionPlanner: b5ExecutionPlanner,
-  });
-  // Generic crafting read authority (slice 2): thin wrapper over the planning
+  // Generic crafting read authority: thin wrapper over the planning
   // read capabilities (/kho + /pv 2 + inventory, TTL 5s). Same read flows,
-  // same TTL, no behavior change; B5ReadFlow keeps working untouched.
+  // same TTL, no behavior change.
   const craftRead = new CraftReadService({ planning: craftPlanning });
-  // Generic crafting automation authority (slice 4, slice 5): same engine, generic class
-  // path. Slice 5: generic automation plans directly with CraftPlanningService.
-  // The B5 compat view (B5PlanningService above) keeps its configured default for
-  // legacy/collector/replay callers only. The legacy b5-automation name stays
-  // dual-exposed on the same instance.
+  // Generic crafting automation authority: same engine, generic class path.
+  // Automation plans directly with CraftPlanningService.
   const craftAutomationCore = new CraftAutomationService({
     planningService: craftPlanning,
     crafting,
@@ -628,15 +611,14 @@ function registerBotServices({ profile, configuration, shared }) {
     recipeRegistry,
     operationManager,
     context,
-    traceRecorder: b5TraceRecorder,
-    config: b5Config,
+    traceRecorder: craftTraceRecorder,
+    // G18: automation config is generic-only; batch policy defaults live in
+    // CraftQuantityPolicy. No b5.json is read here.
+    config: {},
     logger,
     craftingVerificationService,
   });
-  const b5Automation = new CraftAutomationRuntimeDecorator({ service: craftAutomationCore, workloadMetrics });
-  // G3 compat: historical b5Automation names keep pointing at the same generic
-  // single-path instance; no legacy cycle exists behind them.
-  const craftAutomation = b5Automation;
+  const craftAutomation = new CraftAutomationRuntimeDecorator({ service: craftAutomationCore, workloadMetrics });
   const connectionStateView = new ConnectionStateView({ context });
   const islandConfig = configuration.registry.require("island");
   const islandOperation = new IslandTeleportOperation({
@@ -829,12 +811,9 @@ function registerBotServices({ profile, configuration, shared }) {
     procedureBuilder: ProcedureBuilder,
     procedureRecorder: ProcedureRecorder,
     quantityStrategy,
-    b5Planning,
-    b5Automation,
     craftingPlanning: craftPlanning,
     craftingAutomation: craftAutomation,
     craftingTrace: craftTraceRecorder,
-    b5TraceRecorder,
     island,
     dungeon,
     skyblock,
@@ -848,27 +827,6 @@ function registerBotServices({ profile, configuration, shared }) {
     logger,
   });
   const modeCoordinator = new ModeCoordinator({ botId, logger });
-  const collectorB5Config = configuration.registry.require("collectorB5Mode");
-  const collectorB5Mode = new CollectorB5ModeService({
-    botId,
-    context,
-    eventBus,
-    island,
-    skyblock,
-    skyblockReadiness: skyblockAutoJoin,
-    skyTarget,
-    movementManager,
-    positionService,
-    b1Materials,
-    b5Planning,
-    b5Automation,
-    modeCoordinator,
-    failurePublisher: runtimeFailurePublisher,
-    failurePolicy,
-    config: collectorB5Config,
-    dailyRecovery: configuration.registry.require("dailyRecovery"),
-    logger,
-  });
   const fishingMode = new FishingModeService({
     botId,
     eventBus,
@@ -913,13 +871,9 @@ function registerBotServices({ profile, configuration, shared }) {
     skyblock,
     afk: afkAreas,
     fishing,
-    "b5-planning": b5Planning,
-    "b5-automation": b5Automation,
-    "b5-trace": b5TraceRecorder,
-    // Generic crafting capability names (B5 names kept as legacy aliases).
     "crafting-planning": craftPlanning,
-    "crafting-automation": b5Automation,
-    "crafting-trace": b5TraceRecorder,
+    "crafting-automation": craftAutomation,
+    "crafting-trace": craftTraceRecorder,
     "crafting-read": craftRead,
   };
   new CapabilityInstaller({ registry: capabilityRegistry }).install(
@@ -956,7 +910,7 @@ function registerBotServices({ profile, configuration, shared }) {
     skyTarget,
     b1Materials,
     craftingPlanning: craftPlanning,
-    automation: b5Automation,
+    automation: craftAutomation,
     craftingItemRegistry,
     craftingChainPlanner,
     sharedStorageLeases: shared.sharedResourceLeases,
@@ -980,14 +934,7 @@ function registerBotServices({ profile, configuration, shared }) {
       logger,
     });
   }
-  const collectorDefinition = shared.modeCatalog.require("collector-b5");
   const fishingDefinition = shared.modeCatalog.require("fishing");
-  const collectorB5ModeAdapter = new LegacyModeAdapter({
-    modeId: collectorDefinition.id,
-    service: collectorB5Mode,
-    modeContext,
-    requiredCapabilities: collectorDefinition.requiredCapabilities,
-  });
   const fishingModeAdapter = new LegacyModeAdapter({
     modeId: fishingDefinition.id,
     service: fishingMode,
@@ -995,7 +942,6 @@ function registerBotServices({ profile, configuration, shared }) {
     requiredCapabilities: fishingDefinition.requiredCapabilities,
   });
   const servicesByName = {
-    collectorB5Mode: collectorB5ModeAdapter,
     fishingMode: fishingModeAdapter,
     craftingMode,
     ...customModes,
@@ -1088,7 +1034,6 @@ function registerBotServices({ profile, configuration, shared }) {
       fishingPacketObserver,
       fishingMovement,
       modeCoordinator,
-      collectorB5Mode,
       craftingMode,
       fishingMode,
     ],
@@ -1135,10 +1080,6 @@ function registerBotServices({ profile, configuration, shared }) {
       workloadMetrics,
       serverFeatureFacade,
       b1Materials,
-      b5Planning,
-      b5Automation,
-      b5ExecutionPlanner,
-      b5TraceRecorder,
       craftPlanning,
       craftRead,
       craftingPlanning: craftPlanning,
@@ -1147,7 +1088,6 @@ function registerBotServices({ profile, configuration, shared }) {
       procedureRegistry,
       procedureExecutor,
       quantityStrategy,
-      collectorB5Mode: collectorB5ModeAdapter,
       craftingMode,
       fishingMode: fishingModeAdapter,
       ...customModes,

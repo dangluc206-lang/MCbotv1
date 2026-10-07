@@ -1,7 +1,6 @@
 'use strict';
 
 const DiscordPanelStore = require('./DiscordPanelStore');
-const CollectorB5ConfigEditor = require('../config/CollectorB5ConfigEditor');
 const FishingBotConfigEditor = require('../config/FishingBotConfigEditor');
 const DiscordErrorReporter = require('../errors/DiscordErrorReporter');
 const DiscordPanelFormatter = require('./DiscordPanelFormatter');

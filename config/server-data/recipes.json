@@ -95,6 +95,7 @@
       "super_cobblestone": 16
     },
     "menuSlot": 20,
+    "guiIdentityOverride": 20,
     "procedure": "minerals-crafting"
   },
   "refined_coal_block": {

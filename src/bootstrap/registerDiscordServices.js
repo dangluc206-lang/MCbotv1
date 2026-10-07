@@ -2,7 +2,6 @@
 
 const DiscordService = require('../discord/DiscordService');
 const GuiInspectionCommand = require('../discord/commands/GuiInspectionCommand');
-const CollectorB5ModeCommand = require('../discord/commands/CollectorB5ModeCommand');
 const FishingModeCommand = require('../discord/commands/FishingModeCommand');
 const DiscordPanelManager = require('../discord/panels/DiscordPanelManager');
 const RemoteModeCommand = require('../discord/commands/RemoteModeCommand');
@@ -32,7 +31,6 @@ function registerDiscordServices({ configuration, shared, environment = process.
         ]
         : [
             new GuiInspectionCommand({ botRegistry: shared.botRegistry, config, allowedUserIds, logger }),
-            new CollectorB5ModeCommand({ botRegistry: shared.botRegistry, config, allowedUserIds, fleetControl, logger }),
             new FishingModeCommand({ botRegistry: shared.botRegistry, config, allowedUserIds, fleetControl, logger })
         ];
     const panelManager = new DiscordPanelManager({

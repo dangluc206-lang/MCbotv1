@@ -34,15 +34,6 @@ function createModeCatalog({ baseDir = process.cwd() } = {}) {
             metadata: { kind: 'builtin', recommended: true }
         },
         {
-            id: 'collector-b5',
-            serviceName: 'collectorB5Mode',
-            label: 'Collector + B5 (cũ)',
-            description: 'Luồng Collector + B5 cũ có di chuyển; giữ lại để tương thích.',
-            requiredCapabilities: ['island', 'movement', 'storage', 'crafting', 'personal-vault'],
-            requestedResources: ['primary-mode'],
-            metadata: { kind: 'builtin', legacy: true }
-        },
-        {
             id: 'fishing',
             serviceName: 'fishingMode',
             label: 'Câu cá',

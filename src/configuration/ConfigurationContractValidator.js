@@ -251,14 +251,8 @@ class ConfigurationContractValidator {
         };
         for (const itemId of graph.keys()) walk(itemId);
 
-        const tierMembership = new Map();
-        for (const [tier, ids] of Object.entries(snapshot.craftingTiers || {})) {
-            for (const itemId of ids || []) {
-                checkItem(itemId, `craftingTiers.${tier}`);
-                if (tierMembership.has(itemId)) errors.push(`item ${itemId} appears in both ${tierMembership.get(itemId)} and ${tier}`);
-                else tierMembership.set(itemId, tier);
-            }
-        }
+        // G18: crafting-tiers.json removed. Tier membership no longer exists;
+        // eligibility is item + recipe (+ procedure/dependency downstream).
         const identityOwners = new Map();
         const identityValues = definition => {
             const output = {};
@@ -281,38 +275,30 @@ class ConfigurationContractValidator {
                 }
             }
         }
-        for (const tier of ['B2', 'B3', 'B4', 'B5']) {
-            for (const logicalId of snapshot.craftingTiers?.[tier] || []) {
-                const definition = snapshot.items?.[logicalId];
-                if (!definition) continue;
-                const values = identityValues(definition);
-                const policy = definition?.metadata?.strongIdentityPolicy || null;
-                const hasInventory = values.inventory.length > 0;
-                const hasVault = values['personal-vault'].length > 0;
-                if (policy === 'learn') {
-                    if (hasInventory || hasVault) {
-                        errors.push(`items.${logicalId} uses strongIdentityPolicy=learn but also configures a fixed inventory/personal-vault identity`);
-                    }
-                    continue;
+        // G18: strong identity is required for every craftable output
+        // (recipe output), never a tier list. Display-only tier metadata
+        // no longer exists.
+        for (const logicalId of recipeOutputs.keys()) {
+            const definition = snapshot.items?.[logicalId];
+            if (!definition) continue;
+            const values = identityValues(definition);
+            const policy = definition?.metadata?.strongIdentityPolicy || null;
+            const hasInventory = values.inventory.length > 0;
+            const hasVault = values['personal-vault'].length > 0;
+            if (policy === 'learn') {
+                if (hasInventory || hasVault) {
+                    errors.push(`items.${logicalId} uses strongIdentityPolicy=learn but also configures a fixed inventory/personal-vault identity`);
                 }
-                if (!hasInventory || !hasVault) {
-                    errors.push(`craftingTiers.${tier} item ${logicalId} must configure strong identity rules for inventory and personal-vault, or set metadata.strongIdentityPolicy=learn`);
-                    continue;
-                }
-                const vaultSet = new Set(values['personal-vault'].map(value => value.toUpperCase()));
-                if (!values.inventory.some(value => vaultSet.has(value.toUpperCase()))) {
-                    errors.push(`items.${logicalId} inventory and personal-vault strong identities must share at least one identity`);
-                }
+                continue;
             }
-        }
-
-        const targetId = snapshot.b5?.targetId;
-        checkItem(targetId, 'b5.targetId');
-        if (typeof targetId === 'string' && !(snapshot.craftingTiers?.B5 || []).includes(targetId)) {
-            errors.push(`b5.targetId must belong to craftingTiers.B5: ${targetId}`);
-        }
-        if (typeof targetId === 'string' && !recipeOutputs.has(targetId)) {
-            errors.push(`b5.targetId has no producing recipe: ${targetId}`);
+            if (!hasInventory || !hasVault) {
+                errors.push(`craftable item ${logicalId} must configure strong identity rules for inventory and personal-vault, or set metadata.strongIdentityPolicy=learn`);
+                continue;
+            }
+            const vaultSet = new Set(values['personal-vault'].map(value => value.toUpperCase()));
+            if (!values.inventory.some(value => vaultSet.has(value.toUpperCase()))) {
+                errors.push(`items.${logicalId} inventory and personal-vault strong identities must share at least one identity`);
+            }
         }
 
         this.#validateCraftingTargets(snapshot, errors, recipeOutputs);
@@ -390,31 +376,11 @@ class ConfigurationContractValidator {
     }
 
     #validateThresholds(snapshot, errors) {
-        const pv = snapshot.b5?.personalVaultBackpressure;
-        if (pv && Number.isInteger(pv.minEmptySlots) && Number.isInteger(pv.hardMinEmptySlots)
-            && pv.hardMinEmptySlots > pv.minEmptySlots) {
-            errors.push('b5.personalVaultBackpressure.hardMinEmptySlots must be <= minEmptySlots');
-        }
+        // G18: b5/collector thresholds removed with their config groups.
     }
 
     #validateModes(snapshot, botProfiles, errors) {
-        const collector = snapshot.collectorB5Mode;
-        if (collector?.enabled) {
-            for (const axis of ['x', 'y', 'z']) {
-                if (!Number.isFinite(collector.pickupLocation?.[axis])) {
-                    errors.push(`collectorB5Mode.pickupLocation.${axis} is required while enabled`);
-                }
-            }
-        }
-        if (collector && Number.isFinite(collector.arrivalRadius) && Number.isFinite(collector.reanchorRadius)
-            && collector.reanchorRadius < collector.arrivalRadius) {
-            errors.push('collectorB5Mode.reanchorRadius must be >= arrivalRadius');
-        }
-
-        const decompressionMax = collector?.b1Decompression?.maxUsageRatio;
-        if (Number.isFinite(decompressionMax) && (decompressionMax <= 0 || decompressionMax > 1)) {
-            errors.push('collectorB5Mode.b1Decompression.maxUsageRatio must be in (0, 1]');
-        }
+        // G18: collector-b5 mode removed; no collector geometry to validate.
 
         const areaIds = new Set((snapshot.fishingMode?.areas || []).map(area => area.id));
         for (const profile of botProfiles || []) {

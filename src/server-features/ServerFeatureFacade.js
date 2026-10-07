@@ -15,18 +15,7 @@ class ServerFeatureFacade {
     procedureRegistry() { return this.#require('procedureRegistry'); }
     procedureExecutor() { return this.#require('procedureExecutor'); }
     quantityStrategy() { return this.#require('quantityStrategy'); }
-    craftingTrace() {
-        if (this.features.craftingTrace) return this.features.craftingTrace;
-        return this.#require('b5TraceRecorder');
-    }
-    // ponytail: generic crafting trace delegates to the same recorder instance the
-    // legacy b5Trace() path exposes; dual getters keep both contracts green.
-    b5Trace() {
-        if (this.features.b5TraceRecorder) return this.features.b5TraceRecorder;
-        return this.#require('craftingTrace');
-    }
-    b5Planning() { return this.#require('b5Planning'); }
-    b5Automation() { return this.#require('b5Automation'); }
+    craftingTrace() { return this.#require('craftingTrace'); }
     island() { return this.#require('island'); }
     dungeon() { return this.#require('dungeon'); }
     skyblock() { return this.#require('skyblock'); }

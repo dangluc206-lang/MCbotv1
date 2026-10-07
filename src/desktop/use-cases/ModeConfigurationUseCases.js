@@ -1,7 +1,6 @@
 'use strict';
 
 const Redactor = require('../../shared/security/Redactor');
-const CollectorB5ConfigEditor = require('../../discord/config/CollectorB5ConfigEditor');
 const FishingBotConfigEditor = require('../../discord/config/FishingBotConfigEditor');
 
 class ModeConfigurationUseCases {
@@ -9,23 +8,20 @@ class ModeConfigurationUseCases {
         baseDir,
         bundleProvider,
         requireRunning,
-        CollectorEditorClass = CollectorB5ConfigEditor,
         FishingEditorClass = FishingBotConfigEditor
     } = {}) {
         if (!baseDir || typeof bundleProvider !== 'function' || typeof requireRunning !== 'function') {
             throw new TypeError('ModeConfigurationUseCases requires baseDir, bundleProvider and requireRunning.');
         }
-        Object.assign(this, { baseDir, bundleProvider, requireRunning, CollectorEditorClass, FishingEditorClass });
+        Object.assign(this, { baseDir, bundleProvider, requireRunning, FishingEditorClass });
     }
 
-    async collector(botId) {
-        this.requireRunning();
-        return Redactor.sanitize(await this.#collectorEditor(botId).read());
+    async collector() {
+        throw Object.assign(new Error('collector-b5 mode was removed in G18.'), { code: 'COLLECTOR_B5_REMOVED' });
     }
 
-    async updateCollector(botId, fields = {}) {
-        this.requireRunning();
-        return Redactor.sanitize(await this.#collectorEditor(botId).update(fields));
+    async updateCollector() {
+        throw Object.assign(new Error('collector-b5 mode was removed in G18.'), { code: 'COLLECTOR_B5_REMOVED' });
     }
 
     async fishing(botId) {
@@ -36,18 +32,6 @@ class ModeConfigurationUseCases {
     async updateFishingArea(botId, fields = {}) {
         this.requireRunning();
         return Redactor.sanitize(await this.#fishingEditor().setAreaPosition({ botId, ...fields }));
-    }
-
-    #collectorEditor(botId) {
-        const bundle = this.bundleProvider();
-        return new this.CollectorEditorClass({
-            baseDir: this.baseDir,
-            configuration: bundle.configuration,
-            botRegistry: bundle.shared.botRegistry,
-            botId,
-            logger: bundle.shared.loggerFactory.create('DesktopCollectorConfig'),
-            mutationCoordinator: bundle.shared.configMutations
-        });
     }
 
     #fishingEditor() {

@@ -106,18 +106,18 @@ class CraftingGuiNavigator {
     }
 
     async resolveRecipeSlot(session, recipeId, recipe, source) {
-        // The server's crafting GUI presents B2 and the stone B3 with the same
-        // vanilla item name. Runtime GUI knowledge cannot safely distinguish the
-        // two from that display-only fingerprint. For this known collision,
-        // the configured recipe slot is authoritative and the learned slot is
-        // not allowed to replace it.
-        if (recipeId === 'super_cobblestone_block') {
-            const configuredSlot = recipe?.menuSlot === undefined ? null : Number(recipe.menuSlot);
-            if (isContainerSlot(session.window, configuredSlot) && session.window?.slots?.[configuredSlot]) {
+        // G12: data-driven identity override. When recipes declare
+        // `guiIdentityOverride`, that configured slot is authoritative for known
+        // display-name collisions (e.g. stone B3 vs B2) and learned slots must
+        // not replace it. No recipeId hardcode lives here.
+        const overrideRaw = recipe?.guiIdentityOverride;
+        if (overrideRaw !== undefined && overrideRaw !== null) {
+            const overrideSlot = Number(overrideRaw);
+            if (isContainerSlot(session.window, overrideSlot) && session.window?.slots?.[overrideSlot]) {
                 this.trace?.('CRAFT FIXED RECIPE SLOT', 'resolve-recipe-slot', {
-                    recipeId, configuredSlot, reason: 'stone-b3-fixed-slot-authority'
+                    recipeId, configuredSlot: overrideSlot, reason: 'recipe-gui-identity-override'
                 });
-                return configuredSlot;
+                return overrideSlot;
             }
         }
 

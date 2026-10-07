@@ -281,26 +281,6 @@ const island = validator('island', (value, errors) => {
     numberField(value.timeoutMs, 'island.timeoutMs', errors, { positiveOnly: true });
 });
 
-const collectorB5Mode = validator('collectorB5Mode', (value, errors) => {
-    const keys = ['enabled','teleportHomeOnEnable','pickupLocation','arrivalRadius','reanchorRadius','moveTimeoutMs','pollIntervalMs','errorRetryMs','craftLoopDelayMs','b1Decompression'];
-    unknown(value, keys, 'collectorB5Mode', errors);
-    for (const key of ['enabled','teleportHomeOnEnable']) requiredBoolean(value[key], `collectorB5Mode.${key}`, errors);
-    for (const key of ['arrivalRadius','reanchorRadius','moveTimeoutMs','pollIntervalMs','errorRetryMs','craftLoopDelayMs']) numberField(value[key], `collectorB5Mode.${key}`, errors, { positiveOnly: true });
-    if (requiredObject(value.pickupLocation, 'collectorB5Mode.pickupLocation', errors)) {
-        unknown(value.pickupLocation, ['x','y','z'], 'collectorB5Mode.pickupLocation', errors);
-        for (const axis of ['x','y','z']) {
-            if (value.enabled || value.pickupLocation[axis] !== null) numberField(value.pickupLocation[axis], `collectorB5Mode.pickupLocation.${axis}`, errors);
-        }
-    }
-    if (requiredObject(value.b1Decompression, 'collectorB5Mode.b1Decompression', errors)) {
-        unknown(value.b1Decompression, ['maxUsageRatio','requireKnownCapacity'], 'collectorB5Mode.b1Decompression', errors);
-        if (!finite(value.b1Decompression.maxUsageRatio) || value.b1Decompression.maxUsageRatio <= 0 || value.b1Decompression.maxUsageRatio > 1) {
-            errors.push('collectorB5Mode.b1Decompression.maxUsageRatio must be in (0, 1]');
-        }
-        requiredBoolean(value.b1Decompression.requireKnownCapacity, 'collectorB5Mode.b1Decompression.requireKnownCapacity', errors);
-    }
-});
-
 const craftingMode = validator('craftingMode', (value, errors) => {
     const keys = ['enabled','teleportHomeOnEnable','autoResumeOnReconnect','pollIntervalMs','disconnectedPollMs','errorRetryMs','errorRetryMaxMs','craftLoopDelayMs','postCycleCooldownMs','stability','reconciliation'];
     unknown(value, keys, 'craftingMode', errors);
@@ -361,11 +341,12 @@ const recipes = validator('recipes', (value, errors) => {
     for (const [recipeId, recipe] of Object.entries(value)) {
         const path = `recipes.${recipeId}`;
         if (!requiredObject(recipe, path, errors)) continue;
-        unknown(recipe, ['output','outputAmount','menuItemId','inputs','menuSlot','inputSource','procedure'], path, errors);
+        unknown(recipe, ['output','outputAmount','menuItemId','inputs','menuSlot','inputSource','procedure','guiIdentityOverride'], path, errors);
         requiredString(recipe.output, `${path}.output`, errors);
         numberField(recipe.outputAmount, `${path}.outputAmount`, errors, { integerOnly: true, positiveOnly: true });
         requiredString(recipe.menuItemId, `${path}.menuItemId`, errors);
         numberField(recipe.menuSlot, `${path}.menuSlot`, errors, { integerOnly: true });
+        if (recipe.guiIdentityOverride !== undefined && recipe.guiIdentityOverride !== null) numberField(recipe.guiIdentityOverride, `${path}.guiIdentityOverride`, errors, { integerOnly: true });
         requiredString(recipe.procedure, `${path}.procedure`, errors);
         if (!requiredObject(recipe.inputs, `${path}.inputs`, errors)) continue;
         if (Object.keys(recipe.inputs).length === 0) errors.push(`${path}.inputs must not be empty`);
@@ -403,11 +384,6 @@ const procedures = validator('procedures', (value, errors) => {
     }
 });
 
-const craftingTiers = validator('craftingTiers', (value, errors) => {
-    unknown(value, ['B1','B2','B3','B4','B5'], 'craftingTiers', errors);
-    for (const tier of ['B1','B2','B3','B4','B5']) stringArray(value[tier], `craftingTiers.${tier}`, errors, { allowEmpty: false });
-});
-
 const craftingTargets = validator('craftingTargets', (value, errors) => {
     unknown(value, ['schemaVersion','allowItems','denyItems','overrides'], 'craftingTargets', errors);
     if (value.schemaVersion !== undefined && value.schemaVersion !== 1) errors.push('craftingTargets.schemaVersion must be 1');
@@ -427,32 +403,7 @@ const craftingTargets = validator('craftingTargets', (value, errors) => {
     }
 });
 
-const b5 = validator('b5', (value, errors) => {
-    const keys = ['targetId','timeoutMs','inventorySafetyEmptySlots','quantityOptimization','b3AllMinEmptySlots','b1SupplyMode','b2InputSource','personalVaultBackpressure','pvInventorySettleTimeoutMs','pvInventorySettlePollMs'];
-    unknown(value, keys, 'b5', errors);
-    requiredString(value.targetId, 'b5.targetId', errors);
-    numberField(value.timeoutMs, 'b5.timeoutMs', errors, { positiveOnly: true });
-    numberField(value.inventorySafetyEmptySlots, 'b5.inventorySafetyEmptySlots', errors, { integerOnly: true });
-    numberField(value.b3AllMinEmptySlots, 'b5.b3AllMinEmptySlots', errors, { integerOnly: true });
-    numberField(value.pvInventorySettleTimeoutMs, 'b5.pvInventorySettleTimeoutMs', errors, { integerOnly: true, nonNegativeOnly: true });
-    numberField(value.pvInventorySettlePollMs, 'b5.pvInventorySettlePollMs', errors, { integerOnly: true, positiveOnly: true });
-    if (value.b1SupplyMode !== undefined && value.b1SupplyMode !== 'continuous') errors.push('b5.b1SupplyMode must be continuous; finite supply is not implemented');
-    if (value.b2InputSource !== undefined && !['inventory','storage'].includes(value.b2InputSource)) errors.push('b5.b2InputSource must be inventory or storage');
-    const quantity = value.quantityOptimization;
-    if (requiredObject(quantity, 'b5.quantityOptimization', errors)) {
-        const quantityKeys = ['enabled','useAllForB2','useAllForB3','useAllForB4WhenExact','useAllForB5','keepSurplusInPv2','b2BatchSize'];
-        unknown(quantity, quantityKeys, 'b5.quantityOptimization', errors);
-        for (const key of quantityKeys.filter(key => key !== 'b2BatchSize')) requiredBoolean(quantity[key], `b5.quantityOptimization.${key}`, errors);
-        numberField(quantity.b2BatchSize, 'b5.quantityOptimization.b2BatchSize', errors, { integerOnly: true, positiveOnly: true });
-        if (quantity.keepSurplusInPv2 !== true) errors.push('b5.quantityOptimization.keepSurplusInPv2 must be true');
-    }
-    const pressure = value.personalVaultBackpressure;
-    if (requiredObject(pressure, 'b5.personalVaultBackpressure', errors)) {
-        unknown(pressure, ['minEmptySlots','hardMinEmptySlots'], 'b5.personalVaultBackpressure', errors);
-        numberField(pressure.minEmptySlots, 'b5.personalVaultBackpressure.minEmptySlots', errors, { integerOnly: true });
-        numberField(pressure.hardMinEmptySlots, 'b5.personalVaultBackpressure.hardMinEmptySlots', errors, { integerOnly: true });
-    }
-});
+
 
 function genericStrict(name, allowedKeys, stringKeys = [], positiveKeys = [], nonNegativeKeys = [], integerKeys = [], booleanKeys = []) {
     return validator(name, (value, errors) => {
@@ -651,10 +602,7 @@ module.exports = Object.freeze({
     skyblock,
     recipes,
     procedures,
-    craftingTiers,
     craftingTargets,
-    b5,
-    collectorB5Mode,
     craftingMode,
     dailyRecovery
 });

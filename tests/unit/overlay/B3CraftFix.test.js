@@ -42,7 +42,7 @@ const CraftingGuiNavigator = loadModule(navigatorPath, {
     '../../gui/ContainerSlotRange': { findContainerSlot, isContainerSlot }
 });
 
-test('stone B3 recipe slot is authoritative even when GUI knowledge would return B2 slot 10', async () => {
+test('recipe guiIdentityOverride is authoritative even when GUI knowledge would return another slot', async () => {
     let knowledgeCalled = false;
     const traces = [];
     const navigator = new CraftingGuiNavigator({
@@ -62,7 +62,9 @@ test('stone B3 recipe slot is authoritative even when GUI knowledge would return
             inventoryEnd: 54
         }
     };
-    const recipe = { menuItemId: 'super_cobblestone_block', menuSlot: 20 };
+    // Data-driven collision override (stone B3 vs B2 share a display name):
+    // no recipeId hardcode in the navigator — the recipe declares it.
+    const recipe = { menuItemId: 'super_cobblestone_block', menuSlot: 20, guiIdentityOverride: 20 };
     const slot = await navigator.resolveRecipeSlot(session, 'super_cobblestone_block', recipe, 'crafting');
 
     assert.equal(slot, 20);
@@ -70,8 +72,23 @@ test('stone B3 recipe slot is authoritative even when GUI knowledge would return
     assert.equal(traces[0][0], 'CRAFT FIXED RECIPE SLOT');
 });
 
-test('other recipes still use GUI knowledge resolution', async () => {
+test('override on any recipe wins; recipes without override still use GUI knowledge', async () => {
+    const session = { window: { slots: Array(54).fill({}), inventoryStart: 54, inventoryEnd: 54 } };
+    // Generic proof: override works for an arbitrary recipe id, not stone-B3.
     let knowledgeCalled = false;
+    const overrideNavigator = new CraftingGuiNavigator({
+        commandService: {},
+        guiManager: {},
+        itemResolver: {},
+        quantityResolver: {},
+        guiKnowledge: { resolveSlot: async () => { knowledgeCalled = true; return 10; } },
+        config: {}
+    });
+    const overrideSlot = await overrideNavigator.resolveRecipeSlot(session, 'my_item', { menuSlot: 34, menuItemId: 'my_item', guiIdentityOverride: 34 }, 'crafting');
+    assert.equal(overrideSlot, 34);
+    assert.equal(knowledgeCalled, false);
+
+    knowledgeCalled = false;
     const navigator = new CraftingGuiNavigator({
         commandService: {},
         guiManager: {},
@@ -80,7 +97,6 @@ test('other recipes still use GUI knowledge resolution', async () => {
         guiKnowledge: { resolveSlot: async () => { knowledgeCalled = true; return 10; } },
         config: {}
     });
-    const session = { window: { slots: Array(54).fill({}), inventoryStart: 54, inventoryEnd: 54 } };
     const slot = await navigator.resolveRecipeSlot(session, 'super_cobblestone', { menuSlot: 10, menuItemId: 'super_cobblestone' }, 'crafting');
     assert.equal(slot, 10);
     assert.equal(knowledgeCalled, true);

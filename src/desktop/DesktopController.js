@@ -14,7 +14,7 @@ const SupportBundleBuilder = require('../diagnostics/support/SupportBundleBuilde
 const BootFailureContract = require('./BootFailureContract');
 const IncidentIndexStore = require('./incidents/IncidentIndexStore');
 const OperatorHealthService = require('./health/OperatorHealthService');
-const B5OperatorProjection = require('./b5/B5OperatorProjection');
+const B5OperatorProjection = null;
 const ConfigurationWorkspaceService = require('./configuration/ConfigurationWorkspaceService');
 const BackupCatalogService = require('./backup/BackupCatalogService');
 const OperatorSnapshotProjector = require('./projection/OperatorSnapshotProjector');
@@ -329,7 +329,7 @@ class DesktopController {
         };
     }
 
-    // Dev UI B5 Debug: expose the existing B5 trace recorder history plus the
+    // Dev UI craft trace: expose the generic trace recorder history plus the
     // operator journey context (modes.crafting.details lives in bot snapshot).
     // Renderer renders modes.crafting.details; trace carries replay fixture.
     b5Trace(botId) {

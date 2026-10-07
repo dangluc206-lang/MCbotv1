@@ -152,7 +152,7 @@ class CraftingOperation {
         this.#trace('CRAFT LEARN RECIPES', state.stage, { recipeId: state.recipeId, resource: state.recipe.output, phase: 'START' });
         await this.guiKnowledge.learnBootstrapSlots(session, { source: state.craftingSource, entries: this.recipeRegistry.ids().map(id => {
             const definition = this.recipeRegistry.require(id);
-            return { roleId: `recipe:${id}`, bootstrapSlot: definition.menuSlot ?? null, logicalItemId: definition.menuItemId, context: 'crafting-menu' };
+            return { roleId: `recipe:${id}`, bootstrapSlot: definition.guiIdentityOverride ?? definition.menuSlot ?? null, logicalItemId: definition.menuItemId, context: 'crafting-menu' };
         }) });
         this.#trace('CRAFT LEARN RECIPES OK', state.stage, { recipeId: state.recipeId, resource: state.recipe.output, phase: 'OK' });
     }

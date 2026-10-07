@@ -22,10 +22,6 @@ class LiveConfigApplier {
             }
             return true;
         }
-        if (key === 'b5') {
-            for (const runtime of targets) runtime.getService('craftingMode')?.queueRulesConfig?.(value);
-            return true;
-        }
         return false;
     }
 }
