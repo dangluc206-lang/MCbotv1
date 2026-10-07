@@ -28,6 +28,8 @@ class CraftingItemRegistry {
         if (!itemRegistry || typeof itemRegistry.get !== 'function') throw new TypeError('ItemRegistry is required.');
         if (!recipeRegistry || typeof recipeRegistry.ids !== 'function') throw new TypeError('CraftingRecipeRegistry is required.');
 
+        // G4/G5: tiers are display-only metadata, never a crafting decision input.
+        // Eligibility comes from item + recipe (+ procedure/dependency downstream).
         this.#tierByItem = buildTierIndex(tiers);
         this.#recipeByOutput = buildRecipeIndex(recipeRegistry);
         this.#displayNameByItem = buildDisplayNameIndex(itemRegistry);

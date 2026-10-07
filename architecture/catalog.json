@@ -115,7 +115,6 @@
       ],
       "activeB5Implementation": [
         "src/server-features/crafting/B5PlanningService.js",
-        "src/server-features/crafting/B5AutomationRuntimeDecorator.js",
         "src/server-features/crafting/b5/B5B1InventoryCoordinator.js",
         "src/server-features/crafting/b5/B5CycleCoordinator.js",
         "src/server-features/crafting/b5/B5IntermediateCoordinator.js",
@@ -197,6 +196,31 @@
     }
   ],
   "pendingWiringSources": [
+    {
+      "file": "src/server-features/crafting/b5/B5B1InventoryCoordinator.js",
+      "owner": "crafting",
+      "reason": "G3: production path removed; kept only for legacy parity tests until G18 removes the B5 execution stack."
+    },
+    {
+      "file": "src/server-features/crafting/b5/B5CycleCoordinator.js",
+      "owner": "crafting",
+      "reason": "G3: production path removed; kept only for legacy parity tests until G18 removes the B5 execution stack."
+    },
+    {
+      "file": "src/server-features/crafting/b5/B5IntermediateCoordinator.js",
+      "owner": "crafting",
+      "reason": "G3: production path removed; kept only for legacy parity tests until G18 removes the B5 execution stack."
+    },
+    {
+      "file": "src/server-features/crafting/b5/B5ReserveChainCoordinator.js",
+      "owner": "crafting",
+      "reason": "G3: production path removed; kept only for legacy parity tests until G18 removes the B5 execution stack."
+    },
+    {
+      "file": "src/server-features/crafting/b5/support/B5ActionDiagnostics.js",
+      "owner": "crafting",
+      "reason": "G3: production path removed; kept only for legacy parity tests until G18 removes the B5 execution stack."
+    },
     {
       "file": "src/server-features/crafting/b5/flows/B5PlanningFlow.js",
       "owner": "crafting",

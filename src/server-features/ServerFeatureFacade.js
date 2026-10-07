@@ -12,6 +12,9 @@ class ServerFeatureFacade {
     crafting() { return this.#require('crafting'); }
     craftingPlanning() { return this.#require('craftingPlanning'); }
     craftingAutomation() { return this.#require('craftingAutomation'); }
+    procedureRegistry() { return this.#require('procedureRegistry'); }
+    procedureExecutor() { return this.#require('procedureExecutor'); }
+    quantityStrategy() { return this.#require('quantityStrategy'); }
     craftingTrace() {
         if (this.features.craftingTrace) return this.features.craftingTrace;
         return this.#require('b5TraceRecorder');

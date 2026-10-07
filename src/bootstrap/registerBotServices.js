@@ -90,6 +90,11 @@ const CraftingResultVerifier = require("../server-features/crafting/CraftingResu
 const StageExecutionContract = require("../server-features/crafting/verification/StageExecutionContract");
 const CraftingOperation = require("../server-features/crafting/CraftingOperation");
 const CraftingService = require("../server-features/crafting/CraftingService");
+const ProcedureRegistry = require("../server-features/crafting/procedure/ProcedureRegistry");
+const ProcedureExecutor = require("../server-features/crafting/procedure/ProcedureExecutor");
+const ProcedureBuilder = require("../server-features/crafting/procedure/ProcedureBuilder");
+const ProcedureRecorder = require("../server-features/crafting/procedure/ProcedureRecorder");
+const QuantityStrategy = require("../server-features/crafting/quantity/QuantityStrategy");
 const MaterialCalculator = require("../planning/crafting/MaterialCalculator");
 const CraftingPlanner = require("../planning/crafting/CraftingPlanner");
 const CraftingChainPlanner = require("../planning/crafting/CraftingChainPlanner");
@@ -99,7 +104,7 @@ const B5PlanningService = require("../server-features/crafting/B5PlanningService
 const CraftTraceRecorder = require("../server-features/crafting/CraftTraceRecorder");
 const CraftAutomationService = require("../server-features/crafting/CraftAutomationService");
 const CraftReadService = require("../server-features/crafting/CraftReadService");
-const B5AutomationRuntimeDecorator = require("../server-features/crafting/B5AutomationRuntimeDecorator");
+const CraftAutomationRuntimeDecorator = require("../server-features/crafting/CraftAutomationRuntimeDecorator");
 const IslandTeleportOperation = require("../server-features/island/IslandTeleportOperation");
 const IslandService = require("../server-features/island/IslandService");
 const DungeonDestinationRegistry = require("../server-features/dungeon/DungeonDestinationRegistry");
@@ -537,6 +542,13 @@ function registerBotServices({ profile, configuration, shared }) {
     operationManager,
     context,
   });
+  const procedureRegistry = new ProcedureRegistry(configuration.registry.require('procedures'));
+  const quantityStrategy = new QuantityStrategy();
+  const procedureExecutor = new ProcedureExecutor({
+    recipeRegistry,
+    procedureRegistry,
+    quantityStrategy,
+  });
   const materialCalculator = new MaterialCalculator({ recipeRegistry });
   const craftingPlanner = new CraftingPlanner({
     recipeRegistry,
@@ -605,7 +617,7 @@ function registerBotServices({ profile, configuration, shared }) {
   // The B5 compat view (B5PlanningService above) keeps its configured default for
   // legacy/collector/replay callers only. The legacy b5-automation name stays
   // dual-exposed on the same instance.
-  const b5AutomationCore = new CraftAutomationService({
+  const craftAutomationCore = new CraftAutomationService({
     planningService: craftPlanning,
     crafting,
     personalVault,
@@ -621,7 +633,10 @@ function registerBotServices({ profile, configuration, shared }) {
     logger,
     craftingVerificationService,
   });
-  const b5Automation = new B5AutomationRuntimeDecorator({ service: b5AutomationCore, workloadMetrics });
+  const b5Automation = new CraftAutomationRuntimeDecorator({ service: craftAutomationCore, workloadMetrics });
+  // G3 compat: historical b5Automation names keep pointing at the same generic
+  // single-path instance; no legacy cycle exists behind them.
+  const craftAutomation = b5Automation;
   const connectionStateView = new ConnectionStateView({ context });
   const islandConfig = configuration.registry.require("island");
   const islandOperation = new IslandTeleportOperation({
@@ -809,10 +824,15 @@ function registerBotServices({ profile, configuration, shared }) {
     minerals,
     smelting,
     crafting,
+    procedureRegistry,
+    procedureExecutor,
+    procedureBuilder: ProcedureBuilder,
+    procedureRecorder: ProcedureRecorder,
+    quantityStrategy,
     b5Planning,
     b5Automation,
     craftingPlanning: craftPlanning,
-    craftingAutomation: b5Automation,
+    craftingAutomation: craftAutomation,
     craftingTrace: craftTraceRecorder,
     b5TraceRecorder,
     island,
@@ -1122,8 +1142,11 @@ function registerBotServices({ profile, configuration, shared }) {
       craftPlanning,
       craftRead,
       craftingPlanning: craftPlanning,
-      craftingAutomation: b5Automation,
+      craftingAutomation: craftAutomation,
       craftingTrace: craftTraceRecorder,
+      procedureRegistry,
+      procedureExecutor,
+      quantityStrategy,
       collectorB5Mode: collectorB5ModeAdapter,
       craftingMode,
       fishingMode: fishingModeAdapter,

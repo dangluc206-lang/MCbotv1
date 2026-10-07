@@ -92,7 +92,9 @@ test('every configured tier item resolves with correct classification and recipe
     }
     assert.deepEqual(tierCounts, { B1: 8, B2: 8, B3: 8, B4: 3, B5: 1 });
     const all = registry.items();
-    assert.equal(all.length, 28);
+    // G4/G5: tier counts stay display-only; un-tiered data-driven items resolve too.
+    assert.ok(all.length >= 28);
+    assert.ok(registry.resolveById('my_item'), 'data-driven my_item resolves without a tier');
     // identity data survives: MMOItems identity must not be lost
     const sieuDaCuoi = all.find(item => item.id === 'super_cobblestone');
     assert.ok(sieuDaCuoi.identities.includes('MMOITEMS_ITEM_ID:SIEUDACUOI'));

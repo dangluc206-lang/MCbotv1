@@ -906,5 +906,33 @@
         ]
       }
     }
+  },
+  "my_item": {
+    "representations": {
+      "default": {
+        "rules": [
+          {
+            "type": "name",
+            "value": "My Item"
+          }
+        ]
+      },
+      "inventory": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:MYITEM"
+          }
+        ]
+      },
+      "personal-vault": {
+        "rules": [
+          {
+            "type": "identity",
+            "value": "MMOITEMS_ITEM_ID:MYITEM"
+          }
+        ]
+      }
+    }
   }
 }

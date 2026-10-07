@@ -2,12 +2,14 @@
 
 const Operation = require('../../operations/Operation');
 const Result = require('../../shared/result/Result');
+const QuantityStrategy = require('./quantity/QuantityStrategy');
 
 class CraftingService {
-    constructor({ operation, operationManager = null, context = null }) {
+    constructor({ operation, operationManager = null, context = null, quantityStrategy = null } = {}) {
         this.operation = operation;
         this.operationManager = operationManager;
         this.context = context;
+        this.quantityStrategy = quantityStrategy || new QuantityStrategy();
     }
 
     async craft(recipeId, amount, options = {}) {
@@ -37,15 +39,17 @@ class CraftingService {
     async executeStep(step, options = {}) {
         try {
             const results = [];
-            const actions = step.quantityActions || [];
-            for (const action of actions) {
-                for (let repeat = 0; repeat < action.repeats; repeat += 1) {
-                    const result = await this.craft(step.recipeId, action.amount, options);
-                    if (result?.success === false) return result;
-                    results.push(result?.data ?? result);
-                }
+            const outputAmount = Number(step.outputAmount || options.outputAmount || 1);
+            // Exact-quantity: batching belongs to the strategy, never to the planner.
+            const batches = QuantityStrategy.planBatches(Number(step.crafts || 0), {
+                maxBatch: Number(options.maxBatch || 64)
+            });
+            for (const amount of batches) {
+                const result = await this.craft(step.recipeId, amount, { ...options, outputAmount });
+                if (result?.success === false) return result;
+                results.push(result?.data ?? result);
             }
-            return Result.ok({ recipeId: step.recipeId, outputId: step.outputId, crafts: step.crafts, actions, results });
+            return Result.ok({ recipeId: step.recipeId, outputId: step.outputId, crafts: step.crafts, batches, results });
         } catch (error) {
             return Result.fail(this.#status(error), error.message, error, { recipeId: step.recipeId, outputId: step.outputId });
         }

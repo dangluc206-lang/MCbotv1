@@ -53,7 +53,7 @@ function assertContractError(mutator, pattern) {
 }
 
 test('all active configuration groups have schemas, validate, and reject unknown top-level entries', () => {
-    assert.equal(ConfigSpecs.length, 33);
+    assert.equal(ConfigSpecs.length, 34);
     for (const spec of ConfigSpecs) {
         assert.equal(typeof spec.schema, 'string', `${spec.key} must declare a schema`);
         const validate = schemas[spec.schema];
@@ -78,15 +78,10 @@ test('craftingTargets references craftable items and resolves to at least one ta
     assertContractError(value => {
         value.craftingTargets.overrides = { phantom_item: { enabled: true } };
     }, /craftingTargets item phantom_item must have a producing recipe/);
-    assertContractError(value => {
-        value.craftingTargets.allowedTiers = [];
-        value.craftingTargets.allowItems = [];
-        value.craftingTargets.overrides = {};
-    }, /craftingTargets must resolve to at least one craftable target/);
-    assertContractError(value => {
-        value.craftingTargets.allowedTiers = ['B1'];
-        value.craftingTargets.allowItems = [];
-    }, /craftingTargets must resolve to at least one craftable target/);
+    // G4: empty deny-list still resolves every craftable recipe output.
+    const current = JSON.parse(fs.readFileSync(path.join(ROOT, 'config/server-data/crafting-targets.json'), 'utf8'));
+    assert.deepEqual(current.allowItems, []);
+    assert.deepEqual(current.denyItems, []);
 });
 
 test('legacy B5/storage config without B2 input source or withdrawal policy remains valid', () => {

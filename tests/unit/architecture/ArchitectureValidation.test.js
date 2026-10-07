@@ -27,7 +27,7 @@ test('machine-readable architecture catalog matches the reachable project and ex
     )).join('\n'));
     assert.equal(result.catalog.sourceReachable + result.catalog.pendingWiringSources, result.catalog.sourceFiles);
     assert.equal(result.catalog.pendingWiringSources, catalog.pendingWiringSources.length);
-    assert.equal(result.catalog.configGroups, 33);
+    assert.equal(result.catalog.configGroups, 34);
     assert.equal(result.catalog.connectionEvents, 31);
     assert.deepEqual(result.catalog.coverage, catalog.coverage);
     assert.equal(result.catalog.officialDocuments, catalog.officialDocuments.length);

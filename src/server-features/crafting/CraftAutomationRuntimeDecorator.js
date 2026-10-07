@@ -1,8 +1,8 @@
 'use strict';
 
-class B5AutomationRuntimeDecorator {
+class CraftAutomationRuntimeDecorator {
     constructor({ service, workloadMetrics = null }) {
-        if (!service?.runNext) throw new TypeError('B5AutomationRuntimeDecorator service is required.');
+        if (!service?.runNext) throw new TypeError('CraftAutomationRuntimeDecorator service is required.');
         this.service = service;
         this.workloadMetrics = workloadMetrics;
     }
@@ -14,8 +14,6 @@ class B5AutomationRuntimeDecorator {
     runMaintenance(...args) { return this.#measure(() => this.service.runMaintenance(...args)); }
 
     reconfigure(config = {}) {
-        // Delegate normalization to the service so decorator + service store the
-        // same generic-only config (generic `inputSource` wins over legacy).
         if (typeof this.service.reconfigure === 'function') return this.service.reconfigure(config);
         const next = config || {};
         this.service.config = next;
@@ -26,8 +24,8 @@ class B5AutomationRuntimeDecorator {
     }
 
     #measure(action) {
-        return this.workloadMetrics ? this.workloadMetrics.measure('b5.cycle', action) : action();
+        return this.workloadMetrics ? this.workloadMetrics.measure('crafting.cycle', action) : action();
     }
 }
 
-module.exports = B5AutomationRuntimeDecorator;
+module.exports = CraftAutomationRuntimeDecorator;

@@ -210,10 +210,17 @@ class ConfigurationContractValidator {
 
         const recipeOutputs = new Map();
         const recipes = snapshot.recipes || {};
+        const procedureIds = new Set(Object.keys(snapshot.procedures || {}));
         for (const [recipeId, recipe] of Object.entries(recipes)) {
             checkItem(recipe.output, `recipes.${recipeId}.output`);
             checkItem(recipe.menuItemId, `recipes.${recipeId}.menuItemId`);
             for (const inputId of Object.keys(recipe.inputs || {})) checkItem(inputId, `recipes.${recipeId}.inputs.${inputId}`);
+            // G7/G17: every recipe must name an existing procedure (HOW), fail closed otherwise.
+            if (typeof recipe.procedure !== 'string' || !recipe.procedure.trim()) {
+                errors.push(`recipes.${recipeId}.procedure must be a non-empty procedure id`);
+            } else if (!procedureIds.has(recipe.procedure.trim())) {
+                errors.push(`recipes.${recipeId}.procedure references missing procedure: ${recipe.procedure}`);
+            }
             if (recipeOutputs.has(recipe.output)) {
                 errors.push(`recipes.${recipeId}.output duplicates recipe ${recipeOutputs.get(recipe.output)}: ${recipe.output}`);
             } else {
@@ -308,7 +315,7 @@ class ConfigurationContractValidator {
             errors.push(`b5.targetId has no producing recipe: ${targetId}`);
         }
 
-        this.#validateCraftingTargets(snapshot, errors, recipeOutputs, tierMembership);
+        this.#validateCraftingTargets(snapshot, errors, recipeOutputs);
 
         const smeltingIds = new Set(Object.keys(snapshot.smelting?.recipes || {}));
         for (const recipeId of snapshot.mineralConversions?.smeltingRecipeIds || []) {
@@ -316,10 +323,9 @@ class ConfigurationContractValidator {
         }
     }
 
-    #validateCraftingTargets(snapshot, errors, recipeOutputs, tierMembership) {
+    #validateCraftingTargets(snapshot, errors, recipeOutputs) {
         const targets = snapshot.craftingTargets;
         if (!isObject(targets)) return;
-        const allowedTiers = new Set(targets.allowedTiers || []);
         const referenced = [
             ...new Set([
                 ...(targets.allowItems || []),
@@ -332,15 +338,13 @@ class ConfigurationContractValidator {
                 errors.push(`craftingTargets item ${itemId} must have a producing recipe`);
             }
         }
+        // G4: eligibility is item + recipe (+ procedure/dependency downstream),
+        // never tier. Every craftable recipe output is offerable unless denied.
         const enabledTargets = new Set();
-        for (const [tier, ids] of Object.entries(snapshot.craftingTiers || {})) {
-            if (!allowedTiers.has(tier)) continue;
-            for (const itemId of ids || []) {
-                if (recipeOutputs.has(itemId) && !(targets.denyItems || []).includes(itemId)
-                    && targets.overrides?.[itemId]?.enabled !== false) {
-                    enabledTargets.add(itemId);
-                }
-            }
+        for (const itemId of recipeOutputs.keys()) {
+            if ((targets.denyItems || []).includes(itemId)) continue;
+            if (targets.overrides?.[itemId]?.enabled === false) continue;
+            enabledTargets.add(itemId);
         }
         for (const itemId of targets.allowItems || []) {
             if (targets.overrides?.[itemId]?.enabled !== false) enabledTargets.add(itemId);
@@ -350,14 +354,6 @@ class ConfigurationContractValidator {
         }
         if (enabledTargets.size === 0) {
             errors.push('craftingTargets must resolve to at least one craftable target');
-            return;
-        }
-        for (const itemId of enabledTargets) {
-            const tier = tierMembership.get(itemId);
-            if (tier && !allowedTiers.has(tier) && !(targets.allowItems || []).includes(itemId)
-                && targets.overrides?.[itemId]?.enabled === undefined) {
-                errors.push(`craftingTargets item ${itemId} belongs to tier ${tier} which is not in allowedTiers`);
-            }
         }
     }
 

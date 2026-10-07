@@ -218,11 +218,15 @@ class CraftingOperation {
     }
 
     #normalizeQuantity(amount) {
-        if (amount === 1 || amount === 64) return amount;
+        if (amount === 'ALL') return 'ALL';
         if (typeof amount === 'string' && amount.trim().toUpperCase() === 'ALL') return 'ALL';
+        // G10/G11: exact quantity. GUI buttons (1/64) are server capabilities,
+        // not architecture limits — callers batch them to stay exact.
+        const value = Number(amount);
+        if (Number.isSafeInteger(value) && value >= 1) return value;
         throw this.#flow('CRAFTING_QUANTITY_INVALID', 'resolve-quantity', 'normalize crafting quantity', String(amount), {
             amount,
-            supported: [1, 64, 'ALL']
+            supported: 'positive-integer-or-ALL'
         });
     }
 

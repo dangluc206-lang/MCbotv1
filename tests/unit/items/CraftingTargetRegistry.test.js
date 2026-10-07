@@ -32,22 +32,22 @@ test('targets come from configuration data, not hard-coded ids', () => {
     const registry = createRegistry();
     const ids = registry.ids();
     assert.ok(ids.length > 0);
-    for (const tier of ['B3', 'B4', 'B5']) {
-        for (const itemId of TIERS[tier]) {
-            assert.equal(ids.includes(itemId), true, `${itemId} (tier ${tier}) must be a target by default`);
-        }
+    // G4: no tier decision. Every craftable recipe output is offerable by default.
+    for (const recipeId of Object.keys(RECIPES)) {
+        const output = RECIPES[recipeId].output;
+        assert.equal(ids.includes(output), true, `${output} must be a target by default`);
     }
 });
 
-test('B2 intermediates are not operator targets unless the config allows them', () => {
+test('explicit allow-list restricts targets; empty policy means all craftables', () => {
     const registry = createRegistry();
-    for (const itemId of TIERS.B2) {
-        assert.equal(registry.isTarget(itemId), false, `${itemId} must not be a target by default`);
+    for (const itemId of Object.values(RECIPES).map(recipe => recipe.output)) {
+        assert.equal(registry.isTarget(itemId), true, `${itemId} must be a target by default`);
     }
-    const relaxed = createRegistry({ ...TARGET_POLICY, allowedTiers: [...TARGET_POLICY.allowedTiers, 'B2'] });
-    for (const itemId of TIERS.B2) {
-        assert.equal(relaxed.isTarget(itemId), true, `config change alone must promote ${itemId}`);
-    }
+    const restricted = createRegistry({ ...TARGET_POLICY, allowItems: ['titanium', 'carbon'] });
+    assert.equal(restricted.isTarget('titanium'), true);
+    assert.equal(restricted.isTarget('carbon'), true);
+    assert.equal(restricted.isTarget('tungsten'), false, 'config change alone must restrict targets');
 });
 
 test('target entries carry the required identity and recipe contract', () => {
@@ -65,7 +65,8 @@ test('target entries carry the required identity and recipe contract', () => {
         assert.ok(target.displayName);
         assert.ok(target.recipe, `${target.id} must have a producing recipe`);
         assert.ok(Number.isInteger(target.outputAmount) && target.outputAmount > 0);
-        assert.equal(typeof target.tier, 'string');
+        // G4: tier is display-only metadata; un-tiered data-driven items are valid targets.
+        assert.ok(target.tier === null || typeof target.tier === 'string');
         assert.ok(Array.isArray(target.identities));
     }
 });
@@ -91,7 +92,8 @@ test('registry never contains invalid targets', () => {
     const registry = createRegistry();
     for (const target of registry.targets()) {
         assert.equal(typeof RECIPES[target.id], 'object', `${target.id} must exist in recipes.json`);
-        assert.ok(TIERS[target.tier]?.includes(target.id), `${target.id} must be a tier member`);
+        // G4: targets come from item+recipe data, never from tier membership.
+        assert.deepEqual(target.recipe, RECIPES[target.id]);
     }
     assert.equal(registry.resolveById('cobblestone'), null, 'non-craftable B1 material must never be a target');
     assert.equal(registry.resolveById('does_not_exist'), null);
@@ -103,13 +105,12 @@ test('policy data alone can deny a target or force an extra one', () => {
     assert.equal(denied.isTarget('titanium'), false);
     const forced = createRegistry({
         ...TARGET_POLICY,
-        allowedTiers: [],
-        allowItems: ['super_cobblestone'],
+        allowItems: ['titanium'],
         denyItems: [],
         overrides: {}
     });
-    assert.equal(forced.ids().includes('super_cobblestone'), true, 'config can promote an intermediate');
-    assert.equal(forced.ids().includes('titanium'), false, 'removing the tier removes tier targets');
+    assert.equal(forced.ids().includes('titanium'), true, 'config keeps an explicit target');
+    assert.equal(forced.ids().includes('tungsten'), false, 'allow-list restricts the rest');
 });
 
 test('overrides can disable a target or rename it for the operator', () => {
@@ -144,7 +145,7 @@ test('a brand new item and recipe become a target with config+data only', () => 
 });
 
 test('invalid target policy fails closed', () => {
-    assert.throws(() => createRegistry({ ...TARGET_POLICY, allowedTiers: ['B9'] }), /allowedTiers/);
+    assert.throws(() => createRegistry({ ...TARGET_POLICY, allowedTiers: ['B2'] }), /allowedTiers/);
     assert.throws(() => createRegistry({ ...TARGET_POLICY, unknownKey: 1 }), /not allowed/);
     assert.throws(() => createRegistry({ ...TARGET_POLICY, schemaVersion: 2 }), /schemaVersion/);
     assert.throws(() => createRegistry({ ...TARGET_POLICY, allowItems: ['titanium'], denyItems: ['titanium'] }), /overlap/);

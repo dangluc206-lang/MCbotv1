@@ -1,0 +1,42 @@
+{
+  "minerals-crafting": {
+    "label": "Minerals crafting (/ks)",
+    "description": "Shared procedure: command -> GUI -> click -> wait -> verify. Reused by all minerals recipes.",
+    "quantityStrategy": "button-batch",
+    "maxBatch": 64,
+    "steps": [
+      { "type": "command", "commandKey": "minerals" },
+      { "type": "open-gui", "guiId": "crafting" },
+      { "type": "find-logical-item", "itemId": "$recipe.output" },
+      { "type": "click" },
+      { "type": "wait-for-gui", "guiId": "craftingQuantity" },
+      { "type": "click" },
+      { "type": "wait-for-output" },
+      { "type": "verify-quantity", "amount": "$execution.remaining" },
+      { "type": "close-gui" }
+    ]
+  },
+  "forge-crafting": {
+    "label": "Forge crafting",
+    "description": "Diversity proof: command -> click -> wait -> verify (no quantity GUI).",
+    "quantityStrategy": "repeat",
+    "maxBatch": 1,
+    "steps": [
+      { "type": "command", "commandKey": "forge" },
+      { "type": "click" },
+      { "type": "wait", "ms": 500 },
+      { "type": "verify-item" }
+    ]
+  },
+  "npc-crafting": {
+    "label": "NPC crafting",
+    "description": "Diversity proof: open GUI -> find logical item -> quantity -> verify.",
+    "quantityStrategy": "command-quantity",
+    "maxBatch": 64,
+    "steps": [
+      { "type": "open-gui", "guiId": "npc-crafting" },
+      { "type": "find-logical-item", "itemId": "$recipe.output" },
+      { "type": "verify-quantity", "amount": "$request.amount" }
+    ]
+  }
+}

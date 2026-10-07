@@ -1,17 +1,16 @@
 'use strict';
-// ACT E-CUTOVER - production runtime wiring proof.
+// G3 - single generic execution path proof.
 // Asserts the real composition (CraftAutomationService + runtime decorator)
 // executes the generic CraftCycleCoordinator through the public API, and that
-// the legacy B5CycleCoordinator is never executed on the normal crafting path.
+// no legacy B5CycleCoordinator exists on the service anymore.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const Result = require('../../../src/shared/result/Result');
 const CraftAutomationService = require('../../../src/server-features/crafting/CraftAutomationService');
-const B5AutomationRuntimeDecorator = require('../../../src/server-features/crafting/B5AutomationRuntimeDecorator');
+const CraftAutomationRuntimeDecorator = require('../../../src/server-features/crafting/CraftAutomationRuntimeDecorator');
 const CraftCycleCoordinator = require('../../../src/server-features/crafting/coordinators/CraftCycleCoordinator');
-const B5CycleCoordinator = require('../../../src/server-features/crafting/b5/B5CycleCoordinator');
 const CraftIntermediateCoordinator = require('../../../src/server-features/crafting/coordinators/CraftIntermediateCoordinator');
 const CraftReserveChainCoordinator = require('../../../src/server-features/crafting/coordinators/CraftReserveChainCoordinator');
 const CraftBaseInventoryCoordinator = require('../../../src/server-features/crafting/coordinators/CraftBaseInventoryCoordinator');
@@ -99,10 +98,9 @@ function productionRig() {
 
 test('cutover wiring: production service composes the generic cycle over the generic stack', () => {
     const { service } = productionRig();
-    // The execution path dependency is the generic cycle, not the legacy one.
+    // The single execution path is the generic cycle; no legacy cycle exists.
     assert.equal(service.cycle instanceof CraftCycleCoordinator, true);
-    assert.notEqual(service.cycle, service.legacyCycle);
-    assert.equal(service.legacyCycle instanceof B5CycleCoordinator, true);
+    assert.equal('legacyCycle' in service, false);
     // Actual cycle dependencies are the generic coordinators.
     assert.equal(service.cycle.intermediate, service.genericIntermediate);
     assert.equal(service.cycle.intermediate instanceof CraftIntermediateCoordinator, true);
@@ -112,31 +110,26 @@ test('cutover wiring: production service composes the generic cycle over the gen
     assert.equal(service.cycle.baseInventory instanceof CraftBaseInventoryCoordinator, true);
     assert.equal(service.cycle.finalCraft, service.finalCraft, 'generic final craft is shared with the cycle');
     assert.equal(service.cycle.quantity, service.quantity, 'generic quantity policy is the cycle authority');
-    // The legacy B5 stack is NOT behind the production cycle.
-    assert.notEqual(service.cycle.intermediate, service.intermediate);
-    assert.notEqual(service.cycle.reserveChain, service.reserveChain);
+    // Compat aliases expose the same generic instances.
+    assert.equal(service.cycle.intermediate, service.intermediate);
+    assert.equal(service.cycle.reserveChain, service.reserveChain);
     // Runtime decorator (production facade) wraps this exact service.
-    const decorator = new B5AutomationRuntimeDecorator({ service });
+    const decorator = new CraftAutomationRuntimeDecorator({ service });
     assert.equal(decorator.service, service);
     for (const method of ['run', 'runNext', 'runTarget', 'runMaintenance', 'status', 'reconfigure']) {
         assert.equal(typeof decorator[method], 'function', method + ' stays on the public API');
     }
 });
 
-test('cutover wiring: a real runTarget through the production decorator executes the generic cycle, never B5CycleCoordinator', async () => {
+test('cutover wiring: a real runTarget through the production decorator executes the generic cycle', async () => {
     const { service, calls } = productionRig();
-    let legacyRuns = 0;
-    service.legacyCycle.execute = () => {
-        legacyRuns += 1;
-        throw new Error('legacy B5CycleCoordinator must not execute on the normal crafting path');
-    };
     const executed = [];
     const realExecute = service.cycle.execute.bind(service.cycle);
     service.cycle.execute = (amount, context, options) => {
         executed.push({ targetId: options.targetId, mode: options.mode, additional: options.additional });
         return realExecute(amount, context, options);
     };
-    const decorator = new B5AutomationRuntimeDecorator({ service });
+    const decorator = new CraftAutomationRuntimeDecorator({ service });
     const result = await decorator.runTarget({ targetId: 'super_alloy' });
     // Real execution path: the operation ran to a verified completion with
     // actual craft side effects (production-shaped parity fixture).
@@ -149,20 +142,14 @@ test('cutover wiring: a real runTarget through the production decorator executes
     assert.equal(executed.length, 1, JSON.stringify(executed));
     assert.equal(executed[0].targetId, 'super_alloy');
     assert.equal(executed[0].mode, 'production');
-    assert.equal(legacyRuns, 0, 'B5CycleCoordinator executed on the production path');
 });
 
 test('cutover wiring: every public API routes through the generic cycle; missing target stays fail-closed', async () => {
     const { service } = productionRig();
     const executed = [];
-    let legacyRuns = 0;
     service.cycle.execute = (amount, context, options) => {
         executed.push(options);
         return Promise.resolve({ completedTarget: false, targetId: options.targetId || null });
-    };
-    service.legacyCycle.execute = () => {
-        legacyRuns += 1;
-        throw new Error('legacy B5CycleCoordinator must not execute on the normal crafting path');
     };
     // Fail-closed: generic planning + no explicit target never reaches any cycle.
     for (const call of [
@@ -187,17 +174,18 @@ test('cutover wiring: every public API routes through the generic cycle; missing
     assert.deepEqual(executed.map(o => o.targetId), ['super_alloy', 'super_alloy', 'super_alloy', null]);
     assert.deepEqual(executed.map(o => o.mode), ['production', 'production', 'production', 'maintenance']);
     assert.equal(executed[3].craftFinalTarget, false, 'maintenance never crafts the final target');
-    assert.equal(legacyRuns, 0, 'B5CycleCoordinator executed on the production path');
 });
 
 test('cutover wiring: composition root feeds the decorator into crafting/collector/facade consumers', () => {
     const source = fs.readFileSync(path.resolve(__dirname, '../../../src/bootstrap/registerBotServices.js'), 'utf8');
     // The automation core is CraftAutomationService with the generic planning authority.
     assert.match(source, /new CraftAutomationService\(\{\s*planningService:\s*craftPlanning/);
-    // Production facade: every runtime consumer receives the decorator over that core.
-    assert.match(source, /new B5AutomationRuntimeDecorator\(\{\s*service:\s*b5AutomationCore/);
-    assert.match(source, /automation:\s*b5Automation/);
-    assert.match(source, /craftingAutomation:\s*b5Automation/);
+    // Production facade: every runtime consumer receives the generic decorator over that core.
+    assert.match(source, /new CraftAutomationRuntimeDecorator\(\{\s*service:\s*craftAutomationCore/);
+    assert.match(source, /craftingAutomation:\s*craftAutomation/);
+    assert.match(source, /procedureRegistry/);
+    assert.match(source, /procedureExecutor/);
+    assert.match(source, /quantityStrategy/);
     // Collector is an explicit compatibility consumer: it names its target from
     // its own compat planning view, never from an ambient default.
     const collectorSource = fs.readFileSync(path.resolve(__dirname, '../../../src/modes/collector-b5/CollectorB5ModeService.js'), 'utf8');

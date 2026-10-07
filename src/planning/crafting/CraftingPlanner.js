@@ -69,7 +69,6 @@ class CraftingPlanner {
                 recipeId,
                 outputId: recipe.output,
                 crafts,
-                quantityBatches: this.#quantityBatches(crafts),
                 inputs: Object.fromEntries(
                     Object.entries(recipe.inputs || {}).map(([id, count]) => [id, Number(count) * crafts])
                 )
@@ -109,19 +108,6 @@ class CraftingPlanner {
         return stock;
     }
 
-    #quantityBatches(crafts) {
-        const result = [];
-        let remaining = crafts;
-        while (remaining >= 64) {
-            result.push(64);
-            remaining -= 64;
-        }
-        while (remaining > 0) {
-            result.push(1);
-            remaining -= 1;
-        }
-        return result;
-    }
 }
 
 module.exports = CraftingPlanner;

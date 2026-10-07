@@ -361,15 +361,45 @@ const recipes = validator('recipes', (value, errors) => {
     for (const [recipeId, recipe] of Object.entries(value)) {
         const path = `recipes.${recipeId}`;
         if (!requiredObject(recipe, path, errors)) continue;
-        unknown(recipe, ['output','outputAmount','menuItemId','inputs','menuSlot','inputSource'], path, errors);
+        unknown(recipe, ['output','outputAmount','menuItemId','inputs','menuSlot','inputSource','procedure'], path, errors);
         requiredString(recipe.output, `${path}.output`, errors);
         numberField(recipe.outputAmount, `${path}.outputAmount`, errors, { integerOnly: true, positiveOnly: true });
         requiredString(recipe.menuItemId, `${path}.menuItemId`, errors);
         numberField(recipe.menuSlot, `${path}.menuSlot`, errors, { integerOnly: true });
+        requiredString(recipe.procedure, `${path}.procedure`, errors);
         if (!requiredObject(recipe.inputs, `${path}.inputs`, errors)) continue;
         if (Object.keys(recipe.inputs).length === 0) errors.push(`${path}.inputs must not be empty`);
         for (const [itemId, amount] of Object.entries(recipe.inputs)) numberField(amount, `${path}.inputs.${itemId}`, errors, { integerOnly: true, positiveOnly: true });
         if (recipe.inputSource !== undefined && !['storage','inventory','personal-vault'].includes(recipe.inputSource)) errors.push(`${path}.inputSource is unsupported`);
+    }
+});
+
+const procedures = validator('procedures', (value, errors) => {
+    if (Object.keys(value).length === 0) errors.push('procedures must not be empty');
+    const stepTypes = new Set([
+        'command', 'slash-command', 'open-gui', 'resolve-gui',
+        'find-logical-item', 'find-slot', 'click', 'wait',
+        'wait-for-transition', 'wait-for-message', 'wait-for-gui',
+        'wait-for-output', 'close-gui', 'verify-item', 'verify-quantity'
+    ]);
+    for (const [procedureId, procedure] of Object.entries(value)) {
+        const path = `procedures.${procedureId}`;
+        if (!requiredObject(procedure, path, errors)) continue;
+        unknown(procedure, ['label', 'description', 'quantityStrategy', 'maxBatch', 'steps'], path, errors);
+        if (procedure.quantityStrategy !== undefined
+            && !['button-batch', 'repeat', 'command-quantity', 'custom'].includes(procedure.quantityStrategy)) {
+            errors.push(`${path}.quantityStrategy is unsupported`);
+        }
+        if (procedure.maxBatch !== undefined) numberField(procedure.maxBatch, `${path}.maxBatch`, errors, { integerOnly: true, positiveOnly: true });
+        if (!Array.isArray(procedure.steps) || procedure.steps.length === 0) {
+            errors.push(`${path}.steps must be a non-empty array`);
+            continue;
+        }
+        procedure.steps.forEach((step, index) => {
+            const stepPath = `${path}.steps[${index}]`;
+            if (!requiredObject(step, stepPath, errors)) return;
+            if (!stepTypes.has(String(step.type))) errors.push(`${stepPath}.type is unsupported: ${step.type}`);
+        });
     }
 });
 
@@ -379,15 +409,9 @@ const craftingTiers = validator('craftingTiers', (value, errors) => {
 });
 
 const craftingTargets = validator('craftingTargets', (value, errors) => {
-    unknown(value, ['schemaVersion','allowedTiers','allowItems','denyItems','overrides'], 'craftingTargets', errors);
+    unknown(value, ['schemaVersion','allowItems','denyItems','overrides'], 'craftingTargets', errors);
     if (value.schemaVersion !== undefined && value.schemaVersion !== 1) errors.push('craftingTargets.schemaVersion must be 1');
-    if (!Array.isArray(value.allowedTiers)) {
-        errors.push('craftingTargets.allowedTiers must be an array');
-    } else {
-        for (const tier of value.allowedTiers) {
-            if (!['B1','B2','B3','B4','B5'].includes(tier)) errors.push(`craftingTargets.allowedTiers tier is unsupported: ${tier}`);
-        }
-    }
+    if (value.allowedTiers !== undefined) errors.push('craftingTargets.allowedTiers was removed: eligibility is item/recipe/procedure only');
     for (const field of ['allowItems', 'denyItems']) stringArray(value[field], `craftingTargets.${field}`, errors, { allowEmpty: true });
     if (Array.isArray(value.allowItems) && Array.isArray(value.denyItems)) {
         for (const itemId of value.allowItems) {
@@ -412,8 +436,8 @@ const b5 = validator('b5', (value, errors) => {
     numberField(value.b3AllMinEmptySlots, 'b5.b3AllMinEmptySlots', errors, { integerOnly: true });
     numberField(value.pvInventorySettleTimeoutMs, 'b5.pvInventorySettleTimeoutMs', errors, { integerOnly: true, nonNegativeOnly: true });
     numberField(value.pvInventorySettlePollMs, 'b5.pvInventorySettlePollMs', errors, { integerOnly: true, positiveOnly: true });
-    if (value.b1SupplyMode !== 'continuous') errors.push('b5.b1SupplyMode must be continuous; finite supply is not implemented');
-    if (!['inventory','storage'].includes(value.b2InputSource)) errors.push('b5.b2InputSource must be inventory or storage');
+    if (value.b1SupplyMode !== undefined && value.b1SupplyMode !== 'continuous') errors.push('b5.b1SupplyMode must be continuous; finite supply is not implemented');
+    if (value.b2InputSource !== undefined && !['inventory','storage'].includes(value.b2InputSource)) errors.push('b5.b2InputSource must be inventory or storage');
     const quantity = value.quantityOptimization;
     if (requiredObject(quantity, 'b5.quantityOptimization', errors)) {
         const quantityKeys = ['enabled','useAllForB2','useAllForB3','useAllForB4WhenExact','useAllForB5','keepSurplusInPv2','b2BatchSize'];
@@ -626,6 +650,7 @@ module.exports = Object.freeze({
     dungeon,
     skyblock,
     recipes,
+    procedures,
     craftingTiers,
     craftingTargets,
     b5,

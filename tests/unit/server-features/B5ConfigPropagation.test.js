@@ -1,8 +1,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const B5AutomationService = require('../../../src/server-features/crafting/CraftAutomationService');
-const B5AutomationRuntimeDecorator = require('../../../src/server-features/crafting/B5AutomationRuntimeDecorator');
+const CraftAutomationService = require('../../../src/server-features/crafting/CraftAutomationService');
+const CraftAutomationRuntimeDecorator = require('../../../src/server-features/crafting/CraftAutomationRuntimeDecorator');
 const StageExecutionContract = require('../../../src/server-features/crafting/verification/StageExecutionContract');
 
 function serviceFixture() {
@@ -10,35 +10,34 @@ function serviceFixture() {
         source: 'storage',
         reconfigure({ source }) { this.source = source; }
     };
-    const plan = { reconfigure(config) { this.config = config; }, planChain() { return {}; } };
     const flows = {
-        read: {}, plan, storage: { returnBaseInventory() {} }, b2Input,
+        read: {}, storage: { returnBaseInventory() {} }, b2Input,
         deposit: {}, withdraw: {}, craft: {}
     };
-    const service = new B5AutomationService({
+    const service = new CraftAutomationService({
         planningService: {}, crafting: {}, personalVault: {}, storage: {}, b1Materials: {},
         inventoryReader: { snapshot() { return { items: [], emptySlotCount: 36 }; } },
         inventoryCounter: { count() { return 0; } },
         recipeRegistry: { require() { return { inputs: {} }; } },
-        operationManager: { run() {} }, config: { targetId: 'super_alloy', b2InputSource: 'storage' }, flows,
+        operationManager: { run() {} }, config: { inputSource: 'storage' }, flows,
         craftingVerificationService: new StageExecutionContract()
     });
-    return { service, b2Input, plan };
+    return { service, b2Input };
 }
 
-test('B5 service reconfigure propagates one cycle-boundary config to all extracted coordinators', () => {
-    const { service, b2Input, plan } = serviceFixture();
-    const next = { targetId: 'super_alloy', b2InputSource: 'inventory', inventorySafetyEmptySlots: 3 };
+test('crafting service reconfigure propagates one cycle-boundary config to all generic coordinators', () => {
+    const { service, b2Input } = serviceFixture();
+    const next = { inputSource: 'inventory', inventorySafetyEmptySlots: 3 };
     const stored = service.reconfigure(next);
-    // Slice 4/7: legacy b2InputSource is mapped to generic inputSource once at the
-    // boundary; stored config stays generic-only while behavior (inventory) matches.
+    // G3/G4: generic-only config, no B5 vocabulary; one path, no legacyCycle.
     assert.equal(stored.inputSource, 'inventory');
     assert.equal('b2InputSource' in stored, false);
+    assert.equal('legacyCycle' in service, false);
     assert.equal(service.config, stored);
     assert.equal(service.inventoryState.config, stored);
     assert.equal(service.recipeResolver.config, stored);
-    assert.equal(plan.config, stored);
     assert.equal(b2Input.source, 'inventory');
+    assert.equal(service.baseInventory.config, stored);
     assert.equal(service.b1Inventory.config, stored);
     assert.equal(service.finalCraft.config, stored);
     assert.equal(service.intermediate.config, stored);
@@ -52,8 +51,8 @@ test('runtime decorator delegates reconfigure to the service boundary exactly on
         runNext() {}, status() {},
         reconfigure(config) { calls += 1; this.applied = config; return config; }
     };
-    const decorator = new B5AutomationRuntimeDecorator({ service });
-    const next = { b2InputSource: 'inventory' };
+    const decorator = new CraftAutomationRuntimeDecorator({ service });
+    const next = { inputSource: 'inventory' };
     assert.equal(decorator.reconfigure(next), next);
     assert.equal(calls, 1);
     assert.equal(service.applied, next);

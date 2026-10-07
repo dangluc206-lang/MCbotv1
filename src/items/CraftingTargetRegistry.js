@@ -1,6 +1,5 @@
 'use strict';
 
-const TIER_IDS = Object.freeze(['B1', 'B2', 'B3', 'B4', 'B5']);
 const SCHEMA_VERSION = 1;
 
 function fail(message) {
@@ -43,20 +42,19 @@ function normalizePolicy(policy) {
         fail(`craftingTargets.schemaVersion must be ${SCHEMA_VERSION}.`);
     }
     for (const key of Object.keys(policy)) {
-        if (!['schemaVersion', 'allowedTiers', 'allowItems', 'denyItems', 'overrides'].includes(key)) {
+        if (!['schemaVersion', 'allowItems', 'denyItems', 'overrides'].includes(key)) {
+            // G4: allowedTiers removed — tier no longer decides eligibility.
+            // Keep a fail-closed read for legacy files so old configs error clearly
+            // instead of silently changing the offered target set.
+            if (key === 'allowedTiers') fail('craftingTargets.allowedTiers was removed: eligibility is item/recipe/procedure only.');
             fail(`craftingTargets.${key} is not allowed.`);
         }
-    }
-    const allowedTiersRaw = policy.allowedTiers === undefined ? [] : policy.allowedTiers;
-    if (!Array.isArray(allowedTiersRaw) || allowedTiersRaw.some(tier => !TIER_IDS.includes(tier))) {
-        fail(`craftingTargets.allowedTiers must be an array of ${TIER_IDS.join('/')}.`);
     }
     const allowItems = idList(policy.allowItems, 'craftingTargets.allowItems');
     const denyItems = idList(policy.denyItems, 'craftingTargets.denyItems');
     const conflicting = allowItems.filter(itemId => denyItems.includes(itemId));
     if (conflicting.length) fail(`craftingTargets allowItems and denyItems overlap: ${conflicting.join(', ')}.`);
     return Object.freeze({
-        allowedTiers: Object.freeze([...new Set(allowedTiersRaw)]),
         allowItems,
         denyItems: Object.freeze(new Set(denyItems)),
         overrides: normalizeOverrides(policy.overrides)
@@ -108,7 +106,6 @@ class CraftingTargetRegistry {
     descriptor() {
         return Object.freeze({
             contract: 'crafting-target-registry-v1',
-            allowedTiers: Object.freeze([...this.policy.allowedTiers]),
             allowItems: Object.freeze([...this.policy.allowItems]),
             denyItems: Object.freeze([...this.policy.denyItems]),
             targetIds: this.ids()
@@ -118,13 +115,20 @@ class CraftingTargetRegistry {
 
 function buildTargets(craftingItemRegistry, policy) {
     const byId = new Map();
+    const explicitAllowMode = policy.allowItems.length > 0
+        || Object.values(policy.overrides || {}).some(entry => entry?.enabled === true);
     for (const entry of craftingItemRegistry.items()) {
         const itemId = String(entry?.id || '').trim();
         if (!itemId) continue;
         const override = policy.overrides[itemId] || null;
         if (override?.enabled === false || policy.denyItems.has(itemId)) continue;
-        const explicitlyAllowed = override?.enabled === true || policy.allowItems.includes(itemId);
-        if (!explicitlyAllowed && !policy.allowedTiers.includes(entry.tier)) continue;
+        // G4: no tier decision. Eligibility = item + recipe (+ procedure/dependency
+        // checked downstream) + explicit policy. Empty allow-list means every
+        // craftable item is offerable; a non-empty allow-list restricts to it.
+        if (explicitAllowMode) {
+            const explicitlyAllowed = override?.enabled === true || policy.allowItems.includes(itemId);
+            if (!explicitlyAllowed) continue;
+        }
         // A target without a producing recipe is not craftable, so it is never offered.
         if (!entry.recipe) continue;
         const outputAmount = Number(entry.recipe.outputAmount);
@@ -143,5 +147,4 @@ function buildTargets(craftingItemRegistry, policy) {
 }
 
 CraftingTargetRegistry.SCHEMA_VERSION = SCHEMA_VERSION;
-CraftingTargetRegistry.TIER_IDS = TIER_IDS;
 module.exports = CraftingTargetRegistry;

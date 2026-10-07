@@ -7,7 +7,8 @@
       "cobblestone": 16
     },
     "menuSlot": 10,
-    "inputSource": "inventory"
+    "inputSource": "inventory",
+    "procedure": "minerals-crafting"
   },
   "refined_coal": {
     "output": "refined_coal",
@@ -17,7 +18,8 @@
       "coal": 16
     },
     "menuSlot": 11,
-    "inputSource": "inventory"
+    "inputSource": "inventory",
+    "procedure": "minerals-crafting"
   },
   "refined_redstone": {
     "output": "refined_redstone",
@@ -27,7 +29,8 @@
       "redstone": 64
     },
     "menuSlot": 12,
-    "inputSource": "inventory"
+    "inputSource": "inventory",
+    "procedure": "minerals-crafting"
   },
   "refined_lapis": {
     "output": "refined_lapis",
@@ -37,7 +40,8 @@
       "lapis_lazuli": 64
     },
     "menuSlot": 13,
-    "inputSource": "inventory"
+    "inputSource": "inventory",
+    "procedure": "minerals-crafting"
   },
   "refined_iron": {
     "output": "refined_iron",
@@ -47,7 +51,8 @@
       "iron_ingot": 64
     },
     "menuSlot": 14,
-    "inputSource": "inventory"
+    "inputSource": "inventory",
+    "procedure": "minerals-crafting"
   },
   "refined_gold": {
     "output": "refined_gold",
@@ -57,7 +62,8 @@
       "gold_ingot": 64
     },
     "menuSlot": 15,
-    "inputSource": "inventory"
+    "inputSource": "inventory",
+    "procedure": "minerals-crafting"
   },
   "refined_diamond": {
     "output": "refined_diamond",
@@ -67,7 +73,8 @@
       "diamond": 32
     },
     "menuSlot": 16,
-    "inputSource": "inventory"
+    "inputSource": "inventory",
+    "procedure": "minerals-crafting"
   },
   "refined_emerald": {
     "output": "refined_emerald",
@@ -77,7 +84,8 @@
       "emerald": 32
     },
     "menuSlot": 19,
-    "inputSource": "inventory"
+    "inputSource": "inventory",
+    "procedure": "minerals-crafting"
   },
   "super_cobblestone_block": {
     "output": "super_cobblestone_block",
@@ -86,7 +94,8 @@
     "inputs": {
       "super_cobblestone": 16
     },
-    "menuSlot": 20
+    "menuSlot": 20,
+    "procedure": "minerals-crafting"
   },
   "refined_coal_block": {
     "output": "refined_coal_block",
@@ -95,7 +104,8 @@
     "inputs": {
       "refined_coal": 16
     },
-    "menuSlot": 21
+    "menuSlot": 21,
+    "procedure": "minerals-crafting"
   },
   "refined_redstone_block": {
     "output": "refined_redstone_block",
@@ -104,7 +114,8 @@
     "inputs": {
       "refined_redstone": 16
     },
-    "menuSlot": 22
+    "menuSlot": 22,
+    "procedure": "minerals-crafting"
   },
   "refined_lapis_block": {
     "output": "refined_lapis_block",
@@ -113,7 +124,8 @@
     "inputs": {
       "refined_lapis": 16
     },
-    "menuSlot": 23
+    "menuSlot": 23,
+    "procedure": "minerals-crafting"
   },
   "refined_iron_block": {
     "output": "refined_iron_block",
@@ -122,7 +134,8 @@
     "inputs": {
       "refined_iron": 16
     },
-    "menuSlot": 24
+    "menuSlot": 24,
+    "procedure": "minerals-crafting"
   },
   "refined_gold_block": {
     "output": "refined_gold_block",
@@ -131,7 +144,8 @@
     "inputs": {
       "refined_gold": 16
     },
-    "menuSlot": 25
+    "menuSlot": 25,
+    "procedure": "minerals-crafting"
   },
   "refined_diamond_block": {
     "output": "refined_diamond_block",
@@ -140,7 +154,8 @@
     "inputs": {
       "refined_diamond": 16
     },
-    "menuSlot": 28
+    "menuSlot": 28,
+    "procedure": "minerals-crafting"
   },
   "refined_emerald_block": {
     "output": "refined_emerald_block",
@@ -149,7 +164,8 @@
     "inputs": {
       "refined_emerald": 16
     },
-    "menuSlot": 29
+    "menuSlot": 29,
+    "procedure": "minerals-crafting"
   },
   "carbon": {
     "output": "carbon",
@@ -160,7 +176,8 @@
       "super_cobblestone_block": 4,
       "refined_coal_block": 16
     },
-    "menuSlot": 30
+    "menuSlot": 30,
+    "procedure": "minerals-crafting"
   },
   "titanium": {
     "output": "titanium",
@@ -172,7 +189,8 @@
       "refined_gold_block": 8,
       "refined_emerald_block": 2
     },
-    "menuSlot": 31
+    "menuSlot": 31,
+    "procedure": "minerals-crafting"
   },
   "tungsten": {
     "output": "tungsten",
@@ -185,7 +203,8 @@
       "refined_iron_block": 8,
       "refined_gold_block": 8
     },
-    "menuSlot": 32
+    "menuSlot": 32,
+    "procedure": "minerals-crafting"
   },
   "super_alloy": {
     "output": "super_alloy",
@@ -196,6 +215,18 @@
       "titanium": 16,
       "carbon": 32
     },
-    "menuSlot": 33
+    "menuSlot": 33,
+    "procedure": "minerals-crafting"
+  },
+  "my_item": {
+    "output": "my_item",
+    "outputAmount": 1,
+    "menuItemId": "my_item",
+    "inputs": {
+      "iron_ingot": 32,
+      "carbon": 4
+    },
+    "menuSlot": 34,
+    "procedure": "minerals-crafting"
   }
 }

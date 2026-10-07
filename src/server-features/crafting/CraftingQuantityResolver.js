@@ -82,9 +82,13 @@ class CraftingQuantityResolver {
 
 
     #normalizeQuantity(amount) {
-        if (amount === 1 || amount === 64) return amount;
+        if (amount === 'ALL') return 'ALL';
         if (typeof amount === 'string' && amount.trim().toUpperCase() === 'ALL') return 'ALL';
-        throw new RangeError('Only crafting quantities 1, 64 and ALL are supported.');
+        // G10/G11: exact quantity. GUI buttons (1/64) are server capabilities,
+        // not architecture limits — higher-level batching repeats them to stay exact.
+        const value = Number(amount);
+        if (Number.isSafeInteger(value) && value >= 1) return value;
+        throw new RangeError('Crafting quantity must be a positive integer or ALL.');
     }
 
     #entries(window) {

@@ -32,9 +32,7 @@ class CraftingChainPlanner {
                 displayName: entry?.displayName || step.outputId,
                 tier: entry?.tier || null,
                 crafts: step.crafts,
-                inputs: step.inputs,
-                quantityBatches: step.quantityBatches,
-                quantityActions: step.quantityActions
+                inputs: step.inputs
             });
         });
         return Object.freeze({
