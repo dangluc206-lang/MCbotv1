@@ -5,11 +5,10 @@ const Result = require('../../shared/result/Result');
 const Status = require('../../shared/result/Status');
 const FlowError = require('../../shared/errors/FlowError');
 const CraftReadFlow = require('./flows/CraftReadFlow');
-const B5PlanningFlow = require('./b5/flows/B5PlanningFlow');
-const B5StorageFlow = require('./b5/flows/B5StorageFlow');
+const CraftStorageFlow = require('./flows/CraftStorageFlow');
 const CraftWithdrawFlow = require('./flows/CraftWithdrawFlow');
 const CraftCraftFlow = require('./flows/CraftCraftFlow');
-const B2InputAcquisitionFlow = require('./b5/flows/B2InputAcquisitionFlow');
+const CraftInputAcquisitionFlow = require('./flows/CraftInputAcquisitionFlow');
 const CraftProgressTracker = require('./support/CraftProgressTracker');
 const CraftInventoryState = require('./support/CraftInventoryState');
 const CraftRecipeResolver = require('./support/CraftRecipeResolver');
@@ -85,9 +84,8 @@ class CraftAutomationService {
         this.quantity = quantity || CraftQuantityPolicy.fromConfig(config);
         this.flows = Object.freeze({
             read: flows.read || new CraftReadFlow({ planningService, storage, personalVault, inventoryReader }),
-            plan: flows.plan || new B5PlanningFlow({ recipeRegistry, config }),
-            storage: flows.storage || new B5StorageFlow({ b1Materials }),
-            b2Input: flows.b2Input || new B2InputAcquisitionFlow({
+            storage: flows.storage || new CraftStorageFlow({ b1Materials }),
+            b2Input: flows.b2Input || new CraftInputAcquisitionFlow({
                 storage,
                 source: (config?.inputSource ?? config?.b2InputSource) === 'inventory' ? 'inventory' : 'storage'
             }),
@@ -150,8 +148,50 @@ class CraftAutomationService {
         // compatibility reference (parity-lock tests and legacy suites call it
         // directly). No production entry point (run/runNext/runTarget/
         // runMaintenance) ever executes it.
+        // Legacy plan adapter: the production flows stay generic-only (no
+        // flows.plan). The legacy cycle still plans per material, so it gets a
+        // local adapter that reuses the generic quantity authority and maps the
+        // result back to the legacy plan shape. No legacy flow module is
+        // required here, keeping the B5 flows pending-wiring only.
+        const legacyPlan = {
+            reconfigure() {},
+            planChain: (chain = {}) => {
+                const recipe = typeof recipeRegistry?.require === 'function'
+                    ? recipeRegistry.require(chain.b2RecipeId)
+                    : null;
+                const basePerB2 = Math.max(0, Number((recipe && recipe.inputs && recipe.inputs[chain.baseId]) || 0));
+                const generic = this.quantity.planChain({
+                    plannedIntermediateExact: chain.b2Crafts,
+                    plannedOutput: chain.b3Crafts,
+                    basePerIntermediate: basePerB2,
+                    immediatelyCraftable: chain.storedEffective,
+                    totalEffective: chain.storedTotalEffective,
+                    baseNeededFromStorage: chain.rawNeededFromStorage
+                });
+                const nextAction = generic.nextAction === 'PREPARE_BASE' ? 'PREPARE_B1'
+                    : generic.nextAction === 'CRAFT_INTERMEDIATE' ? 'CRAFT_B2'
+                    : generic.nextAction === 'CRAFT_OUTPUT' ? 'CRAFT_B3'
+                    : generic.nextAction;
+                return Object.freeze({
+                    plannedB2Exact: generic.plannedIntermediateExact,
+                    plannedB2: generic.plannedIntermediate,
+                    plannedB3: generic.plannedOutput,
+                    b2BatchSize: generic.intermediateBatchSize,
+                    useAllForB2: generic.useAllForIntermediate,
+                    b2InputSource: generic.inputSource,
+                    basePerB2: generic.basePerIntermediate,
+                    requiredRawForStart: generic.requiredRawForStart,
+                    immediatelyCraftable: generic.immediatelyCraftable,
+                    totalEffective: generic.totalEffective,
+                    immediateB2Crafts: generic.immediateIntermediateCrafts,
+                    totalB2Crafts: generic.totalIntermediateCrafts,
+                    decompressionBlocked: generic.decompressionBlocked,
+                    nextAction
+                });
+            }
+        };
         this.legacyCycle = new B5CycleCoordinator({
-            flows: this.flows,
+            flows: { ...this.flows, plan: flows.plan || legacyPlan },
             inventoryState: this.inventoryState,
             recipeResolver: this.recipeResolver,
             progressTracker: this.progressTracker,
@@ -195,7 +235,7 @@ class CraftAutomationService {
         this.config = next;
         this.inventoryState.config = next;
         this.recipeResolver.config = next;
-        this.flows.plan.reconfigure?.(next);
+        this.legacyCycle?.flows?.plan?.reconfigure?.(next);
         this.flows.b2Input.reconfigure?.({ source: next.inputSource === 'inventory' ? 'inventory' : 'storage' });
         this.b1Inventory.reconfigure(next);
         this.finalCraft.reconfigure(next);

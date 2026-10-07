@@ -196,7 +196,23 @@
       ]
     }
   ],
-  "pendingWiringSources": [],
+  "pendingWiringSources": [
+    {
+      "file": "src/server-features/crafting/b5/flows/B5PlanningFlow.js",
+      "owner": "crafting",
+      "reason": "Legacy B5 planning reference kept for quantity-policy parity tests; production automation runs the generic CraftQuantityPolicy/CraftPlanningService path."
+    },
+    {
+      "file": "src/server-features/crafting/b5/flows/B5StorageFlow.js",
+      "owner": "crafting",
+      "reason": "Legacy B5 storage reference kept for baseline/withdraw-contract parity tests; production automation runs the generic CraftStorageFlow."
+    },
+    {
+      "file": "src/server-features/crafting/b5/flows/B2InputAcquisitionFlow.js",
+      "owner": "crafting",
+      "reason": "Legacy B2 input-acquisition reference kept for automation-service parity tests; production automation runs the generic CraftInputAcquisitionFlow."
+    }
+  ],
   "staleManifest": "scripts/cleanup-stale.js",
   "coverage": {
     "include": "src/**/*.js",

@@ -21,8 +21,7 @@ class B5AutomationRuntimeDecorator {
         this.service.config = next;
         this.service.inventoryState.config = next;
         this.service.recipeResolver.config = next;
-        this.service.flows.plan.reconfigure?.(next);
-        this.service.flows.b2Input.reconfigure?.({ source: (next.inputSource ?? next.b2InputSource) === 'inventory' ? 'inventory' : 'storage' });
+        this.service.flows.b2Input.reconfigure?.({ source: next.inputSource === 'inventory' ? 'inventory' : 'storage' });
         return next;
     }
 

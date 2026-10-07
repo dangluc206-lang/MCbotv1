@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "baselineVersion": 1,
   "workPackage": "WP-001",
-  "generatedAt": "2026-10-06T14:40:39.626Z",
+  "generatedAt": "2026-10-07T09:21:48.419Z",
   "releaseVersion": "2.7.67",
   "scope": {
     "root": ".",
@@ -39,11 +39,11 @@
       "inScopeChangedPaths": 0
     },
     "reason": "Standalone source tree; version-control metadata is intentionally not required.",
-    "sourceFingerprintSha256": "aa2ff53e26847df18bad096e6d25393d3e65330c3bd4a74317815f016bc720dd"
+    "sourceFingerprintSha256": "9e032265efd24578a330e88e6bf737a491d0cfa7f7870187528f9a3fe95b476e"
   },
   "counts": {
-    "files": 1040,
-    "source": 428,
+    "files": 1042,
+    "source": 430,
     "tests": 272,
     "scripts": 41,
     "configJson": 35,
@@ -178,7 +178,7 @@
     },
     {
       "area": "server-features",
-      "files": 84,
+      "files": 86,
       "owner": "src/server-features/",
       "layer": "server-domain-features",
       "classification": "CURRENT"
@@ -215,7 +215,7 @@
           "src/bootstrap/createApplication.js",
           "src/bootstrap/shutdown.js"
         ],
-        "reachableSourceFiles": 345
+        "reachableSourceFiles": 344
       },
       {
         "file": "src/desktop/main.js",
@@ -235,7 +235,7 @@
           "src/desktop/update/local-update-helper.js",
           "src/desktop/use-cases/DesktopRuntimeBootstrap.js"
         ],
-        "reachableSourceFiles": 395
+        "reachableSourceFiles": 394
       },
       {
         "file": "src/desktop/preload.js",
@@ -724,9 +724,6 @@
       "src/server-features/crafting/b5/B5CycleCoordinator.js",
       "src/server-features/crafting/b5/B5IntermediateCoordinator.js",
       "src/server-features/crafting/b5/B5ReserveChainCoordinator.js",
-      "src/server-features/crafting/b5/flows/B2InputAcquisitionFlow.js",
-      "src/server-features/crafting/b5/flows/B5PlanningFlow.js",
-      "src/server-features/crafting/b5/flows/B5StorageFlow.js",
       "src/server-features/crafting/b5/support/B5ActionDiagnostics.js",
       "src/server-features/crafting/coordinators/CraftBaseInventoryCoordinator.js",
       "src/server-features/crafting/coordinators/CraftCycleCoordinator.js",
@@ -734,8 +731,10 @@
       "src/server-features/crafting/coordinators/CraftIntermediateCoordinator.js",
       "src/server-features/crafting/coordinators/CraftReserveChainCoordinator.js",
       "src/server-features/crafting/flows/CraftCraftFlow.js",
+      "src/server-features/crafting/flows/CraftInputAcquisitionFlow.js",
       "src/server-features/crafting/flows/CraftKhoReadFlow.js",
       "src/server-features/crafting/flows/CraftReadFlow.js",
+      "src/server-features/crafting/flows/CraftStorageFlow.js",
       "src/server-features/crafting/flows/CraftWithdrawFlow.js",
       "src/server-features/crafting/support/CraftActionDiagnostics.js",
       "src/server-features/crafting/support/CraftChainAdapter.js",
@@ -1150,9 +1149,6 @@
       "src/server-features/crafting/b5/B5CycleCoordinator.js",
       "src/server-features/crafting/b5/B5IntermediateCoordinator.js",
       "src/server-features/crafting/b5/B5ReserveChainCoordinator.js",
-      "src/server-features/crafting/b5/flows/B2InputAcquisitionFlow.js",
-      "src/server-features/crafting/b5/flows/B5PlanningFlow.js",
-      "src/server-features/crafting/b5/flows/B5StorageFlow.js",
       "src/server-features/crafting/b5/support/B5ActionDiagnostics.js",
       "src/server-features/crafting/coordinators/CraftBaseInventoryCoordinator.js",
       "src/server-features/crafting/coordinators/CraftCycleCoordinator.js",
@@ -1160,8 +1156,10 @@
       "src/server-features/crafting/coordinators/CraftIntermediateCoordinator.js",
       "src/server-features/crafting/coordinators/CraftReserveChainCoordinator.js",
       "src/server-features/crafting/flows/CraftCraftFlow.js",
+      "src/server-features/crafting/flows/CraftInputAcquisitionFlow.js",
       "src/server-features/crafting/flows/CraftKhoReadFlow.js",
       "src/server-features/crafting/flows/CraftReadFlow.js",
+      "src/server-features/crafting/flows/CraftStorageFlow.js",
       "src/server-features/crafting/flows/CraftWithdrawFlow.js",
       "src/server-features/crafting/support/CraftActionDiagnostics.js",
       "src/server-features/crafting/support/CraftChainAdapter.js",
@@ -1244,7 +1242,11 @@
       "src/simulation/VirtualClock.js",
       "src/simulation/b5/B5PlannerReplay.js"
     ],
-    "orphanSourceFiles": []
+    "orphanSourceFiles": [
+      "src/server-features/crafting/b5/flows/B2InputAcquisitionFlow.js",
+      "src/server-features/crafting/b5/flows/B5PlanningFlow.js",
+      "src/server-features/crafting/b5/flows/B5StorageFlow.js"
+    ]
   },
   "sideEffects": [
     {
@@ -1572,6 +1574,7 @@
       "src/server-features/crafting/b5/flows/B5StorageFlow.js",
       "src/server-features/crafting/coordinators/CraftBaseInventoryCoordinator.js",
       "src/server-features/crafting/coordinators/CraftFinalCraftCoordinator.js",
+      "src/server-features/crafting/flows/CraftStorageFlow.js",
       "src/server-features/crafting/verification/CraftingVerificationAttempt.js",
       "src/server-features/crafting/verification/CraftingVerificationEvidence.js",
       "src/server-features/crafting/verification/StageExecutionContract.js",
@@ -1793,8 +1796,10 @@
         "src/server-features/crafting/coordinators/CraftIntermediateCoordinator.js",
         "src/server-features/crafting/coordinators/CraftReserveChainCoordinator.js",
         "src/server-features/crafting/flows/CraftCraftFlow.js",
+        "src/server-features/crafting/flows/CraftInputAcquisitionFlow.js",
         "src/server-features/crafting/flows/CraftKhoReadFlow.js",
         "src/server-features/crafting/flows/CraftReadFlow.js",
+        "src/server-features/crafting/flows/CraftStorageFlow.js",
         "src/server-features/crafting/flows/CraftWithdrawFlow.js",
         "src/server-features/crafting/support/CraftActionDiagnostics.js",
         "src/server-features/crafting/support/CraftChainAdapter.js",
@@ -1911,8 +1916,10 @@
         "src/server-features/crafting/coordinators/CraftIntermediateCoordinator.js",
         "src/server-features/crafting/coordinators/CraftReserveChainCoordinator.js",
         "src/server-features/crafting/flows/CraftCraftFlow.js",
+        "src/server-features/crafting/flows/CraftInputAcquisitionFlow.js",
         "src/server-features/crafting/flows/CraftKhoReadFlow.js",
         "src/server-features/crafting/flows/CraftReadFlow.js",
+        "src/server-features/crafting/flows/CraftStorageFlow.js",
         "src/server-features/crafting/flows/CraftWithdrawFlow.js",
         "src/server-features/crafting/support/CraftActionDiagnostics.js",
         "src/server-features/crafting/support/CraftChainAdapter.js",
@@ -2500,18 +2507,18 @@
     "valid": true,
     "catalog": {
       "schemaVersion": 3,
-      "sourceFiles": 428,
+      "sourceFiles": 430,
       "testFiles": 272,
       "scriptFiles": 41,
-      "sourceReachable": 428,
-      "runtimeReachable": 422,
+      "sourceReachable": 427,
+      "runtimeReachable": 421,
       "configGroups": 33,
       "connectionEvents": 31,
       "stalePaths": 42,
       "officialDocuments": 1,
       "governedDocumentRoots": 0,
       "documentScanExclusions": 3,
-      "pendingWiringSources": 0,
+      "pendingWiringSources": 3,
       "coverage": {
         "include": "src/**/*.js",
         "lines": 80,
@@ -2586,7 +2593,7 @@
       "code": "GENERATION_CANCELLATION_GUARDS_ACTIVE",
       "category": "CURRENT",
       "file": "src/core/events/EventEnvelope.js",
-      "summary": "Generation/cancellation contracts are active with 89 source file(s) carrying generation-guard evidence.",
+      "summary": "Generation/cancellation contracts are active with 90 source file(s) carrying generation-guard evidence.",
       "workPackages": [
         "WP-005"
       ]
