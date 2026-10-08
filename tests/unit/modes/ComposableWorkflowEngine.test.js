@@ -21,7 +21,7 @@ test('workflow migration is deterministic and validator rejects incompatible pro
     const legacy = { id: 'legacy', workflow: { loop: { intervalMs: 100, steps: [] } } };
     assert.deepEqual(migrator.migrate(legacy), migrator.migrate(JSON.parse(JSON.stringify(legacy))));
     const validator = new WorkflowDefinitionValidator({ serverProfile: 'generic' });
-    assert.throws(() => validator.normalize({ id: 'minerua-only', serverProfiles: ['minerua'], workflow: { loop: { steps: [{ type: 'b5-cycle' }] } } }), error => error.code === 'WORKFLOW_SERVER_PROFILE_MISMATCH' || error.code === 'WORKFLOW_MODULE_SERVER_PROFILE_MISMATCH');
+    assert.throws(() => validator.normalize({ id: 'minerua-only', serverProfiles: ['minerua'], workflow: { loop: { steps: [{ type: 'storage-protect' }] } } }), error => error.code === 'WORKFLOW_SERVER_PROFILE_MISMATCH' || error.code === 'WORKFLOW_MODULE_SERVER_PROFILE_MISMATCH');
 });
 
 test('runtime resource budget is enforced by WorkflowStepExecutor', async () => {

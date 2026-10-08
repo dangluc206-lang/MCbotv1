@@ -9,7 +9,7 @@ const CraftingItemRegistry = require('../../../src/items/CraftingItemRegistry');
 
 const ITEMS = require('../../../config/items/items.json');
 const RECIPES = require('../../../config/server-data/recipes.json');
-const TIERS = require('../../../config/server-data/crafting-tiers.json');
+const TIERS = {} // G18: crafting-tiers.json removed; tier-free;
 
 function createRegistry() {
     return new CraftingItemRegistry({
@@ -24,10 +24,11 @@ test('resolves items by real item id', () => {
     const entry = registry.resolveById('super_alloy');
     assert.ok(entry);
     assert.equal(entry.id, 'super_alloy');
-    assert.equal(entry.tier, 'B5');
+    // G18: crafting-tiers.json removed; tier is display-only and resolves tier-free.
+    assert.equal(entry.tier, null);
     assert.ok(entry.displayName);
     const b2 = registry.resolveById('super_cobblestone');
-    assert.equal(b2.tier, 'B2');
+    assert.equal(b2.tier, null);
     assert.deepEqual(b2.identities, ['MMOITEMS_ITEM_ID:SIEUDACUOI']);
     assert.equal(registry.resolveById('does_not_exist'), null);
 });
@@ -71,28 +72,20 @@ test('computes input and output chains across the recipe graph', () => {
     assert.deepEqual(registry.getOutputChain('super_alloy'), []);
 });
 
-test('every configured tier item resolves with correct classification and recipe data', () => {
+test('tier-free registry resolves every craftable by recipe data', () => {
     const registry = createRegistry();
-    const tierCounts = { B1: 0, B2: 0, B3: 0, B4: 0, B5: 0 };
-    for (const [tier, ids] of Object.entries(TIERS)) {
-        for (const id of ids) {
-            const entry = registry.resolveById(id);
-            assert.ok(entry, `${id} (${tier}) must resolve`);
-            assert.equal(entry.tier, tier, `${id} must be classified as ${tier}`);
-            assert.equal(entry.id, id);
-            assert.ok(entry.displayName, `${id} must expose a display name`);
-            if (tier === 'B1') {
-                assert.equal(entry.recipe, null, `${id} is a raw material`);
-            } else {
-                assert.ok(entry.recipe, `${id} must have a recipe`);
-                assert.equal(entry.recipe.output, id);
-            }
-            tierCounts[tier] += 1;
-        }
+    // G18: crafting-tiers.json removed; eligibility is item + recipe only.
+    for (const recipe of Object.values(RECIPES)) {
+        const entry = registry.resolveById(recipe.output);
+        assert.ok(entry, `${recipe.output} must resolve`);
+        assert.equal(entry.tier, null, `${recipe.output} resolves tier-free`);
+        assert.equal(entry.id, recipe.output);
+        assert.ok(entry.displayName, `${recipe.output} must expose a display name`);
+        assert.ok(entry.recipe, `${recipe.output} must have a recipe`);
+        assert.equal(entry.recipe.output, recipe.output);
     }
-    assert.deepEqual(tierCounts, { B1: 8, B2: 8, B3: 8, B4: 3, B5: 1 });
     const all = registry.items();
-    // G4/G5: tier counts stay display-only; un-tiered data-driven items resolve too.
+    // G4/G5: un-tiered data-driven items resolve too.
     assert.ok(all.length >= 28);
     assert.ok(registry.resolveById('my_item'), 'data-driven my_item resolves without a tier');
     // identity data survives: MMOItems identity must not be lost

@@ -19,7 +19,6 @@ const PRESENTATION = Object.freeze({
     'close-gui':P('GUI','MEDIUM','Đóng GUI hiện tại.',EMPTY),
     'read-storage':P('STORAGE','MEDIUM','Đọc fresh /kho và trả snapshot.',EMPTY),
     'storage-protect':P('B5','HIGH','Boundary bắt buộc: fresh kho, nung sắt/vàng, nén, baseline, bán 64, giữ dư, verify 1,5 B5.',EMPTY,{fixedContract:'b5-storage-protection-v1'}),
-    'b5-cycle':P('B5','HIGH','Chạy đúng một chu kỳ B5 đã được bảo vệ.',EMPTY,{fixedContract:'b5-cycle-v1'}),
     'wait-gui':P('GUI','MEDIUM','Chờ GUI identity có giới hạn.',[FIELD('guiId','GUI ID','text'),FIELD('timeoutMs','Timeout (ms)','integer',{min:100,max:30000})]),
     look:P('MOVEMENT','LOW','Đổi góc nhìn qua rotation capability.',[FIELD('yaw','Yaw','number'),FIELD('pitch','Pitch','number'),FIELD('force','Buộc cập nhật','boolean')]),
     log:P('OBSERVABILITY','LOW','Ghi một thông điệp trạng thái đã giới hạn.',[FIELD('level','Mức','enum',{values:['debug','info','warn','error']}),FIELD('message','Thông điệp','text',{maxLength:1000})]),

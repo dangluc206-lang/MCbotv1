@@ -45,10 +45,8 @@ class CraftingModeService extends ManagedMode {
     } = {}) {
         super({ modeId: 'crafting', botId, modeContext, modeCoordinator, catalog, logger });
         if (!island?.goHome) throw new TypeError('CraftingModeService island service is required.');
-        // ponytail: `protectForBatch` is the generic service-owned action name (storage protection owns
-        // the mechanics); `protectForB5Batch` is kept as legacy alias. Mode core must not assume
-        // product-specific semantics from either name.
-        if (!b1Materials?.protectForBatch && !b1Materials?.protectForB5Batch) throw new TypeError('CraftingModeService B1 storage protection service is required.');
+        // ponytail: `protectForBatch` is the generic service-owned action name.
+        if (!b1Materials?.protectForBatch) throw new TypeError('CraftingModeService B1 storage protection service is required.');
         if (!craftingPlanning?.inspectAdditionalFresh) throw new TypeError('CraftingModeService crafting planning service is required.');
         if (!automation?.runNext) throw new TypeError('CraftingModeService crafting automation service is required.');
         Object.assign(this, { island, skyblockReadiness, skyTarget, b1Materials, craftingPlanning, automation, craftingItemRegistry, craftingChainPlanner });
@@ -474,8 +472,7 @@ class CraftingModeService extends ManagedMode {
                 const protectionOperation = createB1MaterialOperation({
                     name: 'CraftStorageProtectionBoundary',
                     b1Materials: this.b1Materials,
-                    // Generic name first; legacy alias keeps old fakes green.
-                    action: typeof this.b1Materials.protectForBatch === 'function' ? 'protectForBatch' : 'protectForB5Batch',
+                    action: 'protectForBatch',
                     args: {
                         batchId: protectionBatchId,
                         trigger: protectionTrigger,

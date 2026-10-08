@@ -148,11 +148,6 @@ class B1StorageMaterialService {
         return this.batchProtection.protect(options);
     }
 
-    /** Legacy alias: same boundary, same instance, no impl split. */
-    protectForB5Batch(options = {}) {
-        return this.protectForBatch(options);
-    }
-
     preprocessForCraft(options = {}) {
         return this.batchProtection.preprocess(options);
     }

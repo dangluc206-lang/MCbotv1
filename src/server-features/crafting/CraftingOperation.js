@@ -16,6 +16,8 @@ class CraftingOperation {
         quantityResolver,
         resultVerifier,
         guiKnowledge = null,
+        procedureRegistry = null,
+        procedureRuntime = null,
         config,
         logger = null
     }) {
@@ -28,6 +30,8 @@ class CraftingOperation {
             quantityResolver,
             resultVerifier,
             guiKnowledge,
+            procedureRegistry,
+            procedureRuntime,
             logger
         });
         this.config = this.#validateConfig(config);

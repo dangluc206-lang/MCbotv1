@@ -50,12 +50,9 @@ function createBuiltinExecutors() {
         'read-storage': execute((step, context) => context.modeContext.capability('storage').read({
             refresh: true, cancellationToken: context.cancellationToken, expectedGeneration: generation(context)
         }).then(result => resultOrThrow(result, 'Không đọc được /kho.')), { operations: true }),
-        'storage-protect': execute((step, context) => context.modeContext.capability('b1-materials').protectForB5Batch({
+        'storage-protect': execute((step, context) => context.modeContext.capability('b1-materials').protectForBatch({
             cancellationToken: context.cancellationToken, expectedGeneration: generation(context)
         }).then(result => resultOrThrow(result, 'Bảo vệ kho thất bại.')), { operations: true }),
-        'b5-cycle': execute((step, context) => context.modeContext.capability('b5-automation').runNext({
-            cancellationToken: context.cancellationToken, expectedGeneration: generation(context)
-        }).then(result => resultOrThrow(result, 'Chu kỳ B5 thất bại.')), { operations: true }),
         'wait-gui': execute(async (step, context) => {
             const session = await context.modeContext.capability('gui').waitFor(step.guiId || null, step.timeoutMs, context.cancellationToken, generation(context));
             return { definitionId: session?.definitionId || null, sessionId: session?.id || null };

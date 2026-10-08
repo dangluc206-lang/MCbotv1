@@ -17,9 +17,7 @@ const EMITTED_EVENTS = Object.freeze([
     'reconnect:succeeded', 'reconnect:cancelled', 'reconnect:suspended',
     'reconnect:resumed',
     // mode
-    'mode:collector-b5:paused', 'mode:collector-b5:resumed',
-    'mode:collector-b5:config-updated', 'mode:collector-b5:cycle-completed',
-    'mode:collector-b5:error', 'mode:fishing:catch',
+    'mode:fishing:catch',
     // operation / runtime
     'runtime:failure',
     // gui
@@ -43,7 +41,7 @@ const EMITTED_EVENTS = Object.freeze([
 ]);
 
 // Ordered eventType -> subsystem taxonomy. Order matters: longer prefixes
-// match first so e.g. 'mode:collector-b5:*' stays 'mode' not 'collector'.
+// match first so e.g. 'mode:crafting:*' stays 'mode' not 'crafting'.
 const SUBSYSTEM_RULES = Object.freeze([
     { prefix: 'mode:', value: 'mode' },
     { prefix: 'reconnect:', value: 'reconnect' },

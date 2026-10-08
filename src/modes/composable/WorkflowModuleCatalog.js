@@ -19,7 +19,6 @@ const DESCRIPTORS = Object.freeze([
     ['close-gui','Đóng GUI','gui','gui-result',['gui']],
     ['read-storage','Đọc /kho','storage','storage-snapshot',['server-command','gui']],
     ['storage-protect','Bảo vệ kho','b1-materials','storage-protection-result',['server-command','gui','inventory']],
-    ['b5-cycle','Một chu kỳ B5','b5-automation','b5-cycle-result',['server-command','gui','inventory']],
     ['wait-gui','Chờ GUI','gui','gui-session',['gui']],
     ['look','Nhìn hướng','rotation','rotation-result',[]],
     ['log','Ghi trạng thái',null,'log-result',[]],

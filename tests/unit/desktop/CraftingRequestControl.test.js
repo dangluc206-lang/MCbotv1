@@ -13,14 +13,14 @@ const DesktopApiContract = require('../../../src/desktop/contracts/DesktopApiCon
 
 const ITEMS = require('../../../config/items/items.json');
 const RECIPES = require('../../../config/server-data/recipes.json');
-const TIERS = require('../../../config/server-data/crafting-tiers.json');
 const TARGET_POLICY = require('../../../config/server-data/crafting-targets.json');
 
 function createRegistry() {
     return new CraftingItemRegistry({
         itemRegistry: new ItemRegistry(ITEMS),
         recipeRegistry: new CraftingRecipeRegistry(RECIPES),
-        tiers: TIERS
+        // G18: crafting-tiers.json removed; registry resolves tier-free.
+        tiers: {}
     });
 }
 

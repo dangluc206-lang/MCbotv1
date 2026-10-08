@@ -9,7 +9,7 @@ const { immutableClone } = require('../shared/utils/object');
 const VERSION = 1;
 const BOT_ID = /^[a-z0-9][a-z0-9_-]{1,31}$/;
 const CONNECTION_STATES = new Set(['CONNECTED', 'DISCONNECTED']);
-const DEFAULT_MODE_IDS = new Set(['collector-b5', 'fishing']);
+const DEFAULT_MODE_IDS = new Set(['crafting', 'fishing']);
 const MODE_STATES = new Set(['ACTIVE', 'PAUSED']);
 
 class DurableIntentStore {

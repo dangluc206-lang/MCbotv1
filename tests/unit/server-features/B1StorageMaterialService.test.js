@@ -265,7 +265,7 @@ test('compact converts loose B1 back to block form and verifies the result', asy
     assert.equal(state.coal_block, 11);
 });
 
-test('protectForB5Batch runs fresh read -> iron/gold smelt -> compact -> reserve trim and never smelts stone', async () => {
+test('protectForBatch runs fresh read -> iron/gold smelt -> compact -> reserve trim and never smelts stone', async () => {
     const events = [];
     const state = {
         cobblestone: 24,
@@ -323,7 +323,7 @@ test('protectForB5Batch runs fresh read -> iron/gold smelt -> compact -> reserve
     };
 
     const service = makeService({ storage, minerals, smelting });
-    const result = await service.protectForB5Batch();
+    const result = await service.protectForBatch();
     assert.equal(result.success, true);
     assert.equal(result.data.reserveCoverage, 1.5);
 
@@ -350,7 +350,7 @@ test('protectForB5Batch runs fresh read -> iron/gold smelt -> compact -> reserve
     }
 });
 
-test('protectForB5Batch enforces hard 1.5 B5 reserve and does not need pass/burst/click/forecast fields', async () => {
+test('protectForBatch enforces hard 1.5 B5 reserve and does not need pass/burst/click/forecast fields', async () => {
     const state = hardReserveState({ coal_block: 130 });
     const service = makeService({
         storage: {
@@ -366,7 +366,7 @@ test('protectForB5Batch enforces hard 1.5 B5 reserve and does not need pass/burs
         smelting: { async smelt() { return { success: true, data: { skipped: true } }; } }
     });
 
-    const result = await service.protectForB5Batch();
+    const result = await service.protectForBatch();
     assert.equal(result.success, true);
     assert.equal(result.data.reserveCoverage, 1.5);
     assert.equal(state.coal_block, 66, '64-only sale keeps the final 63-block surplus remainder above the 3-block reserve');
@@ -399,7 +399,7 @@ test('unverified required smelting stops protection before compact or sell with 
         smelting: { async smelt() { return { success: true, data: { skipped: false } }; } },
         minerals: { async toBlocks() { compactCalls += 1; return { success: true, data: {} }; } }
     });
-    const result = await service.protectForB5Batch({
+    const result = await service.protectForBatch({
         expectedGeneration: 8,
         batchId: 'batch-1', trigger: 'explicit-enable',
         operationContext: { operationId: 'op-1', correlationId: 'corr-1', botId: 'bot-01', connectionGeneration: 8 }
@@ -428,7 +428,7 @@ test('conversion unavailable during protection is a finite blocker and never ope
         smelting: { async smelt() { throw new Error('no raw should be smelted'); } },
         minerals: { async toBlocks(baseId) { if (baseId === 'coal') return { success: true, data: { skipped: true, reason: 'option-unavailable' } }; return { success: true, data: { skipped: true, reason: 'below-block-ratio' } }; } }
     });
-    const result = await service.protectForB5Batch({ expectedGeneration: 3, batchId: 'batch-c' });
+    const result = await service.protectForBatch({ expectedGeneration: 3, batchId: 'batch-c' });
     assert.equal(result.success, false);
     assert.equal(result.error.code, 'B1_B5_PROTECTION_COMPACT_UNVERIFIED');
     assert.equal(sells, 0);
@@ -462,7 +462,7 @@ test('bounded sell episode never expands click budget when independently proven 
         minerals: { async toBlocks() { return { success: true, data: { skipped: true, reason: 'below-block-ratio' } }; } },
         smelting: { async smelt() { throw new Error('no raw'); } }
     });
-    const result = await service.protectForB5Batch({ expectedGeneration: 4, batchId: 'batch-flow', trigger: 'explicit-enable' });
+    const result = await service.protectForBatch({ expectedGeneration: 4, batchId: 'batch-flow', trigger: 'explicit-enable' });
     assert.equal(result.success, true);
     assert.equal(result.data.trimmed.clickBudget, 2, 'budget comes only from the 131-block baseline and 1.5 B5 reserve');
     assert.equal(sells, 2, 'new inflow must not add 64-clicks to the current episode');
@@ -503,7 +503,7 @@ test('large 64-only budget resumes the same episode without repeating compact or
         episodeId: 'batch-large:storage-protection'
     };
 
-    const first = await service.protectForB5Batch({
+    const first = await service.protectForBatch({
         ...common,
         operationContext: {
             operationId: 'op-large-1', correlationId: common.episodeId,
@@ -518,7 +518,7 @@ test('large 64-only budget resumes the same episode without repeating compact or
 
     state.coal_block += 64; // Must be deferred to the next B5 batch.
 
-    const second = await service.protectForB5Batch({
+    const second = await service.protectForBatch({
         ...common,
         operationContext: {
             operationId: 'op-large-2', correlationId: common.episodeId,
@@ -667,7 +667,7 @@ test('episode-level unavailable sell candidate returns one finite blocker instea
         minerals: { async toBlocks() { return { success: true, data: { skipped: true, reason: 'below-block-ratio' } }; } },
         smelting: { async smelt() { throw new Error('no raw'); } }
     });
-    const result = await service.protectForB5Batch({ expectedGeneration: 5, batchId: 'batch-blocked' });
+    const result = await service.protectForBatch({ expectedGeneration: 5, batchId: 'batch-blocked' });
     assert.equal(result.success, false);
     assert.equal(result.status, 'NOT_READY');
     assert.equal(result.error.code, 'B1_B5_PROTECTION_SELL_BLOCKED');
@@ -957,7 +957,7 @@ test('B5 smelting preflight blocks before side effects when either required reci
             storage: { async closeSellGui() { throw new Error('must not touch GUI'); }, async read() { reads += 1; return okSnapshot(hardReserveState()); } },
             smelting: { async smelt() { smelts += 1; return { success: true }; } }
         });
-        const result = await service.protectForB5Batch({ batchId: 'smelt-preflight' });
+        const result = await service.protectForBatch({ batchId: 'smelt-preflight' });
         assert.equal(result.success, false);
         assert.equal(result.error.code, 'B1_B5_PROTECTION_SMELT_CONFIG_INVALID');
         assert.equal(reads, 0);
@@ -986,7 +986,7 @@ test('B5 smelting runtime canonicalizes reversed/extended config to iron then go
         },
         minerals: { async toBlocks() { return { success: true, data: { skipped: true, reason: 'below-block-ratio' } }; } }
     });
-    const result = await service.protectForB5Batch({ batchId: 'ordered-smelt' });
+    const result = await service.protectForBatch({ batchId: 'ordered-smelt' });
     assert.equal(result.success, true);
     assert.deepEqual(smelts, ['raw_iron_to_iron', 'raw_gold_to_gold']);
 });

@@ -1064,7 +1064,6 @@ function defaultModuleStep(type) {
     'close-gui': { type },
     'read-storage': { type },
     'storage-protect': { type },
-    'b5-cycle': { type },
     'wait-gui': { type, guiId: null, timeoutMs: 5000 },
     look: { type, yaw: 0, pitch: 0, force: true },
     log: { type, level: 'info', message: 'Bước workflow' },

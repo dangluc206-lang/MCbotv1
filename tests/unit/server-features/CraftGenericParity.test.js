@@ -6,7 +6,6 @@ const MaterialCalculator = require('../../../src/planning/crafting/MaterialCalcu
 const CraftingPlanner = require('../../../src/planning/crafting/CraftingPlanner');
 const CraftPlanningService = require('../../../src/server-features/crafting/CraftPlanningService');
 const CraftReadService = require('../../../src/server-features/crafting/CraftReadService');
-const B5PlanningService = require('../../../src/server-features/crafting/B5PlanningService');
 const CraftAutomationService = require('../../../src/server-features/crafting/CraftAutomationService');
 const CraftTraceRecorder = require('../../../src/server-features/crafting/CraftTraceRecorder');
 const B1StorageMaterialService = require('../../../src/server-features/storage/B1StorageMaterialService');
@@ -45,13 +44,12 @@ test('slice2: CraftReadService same reads as planning', async () => {
 test('slice2: CraftReadService fails closed', () => {
     assert.throws(() => new CraftReadService({}), /planning/);
 });
-test('slice3: protectForBatch alias shares boundary', async () => {
+test('slice3: protectForBatch shares boundary', async () => {
     const service = Object.create(B1StorageMaterialService.prototype);
     let calls = 0;
     service.batchProtection = { protect: async () => { calls += 1; return { success: true, data: { ok: true } }; } };
     const a = await service.protectForBatch({});
-    const b = await service.protectForB5Batch({});
     assert.equal(a.success, true);
-    assert.deepEqual(a, b);
-    assert.equal(calls, 2);
+    assert.equal(calls, 1);
+    assert.equal(typeof service.protectForB5Batch, 'undefined', 'G18: B5 alias removed, no shim kept');
 });

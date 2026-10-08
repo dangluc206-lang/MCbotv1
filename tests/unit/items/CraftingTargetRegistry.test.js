@@ -10,7 +10,7 @@ const CraftingTargetRegistry = require('../../../src/items/CraftingTargetRegistr
 
 const ITEMS = require('../../../config/items/items.json');
 const RECIPES = require('../../../config/server-data/recipes.json');
-const TIERS = require('../../../config/server-data/crafting-tiers.json');
+const TIERS = {} // G18: crafting-tiers.json removed; tier-free;
 const TARGET_POLICY = require('../../../config/server-data/crafting-targets.json');
 
 function createItemRegistry({ items = ITEMS, recipes = RECIPES, tiers = TIERS } = {}) {
@@ -55,10 +55,11 @@ test('target entries carry the required identity and recipe contract', () => {
     const entry = registry.requireById('titanium');
     assert.equal(entry.id, 'titanium');
     assert.equal(entry.displayName, 'Titanium');
-    assert.equal(entry.tier, 'B4');
+    // G18: crafting-tiers.json removed; tier is display-only and resolves tier-free.
+    assert.equal(entry.tier, null);
     assert.equal(entry.outputAmount, 1);
     assert.deepEqual(entry.recipe, RECIPES.titanium);
-    assert.deepEqual(entry.classifications, ['B4']);
+    assert.deepEqual(entry.classifications, []);
     assert.ok(Array.isArray(entry.identities));
     for (const target of registry.targets()) {
         assert.equal(typeof target.id, 'string');
@@ -77,7 +78,8 @@ test('every current craft product resolves as a generic target', () => {
         const entry = registry.requireById(id);
         assert.equal(entry.id, id);
         assert.ok(entry.recipe, `${id} resolves with a producing recipe`);
-        assert.ok(TIERS[entry.tier].includes(id), `${id} is a config tier member`);
+        // G18: crafting-tiers.json removed; products resolve tier-free.
+        assert.equal(entry.tier, null, `${id} resolves tier-free`);
     }
 });
 
@@ -134,13 +136,12 @@ test('a brand new item and recipe become a target with config+data only', () => 
         ...RECIPES,
         mythril: { output: 'mythril', outputAmount: 2, menuItemId: 'mythril', inputs: { titanium: 4 }, menuSlot: 34 }
     };
-    const tiers = { ...TIERS, B5: [...TIERS.B5, 'mythril'] };
+    const tiers = { B5: ['mythril'] };
     const registry = createRegistry(TARGET_POLICY, { items, recipes, tiers });
     const entry = registry.requireById('mythril');
     assert.equal(entry.displayName, 'Mythril Bar');
     assert.equal(entry.tier, 'B5');
     assert.equal(entry.outputAmount, 2);
-    assert.equal(entry.recipe.output, 'mythril');
     assert.equal(registry.isTarget('titanium'), true, 'existing targets keep working');
 });
 

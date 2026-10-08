@@ -85,14 +85,6 @@ class DiscordPanelManager {
             relativePath: this.panelConfig.storePath || 'data/runtime/discord/panels.json',
             logger
         });
-        this.configEditor = new CollectorB5ConfigEditor({
-            baseDir,
-            configuration,
-            botRegistry,
-            botId: this.botId,
-            logger,
-            mutationCoordinator
-        });
         this.fishingConfigEditor = new FishingBotConfigEditor({
             baseDir,
             configuration,
@@ -254,7 +246,7 @@ class DiscordPanelManager {
 
     async #handleButton(interaction) {
         const id = interaction.customId;
-        if (this.remoteOnly && (id.startsWith('mcbot:admin:') || id.startsWith('mcbot:config:') || id.startsWith('mcbot:fishing-config:'))) {
+        if (this.remoteOnly && (id.startsWith('mcbot:admin:') || id.startsWith('mcbot:fishing-config:'))) {
             await interaction.reply?.({ content: 'Discord đang ở chế độ remote-only; cấu hình sâu thực hiện trên Desktop.', ephemeral: true });
             return true;
         }
@@ -395,24 +387,16 @@ class DiscordPanelManager {
             throw new Error(`Fishing config action không hỗ trợ: ${action}`);
         }
 
-        if (id.startsWith('mcbot:config:')) {
-            const action = id.slice('mcbot:config:'.length);
-            if (action === 'reload') {
-                await interaction.deferUpdate?.();
-                await this.configEditor.reload();
-                await this.refreshAll(true);
-                return true;
-            }
-            const modal = await this.#configModal(action);
-            await interaction.showModal(modal);
-            return true;
+        // G18: collector-b5 removed; legacy collector config buttons fail closed.
+        if (id.startsWith('mcbot:config:') || id.startsWith('mcbot:config-modal:')) {
+            throw new Error('Collector config was removed in G18; use Desktop or fishing config.');
         }
         return false;
     }
 
     async #handleSelect(interaction) {
         const id = interaction.customId;
-        if (this.remoteOnly && (id.startsWith('mcbot:admin:') || id.startsWith('mcbot:config:') || id.startsWith('mcbot:fishing-config:'))) {
+        if (this.remoteOnly && (id.startsWith('mcbot:admin:') || id.startsWith('mcbot:fishing-config:'))) {
             await interaction.reply?.({ content: 'Discord đang ở chế độ remote-only; cấu hình sâu thực hiện trên Desktop.', ephemeral: true });
             return true;
         }
@@ -558,28 +542,8 @@ class DiscordPanelManager {
             return true;
         }
         if (!id.startsWith('mcbot:config-modal:')) return false;
-        const action = id.slice('mcbot:config-modal:'.length);
-        await interaction.deferReply?.({ ephemeral: true });
-
-        if (action === 'pickup') {
-            await this.configEditor.setPickupLocation({
-                x: interaction.fields.getTextInputValue('x'),
-                y: interaction.fields.getTextInputValue('y'),
-                z: interaction.fields.getTextInputValue('z')
-            });
-        } else if (action === 'craft-delay') {
-            await this.configEditor.setCraftLoopDelayMs(interaction.fields.getTextInputValue('milliseconds'));
-        } else if (action === 'poll') {
-            await this.configEditor.setPollSeconds(interaction.fields.getTextInputValue('seconds'));
-        } else if (action === 'reanchor') {
-            await this.configEditor.setReanchorRadius(interaction.fields.getTextInputValue('radius'));
-        } else {
-            throw new Error(`Config action không hỗ trợ: ${action}`);
-        }
-
-        await this.refreshAll(true);
-        await interaction.editReply?.({ content: 'Đã cập nhật config.' });
-        return true;
+        // G18: collector-b5 removed; legacy collector config modals fail closed.
+        throw new Error('Collector config was removed in G18; use Desktop or fishing config.');
     }
 
     async #runControlAction(action, botId = this.selectedControlBotId, { expectedGeneration: pinnedGeneration = null } = {}) {
@@ -666,18 +630,18 @@ class DiscordPanelManager {
         if (result && result.success === false) throw result.error || new Error(result.message || `Action ${action} thất bại.`);
     }
 
-    async #autoFix(runtime, { botId, collectorMode, fishingMode }) {
+    async #autoFix(runtime, { botId } = {}) {
+        const registry = runtime.getService?.('modeRegistry');
+        const activeEntry = registry?.active?.()?.[0] || null;
+        const activeName = activeEntry?.definition?.id || null;
+        const active = activeName ? registry.require(activeName) : null;
+        const activeStatus = active?.status?.() || null;
         const gui = runtime.getService?.('guiManager')?.describeCurrent?.() || null;
-        const fishingStatus = fishingMode?.status?.() || { enabled: false, paused: false, phase: 'DISABLED' };
-        const collectorStatus = collectorMode?.status?.() || { enabled: false, paused: false, phase: 'OFF' };
-        const activeName = fishingStatus.enabled ? 'fishing' : collectorStatus.enabled ? 'collector' : null;
-        const active = activeName === 'fishing' ? fishingMode : activeName === 'collector' ? collectorMode : null;
-        const activeStatus = activeName === 'fishing' ? fishingStatus : activeName === 'collector' ? collectorStatus : null;
 
         if (activeStatus?.lastError || ['ERROR', 'WAITING_RETRY'].includes(activeStatus?.phase)) {
             return this.fleetControl
                 ? this.fleetControl.restartMode(botId, this.#durableModeId(activeName), { source: 'discord-panel-auto-fix' })
-                : this.#restartDirectMode(runtime, activeName, { collectorMode, fishingMode });
+                : this.#restartDirectMode(runtime, activeName);
         }
         if (activeStatus?.paused) {
             return this.fleetControl
@@ -699,39 +663,47 @@ class DiscordPanelManager {
             // State looks healthy; restart only the mode, never the Minecraft connection.
             return this.fleetControl
                 ? this.fleetControl.restartMode(botId, this.#durableModeId(activeName), { source: 'discord-panel-auto-fix' })
-                : this.#restartDirectMode(runtime, activeName, { collectorMode, fishingMode });
+                : this.#restartDirectMode(runtime, activeName);
         }
         return this.#resetInteractions(runtime, { pauseMode: false });
     }
 
     #durableModeId(activeName) {
-        if (activeName === 'collector') return 'collector-b5';
-        if (activeName === 'fishing') return 'fishing';
+        if (activeName) return activeName;
         throw new Error(`Mode không hợp lệ cho durable control: ${activeName || 'none'}`);
     }
 
-    async #restartDirectMode(runtime, activeName, { collectorMode, fishingMode }) {
+    async #restartDirectMode(runtime, activeName) {
         await this.#hardStopModes(runtime, 'Restarting mode from Discord control panel.');
-        return activeName === 'fishing' ? fishingMode.enable() : collectorMode.enable();
+        const registry = runtime.getService?.('modeRegistry');
+        const target = activeName ? registry.require(activeName) : null;
+        if (!target) throw new Error(`Mode không tồn tại: ${activeName || '(trống)'}`);
+        return target.enable();
     }
 
     async #hardStopModes(runtime, reason) {
-        const collectorMode = runtime.requireService('collectorB5Mode');
-        const fishingMode = runtime.requireService('fishingMode');
+        const registry = runtime.getService?.('modeRegistry');
+        if (registry?.disableAll) {
+            const results = await registry.disableAll(reason);
+            const failed = results.find(entry => entry.result?.success === false);
+            return failed?.result || { success: true, data: { stopped: results.length } };
+        }
+        const fishingMode = runtime.getService?.('fishingMode');
+        const craftingMode = runtime.getService?.('craftingMode');
         const results = [];
-        if (fishingMode.status().enabled) results.push(await fishingMode.disable(reason));
-        if (collectorMode.status().enabled) results.push(await collectorMode.disable(reason));
+        if (fishingMode?.status?.().enabled) results.push(await fishingMode.disable(reason));
+        if (craftingMode?.status?.().enabled) results.push(await craftingMode.disable(reason));
         await this.#resetInteractions(runtime, { pauseMode: false });
         const failed = results.find(entry => entry?.success === false);
         return failed || { success: true, data: { stopped: results.length } };
     }
 
     async #resetInteractions(runtime, { pauseMode = true } = {}) {
-        const collectorMode = runtime.requireService('collectorB5Mode');
-        const fishingMode = runtime.requireService('fishingMode');
-        const activeMode = fishingMode.status().enabled ? fishingMode : collectorMode.status().enabled ? collectorMode : null;
+        const registry = runtime.getService?.('modeRegistry');
+        const activeEntry = registry?.active?.()?.[0] || null;
+        const activeMode = activeEntry ? registry.require(activeEntry.definition.id) : null;
 
-        if (pauseMode && activeMode && !activeMode.status().paused) {
+        if (pauseMode && activeMode && !activeMode.status?.()?.paused) {
             const paused = await activeMode.pause('Interaction reset from Discord control panel.');
             if (paused?.success === false) throw paused.error || new Error(paused.message || 'Không pause được mode để reset.');
         }
@@ -787,9 +759,9 @@ class DiscordPanelManager {
         const runtime = this.botRegistry.get?.(selected.id) || null;
         const online = Boolean(runtime?.context?.has?.());
         const state = runtime?.getState?.() || {};
-        const collector = runtime?.getService?.('collectorB5Mode')?.status?.() || null;
-        const fishing = runtime?.getService?.('fishingMode')?.status?.() || null;
-        const activeMode = fishing?.enabled ? `Câu cá/${fishing.phase}` : collector?.enabled ? `Nhặt+B5/${collector.phase}` : 'Không';
+        // G18: collector-b5 removed. Admin shows generic active mode via modeRegistry.
+        const activeEntry = runtime?.getService?.('modeRegistry')?.active?.()?.[0] || null;
+        const activeMode = activeEntry ? `${activeEntry.definition.id}/${activeEntry.status?.phase || (activeEntry.status?.paused ? 'PAUSED' : 'ACTIVE')}` : 'Không';
         const enabledCount = profiles.filter(profile => profile.enabled).length;
         const onlineCount = profiles.filter(profile => this.botRegistry.get?.(profile.id)?.context?.has?.()).length;
         const adminMaxPage = Math.max(0, Math.ceil(profiles.length / 25) - 1);
@@ -888,28 +860,7 @@ class DiscordPanelManager {
     }
 
     async #configPayload() {
-        let current;
-        try {
-            current = await this.configEditor.read();
-        } catch {
-            current = this.botRegistry.require(this.botId).requireService('collectorB5Mode').publicConfig();
-        }
-        const p = current.pickupLocation || {};
-        const pickup = [p.x, p.y, p.z].every(Number.isFinite)
-            ? `${p.x}, ${p.y}, ${p.z}`
-            : 'chưa cấu hình';
-        const craftDelayMs = this.formatter.number(Number(current.craftLoopDelayMs || 250));
-        const pollSeconds = this.formatter.number(Number(current.pollIntervalMs || 0) / 1000);
-        const reanchor = this.formatter.number(Number(current.reanchorRadius || 0));
-
-        const collectorRow = new this.discord.ActionRowBuilder().addComponents(
-            new this.discord.ButtonBuilder().setCustomId('mcbot:config:pickup').setLabel('Điểm nhặt').setStyle(this.discord.ButtonStyle.Primary),
-            new this.discord.ButtonBuilder().setCustomId('mcbot:config:craft-delay').setLabel('Độ trễ chế').setStyle(this.discord.ButtonStyle.Secondary),
-            new this.discord.ButtonBuilder().setCustomId('mcbot:config:poll').setLabel('Chu kỳ kiểm tra').setStyle(this.discord.ButtonStyle.Secondary),
-            new this.discord.ButtonBuilder().setCustomId('mcbot:config:reanchor').setLabel('Reanchor').setStyle(this.discord.ButtonStyle.Secondary),
-            new this.discord.ButtonBuilder().setCustomId('mcbot:config:reload').setLabel('Nạp lại').setStyle(this.discord.ButtonStyle.Success)
-        );
-
+        // G18: collector-b5 removed. Config panel is fishing-only.
         let configuredBotIds = [];
         try {
             configuredBotIds = await this.fishingConfigEditor.listBotIds();
@@ -934,20 +885,13 @@ class DiscordPanelManager {
             }
         }
 
-        // Fishing is an optional panel capability. A partial/legacy installation must
-        // still get the Collector+B5 config panel instead of failing panel startup.
+        // G18: without fishing areas there is no legacy collector fallback.
         if (!fishing?.resolved || !Array.isArray(fishing.resolved.areas) || fishing.resolved.areas.length === 0) {
             const embed = new this.discord.EmbedBuilder()
                 .setTitle(`MCbot Config - ${this.botId}`)
-                .addFields(
-                    { name: 'Điểm nhặt', value: `\`${pickup}\`` },
-                    { name: 'Chế B1→B5', value: '`liên tục, không cooldown`', inline: true },
-                    { name: 'Độ trễ sau lượt chế', value: `\`${craftDelayMs} ms\``, inline: true },
-                    { name: 'Chu kỳ kiểm tra', value: `\`${pollSeconds} giây\``, inline: true },
-                    { name: 'Reanchor radius', value: `\`${reanchor}\``, inline: true }
-                )
+                .setDescription('Chua co khu AFK. Cau hinh cau ca tren Desktop.')
                 .setFooter({ text: this.formatter.marker('config') });
-            return { embeds: [embed], components: [collectorRow] };
+            return { embeds: [embed], components: [] };
         }
 
         if (!fishing.resolved.areas.some(area => area.id === this.selectedFishingAreaId)) {
@@ -965,12 +909,7 @@ class DiscordPanelManager {
         const embed = new this.discord.EmbedBuilder()
             .setTitle(`MCbot Config - ${this.botId}`)
             .addFields(
-                { name: 'Điểm nhặt', value: `\`${pickup}\`` },
-                { name: 'Chế B1→B5', value: '`liên tục, không cooldown`', inline: true },
-                { name: 'Độ trễ sau lượt chế', value: `\`${craftDelayMs} ms\``, inline: true },
-                { name: 'Chu kỳ kiểm tra', value: `\`${pollSeconds} giây\``, inline: true },
-                { name: 'Reanchor radius', value: `\`${reanchor}\``, inline: true },
-                { name: 'Bot cấu hình câu', value: `\`${this.selectedFishingBotId}\``, inline: true },
+                { name: 'Bot cau hinh cau', value: `\`${this.selectedFishingBotId}\``, inline: true },
                 { name: 'Khu AFK', value: `\`${this.selectedFishingAreaId}\``, inline: true },
                 { name: 'Điểm đứng câu', value: `\`${fishingPosition}\` (${explicitArea ? 'riêng bot' : 'mặc định chung'})` },
                 { name: 'Góc cúi khi câu', value: `\`${pitch}°\` (${explicitPitch ? 'riêng bot' : 'mặc định chung'})`, inline: true }
@@ -1006,41 +945,11 @@ class DiscordPanelManager {
             new this.discord.ButtonBuilder().setCustomId('mcbot:fishing-config:current').setLabel('Lấy vị trí hiện tại').setStyle(this.discord.ButtonStyle.Secondary),
             new this.discord.ButtonBuilder().setCustomId('mcbot:fishing-config:reload').setLabel('Nạp config bot').setStyle(this.discord.ButtonStyle.Success)
         );
-        return { embeds: [embed], components: [collectorRow, botRow, areaRow, fishingRow] };
+        return { embeds: [embed], components: [botRow, areaRow, fishingRow] };
     }
 
-    async #configModal(action) {
-        const current = await this.configEditor.read();
-        if (action === 'pickup') {
-            const p = current.pickupLocation || {};
-            return new this.discord.ModalBuilder()
-                .setCustomId('mcbot:config-modal:pickup')
-                .setTitle('Điểm đứng nhặt')
-                .addComponents(
-                    this.#inputRow('x', 'X', p.x),
-                    this.#inputRow('y', 'Y', p.y),
-                    this.#inputRow('z', 'Z', p.z)
-                );
-        }
-        if (action === 'craft-delay') {
-            return new this.discord.ModalBuilder()
-                .setCustomId('mcbot:config-modal:craft-delay')
-                .setTitle('Độ trễ sau lượt chế')
-                .addComponents(this.#inputRow('milliseconds', 'Mili giây', Number(current.craftLoopDelayMs || 250)));
-        }
-        if (action === 'poll') {
-            return new this.discord.ModalBuilder()
-                .setCustomId('mcbot:config-modal:poll')
-                .setTitle('Chu kỳ kiểm tra')
-                .addComponents(this.#inputRow('seconds', 'Giây', Number(current.pollIntervalMs || 0) / 1000));
-        }
-        if (action === 'reanchor') {
-            return new this.discord.ModalBuilder()
-                .setCustomId('mcbot:config-modal:reanchor')
-                .setTitle('Reanchor radius')
-                .addComponents(this.#inputRow('radius', 'Khoảng cách', current.reanchorRadius));
-        }
-        throw new Error(`Config action không hỗ trợ: ${action}`);
+    async #configModal() {
+        throw new Error('Collector config was removed in G18; use Desktop or fishing config.');
     }
 
     async #fishingConfigModal(botId, areaId) {

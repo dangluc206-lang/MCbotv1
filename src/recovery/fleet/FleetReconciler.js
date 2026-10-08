@@ -186,7 +186,7 @@ class FleetReconciler {
 
     #modeDefinitions() {
         return this.modeCatalog?.list?.() || [
-            { id: 'collector-b5', serviceName: 'collectorB5Mode' },
+            { id: 'crafting', serviceName: 'craftingMode' },
             { id: 'fishing', serviceName: 'fishingMode' }
         ];
     }

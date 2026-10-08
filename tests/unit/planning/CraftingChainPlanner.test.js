@@ -13,7 +13,7 @@ const CraftingChainPlanner = require('../../../src/planning/crafting/CraftingCha
 
 const ITEMS = require('../../../config/items/items.json');
 const RECIPES = require('../../../config/server-data/recipes.json');
-const TIERS = require('../../../config/server-data/crafting-tiers.json');
+const TIERS = {} // G18: crafting-tiers.json removed; tier-free;
 
 function createDeps() {
     const itemRegistry = new ItemRegistry(ITEMS);
@@ -36,7 +36,7 @@ test('plans a single-tier B2 chain', () => {
     assert.equal(chain.requiredQuantity, 10);
     assert.equal(chain.steps.length, 1);
     assert.equal(chain.steps[0].outputId, 'super_cobblestone');
-    assert.equal(chain.steps[0].tier, 'B2');
+    assert.equal(chain.steps[0].tier, null); // G18 tier-free
     assert.equal(chain.steps[0].crafts, 10);
     assert.deepEqual(chain.intermediates, []);
     assert.deepEqual(chain.finalMaterials, { cobblestone: 160 });
@@ -88,7 +88,7 @@ test('plans the B5 chain for quantity 100 with all intermediates computed', () =
     // tiers flow down to B1 raw materials with no hard-coded item list here
     assert.ok(byOutput.get('refined_diamond').crafts > 0);
     assert.ok(chain.finalMaterials.diamond > 0);
-    assert.equal(chain.steps.at(-1).tier, 'B5');
+    assert.equal(chain.steps.at(-1).tier, null); // G18 tier-free
 });
 
 test('matches the existing CraftingPlanner behavior exactly (compat)', () => {

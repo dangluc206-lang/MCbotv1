@@ -66,7 +66,7 @@ function harness({ enabled = true, request = true, requestTarget = 'super_alloy'
     const coordinator = new ModeCoordinator({ botId: 'bot-01' });
     const island = { async goHome() { calls.home += 1; return { success: true }; } };
     const b1Materials = {
-        async protectForB5Batch(options) {
+        async protectForBatch(options) {
             calls.protect += 1;
             calls.protectOptions.push(options);
             calls.sequence.push('protect');

@@ -176,7 +176,7 @@ test('cutover wiring: every public API routes through the generic cycle; missing
     assert.equal(executed[3].craftFinalTarget, false, 'maintenance never crafts the final target');
 });
 
-test('cutover wiring: composition root feeds the decorator into crafting/collector/facade consumers', () => {
+test('cutover wiring: single generic execution path is composed', () => {
     const source = fs.readFileSync(path.resolve(__dirname, '../../../src/bootstrap/registerBotServices.js'), 'utf8');
     // The automation core is CraftAutomationService with the generic planning authority.
     assert.match(source, /new CraftAutomationService\(\{\s*planningService:\s*craftPlanning/);
@@ -186,9 +186,8 @@ test('cutover wiring: composition root feeds the decorator into crafting/collect
     assert.match(source, /procedureRegistry/);
     assert.match(source, /procedureExecutor/);
     assert.match(source, /quantityStrategy/);
-    // Collector is an explicit compatibility consumer: it names its target from
-    // its own compat planning view, never from an ambient default.
-    const collectorSource = fs.readFileSync(path.resolve(__dirname, '../../../src/modes/collector-b5/CollectorB5ModeService.js'), 'utf8');
-    assert.match(collectorSource, /targetId:\s*this\.b5Planning\?\.targetId\s*\|\|\s*null/);
+    // G18: collector-b5 removed, no legacy compat consumer remains.
+    assert.equal(source.includes('collectorB5Mode'), false);
+    assert.equal(source.includes('collector-b5'), false);
 });
 

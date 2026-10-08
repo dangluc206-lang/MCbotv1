@@ -8,7 +8,7 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '../../..');
 
 for (const relative of [
-    'src/modes/collector-b5/CollectorB5ModeService.js',
+    'src/modes/crafting/CraftingModeService.js',
     'src/modes/fishing/FishingModeService.js'
 ]) {
     test(`${relative} keeps loop/restart ownership inside TaskSupervisor`, () => {

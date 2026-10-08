@@ -15,7 +15,7 @@ const CraftStageClassifier = require('../../../src/planning/crafting/CraftStageC
 
 const ITEMS = require('../../../config/items/items.json');
 const RECIPES = require('../../../config/server-data/recipes.json');
-const TIERS = require('../../../config/server-data/crafting-tiers.json');
+const TIERS = {} // G18: crafting-tiers.json removed; tier-free;
 
 // One generic pipeline, no per-target code path: a refined block, the B4 items
 // and the B5 item are all resolved by the same planner from recipes.json + tiers.
@@ -138,20 +138,22 @@ test('stage kinds come from output metadata, not from hard-coded target names', 
     const { planning } = createPipeline();
     const plan = planning.plan('titanium', 1);
 
-    const classifier = new CraftStageClassifier({ tiers: TIERS, reserveTiers: ['B2', 'B3'], targetKind: 'TARGET' });
+    const TEST_TIERS = { B2: ['refined_iron', 'refined_lapis'], B3: ['refined_iron_block', 'refined_lapis_block'] };
+    const classifier = new CraftStageClassifier({ tiers: TEST_TIERS, reserveTiers: ['B2', 'B3'], targetKind: 'TARGET' });
     assert.equal(classifier.stageKind('titanium', 'titanium'), 'TARGET');
-    assert.equal(classifier.kindOf('titanium'), tierOf('titanium'));
-    assert.equal(classifier.kindOf('refined_lapis_block'), tierOf('refined_lapis_block'));
+    assert.equal(classifier.kindOf('titanium'), 'INTERMEDIATE'); // G18: not in fixture tiers
+    assert.equal(classifier.kindOf('refined_lapis_block'), 'B3'); // G18: from TEST_TIERS fixture
     assert.equal(classifier.kindOf('not_a_known_item'), 'INTERMEDIATE');
 
     const { reserveSteps, finalSteps } = classifier.partition(plan);
     assert.equal(reserveSteps.length + finalSteps.length, plan.steps.length);
-    assert.ok(reserveSteps.every(step => ['B2', 'B3'].includes(tierOf(step.outputId))));
+    const tierOfTest = id => { for (const [t, ids] of Object.entries(TEST_TIERS)) if (ids.includes(id)) return t; return 'INTERMEDIATE'; };
+    assert.ok(reserveSteps.every(step => ['B2', 'B3'].includes(tierOfTest(step.outputId))));
     assert.ok(finalSteps.some(step => step.outputId === 'titanium'));
 
     // Same plan, different configured reserve tiers: classification is policy
     // data, never a hard-coded B2/B3 (or B5/B4) assumption.
-    const withoutReserve = new CraftStageClassifier({ tiers: TIERS, reserveTiers: [] });
+    const withoutReserve = new CraftStageClassifier({ tiers: TEST_TIERS, reserveTiers: [] });
     assert.deepEqual(withoutReserve.partition(plan).reserveSteps, []);
     assert.equal(withoutReserve.partition(plan).finalSteps.length, plan.steps.length);
 
@@ -181,7 +183,7 @@ test('a new target only needs recipe/item data, never workflow code', () => {
             }
         }
     };
-    const futureTiers = { ...TIERS, B5: [...TIERS.B5, 'future_alloy'] };
+    const futureTiers = { B5: ['future_alloy'] }; // G18: explicit data-driven tier, no file
 
     const { planning, craftingItemRegistry, materialCalculator } = createPipeline({ recipes: futureRecipes, items: futureItems, tiers: futureTiers });
     const expected = expectedOutputs(futureRecipes, 'future_alloy');
@@ -199,6 +201,6 @@ test('a new target only needs recipe/item data, never workflow code', () => {
     const request = CraftingRequest.create({ targetItemId: 'future_alloy', quantity: 3, itemRegistry: craftingItemRegistry });
     const chain = new CraftingChainPlanner({ craftingPlanner: planning.planner, craftingItemRegistry }).plan({ request });
     assert.equal(chain.targetItemId, 'future_alloy');
-    assert.equal(chain.steps.at(-1).tier, 'B5');
+    assert.equal(chain.steps.at(-1).tier, 'B5'); // data-driven: futureTiers passed explicitly above
 });
 

@@ -310,7 +310,7 @@ class BotProfileAdminService {
     }
 
     async #stopModes(runtime, reason) {
-        for (const name of ['fishingMode', 'collectorB5Mode']) {
+        for (const name of ['fishingMode', 'craftingMode']) {
             const mode = runtime.getService?.(name);
             if (!mode?.status?.().enabled) continue;
             const result = await mode.disable(reason);

@@ -14,14 +14,14 @@ const CraftingTargetRegistry = require('../../../src/items/CraftingTargetRegistr
 
 const ITEMS = require('../../../config/items/items.json');
 const RECIPES = require('../../../config/server-data/recipes.json');
-const TIERS = require('../../../config/server-data/crafting-tiers.json');
 const TARGET_POLICY = require('../../../config/server-data/crafting-targets.json');
 
 function realCraftingRegistries() {
     const craftingItemRegistry = new CraftingItemRegistry({
         itemRegistry: new ItemRegistry(ITEMS),
         recipeRegistry: new CraftingRecipeRegistry(RECIPES),
-        tiers: TIERS
+        // G18: crafting-tiers.json removed; registry resolves tier-free.
+        tiers: {}
     });
     return {
         craftingItemRegistry,
@@ -258,7 +258,7 @@ test('DesktopController exposes safe module catalog without starting Minecraft b
     const controller = new DesktopController({ baseDir: process.cwd() });
     const modules = controller.customModeModules();
     const types = modules.map(entry => entry.type);
-    for (const type of ['command','sky-command','slash-command','gui-click','wait','move','look','wait-gui','home','sky-join','read-storage','storage-protect','b5-cycle','if','repeat']) {
+    for (const type of ['command','sky-command','slash-command','gui-click','wait','move','look','wait-gui','home','sky-join','read-storage','storage-protect','if','repeat']) {
         assert.ok(types.includes(type), type);
     }
     assert.equal(types.includes('javascript'), false);
@@ -270,7 +270,7 @@ test('DesktopController.customModeModules() returns IPC-safe DTO without executo
     const modules = controller.customModeModules();
 
     // Verify 17 modules are present
-    assert.equal(modules.length, 17, 'must have exactly 17 module types');
+    assert.equal(modules.length, 16, 'must have exactly 16 module types');
 
     // Verify no executor function leaked into DTO
     const hasExecutorFunction = modules.some(
@@ -342,24 +342,15 @@ test('DesktopController updates mode-driven Sky gateway timing without restoring
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('DesktopController storage protection persists reserve plus Collector-only decompression headroom', async () => {
+test('DesktopController storage protection persists reserve (G18 storage-only)', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcbot-desktop-storage-config-'));
     const storageFile = path.join(dir, 'config', 'storage', 'kho.json');
-    const collectorFile = path.join(dir, 'config', 'modes', 'collector-b5.json');
     fs.mkdirSync(path.dirname(storageFile), { recursive: true });
-    fs.mkdirSync(path.dirname(collectorFile), { recursive: true });
     const conversion = { resources: {} };
     const storage = { sell: { enabled: true, blockOnly: true, reserveCoverage: 1.5, allowSingle: false, allowAll: false } };
-    const collector = {
-        enabled: true, teleportHomeOnEnable: true,
-        pickupLocation: { x: 0, y: 64, z: 0 }, arrivalRadius: 1, reanchorRadius: 2,
-        moveTimeoutMs: 30000, pollIntervalMs: 15000, errorRetryMs: 5000, craftLoopDelayMs: 250,
-        b1Decompression: { maxUsageRatio: 0.8, requireKnownCapacity: true }
-    };
     fs.writeFileSync(storageFile, `${JSON.stringify(storage, null, 2)}\n`);
-    fs.writeFileSync(collectorFile, `${JSON.stringify(collector, null, 2)}\n`);
 
-    let snapshot = { mineralConversions: conversion, storage, collectorB5Mode: collector };
+    let snapshot = { mineralConversions: conversion, storage };
     const applied = [];
     const controller = new DesktopController({ baseDir: dir });
     controller.lifecycle = 'RUNNING';
@@ -373,7 +364,6 @@ test('DesktopController storage protection persists reserve plus Collector-only 
                     assert.equal(candidate.storage.sell.reserveCoverage, 1.5);
                     assert.equal(candidate.storage.sell.enabled, true);
                     assert.equal(candidate.storage.sell.allowSingle, false);
-                    assert.equal(candidate.collectorB5Mode.b1Decompression.maxUsageRatio, 0.84);
                     assert.equal(candidate.mineralConversions.storagePressure, undefined);
                 }
             },
@@ -390,7 +380,6 @@ test('DesktopController storage protection persists reserve plus Collector-only 
                 botId,
                 getService(name) {
                     if (name === 'b1Materials') return { reconfigure: values => applied.push([botId, 'b1', values]) };
-                    if (name === 'collectorB5Mode') return { reconfigure: values => applied.push([botId, 'collector', values]) };
                     return null;
                 }
             }))
@@ -398,22 +387,18 @@ test('DesktopController storage protection persists reserve plus Collector-only 
     };
 
     const result = await controller.updateStorageProtectionConfig({
-        sell: { reserveCoverage: 2.5, enabled: false, blockOnly: false },
-        collector: { b1Decompression: { maxUsageRatio: 0.84, requireKnownCapacity: true } }
+        sell: { reserveCoverage: 2.5, enabled: false, blockOnly: false }
     });
 
     assert.equal(result.appliedLive, true);
     assert.equal(result.restartRequired, false);
     assert.deepEqual(result.botsApplied, ['bot-01', 'bot-02']);
     assert.equal(applied.filter(entry => entry[1] === 'b1').length, 2);
-    assert.equal(applied.filter(entry => entry[1] === 'collector').length, 2);
     assert.equal(applied.find(entry => entry[1] === 'b1')[2].storageConfig.sell.reserveCoverage, 1.5);
     assert.equal(applied.find(entry => entry[1] === 'b1')[2].storageConfig.sell.enabled, true);
     assert.equal(applied.find(entry => entry[1] === 'b1')[2].storageConfig.sell.blockOnly, false);
-    assert.equal(applied.find(entry => entry[1] === 'collector')[2].b1Decompression.maxUsageRatio, 0.84);
     assert.equal(JSON.parse(fs.readFileSync(storageFile, 'utf8')).sell.reserveCoverage, 1.5);
     assert.equal(JSON.parse(fs.readFileSync(storageFile, 'utf8')).sell.enabled, true);
-    assert.equal(JSON.parse(fs.readFileSync(collectorFile, 'utf8')).b1Decompression.maxUsageRatio, 0.84);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 

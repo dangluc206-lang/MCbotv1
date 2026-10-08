@@ -48,7 +48,7 @@ function collector({ eventBus, publisher, preprocess, policy = failurePolicy, de
         skyTarget: 'sky1',
         movementManager: { goTo: async () => {}, stop: async () => {} },
         positionService: { current: () => ({ x: 0, y: 64, z: 0 }), distance: () => 0 },
-        b1Materials: { protectForB5Batch: preprocess, ...b1Materials },
+        b1Materials: { protectForBatch: preprocess, ...b1Materials },
         b5Planning: { inspectAdditional: async () => ({ success: true, data: { fullPlan: { feasible: false }, finalSteps: [], chains: [] } }) },
         b5Automation: {
             runNext: async () => ({ success: true, data: { completedTarget: false } }),

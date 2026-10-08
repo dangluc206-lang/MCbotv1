@@ -11,6 +11,35 @@ class CraftingGuiNavigator {
 
     reconfigure(config) { this.config = config; }
 
+    openRoot(rootSource, { cancellationToken = null, expectedGeneration = null, operationContext = null } = {}) {
+        return this.openMineralsRoot(rootSource, { cancellationToken, expectedGeneration, operationContext });
+    }
+
+    rootSource(recipe, guiId) {
+        return {
+            command: this.config.commandKey ? `/${this.config.commandKey.replace(/^\//, '')}` : '/ks',
+            commandKey: this.config.commandKey || recipe?.commandKey || 'minerals',
+            guiId: this.config.mineralsGuiId || guiId || 'minerals',
+            actions: []
+        };
+    }
+
+    entrySource() {
+        return { command: '/ks', commandKey: this.config.commandKey || 'minerals', guiId: this.config.mineralsGuiId || 'minerals', actions: [] };
+    }
+
+    menuSource() {
+        return { command: '/ks', commandKey: this.config.commandKey || 'minerals', guiId: this.config.guiId || 'crafting', clicks: [], actions: [] };
+    }
+
+    quantitySource(recipe) {
+        return { command: '/ks', commandKey: this.config.commandKey || 'minerals', guiId: this.config.quantityGuiId || 'craftingQuantity', actions: [recipe?.menuItemId || recipe?.output].filter(Boolean) };
+    }
+
+    recipeSource(recipe, session) {
+        return { command: '/ks', commandKey: this.config.commandKey || 'minerals', guiId: session?.definitionId || this.config.guiId || 'crafting', clicks: [], actions: [] };
+    }
+
     async openMineralsRoot(rootSource, { cancellationToken = null, expectedGeneration = null, operationContext = null } = {}) {
         const current = this.guiManager.current();
         if (current?.active && current?.source?.command === '/ks'

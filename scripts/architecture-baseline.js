@@ -205,9 +205,7 @@ function modeInventory(root) {
     return modeCatalog.list().map(definition => {
         const serviceFile = definition.serviceName === 'craftingMode'
             ? 'src/modes/crafting/CraftingModeService.js'
-            : definition.serviceName === 'collectorB5Mode'
-                ? 'src/modes/collector-b5/CollectorB5ModeService.js'
-                : definition.serviceName === 'fishingMode'
+            : definition.serviceName === 'fishingMode'
                     ? 'src/modes/fishing/FishingModeService.js'
                     : definition.metadata?.sourceFile || null;
         let lifecycle = 'UNKNOWN';
@@ -253,7 +251,7 @@ function capabilityInventory(root) {
 
 function configInventory(root, sourceFiles) {
     const genericReloadFile = 'src/configuration/ConfigurationService.js';
-    const explicitLiveApply = new Set(['skyblock', 'skyCommands', 'craftingMode', 'collectorB5Mode']);
+    const explicitLiveApply = new Set(['skyblock', 'skyCommands', 'craftingMode']);
     return ConfigSpecs.map(spec => {
         const consumers = [];
         const escaped = spec.key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -271,9 +269,7 @@ function configInventory(root, sourceFiles) {
                 api: genericReloadFile,
                 configurationReloadSupported: true,
                 explicitRuntimeApply: explicitLiveApply.has(spec.key),
-                explicitRuntimeApplyEvidence: spec.key === 'collectorB5Mode'
-                    ? ['src/discord/config/CollectorB5ConfigEditor.js']
-                    : explicitLiveApply.has(spec.key) ? ['src/desktop/DesktopController.js'] : []
+                explicitRuntimeApplyEvidence: explicitLiveApply.has(spec.key) ? ['src/desktop/DesktopController.js'] : []
             }
         };
     });

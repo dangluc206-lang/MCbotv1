@@ -6,14 +6,15 @@ const path = require('node:path');
 const { buildInventory, validateInventory } = require('../../../scripts/inspect-minerua-knowledge');
 const root = path.resolve(__dirname, '../../..');
 
-test('WP-101 inventory covers every command/GUI and maps B1-B5/storage without secrets', () => {
+test('WP-101 inventory covers every command/GUI and maps storage without secrets', () => {
     const inventory = buildInventory();
     assert.deepEqual(validateInventory(inventory), []);
     const commands = require('../../../config/commands/commands.json');
     const windows = require('../../../config/gui/windows.json');
     assert.equal(inventory.facts.filter(f => f.category === 'command').length, Object.keys(commands).length);
     assert.equal(inventory.facts.filter(f => f.category === 'gui-identity').length, Object.keys(windows).length);
-    assert.ok(inventory.facts.find(f => f.factId === 'tiers.b1-b5'));
+    assert.equal(inventory.facts.some(f => f.factId === 'tiers.b1-b5'), false);
+    assert.equal(inventory.facts.some(f => f.factId === 'policy.b5'), false);
     assert.ok(inventory.facts.find(f => f.factId === 'storage.sell'));
     assert.equal(inventory.safety.secretsCaptured, false);
 });

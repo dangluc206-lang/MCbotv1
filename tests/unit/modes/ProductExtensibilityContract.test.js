@@ -11,7 +11,7 @@ const ModePresentationService = require('../../../src/modes/ModePresentationServ
 
 test('XP-300 every workflow module has a complete fail-closed presentation schema', () => {
     const modules = new WorkflowDefinitionValidator().moduleCatalog();
-    assert.equal(modules.length, 17);
+    assert.equal(modules.length, 16);
     for (const module of modules) {
         assert.equal(module.presentation.contract, 'workflow-module-presentation-v1', module.type);
         assert.match(module.presentation.risk, /^(LOW|MEDIUM|HIGH)$/);
@@ -63,17 +63,17 @@ test('XP-302 package manifest is deterministic and tamper evident', () => {
     assert.equal(service.verify(versionTampered).valid, false);
 });
 
-test('XP-303 template gallery provides safe bounded examples including exact B5 boundary', () => {
+test('XP-303 template gallery provides safe bounded examples including storage protection boundary', () => {
     const gallery = new CustomModeTemplateGallery().list();
     assert.ok(gallery.length >= 4);
-    const b5 = gallery.find(item => item.id === 'b5-safe-cycle');
-    assert.deepEqual(b5.definition.workflow.loop.steps.map(step => step.type), ['read-storage','storage-protect','b5-cycle','wait']);
-    assert.equal(JSON.stringify(b5).includes('allowSmelting'), false);
-    assert.equal(b5.contract, 'mcbot-custom-mode-template-v1');
-    assert.equal(b5.supportStatus, 'BETA');
-    assert.deepEqual(b5.serverProfileCompatibility, ['minerua']);
-    assert.ok(b5.requiredCapabilities.includes('b1-materials'));
-    assert.ok(b5.requestedResources.includes('primary-mode'));
+    const loop = gallery.find(item => item.id === 'storage-protect-loop');
+    assert.deepEqual(loop.definition.workflow.loop.steps.map(step => step.type), ['read-storage','storage-protect','wait']);
+    assert.equal(JSON.stringify(loop).includes('allowSmelting'), false);
+    assert.equal(loop.contract, 'mcbot-custom-mode-template-v1');
+    assert.equal(loop.supportStatus, 'BETA');
+    assert.deepEqual(loop.serverProfileCompatibility, ['minerua']);
+    assert.ok(loop.requiredCapabilities.includes('b1-materials'));
+    assert.ok(loop.requestedResources.includes('primary-mode'));
 });
 
 test('XP-304 mode presentation accepts a fake future mode without generic branching', () => {

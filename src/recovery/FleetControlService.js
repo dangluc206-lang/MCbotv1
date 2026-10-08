@@ -213,7 +213,7 @@ class FleetControlService {
         const id = String(modeId || '').trim();
         if (!id) return false;
         if (this.modeCatalog?.has) return this.modeCatalog.has(id);
-        return ['collector-b5', 'fishing'].includes(id);
+        return ['crafting', 'fishing'].includes(id);
     }
 
     #requireRuntime(botId) {

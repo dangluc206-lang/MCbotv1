@@ -32,7 +32,6 @@
     function modeActionsHtml({ bot, id, mode, fullActions, profile, connectionView }) {
   const availableModes = bot.modes?.available || [
     { definition: { id: 'crafting', label: 'Chế tạo' }, readiness: { ready: true } },
-    { definition: { id: 'collector-b5', label: 'Collector+B5 (cũ)' }, readiness: { ready: true } },
     { definition: { id: 'fishing', label: 'Câu cá' }, readiness: { ready: true } }
   ];
   const startModeButtons = availableModes.map(entry => {

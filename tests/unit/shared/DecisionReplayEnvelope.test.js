@@ -2,8 +2,6 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const DecisionReplayEnvelope=require('../../../src/shared/contracts/DecisionReplayEnvelope');
-const B5ExecutionPlanner=require('../../../src/planning/crafting/B5ExecutionPlanner');
-const B5PlannerReplay=require('../../../src/simulation/b5/B5PlannerReplay');
 
 function create(input, overrides={}) { return DecisionReplayEnvelope.create({ domain:'demo', input, decision:{kind:'WAIT',resource:null}, profile:{id:'minerua',revision:'p1'}, policy:{id:'policy',revision:'r1'}, ...overrides }); }
 
@@ -26,9 +24,11 @@ test('WP-300 redacts sensitive fields, rejects runtime objects and rejects expli
  assert.throws(()=>DecisionReplayEnvelope.read({...value,version:99}),e=>e.code==='REPLAY_VERSION_UNSUPPORTED');
 });
 
-test('WP-300 legacy B5 fixture round-trips through generic envelope and current replay reader',()=>{
- const fixture=require('../../fixtures/replay/b5-planner-basic.json');
- const envelope=DecisionReplayEnvelope.fromLegacyB5Fixture(fixture,{profile:{id:'minerua',revision:'profile-1'}});
- const result=new B5PlannerReplay({planner:new B5ExecutionPlanner()}).replay(envelope);
- assert.equal(result.success,true,result.mismatches.join('; '));
+test('WP-300 generic craft fixture round-trips through the envelope',()=>{
+ const fixture={ version: 1, inspection: { targetId: 'carbon', amount: 1 }, expected: { decisionKind: 'CRAFT', decisionResource: 'carbon', blockers: [] } };
+ const envelope=DecisionReplayEnvelope.fromCraftFixture(fixture,{profile:{id:'minerua',revision:'profile-1'}});
+ assert.equal(envelope.domain,'crafting');
+ const back=DecisionReplayEnvelope.toCraftFixture(envelope);
+ assert.equal(back.version,1);
+ assert.deepEqual(back.inspection,fixture.inspection);
 });

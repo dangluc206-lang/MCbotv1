@@ -19,7 +19,7 @@ function stubService() {
     };
 }
 
-test('bootstrap catalog registers generic crafting mode without b5Craft alias', () => {
+test('bootstrap catalog registers generic crafting mode without b5Craft/collector aliases', () => {
     const catalog = createModeCatalog({ baseDir: path.resolve(__dirname, '../../..') });
     const crafting = catalog.require('crafting');
     assert.equal(crafting.id, 'crafting');
@@ -27,30 +27,25 @@ test('bootstrap catalog registers generic crafting mode without b5Craft alias', 
     assert.equal(crafting.label, 'Chế tạo');
     assert.equal(catalog.has('b5-craft'), false);
     assert.equal(catalog.list().some(entry => entry.serviceName === 'b5CraftMode'), false);
-    const collector = catalog.require('collector-b5');
-    assert.equal(collector.serviceName, 'collectorB5Mode');
-    assert.equal(collector.id, 'collector-b5');
+    // G18: collector-b5 removed, no shim kept.
+    assert.equal(catalog.has('collector-b5'), false);
+    assert.equal(catalog.list().some(entry => entry.serviceName === 'collectorB5Mode'), false);
+    assert.throws(() => catalog.require('collector-b5'), /not registered/i);
 });
 
-test('runtime resolves crafting mode to the generic service, not collector legacy', () => {
+test('runtime resolves crafting mode to the generic service', () => {
     const catalog = createModeCatalog({ baseDir: path.resolve(__dirname, '../../..') });
     const capabilities = new CapabilityRegistry({ botId: 'bot-01' });
     for (const cap of catalog.require('crafting').requiredCapabilities) capabilities.register(cap, {});
-    for (const cap of catalog.require('collector-b5').requiredCapabilities) {
-        if (!capabilities.has(cap)) capabilities.register(cap, {});
-    }
     capabilities.seal();
     const craftingService = stubService();
-    const collectorService = stubService();
     const registry = new RuntimeModeRegistry({
         botId: 'bot-01',
         catalog,
         capabilityRegistry: capabilities,
-        services: { craftingMode: craftingService, collectorB5Mode: collectorService }
+        services: { craftingMode: craftingService }
     });
     assert.equal(registry.require('crafting'), craftingService);
-    assert.equal(registry.require('collector-b5'), collectorService);
-    assert.notEqual(registry.require('crafting'), registry.require('collector-b5'));
     assert.equal(registry.readiness('crafting').serviceBound, true);
     assert.deepEqual(registry.readiness('crafting').missingCapabilities, []);
 });

@@ -11,7 +11,7 @@ const files = [
     'src/index.js',
     'src/bootstrap/shutdown.js',
     'src/core/TaskSupervisor.js',
-    'src/modes/collector-b5/CollectorB5ModeService.js',
+    'src/modes/crafting/CraftingModeService.js',
     'src/desktop/DesktopController.js',
     'src/desktop/update/LocalZipUpdateService.js',
     'src/desktop/update/local-update-helper.js',

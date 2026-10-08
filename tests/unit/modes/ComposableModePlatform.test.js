@@ -22,8 +22,7 @@ function definition(id = 'demo-mode') {
                 { type: 'move', x: 1, y: 2, z: 3 },
                 { type: 'look', yaw: 1.2, pitch: -0.3 },
                 { type: 'wait-gui', guiId: 'storage', timeoutMs: 1000 },
-                { type: 'storage-protect' },
-                { type: 'b5-cycle' }
+                { type: 'storage-protect' }
             ] }
         }
     };
@@ -32,7 +31,7 @@ function definition(id = 'demo-mode') {
 test('workflow validator derives capabilities and rejects unsafe/raw module types', () => {
     const validator = new WorkflowDefinitionValidator();
     const normalized = validator.normalize(definition());
-    for (const capability of ['island','commands','sky-commands','slash-command','gui','movement','rotation','b1-materials','b5-automation']) {
+    for (const capability of ['island','commands','sky-commands','slash-command','gui','movement','rotation','b1-materials']) {
         assert.ok(normalized.requiredCapabilities.includes(capability), capability);
     }
     assert.equal(validator.validate({ id: 'evil', workflow: { loop: { steps: [{ type: 'javascript', code: 'process.exit()' }] } } }).valid, false);
@@ -54,8 +53,7 @@ test('workflow executor routes modules only through registered capabilities and 
         movement: { async goTo(pos) { calls.push(['move', pos]); return { arrived: true }; } },
         rotation: { async look(yaw, pitch) { calls.push(['look', yaw, pitch]); } },
         island: { async goHome() { calls.push(['home']); return { success: true }; } },
-        'b1-materials': { async protectForB5Batch(options) { calls.push(['protect', options.expectedGeneration]); return { success: true, data: {} }; } },
-        'b5-automation': { async runNext() { calls.push(['b5']); return { success: true, data: {} }; } }
+        'b1-materials': { async protectForBatch(options) { calls.push(['protect', options.expectedGeneration]); return { success: true, data: {} }; } }
     };
     const modeContext = { generation: () => 4, connected: () => true, capability: id => capabilities[id] };
     const executor = new WorkflowStepExecutor({ botId: 'bot-01', modeId: 'demo', modeContext });
@@ -69,7 +67,6 @@ test('workflow executor routes modules only through registered capabilities and 
     assert.ok(calls.some(call => call[0] === 'look'));
     assert.ok(calls.some(call => call[0] === 'wait-gui'));
     assert.deepEqual(calls.find(call => call[0] === 'protect'), ['protect', 4]);
-    assert.ok(calls.some(call => call[0] === 'b5'));
 });
 
 test('custom mode store keeps backend boot-safe when one user workflow file is invalid', async () => {

@@ -73,11 +73,11 @@ class DecisionReplayEnvelope {
         return normalized;
     }
 
-    static fromLegacyB5Fixture(fixture, { profile, policy = { id: 'b5-execution-planner', revision: 'v2' } } = {}) {
-        if (!fixture || Number(fixture.version) !== 1 || !fixture.inspection) throw new TypeError('B5 replay fixture v1 is required.');
+    static fromCraftFixture(fixture, { profile, policy = { id: 'crafting-planner', revision: 'v1' } } = {}) {
+        if (!fixture || Number(fixture.version) !== 1 || !fixture.inspection) throw new TypeError('Craft replay fixture v1 is required.');
         const expected = fixture.expected || {};
         return this.create({
-            domain: 'b5-crafting',
+            domain: 'crafting',
             input: fixture.inspection,
             decision: {
                 kind: expected.decisionKind ?? null,
@@ -86,13 +86,13 @@ class DecisionReplayEnvelope {
             },
             profile,
             policy,
-            metadata: { legacyFixtureVersion: 1 }
+            metadata: { fixtureVersion: 1 }
         });
     }
 
-    static toLegacyB5Fixture(value) {
+    static toCraftFixture(value) {
         const envelope = this.read(value);
-        if (envelope.domain !== 'b5-crafting') throw Object.assign(new TypeError(`Replay domain is not B5: ${envelope.domain}.`), { code: 'REPLAY_DOMAIN_MISMATCH' });
+        if (envelope.domain !== 'crafting') throw Object.assign(new TypeError(`Replay domain is not crafting: ${envelope.domain}.`), { code: 'REPLAY_DOMAIN_MISMATCH' });
         return deepFreeze({
             version: 1,
             inspection: envelope.input,

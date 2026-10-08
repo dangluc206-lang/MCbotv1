@@ -14,7 +14,6 @@ const SupportBundleBuilder = require('../diagnostics/support/SupportBundleBuilde
 const BootFailureContract = require('./BootFailureContract');
 const IncidentIndexStore = require('./incidents/IncidentIndexStore');
 const OperatorHealthService = require('./health/OperatorHealthService');
-const B5OperatorProjection = null;
 const ConfigurationWorkspaceService = require('./configuration/ConfigurationWorkspaceService');
 const BackupCatalogService = require('./backup/BackupCatalogService');
 const OperatorSnapshotProjector = require('./projection/OperatorSnapshotProjector');
@@ -334,8 +333,7 @@ class DesktopController {
     // Renderer renders modes.crafting.details; trace carries replay fixture.
     b5Trace(botId) {
         const runtime = this.#runtime(botId);
-        // Generic recorder is the same instance; either service name resolves it.
-        const recorder = runtime.getService?.('craftingTrace') || runtime.getService?.('b5TraceRecorder');
+        const recorder = runtime.getService?.('craftingTrace');
         const bot = this.snapshot().bots.find(item => item.botId === botId) || null;
         return {
             contract: 'dev-b5-trace-v1',
@@ -352,7 +350,8 @@ class DesktopController {
         const bots = this.snapshot().bots || [];
         const selected = botId ? bots.filter(bot => bot.botId === botId) : bots;
         if (botId && selected.length === 0) throw Object.assign(new Error(`Bot does not exist: ${botId}`), { code: 'DESKTOP_BOT_NOT_FOUND' });
-        return { contract: B5OperatorProjection.CONTRACT, items: selected.map(bot => B5OperatorProjection.projectBot(bot)), projectedAt: VietnamTime.iso() };
+        // G18: collector-b5 projection removed. Journey is generic crafting details.
+        return { contract: 'dev-craft-journey-v1', items: selected.map(bot => ({ botId: bot.botId, crafting: bot.modes?.crafting || null })), projectedAt: VietnamTime.iso() };
     }
 
     async incidents({ limit = 100, states = null, botId = null } = {}) {
@@ -619,13 +618,11 @@ class DesktopController {
                 warnings.push({ code: 'SUPPORT_RUNTIME_FAILURE_SKIPPED', artifactId: artifact.id, message: error.message });
             }
         }
-        const b5Replays = this.bundle?.application?.listRuntimes?.().map(runtime => ({
+        const craftReplays = this.bundle?.application?.listRuntimes?.().map(runtime => ({
             botId: runtime.botId,
-            // Generic recorder is the same instance; either service name resolves it.
-            fixture: runtime.getService?.('craftingTrace')?.latestReplayFixture?.()
-                || runtime.getService?.('b5TraceRecorder')?.latestReplayFixture?.() || null
+            fixture: runtime.getService?.('craftingTrace')?.latestReplayFixture?.() || null
         })).filter(entry => entry.fixture) || [];
-        for (const [index, replay] of b5Replays.entries()) {
+        for (const [index, replay] of craftReplays.entries()) {
             entries.push({ path: `evidence/replay-b5-${String(index + 1).padStart(3, '0')}.json`, value: replay, optional: true });
         }
         if (this.lifecycle === 'RUNNING') {
@@ -726,12 +723,8 @@ class DesktopController {
     storageProtectionConfig() {
         this.#requireRunning();
         const storage = this.bundle.configuration.registry.require('storage');
-        const collector = this.bundle.configuration.registry.require('collectorB5Mode');
         return {
-            sell: storage.sell || {},
-            collector: {
-                b1Decompression: collector.b1Decompression || { maxUsageRatio: 0.8, requireKnownCapacity: true }
-            }
+            sell: storage.sell || {}
         };
     }
 
@@ -740,42 +733,32 @@ class DesktopController {
     async #updateStorageProtectionConfig(fields = {}) {
         this.#requireRunning();
         const storage = this.bundle.configuration.registry.require('storage');
-        const collector = this.bundle.configuration.registry.require('collectorB5Mode');
         const requestedSell = fields.sell || {};
         const sell = {
             ...(storage.sell || {}),
             ...(Object.prototype.hasOwnProperty.call(requestedSell, 'blockOnly') ? { blockOnly: requestedSell.blockOnly } : {}),
-            // B5 protection reserve and mandatory-sale boundary are business
-            // invariants. Desktop cannot disable selling or tune reserve.
+            // G18: collector-b5 removed. Sell reserve boundary is owned by
+            // storage alone; desktop cannot disable selling or tune reserve.
             reserveCoverage: 1.5,
             allowSingle: false
         };
         const nextStorage = { ...storage, sell };
-        const nextCollector = {
-            ...collector,
-            b1Decompression: { ...(collector.b1Decompression || {}), ...(fields.collector?.b1Decompression || {}) }
-        };
         const profiles = Object.values(this.bundle.fleetControl.profileSnapshot() || {});
         this.bundle.configuration.validator.assertValid('storage', nextStorage);
-        this.bundle.configuration.validator.assertValid('collectorB5Mode', nextCollector);
-        const candidate = { ...this.bundle.configuration.registry.snapshot(), storage: nextStorage, collectorB5Mode: nextCollector };
+        const candidate = { ...this.bundle.configuration.registry.snapshot(), storage: nextStorage };
         this.bundle.configuration.crossValidator.assertValid(candidate, { botProfiles: profiles, requireComplete: true });
         const backups = [
-            await this.#writeConfigAtomic('config/storage/kho.json', nextStorage, 'storage'),
-            await this.#writeConfigAtomic('config/modes/collector-b5.json', nextCollector, 'collectorB5Mode')
+            await this.#writeConfigAtomic('config/storage/kho.json', nextStorage, 'storage')
         ];
         const first = await this.bundle.configuration.service.reload('storage', 'config/storage/kho.json', 'storage', { botProfiles: profiles });
         if (!first.success) throw first.error || new Error(first.message);
-        const second = await this.bundle.configuration.service.reload('collectorB5Mode', 'config/modes/collector-b5.json', 'collectorB5Mode', { botProfiles: profiles });
-        if (!second.success) throw second.error || new Error(second.message);
         const live = [];
         const conversion = this.bundle.configuration.registry.require('mineralConversions');
         for (const runtime of this.bundle.application.listRuntimes()) {
             runtime.getService('b1Materials')?.reconfigure?.({ conversionConfig: conversion, storageConfig: nextStorage });
-            runtime.getService('collectorB5Mode')?.reconfigure?.(nextCollector);
             live.push(runtime.botId);
         }
-        return Redactor.sanitize({ sell, collector: nextCollector, backups, appliedLive: true, restartRequired: false, botsApplied: live });
+        return Redactor.sanitize({ sell, backups, appliedLive: true, restartRequired: false, botsApplied: live });
     }
 
     // Kept as a compatibility API for older Desktop preload clients. There is
@@ -1007,8 +990,7 @@ class DesktopController {
             definition: entry.definition,
             readiness: entry.readiness
         }]));
-        const collector = modesById['collector-b5'] || runtime.getService('collectorB5Mode')?.status?.() || null;
-        const b5Craft = modesById['crafting'] || runtime.getService('craftingMode')?.status?.() || null;
+        const crafting = modesById.crafting || runtime.getService('craftingMode')?.status?.() || null;
         const fishing = modesById.fishing || runtime.getService('fishingMode')?.status?.() || null;
         const skyAutoJoin = runtime.getService('skyblockAutoJoin')?.status?.() || null;
         const skyCommands = runtime.getService('skyCommandService')?.status?.() || null;
@@ -1053,8 +1035,7 @@ class DesktopController {
             modes: {
                 available: (modeRegistrySnapshot.modes || []).map(entry => ({ definition: entry.definition, readiness: entry.readiness })),
                 byId: modesById,
-                collectorB5: collector,
-                b5Craft,
+                crafting,
                 fishing
             },
             skyAutoJoin,

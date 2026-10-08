@@ -10,7 +10,7 @@ const CraftingRequest = require('../../../src/items/CraftingRequest');
 
 const ITEMS = require('../../../config/items/items.json');
 const RECIPES = require('../../../config/server-data/recipes.json');
-const TIERS = require('../../../config/server-data/crafting-tiers.json');
+const TIERS = {} // G18: crafting-tiers.json removed; tier-free;
 
 function createRegistry() {
     return new CraftingItemRegistry({

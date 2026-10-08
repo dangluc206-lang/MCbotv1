@@ -435,7 +435,7 @@ test('DesktopController dev detail has recentOperations and b5 history', () => {
             modes: { crafting: { details: { phase: 'CRAFTING' } } }
         };
         controller.snapshot = () => ({ bots: [bot] });
-        controller.bundle = { application: { getRuntime: () => ({ services: { b: 1 }, getService: name => name === 'b5TraceRecorder' ? { latest: () => ({ traceId: 't1' }), snapshot: () => [{ traceId: 't1' }], latestReplayFixture: () => ({ version: 1 }) } : null }) } };
+        controller.bundle = { application: { getRuntime: () => ({ services: { b: 1 }, getService: name => name === 'craftingTrace' ? { latest: () => ({ traceId: 't1' }), snapshot: () => [{ traceId: 't1' }], latestReplayFixture: () => ({ version: 1 }) } : null }) } };
         controller.lifecycle = 'RUNNING';
         const detail = controller.botDevDetail('bot-01');
         assert.deepEqual(detail.recentOperations, bot.operation);

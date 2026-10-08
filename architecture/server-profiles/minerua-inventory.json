@@ -4,7 +4,7 @@
   "generatedAt": "2026-08-22",
   "profile": {
     "id": "default",
-    "revision": "r-3c7ee9ff60eb",
+    "revision": "r-59e2d067c530",
     "implementation": "minerua",
     "endpointHost": "mc.minerua.com"
   },
@@ -23,9 +23,9 @@
   "counts": {
     "commands": 11,
     "guis": 9,
-    "items": 49,
-    "recipes": 20,
-    "facts": 33
+    "items": 50,
+    "recipes": 21,
+    "facts": 31
   },
   "facts": [
     {
@@ -596,7 +596,7 @@
     {
       "factId": "items.catalog",
       "category": "item-identity",
-      "semanticMeaning": "MinerUA/vanilla logical item identity catalog including B1-B5 and GUI carrier identities",
+      "semanticMeaning": "MinerUA/vanilla logical item identity catalog including GUI carrier identities",
       "currentLocations": [
         "config/items/items.json"
       ],
@@ -636,6 +636,7 @@
           "menu_crafting",
           "menu_smelting",
           "menu_withdraw",
+          "my_item",
           "raw_gold",
           "raw_iron",
           "redstone",
@@ -666,9 +667,10 @@
           "titanium",
           "tungsten"
         ],
-        "count": 49,
+        "count": 50,
         "mmoIdentityItems": [
           "carbon",
+          "my_item",
           "refined_coal",
           "refined_coal_block",
           "refined_diamond",
@@ -694,7 +696,7 @@
     {
       "factId": "recipes.crafting",
       "category": "recipe",
-      "semanticMeaning": "B2-B5 recipe inputs/output/menu-slot/server input source",
+      "semanticMeaning": "Recipe inputs/output/menu-slot/server input source",
       "currentLocations": [
         "config/server-data/recipes.json"
       ],
@@ -702,7 +704,6 @@
       "evidence": "committed-config-and-server-behavior-doc",
       "consumers": [
         "CraftingRecipeRegistry",
-        "B5Planner",
         "CraftingOperation"
       ],
       "mutationRisk": "HIGH",
@@ -714,6 +715,7 @@
       "notes": {
         "recipeIds": [
           "carbon",
+          "my_item",
           "refined_coal",
           "refined_coal_block",
           "refined_diamond",
@@ -734,101 +736,7 @@
           "titanium",
           "tungsten"
         ],
-        "count": 20
-      }
-    },
-    {
-      "factId": "tiers.b1-b5",
-      "category": "crafting-tier",
-      "semanticMeaning": "B1-B5 item tier mapping",
-      "currentLocations": [
-        "config/server-data/crafting-tiers.json"
-      ],
-      "status": "CONFIRMED",
-      "evidence": "committed-config-and-server-behavior-doc",
-      "consumers": [
-        "B5Planner",
-        "B5PlanningService"
-      ],
-      "mutationRisk": "HIGH",
-      "targetProfileGroup": "recipes",
-      "testCoverage": [
-        "tests/unit/planning"
-      ],
-      "notes": {
-        "B1": [
-          "cobblestone",
-          "coal",
-          "redstone",
-          "lapis_lazuli",
-          "iron_ingot",
-          "gold_ingot",
-          "diamond",
-          "emerald"
-        ],
-        "B2": [
-          "super_cobblestone",
-          "refined_coal",
-          "refined_redstone",
-          "refined_lapis",
-          "refined_iron",
-          "refined_gold",
-          "refined_diamond",
-          "refined_emerald"
-        ],
-        "B3": [
-          "super_cobblestone_block",
-          "refined_coal_block",
-          "refined_redstone_block",
-          "refined_lapis_block",
-          "refined_iron_block",
-          "refined_gold_block",
-          "refined_diamond_block",
-          "refined_emerald_block"
-        ],
-        "B4": [
-          "carbon",
-          "titanium",
-          "tungsten"
-        ],
-        "B5": [
-          "super_alloy"
-        ]
-      }
-    },
-    {
-      "factId": "policy.b5",
-      "category": "bot-policy",
-      "semanticMeaning": "B5 execution policy; explicitly not a server-profile fact",
-      "currentLocations": [
-        "config/server-data/b5.json"
-      ],
-      "status": "CONFIRMED",
-      "evidence": "committed-config-and-server-behavior-doc",
-      "consumers": [
-        "B5PlanningService",
-        "B5AutomationService",
-        "B5CraftModeService"
-      ],
-      "mutationRisk": "HIGH",
-      "targetProfileGroup": "OUTSIDE_PROFILE",
-      "testCoverage": [
-        "tests/unit/modes/B5CraftModeService.test.js"
-      ],
-      "notes": {
-        "targetId": "super_alloy",
-        "policyKeys": [
-          "b1SupplyMode",
-          "b2InputSource",
-          "b3AllMinEmptySlots",
-          "inventorySafetyEmptySlots",
-          "personalVaultBackpressure",
-          "pvInventorySettlePollMs",
-          "pvInventorySettleTimeoutMs",
-          "quantityOptimization",
-          "targetId",
-          "timeoutMs"
-        ]
+        "count": 21
       }
     },
     {

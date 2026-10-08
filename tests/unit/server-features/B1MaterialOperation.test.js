@@ -10,11 +10,10 @@ function fakeContext({ connectionGeneration = 7, token = 'tok' } = {}) {
     return { cancellation: { token }, connectionGeneration };
 }
 
-test('wraps protectForBatch (and legacy protectForB5Batch) with generation passthrough and extra args', async () => {
+test('wraps protectForBatch with generation passthrough and extra args', async () => {
     const calls = [];
     const b1Materials = {
-        async protectForBatch(args) { calls.push(args); return { success: true, data: {} }; },
-        async protectForB5Batch(args) { calls.push(args); return { success: true, data: {} }; }
+        async protectForBatch(args) { calls.push(args); return { success: true, data: {} }; }
     };
     const operation = createB1MaterialOperation({
         name: 'CraftStorageProtectionBoundary',
@@ -22,19 +21,11 @@ test('wraps protectForBatch (and legacy protectForB5Batch) with generation passt
         action: 'protectForBatch',
         args: { batchId: 'b1', trigger: 't', episodeId: 'e1' }
     });
-    const legacy = createB1MaterialOperation({
-        name: 'B5StorageProtectionBoundary',
-        b1Materials,
-        action: 'protectForB5Batch',
-        args: { batchId: 'b1', trigger: 't', episodeId: 'e1' }
-    });
     assert.ok(operation instanceof Operation);
     assert.equal(operation.name, 'CraftStorageProtectionBoundary');
-    assert.ok(legacy instanceof Operation);
     const context = fakeContext();
     const result = await operation.executor(context);
-    await legacy.executor(context);
-    assert.equal(calls.length, 2);
+    assert.equal(calls.length, 1);
     assert.equal(calls[0].cancellationToken, 'tok');
     assert.equal(calls[0].operationContext, context);
     assert.equal(calls[0].expectedGeneration, 7);
@@ -60,12 +51,12 @@ test('wraps preprocessForCraft without extra args', async () => {
 });
 
 test('rejects invalid factory inputs', () => {
-    const b1Materials = { async protectForB5Batch() { return { success: true }; } };
+    const b1Materials = { async protectForBatch() { return { success: true }; } };
     assert.throws(() => createB1MaterialOperation(), TypeError);
-    assert.throws(() => createB1MaterialOperation({ name: '', b1Materials, action: 'protectForB5Batch' }), TypeError);
-    assert.throws(() => createB1MaterialOperation({ name: 'x', b1Materials: null, action: 'protectForB5Batch' }), TypeError);
-    assert.throws(() => createB1MaterialOperation({ name: 'x', b1Materials: {}, action: 'protectForB5Batch' }), TypeError);
+    assert.throws(() => createB1MaterialOperation({ name: '', b1Materials, action: 'protectForBatch' }), TypeError);
+    assert.throws(() => createB1MaterialOperation({ name: 'x', b1Materials: null, action: 'protectForBatch' }), TypeError);
+    assert.throws(() => createB1MaterialOperation({ name: 'x', b1Materials: {}, action: 'protectForBatch' }), TypeError);
     assert.throws(() => createB1MaterialOperation({ name: 'x', b1Materials, action: 'arbitraryMethod' }), TypeError);
     assert.throws(() => createB1MaterialOperation({ name: 'x', b1Materials, action: undefined }), TypeError);
-    assert.deepEqual(ALLOWED_ACTIONS, ['protectForBatch', 'protectForB5Batch', 'preprocessForCraft']);
+    assert.deepEqual(ALLOWED_ACTIONS, ['protectForBatch', 'preprocessForCraft']);
 });

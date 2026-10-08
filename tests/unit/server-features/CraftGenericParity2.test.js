@@ -2,7 +2,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const CraftPlanningService = require('../../../src/server-features/crafting/CraftPlanningService');
-const B5PlanningService = require('../../../src/server-features/crafting/B5PlanningService');
 const CraftAutomationService = require('../../../src/server-features/crafting/CraftAutomationService');
 const CraftTraceRecorder = require('../../../src/server-features/crafting/CraftTraceRecorder');
 const ServerFeatureFacade = require('../../../src/server-features/ServerFeatureFacade');
@@ -19,7 +18,7 @@ function createPlanning(inputSource = 'storage', inventoryB1 = 0) {
     return new CraftPlanningService({ planner, materialCalculator, recipeRegistry, tiers, readFlows, inventoryCounter: { count: () => 0 }, config: { supplyMode: 'continuous', inputSource, vaultBackpressure: {} } });
 }
 
-test('slice6: CraftTraceRecorder keeps legacy id + generic fields', () => {
+test('slice6: CraftTraceRecorder keeps generic id + fields', () => {
     const recorder = new CraftTraceRecorder({ botId: 'bot-01', historyLimit: 10 });
     // Generic owns the implementation (no B5 alias needed for parity).
     assert.equal(recorder.constructor.name, 'CraftTraceRecorder');
@@ -29,7 +28,7 @@ test('slice6: CraftTraceRecorder keeps legacy id + generic fields', () => {
         data: { targetId: 'carbon', productive: true, completedTarget: false, blockingReasons: [], actionSummary: {}, plan: null },
         meta: { operationId: 'bot-01:1', connectionGeneration: 3, trace: [] }
     }, { targetId: 'carbon' });
-    assert.equal(record.traceId, 'bot-01:b5:1');
+    assert.equal(record.traceId, 'bot-01:craft:1');
     assert.equal(record.targetId, 'carbon');
     assert.ok(String(record.craftTraceId).includes(':craft:'));
 });
@@ -58,7 +57,7 @@ test('slice6: facade craftingTrace/b5Trace same instance', () => {
     assert.equal(recorder.constructor.name, 'CraftTraceRecorder');
     const facade = new ServerFeatureFacade({ craftingTrace: recorder });
     assert.equal(facade.craftingTrace(), recorder);
-    assert.equal(facade.b5Trace(), recorder);
+    assert.equal(typeof facade.b5Trace, 'undefined', 'G18: B5 trace alias removed, no shim kept');
 });
 test('slice4: automation reconfigure maps legacy input source', () => {
     const normalized = CraftAutomationService.normalizeAutomationConfig({ b2InputSource: 'inventory', inputSource: 'storage' }, { inputSource: 'storage' });
@@ -66,17 +65,15 @@ test('slice4: automation reconfigure maps legacy input source', () => {
     assert.equal('b2InputSource' in normalized, false);
     assert.equal(CraftAutomationService.normalizeAutomationConfig({ b2InputSource: 'inventory' }, {}).inputSource, 'inventory');
 });
-test('slice3: legacy B5 view plans request targetId', async () => {
+test('slice3: generic planning resolves request targetId', async () => {
     const planning = createPlanning('inventory', 64);
-    const b5 = new B5PlanningService({ planning, tiers: { B1: ['b1'], B2: ['b2'], B3: ['b3'], B4: [], B5: ['b5'] }, targetId: 'b5' });
-    const legacy = await b5.inspectAdditional(1, { targetId: 'carbon' });
-    const generic = await planning.inspectAdditional('carbon', 1);
-    assert.equal(legacy.data.fullPlan.targetId, 'carbon');
-    assert.deepEqual(legacy.data.fullPlan, generic.data.fullPlan);
+    const first = await planning.inspectAdditional('carbon', 1);
+    const second = await planning.inspectAdditional('carbon', 1);
+    assert.equal(first.data.fullPlan.targetId, 'carbon');
+    assert.deepEqual(first.data.fullPlan, second.data.fullPlan);
 });
 test('slice5: generic run/runNext fail closed without targetId', async () => {
     const planning = createPlanning('storage', 0);
-    const b5 = new B5PlanningService({ planning, tiers: { B1: ['b1'], B2: ['b2'], B3: ['b3'], B4: [], B5: ['b5'] }, targetId: 'b5' });
     const automation = new CraftAutomationService({
         planningService: planning,
         crafting: { async craft() { throw new Error('must not craft without inspection'); } },
@@ -93,12 +90,11 @@ test('slice5: generic run/runNext fail closed without targetId', async () => {
     });
     assert.equal(typeof automation.planningService.plan, 'function', 'generic automation must hold CraftPlanningService (plan authority)');
     assert.equal(automation.planningService, planning);
-    assert.notEqual(automation.planningService, b5, 'generic automation must not hold the B5 compat view');
-    const legacy = await b5.inspectAdditional(1, { targetId: 'b5' });
-    const generic = await planning.inspectAdditional('b5', 1);
-    assert.equal(legacy.success, true);
-    assert.equal(generic.success, true);
-    assert.deepEqual(legacy.data.fullPlan, generic.data.fullPlan);
+    const first = await planning.inspectAdditional('b5', 1);
+    const second = await planning.inspectAdditional('b5', 1);
+    assert.equal(first.success, true);
+    assert.equal(second.success, true);
+    assert.deepEqual(first.data.fullPlan, second.data.fullPlan);
     const closed = await automation.runTarget({});
     assert.equal(closed.success, false);
     assert.equal(closed.status, 'INVALID_INPUT');
