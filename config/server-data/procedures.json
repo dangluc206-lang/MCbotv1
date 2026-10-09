@@ -1,12 +1,14 @@
 {
   "minerals-crafting": {
     "label": "Minerals crafting (/ks)",
-    "description": "Shared procedure: command -> GUI -> click -> wait -> verify. Reused by all minerals recipes.",
+    "description": "Shared procedure: command -> root -> entry -> recipe. The runtime owns navigation only; quantity click + output verification + close stay owned by CraftingOperation.",
     "quantityStrategy": "button-batch",
     "maxBatch": 64,
     "steps": [
       { "type": "command", "commandKey": "minerals" },
-      { "type": "open-gui", "guiId": "crafting" },
+      { "type": "open-gui", "guiId": "minerals" },
+      { "type": "find-logical-item", "itemId": "menu_crafting" },
+      { "type": "click" },
       { "type": "find-logical-item", "itemId": "$recipe.output" },
       { "type": "click" },
       { "type": "wait-for-gui", "guiId": "craftingQuantity" },

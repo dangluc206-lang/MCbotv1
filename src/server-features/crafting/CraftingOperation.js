@@ -56,8 +56,10 @@ class CraftingOperation {
 
     async execute(recipeId, amount, options = {}) {
         const state = this.#createState(recipeId, amount, options);
+        state.procedure = this.#resolveProcedure(state.recipe, options);
         try {
             this.#captureBefore(state);
+            await this.#runProcedureNavigation(state);
             await this.#navigateToQuantity(state);
             await this.#clickQuantity(state);
             state.stage = 'verify-output';
@@ -111,10 +113,93 @@ class CraftingOperation {
         });
     }
 
+    #resolveProcedure(recipe, options = {}) {
+        const explicitId = String(options.procedureId || recipe?.procedure || '').trim();
+        // Legacy/test recipes without a procedure keep the fixed production path.
+        // Schema requires `procedure` for new recipes, so null only means fallback.
+        if (!explicitId) return null;
+        const registry = this.procedureRegistry;
+        if (!registry || typeof registry.require !== 'function') throw this.#flow('CRAFTING_PROCEDURE_REGISTRY_MISSING', 'resolve-procedure', 'resolve procedure', explicitId, { recipeId: recipe?.output || null });
+        return registry.require(explicitId);
+    }
+
+    async #runProcedureNavigation(state) {
+        state.cancellationToken?.throwIfCancelled?.();
+        this.#assertGeneration(state.expectedGeneration);
+        if (!state.procedure) return { skipped: true, reason: 'no-procedure' };
+        if (!this.procedureRuntime || typeof this.procedureRuntime.runBatch !== 'function') return { skipped: true, reason: 'no-runtime' };
+        // Quantity/verification/close stay owned by the operation. Only navigation
+        // primitives (command/open/find/click/wait/slot) run through the runtime.
+        const NAVIGATION_TYPES = ['command', 'slash-command', 'open-gui', 'resolve-gui', 'wait-for-gui', 'find-logical-item', 'find-slot', 'click', 'wait', 'wait-for-transition'];
+        const types = new Set((state.procedure.steps || []).map(step => String(step?.type || '').trim()));
+        const hasCommand = types.has('command') || types.has('slash-command');
+        const hasFind = types.has('find-logical-item');
+        // Legacy/test recipes without a navigation shape keep the fixed path.
+        if (!hasCommand && !hasFind) return { skipped: true, reason: 'no-navigation-steps' };
+        // Fail-closed: this operation executes command-driven GUI navigation only.
+        // Forge/npc-shaped procedures declare different terminal semantics and must
+        // not silently run the minerals GUI.
+        if (!hasCommand || !hasFind) throw this.#flow('CRAFTING_PROCEDURE_NOT_SUPPORTED', 'run-procedure-step', 'run procedure navigation', state.procedure.id || state.recipe?.procedure, { recipeId: state.recipeId, procedureSteps: (state.procedure.steps || []).map(step => step?.type) });
+        // Navigation prefix: leading command/open/find/click/wait steps only. The
+        // quantity phase (wait-for-gui quantity, quantity click, output wait,
+        // verify, close) stays owned by the operation below.
+        const NAV_PREFIX = new Set(['command', 'slash-command', 'open-gui', 'find-logical-item', 'find-slot', 'click', 'wait', 'wait-for-transition']);
+        const navigationSteps = [];
+        for (const step of state.procedure.steps || []) {
+            if (!NAV_PREFIX.has(String(step?.type || '').trim())) break;
+            navigationSteps.push(step);
+        }
+        if (!navigationSteps.length) return { skipped: true, reason: 'no-navigation-steps' };
+        const navigation = { ...state.procedure, steps: navigationSteps };
+        const runtimeState = await this.procedureRuntime.runBatch({
+            procedure: navigation,
+            recipe: state.recipe,
+            request: { amount: state.quantity },
+            execution: { requested: state.quantity, remaining: state.quantity, executed: 0, actual: 0 },
+            options: {
+                config: this.config,
+                cancellationToken: state.cancellationToken,
+                expectedGeneration: state.expectedGeneration,
+                operationContext: state.operationContext,
+                trace: (...args) => this.#trace(...args),
+                flow: (...args) => this.#flow(...args)
+            }
+        });
+        this.#assertGeneration(state.expectedGeneration);
+        if (Number.isInteger(runtimeState?.entrySlot) && runtimeState.entrySlot >= 0) state.entrySlot = runtimeState.entrySlot;
+        if (Number.isInteger(runtimeState?.recipeSlot) && runtimeState.recipeSlot >= 0) state.recipeSlot = runtimeState.recipeSlot;
+        state.procedureNavigation = {
+            session: runtimeState?.session || null,
+            enteredMenu: runtimeState?.enteredMenu === true,
+            selectedRecipe: runtimeState?.selectedRecipe === true,
+            reachedMenu: Boolean(runtimeState?.session?.window)
+        };
+        return { skipped: false, steps: navigationSteps.length };
+    }
+
     async #navigateToQuantity(state) {
         const { recipeId, recipe, quantity, cancellationToken, expectedGeneration, operationContext, baseDetails } = state;
         state.stage = 'open-minerals-root';
         this.#trace('CRAFT OPEN /ks', state.stage, { recipeId, quantity, resource: recipe.output, phase: 'START' });
+        // G14.2: the procedure owns the navigation sequence (command + entry/menu
+        // clicks). The runtime already applied those primitives through the same
+        // capability owners (CommandService/GuiManager). Skipping the fixed /ks
+        // sequence avoids double-clicking; the fixed path below is the fail-closed
+        // fallback when no procedure navigation ran.
+        const nav = state.procedureNavigation;
+        const navigatedSession = nav?.session?.window ? nav.session : null;
+        if (navigatedSession && nav?.selectedRecipe) {
+            // Runtime already selected the recipe (its click opened the quantity
+            // GUI). Adopt that session instead of clicking the recipe slot a
+            // second time — re-clicking would be an unverified repeat side effect.
+            await this.#adoptProcedureQuantitySession(state, navigatedSession);
+            return;
+        }
+        if (navigatedSession && nav?.enteredMenu) {
+            this.#trace('CRAFT PROCEDURE MENU READY', state.stage, { recipeId, resource: recipe.output, phase: 'OK', title: navigatedSession?.window?.title || null });
+            await this.#prepareQuantityFromMenu(state, navigatedSession);
+            return;
+        }
         const rootSource = { commandKey: this.config.commandKey, command: '/ks', guiId: this.config.mineralsGuiId, clicks: [], actions: [], source: 'operation' };
         let session = await this.navigator.openMineralsRoot(rootSource, { cancellationToken, expectedGeneration, operationContext });
         this.navigator.assertGuiIdentity(session, this.config.mineralsGuiId, state.stage, baseDetails);
@@ -125,6 +210,23 @@ class CraftingOperation {
         if (state.entrySlot < 0) throw this.#flow('CRAFTING_ENTRY_NOT_FOUND', state.stage, 'resolve menu_crafting', this.config.entryMenuItemId, { ...baseDetails, gui: this.guiManager.describeCurrent() });
         session = await this.#enterCraftingMenu(state, rootSource);
         await this.#learnRecipeMenu(state, session);
+        await this.#prepareQuantityFromMenu(state, session);
+    }
+
+    async #adoptProcedureQuantitySession(state, session) {
+        const { recipeId, recipe, quantity } = state;
+        state.stage = 'resolve-quantity';
+        this.navigator.assertGuiIdentity(session, this.config.quantityGuiId, state.stage, state.baseDetails);
+        this.#trace('CRAFT QUANTITY MENU READY', state.stage, { recipeId, resource: recipe.output, phase: 'OK', title: session?.window?.title || null, via: 'procedure' });
+        state.quantitySession = session;
+        state.quantitySource = { commandKey: this.config.commandKey, command: '/ks', guiId: this.config.quantityGuiId,
+            clicks: [state.entrySlot, state.recipeSlot], actions: ['menu_crafting', `recipe:${recipeId}`], source: 'procedure' };
+        state.quantitySlot = await this.navigator.resolveQuantitySlot(state.quantitySession, quantity, state.quantitySource);
+        this.#trace('CRAFT QUANTITY RESOLVED', state.stage, { recipeId, resource: recipe.output, quantity, phase: 'OK', slot: state.quantitySlot });
+    }
+
+    async #prepareQuantityFromMenu(state, session) {
+        const { recipeId, recipe, quantity, baseDetails } = state;
         state.stage = 'resolve-recipe-slot';
         const craftingSource = state.craftingSource;
         state.recipeSlot = await this.navigator.resolveRecipeSlotWithRetry(session, recipeId, recipe, craftingSource);
@@ -275,7 +377,10 @@ class CraftingOperation {
             CRAFTING_OUTCOME_UNCERTAIN: `Crafting outcome is uncertain for ${resource}; fresh reconciliation is required before retry.`,
             CRAFTING_BOT_TIMING_UNAVAILABLE: 'Crafting cannot apply the configured tick delays because bot.waitForTicks is unavailable.',
             CRAFTING_QUANTITY_GUI_CLOSE_UNAVAILABLE: 'Crafting quantity GUI could not be closed before inventory verification.',
-            CRAFTING_QUANTITY_INVALID: `Unsupported crafting quantity: ${resource}.`
+            CRAFTING_QUANTITY_INVALID: `Unsupported crafting quantity: ${resource}.`,
+            CRAFTING_PROCEDURE_MISSING: `Crafting procedure is missing for ${resource}.`,
+            CRAFTING_PROCEDURE_REGISTRY_MISSING: `Crafting procedure registry is missing for ${resource}.`,
+            CRAFTING_PROCEDURE_NOT_SUPPORTED: `Crafting procedure is not supported by the GUI operation: ${resource}.`
         };
         return messages[code] || `Crafting failed for ${resource}.`;
     }

@@ -93,6 +93,7 @@ const CraftingService = require("../server-features/crafting/CraftingService");
 const ProcedureRegistry = require("../server-features/crafting/procedure/ProcedureRegistry");
 const ProcedureExecutor = require("../server-features/crafting/procedure/ProcedureExecutor");
 const ProcedureBuilder = require("../server-features/crafting/procedure/ProcedureBuilder");
+const CraftingProcedureRuntime = require("../server-features/crafting/CraftingProcedureRuntime");
 const ProcedureRecorder = require("../server-features/crafting/procedure/ProcedureRecorder");
 const QuantityStrategy = require("../server-features/crafting/quantity/QuantityStrategy");
 const MaterialCalculator = require("../planning/crafting/MaterialCalculator");
@@ -567,7 +568,19 @@ function registerBotServices({ profile, configuration, shared }) {
     craftingPlanner,
     craftingItemRegistry,
   });
-  // Generic trace authority (G18: B5 names removed).
+  // G14.2: procedure is the navigation authority of the production crafting path.
+  // The runtime maps procedure primitives to existing capability owners
+  // (CommandService/GuiManager/navigator); CraftingOperation keeps quantity click
+  // + verification, CraftingService keeps operation locking + procedure batch policy.
+  craftingOperation.procedureRegistry = procedureRegistry;
+  craftingOperation.procedureRuntime = new CraftingProcedureRuntime({
+    commandService,
+    guiManager,
+    navigator: craftingOperation.navigator,
+    logger
+  });
+  crafting.procedureRegistry = procedureRegistry;
+  crafting.recipeRegistry = recipeRegistry;
   const craftTraceRecorder = new CraftTraceRecorder({
     botId,
     serverProfile,
