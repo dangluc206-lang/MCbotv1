@@ -95,13 +95,16 @@ test('crafting waits 15 ticks before quantity click, 10 ticks after, closes GUI,
     const click = order.indexOf('quantity-click:20');
     const post = order.indexOf('wait:10');
     const close = order.indexOf('close:3');
-    const verify = order.indexOf('verify:bot-inventory:gui-closed');
+    // G12.1 batch mode: the single 64-batch is clicked once, output-verified
+    // against bot-inventory while the quantity GUI is still open (reads stay
+    // scoped to bot-inventory), then the GUI is closed once at the end.
+    const verify = order.indexOf('verify:bot-inventory:gui-open');
 
     assert.ok(pre >= 0, order.join(' -> '));
     assert.ok(click > pre, order.join(' -> '));
     assert.ok(post > click, order.join(' -> '));
-    assert.ok(close > post, order.join(' -> '));
-    assert.ok(verify > close, order.join(' -> '));
+    assert.ok(verify > post, order.join(' -> '));
+    assert.ok(close > verify, order.join(' -> '));
     assert.ok(order.includes('before:bot-inventory'));
     assert.ok(order.includes('arm'));
 });

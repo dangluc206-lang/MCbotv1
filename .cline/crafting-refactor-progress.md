@@ -1,7 +1,7 @@
 # Crafting Refactor Progress
 
 ## Current Phase
-G14.2 — Procedure Runtime Integration (corrective subphase; G14 unit executor exists but was not wired into production)
+G12.1 — Quantity Resolver Hardening (uncommitted working tree; G14.2 closeout 668de54 is HEAD)
 
 ## Status
 IN_PROGRESS
@@ -19,6 +19,11 @@ IN_PROGRESS
 - G10 exact planner: batches live in QuantityStrategy/CraftingService.executeStep
 - G11 quantity strategy: button-batch/repeat/command-quantity/custom
 - G12 GUI resolution hardening (CraftingQuantityResolver/CraftingGuiNavigator: live GUI inspection first, configured slots as fallback; guiIdentityOverride authoritative)
+- G12.1 quantity batch execution (this act, uncommitted working tree):
+  - CraftingQuantityResolver.describeActions: frozen verified GUI capabilities (live first, configured fallback; ALL never listed as a fixed batch)
+  - CraftingOperation: ALL keeps single-click semantics; any positive integer runs a verified batch loop (observed 64/1 actions, greedy exact, per-batch click + output verification, single close at end, totals reported)
+  - Navigation no longer resolves the full amount in batch mode (menu open only; per-batch slots resolved in-loop)
+  - Partial failure surfaces the existing UNCERTAIN contract with reconciliation baseline; missing buttons fail closed with zero side effects
 - B5 runtime/config deletion completed separately (verified on HEAD 2de2dc6 + disk):
   - src/server-features/crafting/b5/B5CycleCoordinator.js — ABSENT (git + disk)
   - src/server-features/crafting/B5PlanningService.js — ABSENT (git + disk)
@@ -38,13 +43,17 @@ IN_PROGRESS
 - G15 reconciliation: flaky/failure paths tested, never report success on failure
 - G17 validation: schema + cross-ref (recipe→procedure, cycle detection, target policy)
 
-## Changed (G14.2 commit 2de2dc6)
-- src/server-features/crafting/CraftingProcedureRuntime.js (hardened step ownership, guards, typed errors)
-- src/server-features/crafting/CraftingOperation.js (#resolveProcedure, #runProcedureNavigation, navigation-prefix ownership, #adoptProcedureQuantitySession)
-- src/server-features/crafting/CraftingService.js (procedure batch policy surfaced in executeStep result)
-- src/bootstrap/registerBotServices.js (fixed composition-root wiring typo)
-- config/server-data/procedures.json (minerals entry navigation made explicit)
-- tests/unit/server-features/CraftProcedureRuntimeWiring.test.js (new, 8 tests)
+## Changed (G12.1, uncommitted)
+- src/server-features/crafting/CraftingQuantityResolver.js (describeActions + #tryResolve source tracking)
+- src/server-features/crafting/CraftingOperation.js (#executeBatches loop, #executeSingleBatch, per-batch slot resolve, totals reporting, navigation defers full-amount resolve in batch mode)
+- tests/unit/server-features/CraftQuantityBatchExecution.test.js (new, 10 tests)
+- tests/unit/server-features/CraftingQuantityTiming.test.js (batch order: verify-while-open scoped to bot-inventory, single close at end)
+
+## Tests (G12.1, actually run)
+- `node --test tests/unit/server-features/CraftQuantityBatchExecution.test.js` -> PASS 10/10 (exact 1/9/64/65/137/1000, 1-button-only, no-buttons fail-closed, UNCERTAIN partial, capability listing)
+- 10 adjacent suites -> PASS 40/40, zero regressions (incl. updated timing order + G14.2 wiring)
+- `node scripts/validate-config.js` -> PASS 31/31 schema + cross-ref PASS
+- Verified by mock/unit tests only; no live-GUI runtime proof claimed.
 
 ## Tests (closeout act, actually run on HEAD 2de2dc6)
 Full unit suite (242 files) was run in per-directory chunks because `node --test tests/unit/` is not accepted by this Node version and a single `npm test` run exceeds the 30s tool limit:
@@ -65,13 +74,13 @@ Full unit suite (242 files) was run in per-directory chunks because `node --test
 ## Known Issues
 - Pre-existing: 3 unauthorized task MDs fail structure/architecture gates (task docs, not refactor)
 - B5 architecture/SLO/fault-matrix/static-quality metadata cleanup still pending (future phase; runtime/config deletion is DONE, do not re-delete)
-- CraftingQuantityResolver still only 1/64/ALL buttons (generic resolution hardening pending, out of scope for this act)
+- CraftingQuantityResolver now reports verified button capabilities + executes exact batches (G12.1, this act); live-GUI proof still pending
 - Storage/input still B5-named in places (G16 pending, out of scope for this act)
 - Procedure Builder/Recorder foundations exist but production Builder/Recorder wiring (G20/G21) pending
 - Special procedures (forge/npc) validated at executor level only; GUI operation intentionally rejects them fail-closed until their owners exist
 
 ## Next Action
-- G14.2 is committed (2de2dc6) and closeout-tested. No further action in this act. G16/G18 and later phases start only in a separate act with explicit instruction — do not auto-advance.
+- G12.1 is implemented + unit-tested (uncommitted). Commit G12.1 in a closeout act after re-running the affected suites. G16/G18 and later phases start only with explicit instruction — do not auto-advance.
 
 ## Completion Evidence
 - (pending full G1-G24)

@@ -10,17 +10,18 @@ class CraftingQuantityResolver {
 
     resolve(amount, window = null) {
         const quantity = this.#normalizeQuantity(amount);
-
-        // Quantity buttons are a special case: two server buttons can use the
-        // same carrier/custom item and differ only by numeric text (1 vs 64).
-        // Always inspect the live GUI first. A configured slot is only a
-        // bootstrap/fallback when semantic detection is unavailable.
-        const detected = this.#detect(window, quantity);
-        if (Number.isInteger(detected)) return detected;
-
-        const configured = this.config.quantitySlots?.[String(quantity)];
-        if (Number.isInteger(configured) && window?.slots?.[configured]) return configured;
+        const resolved = this.#tryResolve(window, quantity);
+        if (resolved !== null) return resolved.slot;
         throw new Error(`Crafting quantity slot is not configured or detectable: ${quantity}. ${this.#describe(window)}`);
+    }
+
+    #tryResolve(window, quantity) {
+        // Live GUI first; configured slot only as bootstrap/fallback.
+        const detected = this.#detect(window, quantity);
+        if (Number.isInteger(detected)) return { slot: detected, source: 'live' };
+        const configured = this.config.quantitySlots?.[String(quantity)];
+        if (Number.isInteger(configured) && window?.slots?.[configured]) return { slot: configured, source: 'configured' };
+        return null;
     }
 
     describeCandidates(window) {
@@ -31,6 +32,23 @@ class CraftingQuantityResolver {
             text: String(entry.text || '').replace(/\s+/g, ' ').trim(),
             isAll: entry.isAll
         }));
+    }
+
+    /**
+     * G12.1: verified GUI quantity capabilities.
+     * Returns the frozen list of single-click craft actions the CURRENT live
+     * window provably supports, live detection first, configured slots as
+     * fallback. Each entry is { amount, slot, source } where source is
+     * 'live' or 'configured'. ALL is never included: it is not a fixed-size
+     * batch and must not be used to satisfy an exact numeric request.
+     */
+    describeActions(window = null) {
+        const actions = [];
+        for (const amount of [64, 1]) {
+            const resolved = this.#tryResolve(window, amount);
+            if (resolved !== null) actions.push(Object.freeze({ amount, ...resolved }));
+        }
+        return Object.freeze(actions.sort((a, b) => b.amount - a.amount));
     }
 
     #detect(window, amount) {

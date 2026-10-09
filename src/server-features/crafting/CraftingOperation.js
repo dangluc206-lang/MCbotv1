@@ -61,19 +61,11 @@ class CraftingOperation {
             this.#captureBefore(state);
             await this.#runProcedureNavigation(state);
             await this.#navigateToQuantity(state);
-            await this.#clickQuantity(state);
-            state.stage = 'verify-output';
-            this.#trace('CRAFT VERIFY START', state.stage, {
-                recipeId: state.recipeId, resource: state.recipe.output, quantity: state.quantity, phase: 'START',
-                inventorySource: 'bot-inventory', currentWindowId: state.bot.currentWindow?.id ?? null
-            });
-            return this.verification.verify({
-                recipeId: state.recipeId, recipe: state.recipe, quantity: state.quantity, before: state.before,
-                baseDetails: state.baseDetails, effectiveInputSource: state.effectiveInputSource,
-                reconciliationBaseline: state.reconciliationBaseline, expectedGeneration: state.expectedGeneration,
-                bot: state.bot, startedAt: state.startedAt, entrySlot: state.entrySlot,
-                recipeSlot: state.recipeSlot, quantitySlot: state.quantitySlot
-            });
+            // G12.1: ALL keeps single-click semantics. Any positive integer is
+            // satisfied by repeating verified button-batch clicks (1s and 64s
+            // from observed GUI capabilities), verifying each batch.
+            if (state.quantity === 'ALL') return this.#executeSingleBatch(state);
+            return this.#executeBatches(state);
         } catch (error) {
             if (error instanceof FlowError) throw error;
             throw FlowError.wrap(error, {
@@ -82,6 +74,117 @@ class CraftingOperation {
                 details: { ...state.baseDetails, before: state.before?.countsBySource || null, gui: this.guiManager.describeCurrent?.() || null }
             });
         }
+    }
+
+    async #executeSingleBatch(state) {
+        await this.#clickQuantity(state);
+        state.stage = 'verify-output';
+        this.#trace('CRAFT VERIFY START', state.stage, {
+            recipeId: state.recipeId, resource: state.recipe.output, quantity: state.quantity, phase: 'START',
+            inventorySource: 'bot-inventory', currentWindowId: state.bot.currentWindow?.id ?? null
+        });
+        return this.verification.verify({
+            recipeId: state.recipeId, recipe: state.recipe, quantity: state.quantity, before: state.before,
+            baseDetails: state.baseDetails, effectiveInputSource: state.effectiveInputSource,
+            reconciliationBaseline: state.reconciliationBaseline, expectedGeneration: state.expectedGeneration,
+            bot: state.bot, startedAt: state.startedAt, entrySlot: state.entrySlot,
+            recipeSlot: state.recipeSlot, quantitySlot: state.quantitySlot
+        });
+    }
+
+    async #executeBatches(state) {
+        // Batching belongs to the observed capability, never to a hardcoded
+        // 64: the plan is rebuilt from fresh GUI actions every iteration, so a
+        // GUI that only exposes a 1-button still stays exact.
+        const requested = Number(state.quantity);
+        const batches = [];
+        let actual = 0;
+        let crafts = 0;
+        let lastResult = null;
+        while (crafts < requested) {
+            state.cancellationToken?.throwIfCancelled?.();
+            this.#assertGeneration(state.expectedGeneration);
+            const remaining = requested - crafts;
+            const actions = this.#quantityActions(state);
+            if (!actions.length) {
+                throw this.#flow('CRAFTING_QUANTITY_NOT_FOUND', 'resolve-quantity', `resolve quantity batch ${remaining}`, state.recipe.output, {
+                    ...state.baseDetails, remaining, candidates: this.quantityResolver.describeCandidates?.(state.quantitySession?.window) || []
+                });
+            }
+            const batchAmount = this.#pickBatch(actions, remaining);
+            await this.#ensureQuantitySession(state);
+            await this.#clickQuantity(state, batchAmount, { keepOpen: true });
+            const result = await this.#verifyBatch(state, batchAmount, batches.length + 1);
+            const verified = Number(result?.actualCrafts || 0);
+            batches.push(Object.freeze({ wanted: batchAmount, actual: verified, quantitySlot: state.quantitySlot }));
+            // producedAmount is per-batch: accumulate, never overwrite.
+            actual += Number(result?.producedAmount || 0);
+            crafts += verified;
+            lastResult = result;
+            if (verified <= 0) break;
+        }
+        const remaining = requested - crafts;
+        if (remaining > 0) {
+            throw this.#flow('CRAFTING_OUTPUT_NOT_VERIFIED', 'verify-output', `verify quantity batches ${requested}`, state.recipe.output, {
+                ...state.baseDetails, requested, actual, remaining,
+                batches, lastVerification: lastResult?.verification || null
+            });
+        }
+        // Single close at the end: verification observed the open GUI, and the
+        // closed-GUI invariant for inventory reads holds from here on.
+        state.stage = 'close-quantity-menu';
+        const closeResult = await this.support.closeQuantityWindowIfStillOpen(state.quantitySession, state.bot);
+        this.#trace('CRAFT QUANTITY GUI CLOSED', state.stage, { recipeId: state.recipeId, resource: state.recipe.output, phase: 'OK', ...closeResult });
+        // Totals, not last-batch: callers account requested/actual/remaining.
+        return {
+            ...lastResult, batches: Object.freeze(batches), requested, actual, remaining: 0,
+            amount: requested, quantityAction: requested, actualCrafts: crafts, producedAmount: actual
+        };
+    }
+
+    #quantityActions(state) {
+        const window = state.quantitySession?.window || null;
+        if (typeof this.quantityResolver.describeActions === 'function') {
+            const actions = this.quantityResolver.describeActions(window) || [];
+            return actions.filter(action => Number.isInteger(action?.amount) && action.amount > 0 && Number.isInteger(action?.slot) && action.slot >= 0);
+        }
+        // Fallback for stub resolvers in older tests: single resolve probes.
+        const actions = [];
+        for (const amount of [64, 1]) {
+            try {
+                const slot = this.quantityResolver.resolve(amount, window);
+                if (Number.isInteger(slot) && slot >= 0) actions.push({ amount, slot, source: 'resolve' });
+            } catch { /* capability absent: not a batch candidate */ }
+        }
+        return actions;
+    }
+
+    #pickBatch(actions, remaining) {
+        // Greedy over verified desc amounts; a 1-button guarantees exactness.
+        // ALL is never a candidate: it is not a fixed-size batch.
+        let batch = 1;
+        for (const action of actions) {
+            if (action.amount <= remaining && action.amount >= batch) batch = action.amount;
+        }
+        return batch;
+    }
+
+    async #verifyBatch(state, batchAmount, batchIndex) {
+        state.stage = 'verify-output';
+        this.#trace('CRAFT VERIFY START', state.stage, {
+            recipeId: state.recipeId, resource: state.recipe.output, quantity: batchAmount, phase: 'START',
+            batch: batchIndex, inventorySource: 'bot-inventory', currentWindowId: state.bot.currentWindow?.id ?? null
+        });
+        const result = await this.verification.verify({
+            recipeId: state.recipeId, recipe: state.recipe, quantity: batchAmount, before: state.before,
+            baseDetails: state.baseDetails, effectiveInputSource: state.effectiveInputSource,
+            reconciliationBaseline: state.reconciliationBaseline, expectedGeneration: state.expectedGeneration,
+            bot: state.bot, startedAt: state.startedAt, entrySlot: state.entrySlot,
+            recipeSlot: state.recipeSlot, quantitySlot: state.quantitySlot
+        });
+        // Advance the baseline so the next batch verifies only its own delta.
+        this.#captureBefore(state);
+        return result;
     }
 
     #createState(recipeId, amount, options) {
@@ -221,8 +324,12 @@ class CraftingOperation {
         state.quantitySession = session;
         state.quantitySource = { commandKey: this.config.commandKey, command: '/ks', guiId: this.config.quantityGuiId,
             clicks: [state.entrySlot, state.recipeSlot], actions: ['menu_crafting', `recipe:${recipeId}`], source: 'procedure' };
-        state.quantitySlot = await this.navigator.resolveQuantitySlot(state.quantitySession, quantity, state.quantitySource);
-        this.#trace('CRAFT QUANTITY RESOLVED', state.stage, { recipeId, resource: recipe.output, quantity, phase: 'OK', slot: state.quantitySlot });
+        // G12.1: batch mode resolves per-batch slots in the loop; only the
+        // single-click ALL path resolves the full amount here.
+        if (quantity === 'ALL') {
+            state.quantitySlot = await this.navigator.resolveQuantitySlot(state.quantitySession, quantity, state.quantitySource);
+            this.#trace('CRAFT QUANTITY RESOLVED', state.stage, { recipeId, resource: recipe.output, quantity, phase: 'OK', slot: state.quantitySlot });
+        }
     }
 
     async #prepareQuantityFromMenu(state, session) {
@@ -235,8 +342,12 @@ class CraftingOperation {
         await this.#bindRecipeOutput(state, session);
         state.quantitySession = await this.#openQuantityMenu(state);
         state.stage = 'resolve-quantity';
-        state.quantitySlot = await this.navigator.resolveQuantitySlot(state.quantitySession, quantity, state.quantitySource);
-        this.#trace('CRAFT QUANTITY RESOLVED', state.stage, { recipeId, resource: recipe.output, quantity, phase: 'OK', slot: state.quantitySlot });
+        // G12.1: batch mode resolves per-batch slots in the loop; only the
+        // single-click ALL path resolves the full amount here.
+        if (quantity === 'ALL') {
+            state.quantitySlot = await this.navigator.resolveQuantitySlot(state.quantitySession, quantity, state.quantitySource);
+            this.#trace('CRAFT QUANTITY RESOLVED', state.stage, { recipeId, resource: recipe.output, quantity, phase: 'OK', slot: state.quantitySlot });
+        }
     }
 
     async #enterCraftingMenu(state) {
@@ -286,26 +397,54 @@ class CraftingOperation {
         return session;
     }
 
-    async #clickQuantity(state) {
+    async #ensureQuantitySession(state) {
+        // Batches share one live quantity GUI: closing between clicks would
+        // force unverified re-navigation. If the server closed it mid-loop,
+        // stop with partial evidence instead of blindly re-clicking.
+        const live = state.quantitySession?.window || null;
+        if (!live) {
+            throw this.#flow('CRAFTING_QUANTITY_GUI_CLOSED', 'resolve-quantity', 'reuse quantity GUI', state.recipe.output, {
+                ...state.baseDetails, gui: this.guiManager.describeCurrent?.() || null
+            });
+        }
+        state.cancellationToken?.throwIfCancelled?.();
+        this.#assertGeneration(state.expectedGeneration);
+        return state.quantitySession;
+    }
+
+    async #clickQuantity(state, batchAmount = null, { keepOpen = false } = {}) {
+        const clicked = batchAmount === null ? state.quantity : batchAmount;
         state.stage = 'click-quantity';
         state.bot = this.support.requireBot();
-        this.#trace('CRAFT PRE-CLICK DELAY', state.stage, { recipeId: state.recipeId, resource: state.recipe.output, quantity: state.quantity, phase: 'WAIT', ticks: this.config.preQuantityClickTicks, slot: state.quantitySlot });
+        if (batchAmount !== null) {
+            // Each batch re-resolves its slot from the CURRENT live quantity
+            // GUI: capabilities are re-observed every iteration, never assumed.
+            state.quantitySlot = await this.navigator.resolveQuantitySlot(state.quantitySession, batchAmount, state.quantitySource);
+            this.#trace('CRAFT QUANTITY RESOLVED', state.stage, { recipeId: state.recipeId, resource: state.recipe.output, quantity: batchAmount, phase: 'OK', slot: state.quantitySlot });
+        }
+        this.#trace('CRAFT PRE-CLICK DELAY', state.stage, { recipeId: state.recipeId, resource: state.recipe.output, quantity: clicked, phase: 'WAIT', ticks: this.config.preQuantityClickTicks, slot: state.quantitySlot });
         await state.bot.waitForTicks(this.config.preQuantityClickTicks);
         state.cancellationToken?.throwIfCancelled?.(); this.#assertGeneration(state.expectedGeneration);
-        this.#trace('CRAFT CLICK QUANTITY', state.stage, { recipeId: state.recipeId, resource: state.recipe.output, quantity: state.quantity, phase: 'START', slot: state.quantitySlot });
+        this.#trace('CRAFT CLICK QUANTITY', state.stage, { recipeId: state.recipeId, resource: state.recipe.output, quantity: clicked, phase: 'START', slot: state.quantitySlot });
         this.resultVerifier.arm?.(state.before); state.quantityClickedAt = Date.now();
         await this.guiManager.click(state.quantitySlot, { cancellationToken: state.cancellationToken, expectedGeneration: state.expectedGeneration });
         this.support.traceInventoryTimeline('after-click', state.quantityClickedAt, state.recipeId, state.recipe, state.effectiveInputSource, state.expectedGeneration);
-        await this.#postClickWait(state);
+        await this.#postClickWait(state, batchAmount);
+        if (keepOpen) {
+            this.#trace('CRAFT CLICK QUANTITY OK', 'click-quantity', { recipeId: state.recipeId, resource: state.recipe.output, quantity: clicked, phase: 'OK', slot: state.quantitySlot, keptOpen: true });
+            this.support.traceInventoryTimeline('after-post-click-ticks-keep-open', state.quantityClickedAt, state.recipeId, state.recipe, state.effectiveInputSource, state.expectedGeneration);
+            return;
+        }
         state.stage = 'close-quantity-menu';
         const closeResult = await this.support.closeQuantityWindowIfStillOpen(state.quantitySession, state.bot);
         this.#trace('CRAFT QUANTITY GUI CLOSED', state.stage, { recipeId: state.recipeId, resource: state.recipe.output, quantity: state.quantity, phase: 'OK', ...closeResult });
-        this.#trace('CRAFT CLICK QUANTITY OK', 'click-quantity', { recipeId: state.recipeId, resource: state.recipe.output, quantity: state.quantity, phase: 'OK', slot: state.quantitySlot });
+        this.#trace('CRAFT CLICK QUANTITY OK', 'click-quantity', { recipeId: state.recipeId, resource: state.recipe.output, quantity: clicked, phase: 'OK', slot: state.quantitySlot });
         this.support.traceInventoryTimeline('after-quantity-close', state.quantityClickedAt, state.recipeId, state.recipe, state.effectiveInputSource, state.expectedGeneration);
     }
 
-    async #postClickWait(state) {
-        this.#trace('CRAFT POST-CLICK DELAY', state.stage, { recipeId: state.recipeId, resource: state.recipe.output, quantity: state.quantity, phase: 'WAIT', ticks: this.config.postQuantityClickTicks, slot: state.quantitySlot });
+    async #postClickWait(state, batchAmount = null) {
+        const waited = batchAmount === null ? state.quantity : batchAmount;
+        this.#trace('CRAFT POST-CLICK DELAY', state.stage, { recipeId: state.recipeId, resource: state.recipe.output, quantity: waited, phase: 'WAIT', ticks: this.config.postQuantityClickTicks, slot: state.quantitySlot });
         await state.bot.waitForTicks(this.config.postQuantityClickTicks);
         state.cancellationToken?.throwIfCancelled?.(); this.#assertGeneration(state.expectedGeneration);
         this.support.traceInventoryTimeline('after-post-click-ticks', state.quantityClickedAt, state.recipeId, state.recipe, state.effectiveInputSource, state.expectedGeneration);
@@ -378,6 +517,7 @@ class CraftingOperation {
             CRAFTING_BOT_TIMING_UNAVAILABLE: 'Crafting cannot apply the configured tick delays because bot.waitForTicks is unavailable.',
             CRAFTING_QUANTITY_GUI_CLOSE_UNAVAILABLE: 'Crafting quantity GUI could not be closed before inventory verification.',
             CRAFTING_QUANTITY_INVALID: `Unsupported crafting quantity: ${resource}.`,
+            CRAFTING_QUANTITY_GUI_CLOSED: `Crafting quantity GUI closed before all batches completed for ${resource}.`,
             CRAFTING_PROCEDURE_MISSING: `Crafting procedure is missing for ${resource}.`,
             CRAFTING_PROCEDURE_REGISTRY_MISSING: `Crafting procedure registry is missing for ${resource}.`,
             CRAFTING_PROCEDURE_NOT_SUPPORTED: `Crafting procedure is not supported by the GUI operation: ${resource}.`
