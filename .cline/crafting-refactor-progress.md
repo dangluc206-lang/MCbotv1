@@ -1,10 +1,10 @@
 # Crafting Refactor Progress
 
 ## Current Phase
-G16.1 — Per-Material Input Policy Integration Fix (CLOSED: implementation aaf3bd4; closeout pending)
+G16.1 — Per-Material Input Policy Integration Fix (CLOSED: implementation aaf3bd4, closeout bec96f1)
 
 ## Status
-IN_PROGRESS
+G16.1 CLOSED. Overall refactor G1–G24 remains IN PROGRESS; G19 not started.
 
 ## Completed
 - G1 scope freeze + baseline
@@ -130,7 +130,7 @@ Full unit suite (242 files) was run in per-directory chunks because `node --test
 - Special procedures (forge/npc) validated at executor level only; GUI operation intentionally rejects them fail-closed until their owners exist
 
 ## Next Action
-- G16.1 is CLOSED (implementation aaf3bd4). G19 starts only with explicit instruction — do not auto-advance. No push in this act.
+- G16.1 is CLOSED (implementation aaf3bd4, closeout bec96f1). G19 has NOT started and starts only on explicit user request — no auto-advance, no next-phase prompt.
 
 ## Completion Evidence
 - (pending full G1-G24)
