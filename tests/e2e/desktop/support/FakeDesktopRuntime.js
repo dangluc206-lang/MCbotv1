@@ -9,9 +9,9 @@ const FIXED_TIME = '2026-08-24T00:00:00.000Z';
 const SAFE_NOOP_CHANNELS = new Set([
     'mcbot:profiles:update', 'mcbot:profiles:create', 'mcbot:profiles:clone', 'mcbot:profiles:delete',
     'mcbot:bot:connect', 'mcbot:bot:disconnect', 'mcbot:bot:home',
-    'mcbot:mode:start', 'mcbot:mode:pause', 'mcbot:mode:resume', 'mcbot:mode:stop', 'mcbot:mode:restart', 'mcbot:mode:b5-retry-storage-protection',
+    'mcbot:mode:start', 'mcbot:mode:pause', 'mcbot:mode:resume', 'mcbot:mode:stop', 'mcbot:mode:restart', 'mcbot:mode:retry-storage-protection',
     'mcbot:fleet:action', 'mcbot:command:send', 'mcbot:sky-commands:save', 'mcbot:sky-commands:delete', 'mcbot:sky-commands:send',
-    'mcbot:config:collector:update', 'mcbot:config:fishing:update-area', 'mcbot:config:b5-rules:update', 'mcbot:config:b5-craft:update',
+    'mcbot:config:fishing:update-area', 'mcbot:config:crafting:update',
     'mcbot:config:storage-protection:update', 'mcbot:config:sky-auto-join:update', 'mcbot:config:group:save',
     'mcbot:config:workspace:save', 'mcbot:config:workspace:undo', 'mcbot:config:workspace:close',
     'mcbot:incidents:transition', 'mcbot:incidents:action', 'mcbot:config:restore',
@@ -97,7 +97,7 @@ class FakeDesktopRuntime {
         case 'mcbot:snapshot': return this.snapshot();
         case 'mcbot:health': return { contract: 'operator-health-v1', overall: this.lifecycle === 'RUNNING' ? 'HEALTHY' : 'UNKNOWN', stale: false, cached: false, ageMs: 0, sampledAt: FIXED_TIME, probes: [] };
         case 'mcbot:readiness': return { contract: 'desktop-readiness-v1', overall: this.lifecycle === 'RUNNING' ? 'READY' : 'INCOMPLETE', checks: [], sideEffects: 'NONE' };
-        case 'mcbot:b5:journey': return { contract: 'b5-operator-presentation-v1', items: [], projectedAt: FIXED_TIME };
+        case 'mcbot:crafting:journey': return { contract: 'craft-operator-presentation-v1', items: [], projectedAt: FIXED_TIME };
         case 'mcbot:incidents:list': return { contract: 'desktop-incident-index-v1', items: [], warnings: [] };
         case 'mcbot:profiles:list': return this.lifecycle === 'RUNNING' ? [clone(this.profile)] : [];
         case 'mcbot:commands': return [];
@@ -110,16 +110,14 @@ class FakeDesktopRuntime {
         case 'mcbot:custom-mode:modules': return [];
         case 'mcbot:custom-mode:templates': return [];
         case 'mcbot:custom-mode:list': return [];
-        case 'mcbot:config:b5-craft:get': return this.configGroup('craftingMode');
-        case 'mcbot:config:b5-rules:get': return this.configGroup('b5');
+        case 'mcbot:config:crafting:get': return this.configGroup('craftingMode');
         case 'mcbot:config:storage-protection:get': return { value: { sellBlockOnly: true, collectorB1Decompression: { maxUsageRatio: 0.8, requireKnownCapacity: true } } };
         case 'mcbot:config:sky-auto-join:get': return { value: clone(this.configByKey.get('skyblock')) };
-        case 'mcbot:config:collector:get': return clone(this.configByKey.get('collectorB5Mode'));
         case 'mcbot:config:fishing:get': return { resolved: clone(this.configByKey.get('fishingMode')), overrides: {} };
         case 'mcbot:logs': return clone(this.logs);
         case 'mcbot:events:snapshot': return [];
         case 'mcbot:bot:dev-detail': return { botId: args[0] || null, lifecycle: this.lifecycle, generation: 1, services: [] };
-        case 'mcbot:b5:trace': return { botId: args[0] || null, cycles: [] };
+        case 'mcbot:crafting:trace': return { botId: args[0] || null, cycles: [] };
         case 'mcbot:presentation:search': return CommandPaletteCatalog.search(args[0], { experienceLevel: 'advanced', ...(args[1] || {}) });
         case 'mcbot:diagnostics:list': return { contract: 'runtime-failure-artifact-v1', items: [], warnings: [] };
         case 'mcbot:support:preview': return { contract: 'support-bundle', version: 2, previewId: 'support-preview:e2e', entryCount: 2, totalBytes: 1024, privacy: { default: 'PSEUDONYMIZED' }, warnings: [], files: [] };

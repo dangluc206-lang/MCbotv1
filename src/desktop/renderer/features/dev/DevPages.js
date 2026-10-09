@@ -27,7 +27,7 @@
       .replace(/'/g, `${AMP}#39;`);
   }
 
-  function shorten(value) {
+  function truncateMeta(value) {
     const text = typeof value === 'object' ? JSON.stringify(value) : String(value ?? '');
     return text.length > 80 ? `${text.slice(0, 77)}…` : text;
   }
@@ -100,7 +100,7 @@
 
   function logLine(record) {
     const time = new Date(record.timestamp).toLocaleTimeString('vi-VN', { hour12: false });
-    const meta = record.meta ? Object.entries(record.meta).filter(([key]) => key !== 'stack' && key !== 'error').map(([key, value]) => `${key}=${shorten(value)}`).join(' · ') : '';
+    const meta = record.meta ? Object.entries(record.meta).filter(([key]) => key !== 'stack' && key !== 'error').map(([key, value]) => `${key}=${truncateMeta(value)}`).join(' · ') : '';
     const stack = String(record.meta?.stack || record.meta?.error?.stack || '').trim();
     const stackHtml = stack ? `<details class="log-stack"><summary>Stack trace</summary><pre>${escapeText(stack)}</pre></details>` : '';
     return `<div class="log-line ${escapeText(record.level)}"><span class="log-time">${escapeText(time)}</span><span class="log-level ${escapeText(record.level)}">${escapeText(String(record.level || '').toUpperCase())}</span><span class="log-scope" title="${escapeText(record.scope)}">${escapeText(record.scope)}</span><span class="log-message">${escapeText(record.message)}${meta ? ` <span class="log-meta">· ${escapeText(meta)}</span>` : ''}${stackHtml}</span></div>`;
@@ -230,31 +230,30 @@
     return `<pre class="dev-json-output">${escapeText(JSON.stringify(snapshot, null, 2))}</pre>`;
   }
 
-  // ---- B5 Debug ----
+  // ---- Craft Debug ----
   // Renderer-only: journey operator + trace replay. modes.crafting.details is
   // rendered when present (crafting status/blocker/verification), then trace.
 
-  function b5DebugView(journey, trace) {
+  function craftDebugView(journey, trace) {
     const journeyHtml = journey?.length ? journey.map(entry => {
       const botId = entry.botId || '—';
-      const completed = entry.completedB5 ?? '—';
-      const state = entry.state || '—';
-      // Legacy B5 debug card (collector-B5/dev boundary only). The generic
-      // crafting status uses target/completedUnits/state/blocker in
-      // CraftingRequestPanel.statusText and botCard, never completedB5.
-      const details = entry.details ? ` · details=${shorten(entry.details)}` : '';
-      const phase = entry.phase ? ` · phase=${entry.phase}` : '';
-      const gen = entry.connectionGeneration ?? entry.generation;
+      const crafting = entry.crafting || null;
+      const details = crafting?.details || crafting || null;
+      const state = details?.state || crafting?.state || entry.state || '—';
+      const target = details?.targetItemId || details?.target || null;
+      const units = details?.completedUnits ?? null;
+      const remaining = details?.remaining ?? null;
+      const reason = details?.lastError || details?.lastBlocker || details?.waitingReason || null;
+      const summary = [
+        `target=${target || '—'}`,
+        `completedUnits=${units ?? '—'}`,
+        remaining !== null && remaining !== undefined ? `remaining=${remaining}` : null,
+        reason ? `lý do: ${reason}` : null
+      ].filter(Boolean).join(' · ');
+      const gen = details?.connectionGeneration ?? entry.generation;
       const genText = gen !== undefined && gen !== null ? ` · gen=${gen}` : '';
-      // P0/P1-9: render modes.crafting.details khi journey entry mang target/
-      // completedUnits (fallback completedB5 cũ): target/completedUnits/state.
-      const target = entry.targetItemId || entry.target || null;
-      const units = entry.completedUnits ?? null;
-      const enriched = (target || units !== null)
-        ? ` · target=${target || '—'}/completedUnits=${units ?? '—'}`
-        : '';
-      return `<div class="b5-journey-card panel"><strong>${escapeText(botId)}</strong><span>${escapeText(state)} · ${escapeText(String(completed))} B5${escapeText(String(phase))}${escapeText(String(genText))}${escapeText(String(details))}${escapeText(String(enriched))}</span></div>`;
-    }).join('') : stateView({ empty: 'Chưa có trạng thái B5.' });
+      return `<div class="craft-journey-card panel"><strong>${escapeText(botId)}</strong><span>${escapeText(state)} · ${escapeText(String(summary))}${escapeText(String(genText))}</span></div>`;
+    }).join('') : stateView({ empty: 'Chưa có trạng thái chế tạo.' });
     const traceHtml = trace ? `<pre class="dev-json-output">${escapeText(JSON.stringify(trace, null, 2))}</pre>` : stateView({ empty: 'Chưa có trace.' });
     return `${journeyHtml}${traceHtml}`;
   }
@@ -281,6 +280,6 @@
   return Object.freeze({
     stateView, fleetRows, botDetail, logLine, incidentTimeline, incidentEvidenceNav,
     inspectorView, eventStream, eventLine, logStream, runtimeStateView,
-    b5DebugView, diagnosticsView, configDebugView
+    craftDebugView, diagnosticsView, configDebugView
   });
 }));

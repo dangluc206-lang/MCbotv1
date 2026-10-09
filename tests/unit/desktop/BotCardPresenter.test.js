@@ -117,12 +117,12 @@ test('storage-protection retry only shows while the episode allows it', () => {
     const retry = presenter.create(makeDeps({ modeInfo: grant })).botCard(makeBot({
         modes: { available: [], crafting: { phase: 'RUNNING', details: { protectionEpisode: episode, recovery: { allowedActions: ['retry-storage-protection'] } } } }
     }));
-    assert.match(retry, /data-action="b5-retry-storage"/);
+    assert.match(retry, /data-action="craft-retry-storage"/);
 
     const blocked = presenter.create(makeDeps({ modeInfo: grant })).botCard(makeBot({
         modes: { available: [], crafting: { phase: 'RUNNING', details: { protectionEpisode: episode, recovery: { allowedActions: [] } } } }
     }));
-    assert.doesNotMatch(blocked, /data-action="b5-retry-storage"/, 'the button must stay hidden without the recovery grant');
+    assert.doesNotMatch(blocked, /data-action="craft-retry-storage"/, 'the button must stay hidden without the recovery grant');
 });
 
 test('advanced shell reveals the tech grid and the protection gate', () => {

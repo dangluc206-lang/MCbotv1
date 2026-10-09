@@ -19,7 +19,7 @@
     logs:Object.freeze({ title:'Dev · Nhật ký', subtitle:'DEBUG/INFO/WARN/ERROR với bộ lọc đầy đủ', group:'DEV' }),
     'incident-debug':Object.freeze({ title:'Dev · Incident Debugger', subtitle:'Timeline sự cố: event → operation → service → recovery', group:'DEV' }),
     'runtime-state':Object.freeze({ title:'Dev · Runtime State', subtitle:'Snapshot lifecycle, intent, mode, operation, services', group:'DEV' }),
-    'b5-debug':Object.freeze({ title:'Dev · Craft Debug', subtitle:'Journey, trace replay, blocker và verification chế tạo (tương thích B5)', group:'DEV' }),
+    'craft-debug':Object.freeze({ title:'Dev · Craft Debug', subtitle:'Journey, trace replay, blocker và verification chế tạo', group:'DEV' }),
     builder:Object.freeze({ title:'Tạo chế độ', subtitle:'Ghép mô-đun an toàn thành luồng tự động', group:'DEV' }),
     tools:Object.freeze({ title:'Dev · Công cụ', subtitle:'Trung tâm lệnh và kiểm tra GUI', group:'DEV' }),
     diagnostics:Object.freeze({ title:'Dev · Chẩn đoán', subtitle:'Lỗi khi chạy và gói hỗ trợ', group:'DEV' }),

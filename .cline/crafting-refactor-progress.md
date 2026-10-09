@@ -1,10 +1,10 @@
 # Crafting Refactor Progress
 
 ## Current Phase
-G16.1 — Per-Material Input Policy Integration Fix (CLOSED: implementation aaf3bd4, closeout bec96f1)
+G19 — Desktop UI Cleanup (IN_PROGRESS: source edits complete, tests green, commit pending)
 
 ## Status
-G16.1 CLOSED. Overall refactor G1–G24 remains IN PROGRESS; G19 not started.
+G16.1 CLOSED. Overall refactor G1–G24 remains IN PROGRESS; G19 implementation done, closeout pending (commit + push + remote verify).
 
 ## Completed
 - G1 scope freeze + baseline
@@ -70,6 +70,15 @@ G16.1 CLOSED. Overall refactor G1–G24 remains IN PROGRESS; G19 not started.
 - src/bootstrap/registerBotServices.js (generic storageMaterials key at composition root)
 - tests/unit/server-features/CraftInputAcquisition.test.js (new, 9 tests)
 
+## Tests (G19, actually run on working tree)
+- Focused desktop+config suites -> PASS 97/97 (BotCardPresenter 8, CraftingRequestControl 5, DesktopApiContract 3, RendererDomContract 3, OperatorPresenter 7, OperatorSnapshotProjector 2, DesktopLogPolicy 3, OperatorHealthService 2, DesktopControllerActions 16, DevExperience 32, OperatorExperienceContract 4, DecompositionContract 2, ModeConfigurationUseCases 2, CraftingConfigSeparation 4, RendererEventBindings 4)
+- Desktop E2E critical flow (real Electron, fixture backend) -> PASS 1/1
+- `node scripts/validate-config.js` -> PASS 31/31 schema + cross-ref PASS; `node scripts/check-slo-contract.js` -> PASS (7 objectives); `git diff --check` clean
+- CraftingModeService modes suite -> PASS 54/54 (mode engine untouched; test names still B5-flavored, out of scope)
+- Newly-fixed-by-G19 (were failing on HEAD before this act): CraftingConfigSeparation b5-compat x2, ModeConfigurationUseCases collector x1, DesktopDevExperience b5-trace/nav x3, Desktop E2E harness (stale #b5Journey waiter + channels)
+- Remaining baseline failures (untouched, out of scope): GenericConfigMutationTransaction (requires deleted CollectorB5ConfigEditor), DesktopSupportReplay (B5 replay fixture), CraftStep2/3/4 + GenericCraftExecutionTarget (require deleted b5/ coordinators), KhoWithdrawOperation batchCount drift, + others listed under closeout-act section
+- Mock/unit + Electron fixture only; no live-server proof claimed.
+
 ## Tests (G16.1, actually run on working tree)
 - `node --test tests/unit/server-features/CraftInputAcquisition.test.js` -> PASS 18/18 (10 G16 + 8 G16.1: per-material override both directions, independent routing, reconfigure preservation, invalid-override fallback, returnToStorage source, service plumbing)
 - Affected suites: planning/parity/bootstrap/modes/quantity batch -> PASS 149/149; shared-storage suites -> PASS 62/62
@@ -126,6 +135,7 @@ Full unit suite (242 files) was run in per-directory chunks because `node --test
 - CraftingQuantityResolver now reports verified button capabilities + executes exact batches (G12.1 committed); live-GUI proof still pending
 - Storage/input genericized at the crafting boundary (G16 closed + pushed); shared storage primitives untouched
 - G16.1 per-material policy fix closed (implementation aaf3bd4); mock/unit only, no live-server proof
+- G19 Desktop UI cleanup IN_PROGRESS: B5 config/rules/compat-mode/storage-protection-UI/controls/labels removed from Desktop (controller/main/preload/contract/renderer/log-policy/health/projection); generic crafting channels (crafting:journey/trace, retry-storage-protection, config:crafting) + craft-debug dev page; RuntimeConfigMigrations + CraftingModeService engine preserved; commit pending
 - Procedure Builder/Recorder foundations exist but production Builder/Recorder wiring (G20/G21) pending
 - Special procedures (forge/npc) validated at executor level only; GUI operation intentionally rejects them fail-closed until their owners exist
 

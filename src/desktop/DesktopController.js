@@ -331,12 +331,12 @@ class DesktopController {
     // Dev UI craft trace: expose the generic trace recorder history plus the
     // operator journey context (modes.crafting.details lives in bot snapshot).
     // Renderer renders modes.crafting.details; trace carries replay fixture.
-    b5Trace(botId) {
+    craftTrace(botId) {
         const runtime = this.#runtime(botId);
         const recorder = runtime.getService?.('craftingTrace');
         const bot = this.snapshot().bots.find(item => item.botId === botId) || null;
         return {
-            contract: 'dev-b5-trace-v1',
+            contract: 'dev-craft-trace-v1',
             botId,
             crafting: bot?.modes?.crafting || null,
             trace: recorder?.latest?.() || null,
@@ -346,11 +346,11 @@ class DesktopController {
         };
     }
 
-    b5OperatorJourney(botId = null) {
+    craftOperatorJourney(botId = null) {
         const bots = this.snapshot().bots || [];
         const selected = botId ? bots.filter(bot => bot.botId === botId) : bots;
         if (botId && selected.length === 0) throw Object.assign(new Error(`Bot does not exist: ${botId}`), { code: 'DESKTOP_BOT_NOT_FOUND' });
-        // G18: collector-b5 projection removed. Journey is generic crafting details.
+        // Journey is generic crafting details.
         return { contract: 'dev-craft-journey-v1', items: selected.map(bot => ({ botId: bot.botId, crafting: bot.modes?.crafting || null })), projectedAt: VietnamTime.iso() };
     }
 
@@ -398,7 +398,7 @@ class DesktopController {
             const mode = runtime.getService?.('craftingMode')?.status?.();
             const episode = mode?.details?.protectionEpisode;
             if (!episode) throw Object.assign(new Error('Current storage-protection episode no longer exists.'), { code: 'CRAFT_RETRY_STALE_EPISODE' });
-            result = await this.retryB5StorageProtection(incident.botId, {
+            result = await this.retryStorageProtection(incident.botId, {
                 expectedGeneration: request.expectedGeneration,
                 episodeId: episode.episodeId,
                 incidentId: episode.correlationId,
@@ -446,10 +446,10 @@ class DesktopController {
     stopMode(botId) { return this.fleetDomain.stopMode(botId); }
     restartMode(botId) { return this.fleetDomain.restartMode(botId); }
 
-    async retryB5StorageProtection(botId, request = {}) {
+    async retryStorageProtection(botId, request = {}) {
         const runtime = this.#runtime(botId);
         const service = runtime.getService?.('craftingMode');
-        if (!service?.requestStorageProtectionRetry) throw new Error(`B5 craft mode recovery is unavailable for ${botId}.`);
+        if (!service?.requestStorageProtectionRetry) throw new Error(`Crafting mode recovery is unavailable for ${botId}.`);
         return resultPayload(service.requestStorageProtectionRetry({
             expectedBotId: botId,
             expectedGeneration: request.expectedGeneration,
@@ -464,10 +464,6 @@ class DesktopController {
     craftingItems(botId) { return this.fleetDomain.craftingItems(botId); }
     setCraftingRequest(botId, request) { return this.fleetDomain.setCraftingRequest(botId, request); }
     clearCraftingRequest(botId) { return this.fleetDomain.clearCraftingRequest(botId); }
-    // Kept for older preload/renderer clients: mcbot:b5:craft-* channels.
-    b5CraftItems(botId) { return this.craftingItems(botId); }
-    setB5CraftRequest(botId, request) { return this.setCraftingRequest(botId, request); }
-    clearB5CraftRequest(botId) { return this.clearCraftingRequest(botId); }
 
     reconcileFleet(reason = 'desktop-reconcile') { return this.fleetDomain.reconcile(reason); }
     fleetAction(action) { return this.fleetDomain.fleetAction(action); }
@@ -623,7 +619,7 @@ class DesktopController {
             fixture: runtime.getService?.('craftingTrace')?.latestReplayFixture?.() || null
         })).filter(entry => entry.fixture) || [];
         for (const [index, replay] of craftReplays.entries()) {
-            entries.push({ path: `evidence/replay-b5-${String(index + 1).padStart(3, '0')}.json`, value: replay, optional: true });
+            entries.push({ path: `evidence/replay-craft-${String(index + 1).padStart(3, '0')}.json`, value: replay, optional: true });
         }
         if (this.lifecycle === 'RUNNING') {
             try { entries.push({ path: 'evidence/mode-status-profiles.json', value: await this.listProfiles(), optional: true }); }
@@ -640,8 +636,6 @@ class DesktopController {
     goHome(botId) { return this.fleetDomain.home(botId); }
 
 
-    collectorConfig(botId) { return this.modeConfigurationUseCases.collector(botId); }
-    updateCollectorConfig(botId, fields = {}) { return this.modeConfigurationUseCases.updateCollector(botId, fields); }
     fishingConfig(botId) { return this.modeConfigurationUseCases.fishing(botId); }
     updateFishingArea(botId, fields = {}) { return this.modeConfigurationUseCases.updateFishingArea(botId, fields); }
 
@@ -682,32 +676,15 @@ class DesktopController {
         return Redactor.sanitize({ key, file: spec.file, backup, appliedLive: applied, restartRequired: !applied, value });
     }
 
-    b5CraftConfig() { return this.configGroup('craftingMode'); }
+    craftConfig() { return this.configGroup('craftingMode'); }
 
-    b5RulesConfig() { return this.configGroup('b5'); }
+    updateCraftConfig(fields = {}) { return this.#configMutation(() => this.#updateCraftConfig(fields)); }
 
-    updateB5RulesConfig(fields = {}) { return this.#configMutation(() => this.#updateB5RulesConfig(fields)); }
-
-    async #updateB5RulesConfig(fields = {}) {
-        this.#requireRunning();
-        const current = this.bundle.configuration.registry.require('b5');
-        const next = {
-            ...current,
-            ...pick(fields, ['inventorySafetyEmptySlots','b3AllMinEmptySlots','b2InputSource']),
-            quantityOptimization: { ...current.quantityOptimization, ...(fields.quantityOptimization || {}) },
-            personalVaultBackpressure: { ...current.personalVaultBackpressure, ...(fields.personalVaultBackpressure || {}) }
-        };
-        return this.#saveConfigGroup('b5', next);
-    }
-
-
-    updateB5CraftConfig(fields = {}) { return this.#configMutation(() => this.#updateB5CraftConfig(fields)); }
-
-    async #updateB5CraftConfig(fields = {}) {
+    async #updateCraftConfig(fields = {}) {
         const current = this.bundle.configuration.registry.require('craftingMode');
         const next = {
             ...current,
-            ...pick(fields, ['enabled','teleportHomeOnEnable','autoResumeOnReconnect','pollIntervalMs','disconnectedPollMs','errorRetryMs','errorRetryMaxMs','craftLoopDelayMs','postCycleCooldownMs','postB5CooldownMs']),
+            ...pick(fields, ['enabled','teleportHomeOnEnable','autoResumeOnReconnect','pollIntervalMs','disconnectedPollMs','errorRetryMs','errorRetryMaxMs','craftLoopDelayMs','postCycleCooldownMs']),
             stability: {
                 ...(current.stability || {}),
                 ...(fields.stability || {})
@@ -737,8 +714,8 @@ class DesktopController {
         const sell = {
             ...(storage.sell || {}),
             ...(Object.prototype.hasOwnProperty.call(requestedSell, 'blockOnly') ? { blockOnly: requestedSell.blockOnly } : {}),
-            // G18: collector-b5 removed. Sell reserve boundary is owned by
-            // storage alone; desktop cannot disable selling or tune reserve.
+            // Sell reserve boundary is owned by storage alone; desktop cannot
+            // disable selling or tune reserve.
             reserveCoverage: 1.5,
             allowSingle: false
         };
@@ -1091,7 +1068,7 @@ class DesktopController {
 
         // The JSONL file remains the detailed forensic source. The desktop view
         // intentionally receives only operator-relevant events, with repeated
-        // messages folded so long B5/reconnect loops stay readable.
+        // messages folded so long craft/reconnect loops stay readable.
         if (persist) this.#persistLog(sanitized);
 
         // Dev UI receives the same sanitized record pre-fold (DEBUG included).

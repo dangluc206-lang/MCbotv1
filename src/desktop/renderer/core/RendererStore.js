@@ -20,7 +20,7 @@
       customTemplates: [], customDraft: null, localUpdate: null,
       updateMigration: null, readiness: null, health: null,
       incidents: [], selectedIncidentId: null, incidentEvidenceIndex: 0,
-      b5Journey: [], configWorkspace: null, backupCatalog: [],
+      craftJourney: [], configWorkspace: null, backupCatalog: [],
       devLogs: [], devLogsLoaded: false, incidentDebugId: null,
       events: [], eventsLoaded: false
     };

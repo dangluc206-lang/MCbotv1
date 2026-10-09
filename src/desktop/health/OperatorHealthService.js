@@ -78,11 +78,11 @@ class OperatorHealthService {
         const guiAge = Number(bot.gui?.ageMs || 0);
         probes.push(probe('gui-session', guiAge > 30000 ? 'DEGRADED' : bot.gui ? 'HEALTHY' : 'NOT_APPLICABLE', guiAge > 30000 ? 'GUI session tồn tại quá lâu.' : bot.gui ? 'GUI session trong giới hạn.' : 'Không có GUI session.', { botId, ageMs: guiAge, evidenceRef: guiAge ? 'gui' : null }));
         const episode = mode?.details?.protectionEpisode;
-        if (!episode) probes.push(probe('b5-blocker-dwell', 'NOT_APPLICABLE', 'Không có storage-protection episode.', { botId }));
+        if (!episode) probes.push(probe('storage-blocker-dwell', 'NOT_APPLICABLE', 'Không có storage-protection episode.', { botId }));
         else {
             const dwell = Math.max(0, this.now() - Date.parse(episode.lastAttemptAt || episode.startedAt || new Date(this.now()).toISOString()));
             const blocked = episode.state === 'WAITING_BLOCKED';
-            probes.push(probe('b5-blocker-dwell', blocked && dwell > 60000 ? 'UNHEALTHY' : blocked ? 'DEGRADED' : 'HEALTHY', blocked ? 'Bảo vệ kho đang dừng an toàn chờ điều kiện.' : 'Bảo vệ kho đang tiến triển.', { botId, ageMs: dwell, evidenceRef: 'modes.crafting.details.protectionEpisode', remediation: blocked ? 'Chỉ dùng action retry được DTO cho phép.' : null }));
+            probes.push(probe('storage-blocker-dwell', blocked && dwell > 60000 ? 'UNHEALTHY' : blocked ? 'DEGRADED' : 'HEALTHY', blocked ? 'Bảo vệ kho đang dừng an toàn chờ điều kiện.' : 'Bảo vệ kho đang tiến triển.', { botId, ageMs: dwell, evidenceRef: 'modes.crafting.details.protectionEpisode', remediation: blocked ? 'Chỉ dùng action retry được DTO cho phép.' : null }));
         }
     }
 

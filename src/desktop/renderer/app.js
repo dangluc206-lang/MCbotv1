@@ -39,7 +39,7 @@ function bridgeMissingError(action = 'Thao tác') {
 }
 
 function setBridgeDependentUiDisabled(disabled) {
-  for (const id of ['loadB5PureConfig', 'saveB5PureConfig', 'loadB5Rules', 'saveB5Rules', 'loadStorageProtect', 'saveStorageProtect']) {
+  for (const id of ['loadCraftConfig', 'saveCraftConfig', 'loadStorageProtect', 'saveStorageProtect']) {
     const el = document.getElementById(id);
     if (el) {
       el.disabled = disabled;
@@ -278,19 +278,6 @@ async function loadIncidents() {
   renderIncidents();
 }
 
-function renderB5Journey() {
-  const root = $('#b5Journey');
-  if (!root) return;
-  const items = state.b5Journey || [];
-  root.innerHTML = window.MCbotB5JourneyPresenter.render(items, esc);
-}
-
-async function loadB5Journey() {
-  const result = await api(window.mcbot.b5Journey());
-  state.b5Journey = result.items || [];
-  renderB5Journey();
-}
-
 function renderModes() {
   const bots = state.snapshot?.bots || [];
   $('#modeCards').innerHTML = bots.length ? bots.map(bot => botCard(bot, true)).join('') : '<div class="empty panel">Chưa có tiến trình bot.</div>';
@@ -427,19 +414,25 @@ function renderRuntimeState() {
   if (output && state.snapshot) output.textContent = JSON.stringify(state.snapshot, null, 2);
 }
 
-async function renderB5Debug() {
-  const botId = $('#b5DebugBotSelect')?.value;
-  const traceEl = $('#b5DebugTrace');
+async function renderCraftDebug() {
+  const botId = $('#craftDebugBotSelect')?.value;
+  const traceEl = $('#craftDebugTrace');
   if (!botId || !traceEl) return;
-  const journey = state.b5Journey.find(item => item.botId === botId);
+  const journey = (state.craftJourney || []).find(item => item.botId === botId);
   const bot = (state.snapshot?.bots || []).find(entry => entry.botId === botId) || null;
   // Render modes.crafting.details (crafting status/blocker/verification) first,
   // then journey + trace replay fixture. Read-only, no runtime logic.
-  const details = bot?.modes?.crafting?.details || bot?.modes?.b5Craft?.details || null;
+  const details = bot?.modes?.crafting?.details || null;
   const detailsHtml = details ? `<div class="section-head"><div><h2>modes.crafting.details</h2><p>Raw crafting status của bot hiện tại</p></div></div><pre class="log-console panel">${esc(JSON.stringify(details, null, 2))}</pre>` : '';
-  $('#b5DebugJourney').innerHTML = detailsHtml + window.MCbotB5JourneyPresenter.render(journey ? [journey] : [], esc);
-  try { traceEl.textContent = JSON.stringify(await api(window.mcbot.b5Trace(botId)), null, 2); }
+  const journeyHtml = journey ? `<pre class="log-console panel">${esc(JSON.stringify(journey, null, 2))}</pre>` : '';
+  $('#craftDebugJourney').innerHTML = detailsHtml + journeyHtml;
+  try { traceEl.textContent = JSON.stringify(await api(window.mcbot.craftTrace(botId)), null, 2); }
   catch (error) { traceEl.textContent = `Trace lỗi: ${error.message}`; }
+}
+
+async function loadCraftJourney() {
+  const result = await api(window.mcbot.craftJourney());
+  state.craftJourney = result.items || [];
 }
 
 async function loadConfigDebug() {
@@ -486,7 +479,7 @@ function syncSelectors() {
   const signature = `${bots.map(bot => `${bot.botId}:${bot.profile?.displayName || ''}`).join('|')}::${state.commands.map(command => `${command.key}:${command.command || ''}`).join('|')}`;
   if (signature === state.selectorSignature) return;
   state.selectorSignature = signature;
-  for (const id of ['guiBot', 'commandBot', 'skyCommandBot', 'collectorConfigBot', 'fishingConfigBot', 'secretBotSelect', 'botDetailSelect', 'inspectorBotSelect', 'b5DebugBotSelect']) syncSelect($('#' + id), botOptions);
+  for (const id of ['guiBot', 'commandBot', 'skyCommandBot', 'fishingConfigBot', 'secretBotSelect', 'botDetailSelect', 'inspectorBotSelect', 'craftDebugBotSelect']) syncSelect($('#' + id), botOptions);
   syncSelect($('#eventBot'), '<option value="all">Mọi bot</option>' + botOptions, 'all');
   syncSelect($('#incidentBotFilter'), '<option value="">Tất cả bot</option>' + botOptions);
   syncSelect($('#logBot'), '<option value="all">Mọi bot</option>' + botOptions, localStorage.getItem('mcbot.logBot') || 'all');
@@ -566,7 +559,7 @@ async function loadStaticData() {
   if (state.page === 'bots' || !state.profilesLoaded) jobs.push(loadProfiles());
   jobs.push(loadReadinessAndHealth());
   if (state.page === 'incidents') jobs.push(loadIncidents());
-  if (state.page === 'modes') jobs.push(loadB5Journey());
+  if (state.page === 'modes') jobs.push(loadCraftJourney());
   await Promise.all(jobs);
 }
 
@@ -661,14 +654,14 @@ async function handleBotAction(button) {
   if (action === 'mode-resume') return runAction({ key: `mode:${bot}`, button, success: 'Đã tiếp tục chế độ.', fn: () => api(window.mcbot.resumeMode(bot)) });
   if (action === 'mode-stop') return runAction({ key: `mode:${bot}`, button, success: 'Đã dừng chế độ.', fn: () => api(window.mcbot.stopMode(bot)) });
   if (action === 'mode-restart') return runAction({ key: `mode:${bot}`, button, success: 'Đã khởi động lại chế độ.', fn: () => api(window.mcbot.restartMode(bot)) });
-  if (action === 'b5-retry-storage') {
+  if (action === 'craft-retry-storage') {
     const current = (state.snapshot?.bots || []).find(entry => entry.botId === bot);
     const episode = current?.modes?.crafting?.details?.protectionEpisode;
     if (!episode) throw new Error('Episode bảo vệ kho không còn tồn tại; hãy tải lại trạng thái.');
-    const idempotencyKey = `desktop-b5-retry:${bot}:${episode.episodeId}:${crypto.randomUUID()}`;
+    const idempotencyKey = `desktop-craft-retry:${bot}:${episode.episodeId}:${crypto.randomUUID()}`;
     return runAction({
-      key: `b5-retry:${bot}`, button, success: 'Đã cấp một lần thử bảo vệ kho có kiểm soát.',
-      fn: () => api(window.mcbot.retryB5StorageProtection(bot, {
+      key: `craft-retry:${bot}`, button, success: 'Đã cấp một lần thử bảo vệ kho có kiểm soát.',
+      fn: () => api(window.mcbot.retryStorageProtection(bot, {
         expectedGeneration: current.connectionGeneration,
         episodeId: episode.episodeId,
         incidentId: episode.correlationId,
@@ -731,7 +724,7 @@ function switchDevPage(page) {
   if (next === 'logs') { state.logUnread = 0; renderLogs(); }
   if (next === 'incident-debug') { loadIncidents().then(() => { renderIncidentDebug(); renderIncidentDebugDetail().catch(() => {}); }).catch(error => toast(error.message, 'error')); }
   if (next === 'runtime-state') renderRuntimeState();
-  if (next === 'b5-debug') { loadB5Journey().then(renderB5Debug).catch(error => toast(error.message, 'error')); }
+  if (next === 'craft-debug') { loadCraftJourney().then(renderCraftDebug).catch(error => toast(error.message, 'error')); }
   if (next === 'diagnostics') refreshDiagnostics();
   if (next === 'config-debug') { if (state.configGroups.length) syncSelect($('#configDebugGroup'), state.configGroups.map(group => `<option value="${esc(group.key)}">${esc(configLabels[group.key] || group.key)}</option>`).join('')); }
 }
@@ -747,7 +740,7 @@ function switchPage(page) {
   // If the target is a Dev nav page, also sync the Dev layout.
   if (window.MCbotDevRouter.isDevNavPage(page)) switchDevPage(page);
   if (page === 'dashboard') renderDashboard();
-  if (page === 'modes') { renderModes(); Promise.all([loadB5PureConfig(), loadB5Rules(), loadStorageProtection(), loadB5Journey()]).catch(error => toast(error.message, 'error')); }
+  if (page === 'modes') { renderModes(); Promise.all([loadCraftConfig(), loadStorageProtection(), loadCraftJourney()]).catch(error => toast(error.message, 'error')); }
   if (page === 'incidents') loadIncidents().catch(error => toast(error.message, 'error'));
   if (page === 'bots' && !state.profilesLoaded) loadProfiles().catch(error => toast(error.message, 'error'));
   if (page === 'builder' && state.snapshot?.lifecycle === 'RUNNING') loadCustomModeCatalog().catch(error => toast(error.message, 'error'));
@@ -760,22 +753,8 @@ function switchPage(page) {
   if (page === 'events') { loadEvents().then(renderEventStream).catch(() => {}); }
   if (page === 'incident-debug') { loadIncidents().then(() => { renderIncidentDebug(); renderIncidentDebugDetail().catch(() => {}); }).catch(error => toast(error.message, 'error')); }
   if (page === 'runtime-state') renderRuntimeState();
-  if (page === 'b5-debug') { loadB5Journey().then(renderB5Debug).catch(error => toast(error.message, 'error')); }
+  if (page === 'craft-debug') { loadCraftJourney().then(renderCraftDebug).catch(error => toast(error.message, 'error')); }
   if (page === 'config-debug') { if (state.configGroups.length) syncSelect($('#configDebugGroup'), state.configGroups.map(group => `<option value="${esc(group.key)}">${esc(configLabels[group.key] || group.key)}</option>`).join('')); }
-}
-
-async function loadCollectorConfig() {
-  try {
-    const bot = $('#collectorConfigBot').value; if (!bot) return;
-    const config = await api(window.mcbot.collectorConfig(bot));
-    const pickup = config.pickupLocation || {};
-    $('#collectorX').value = pickup.x ?? '';
-    $('#collectorY').value = pickup.y ?? '';
-    $('#collectorZ').value = pickup.z ?? '';
-    $('#collectorDelay').value = config.craftLoopDelayMs ?? '';
-    $('#collectorPoll').value = config.pollIntervalMs ? Number(config.pollIntervalMs) / 1000 : '';
-    $('#collectorRadius').value = config.reanchorRadius ?? '';
-  } catch (error) { toast(error.message, 'error'); }
 }
 
 async function loadFishingConfig() {
@@ -926,103 +905,53 @@ async function openCommandPalette() {
   queueMicrotask(() => input.focus());
 }
 
-async function loadB5PureConfig() {
-  if (!bridgeAvailable() || typeof window.mcbot.b5CraftConfig !== 'function') throw bridgeMissingError('Tải cấu hình chế tạo');
-  const group = await api(window.mcbot.b5CraftConfig());
+async function loadCraftConfig() {
+  if (!bridgeAvailable() || typeof window.mcbot.craftConfig !== 'function') throw bridgeMissingError('Tải cấu hình chế tạo');
+  const group = await api(window.mcbot.craftConfig());
   const c = group.value || {};
-  $('#b5PureEnabled').checked = c.enabled !== false;
-  $('#b5PureHome').checked = c.teleportHomeOnEnable !== false;
-  $('#b5PureResume').checked = c.autoResumeOnReconnect !== false;
-  $('#b5PurePoll').value = c.pollIntervalMs ?? 10000;
-  $('#b5PureCraftDelay').value = c.craftLoopDelayMs ?? 300;
-  $('#b5PureCooldownMinutes').value = Math.round(Number(c.postCycleCooldownMs ?? c.postB5CooldownMs ?? 1800000) / 60000);
-  $('#b5PureRetry').value = c.errorRetryMs ?? 5000;
-  $('#b5PureDisconnectedPoll').value = c.disconnectedPollMs ?? 1500;
-  $('#b5PureRetryMax').value = c.errorRetryMaxMs ?? 30000;
-  $('#b5PureReconcileReads').value = c.reconciliation?.maxFreshReads ?? 3;
-  $('#b5PureReconcileRetry').value = c.reconciliation?.retryMs ?? 1000;
-  $('#b5PureReconcileUnresolved').value = c.reconciliation?.unresolvedPollMs ?? 15000;
-  $('#b5PureRetryAfterNoEffect').checked = c.reconciliation?.allowRetryAfterVerifiedNoEffect !== false;
-  $('#b5PureNoProgressBase').value = c.stability?.noProgressBaseDelayMs ?? 10000;
-  $('#b5PureNoProgressMax').value = c.stability?.noProgressMaxDelayMs ?? 60000;
-  $('#b5PureBlockerThreshold').value = c.stability?.sameBlockerThreshold ?? 2;
-  $('#b5PureLogEvery').value = c.stability?.logEveryNthRepeat ?? 5;
+  $('#craftEnabled').checked = c.enabled !== false;
+  $('#craftHome').checked = c.teleportHomeOnEnable !== false;
+  $('#craftResume').checked = c.autoResumeOnReconnect !== false;
+  $('#craftPoll').value = c.pollIntervalMs ?? 10000;
+  $('#craftDelay').value = c.craftLoopDelayMs ?? 300;
+  $('#craftCooldownMinutes').value = Math.round(Number(c.postCycleCooldownMs ?? 1800000) / 60000);
+  $('#craftRetry').value = c.errorRetryMs ?? 5000;
+  $('#craftDisconnectedPoll').value = c.disconnectedPollMs ?? 1500;
+  $('#craftRetryMax').value = c.errorRetryMaxMs ?? 30000;
+  $('#craftReconcileReads').value = c.reconciliation?.maxFreshReads ?? 3;
+  $('#craftReconcileRetry').value = c.reconciliation?.retryMs ?? 1000;
+  $('#craftReconcileUnresolved').value = c.reconciliation?.unresolvedPollMs ?? 15000;
+  $('#craftRetryAfterNoEffect').checked = c.reconciliation?.allowRetryAfterVerifiedNoEffect !== false;
+  $('#craftNoProgressBase').value = c.stability?.noProgressBaseDelayMs ?? 10000;
+  $('#craftNoProgressMax').value = c.stability?.noProgressMaxDelayMs ?? 60000;
+  $('#craftBlockerThreshold').value = c.stability?.sameBlockerThreshold ?? 2;
+  $('#craftLogEvery').value = c.stability?.logEveryNthRepeat ?? 5;
 }
 
-async function saveB5PureConfig() {
-  if (!bridgeAvailable() || typeof window.mcbot.updateB5CraftConfig !== 'function') throw bridgeMissingError('Lưu cấu hình chế tạo');
-  return api(window.mcbot.updateB5CraftConfig({
-    enabled: $('#b5PureEnabled').checked,
-    teleportHomeOnEnable: $('#b5PureHome').checked,
-    autoResumeOnReconnect: $('#b5PureResume').checked,
-    pollIntervalMs: Number($('#b5PurePoll').value),
-    craftLoopDelayMs: Number($('#b5PureCraftDelay').value),
-    postCycleCooldownMs: Number($('#b5PureCooldownMinutes').value) * 60000,
-    errorRetryMs: Number($('#b5PureRetry').value),
-    disconnectedPollMs: Number($('#b5PureDisconnectedPoll').value),
-    errorRetryMaxMs: Number($('#b5PureRetryMax').value),
+async function saveCraftConfig() {
+  if (!bridgeAvailable() || typeof window.mcbot.updateCraftConfig !== 'function') throw bridgeMissingError('Lưu cấu hình chế tạo');
+  return api(window.mcbot.updateCraftConfig({
+    enabled: $('#craftEnabled').checked,
+    teleportHomeOnEnable: $('#craftHome').checked,
+    autoResumeOnReconnect: $('#craftResume').checked,
+    pollIntervalMs: Number($('#craftPoll').value),
+    craftLoopDelayMs: Number($('#craftDelay').value),
+    postCycleCooldownMs: Number($('#craftCooldownMinutes').value) * 60000,
+    errorRetryMs: Number($('#craftRetry').value),
+    disconnectedPollMs: Number($('#craftDisconnectedPoll').value),
+    errorRetryMaxMs: Number($('#craftRetryMax').value),
     stability: {
       noProgressBackoffEnabled: true,
-      noProgressBaseDelayMs: Number($('#b5PureNoProgressBase').value),
-      noProgressMaxDelayMs: Number($('#b5PureNoProgressMax').value),
-      sameBlockerThreshold: Number($('#b5PureBlockerThreshold').value),
-      logEveryNthRepeat: Number($('#b5PureLogEvery').value)
+      noProgressBaseDelayMs: Number($('#craftNoProgressBase').value),
+      noProgressMaxDelayMs: Number($('#craftNoProgressMax').value),
+      sameBlockerThreshold: Number($('#craftBlockerThreshold').value),
+      logEveryNthRepeat: Number($('#craftLogEvery').value)
     },
     reconciliation: {
-      maxFreshReads: Number($('#b5PureReconcileReads').value),
-      retryMs: Number($('#b5PureReconcileRetry').value),
-      unresolvedPollMs: Number($('#b5PureReconcileUnresolved').value),
-      allowRetryAfterVerifiedNoEffect: $('#b5PureRetryAfterNoEffect').checked
-    }
-  }));
-}
-
-async function loadB5Rules() {
-  const group = await api(window.mcbot.b5RulesConfig());
-  const c = group.value || {};
-  const quantity = c.quantityOptimization || {};
-  const pv = c.personalVaultBackpressure || {};
-  $('#b5InventorySafety').value = c.inventorySafetyEmptySlots ?? 2;
-  $('#b5B2InputSource').value = c.b2InputSource === 'inventory' ? 'inventory' : 'storage';
-  $('#b5B3MinSlots').value = c.b3AllMinEmptySlots ?? 1;
-  $('#b5PvMinEmpty').value = pv.minEmptySlots ?? 3;
-  $('#b5PvHardMin').value = pv.hardMinEmptySlots ?? 1;
-  $('#b5BatchSize').value = quantity.b2BatchSize ?? 64;
-  $('#b5QuantityEnabled').checked = quantity.enabled !== false;
-  $('#b5B2UseAll').checked = quantity.useAllForB2 === true;
-  $('#b5B3UseAll').checked = quantity.useAllForB3 !== false;
-  $('#b5B4UseAllExact').checked = quantity.useAllForB4WhenExact !== false;
-  $('#b5B5UseAll').checked = quantity.useAllForB5 === true;
-  $('#b5KeepSurplusPv2').checked = quantity.keepSurplusInPv2 !== false;
-  syncB2InputSourceUi();
-}
-
-function syncB2InputSourceUi() {
-  const inventorySource = $('#b5B2InputSource').value === 'inventory';
-  $('#b5B2UseAll').disabled = inventorySource;
-  $('#b5B2UseAll').title = inventorySource
-    ? 'Nguồn inventory luôn dùng lượng B1 đã kiểm soát; B2 ALL sẽ không được dùng.'
-    : '';
-}
-
-async function saveB5Rules() {
-  if (!$('#b5KeepSurplusPv2').checked) throw new Error('Giữ phần dư ở PV2 là bắt buộc để bảo toàn luồng B5.');
-  return api(window.mcbot.updateB5RulesConfig({
-    inventorySafetyEmptySlots: Number($('#b5InventorySafety').value),
-    b3AllMinEmptySlots: Number($('#b5B3MinSlots').value),
-    b2InputSource: $('#b5B2InputSource').value === 'inventory' ? 'inventory' : 'storage',
-    quantityOptimization: {
-      enabled: $('#b5QuantityEnabled').checked,
-      useAllForB2: $('#b5B2UseAll').checked,
-      useAllForB3: $('#b5B3UseAll').checked,
-      useAllForB4WhenExact: $('#b5B4UseAllExact').checked,
-      useAllForB5: $('#b5B5UseAll').checked,
-      keepSurplusInPv2: true,
-      b2BatchSize: Number($('#b5BatchSize').value)
-    },
-    personalVaultBackpressure: {
-      minEmptySlots: Number($('#b5PvMinEmpty').value),
-      hardMinEmptySlots: Number($('#b5PvHardMin').value)
+      maxFreshReads: Number($('#craftReconcileReads').value),
+      retryMs: Number($('#craftReconcileRetry').value),
+      unresolvedPollMs: Number($('#craftReconcileUnresolved').value),
+      allowRetryAfterVerifiedNoEffect: $('#craftRetryAfterNoEffect').checked
     }
   }));
 }
@@ -1036,7 +965,7 @@ async function loadStorageProtection() {
 
 async function saveStorageProtection() {
   const maxUsagePercent = Number($('#collectorDecompressMax').value);
-  if (!Number.isFinite(maxUsagePercent) || maxUsagePercent <= 0 || maxUsagePercent > 100) throw new Error('Trần bung B1 của Nhặt+B5 phải nằm trong khoảng 1–100%.');
+  if (!Number.isFinite(maxUsagePercent) || maxUsagePercent <= 0 || maxUsagePercent > 100) throw new Error('Trần bung vật liệu nền phải nằm trong khoảng 1–100%.');
   return api(window.mcbot.updateStorageProtectionConfig({
     sell: {
       blockOnly: $('#storageBlockOnly').checked
@@ -1174,17 +1103,17 @@ const { bindEvents } = window.MCbotRendererEventBindings.create({
   document, state, $, api, toast, esc, pageTitles,
   handleBotAction, handleFleetAction, switchPage, switchDevPage,
   openCommandPalette, renderCommandPalette, renderFirstRun, renderHealth,
-  renderIncidents, loadIncidents, renderB5Journey, loadB5Journey,
+  renderIncidents, loadIncidents,
   renderModes, renderBotDetail, renderDevOverview, renderInspector,
   renderEventStream, scheduleEventRender, copyEventRecord, renderIncidentDebug,
-  renderIncidentDebugDetail, renderRuntimeState, renderB5Debug, loadConfigDebug,
+  renderIncidentDebugDetail, renderRuntimeState, renderCraftDebug, loadConfigDebug,
   renderProfiles, loadProfiles, loadCommands, syncSelectors, loadStaticData,
   loadSkyCommands, renderSkyCommands, clearSkyCommandEditor, saveSkyCommandFromEditor,
   renderLogs, scheduleLogRender, updateLogUnread, refreshDiagnostics,
-  loadCollectorConfig, loadFishingConfig, fillFishingArea, renderUpdateStatus,
+  loadFishingConfig, fillFishingArea, renderUpdateStatus,
   loadConfigurationCatalog, loadAdvancedConfig, previewAdvancedConfig, saveAdvancedConfig,
-  undoAdvancedConfig, renderBackupCatalog, loadBackupCatalog, loadB5PureConfig,
-  saveB5PureConfig, loadB5Rules, syncB2InputSourceUi, saveB5Rules,
+  undoAdvancedConfig, renderBackupCatalog, loadBackupCatalog, loadCraftConfig,
+  saveCraftConfig,
   loadStorageProtection, saveStorageProtection, defaultModuleStep, newCustomDraft,
   modulePayload, renderWorkflowList, draftFromBuilder, readCustomSteps, fillCustomBuilder,
   renderModulePalette, customModeEntryId, loadCustomModeCatalog, changeWorkflowStep,

@@ -32,7 +32,7 @@ test('page catalog exposes USER and DEV groups and every page is grouped', () =>
     for (const page of ['dashboard', 'bots', 'bot-detail', 'modes', 'incidents', 'settings']) {
         assert.equal(Catalog[page].group, 'USER', `${page} must stay in USER experience`);
     }
-    for (const page of ['dev-overview', 'inspector', 'events', 'logs', 'incident-debug', 'runtime-state', 'b5-debug', 'diagnostics', 'config-debug', 'builder', 'tools']) {
+    for (const page of ['dev-overview', 'inspector', 'events', 'logs', 'incident-debug', 'runtime-state', 'craft-debug', 'diagnostics', 'config-debug', 'builder', 'tools']) {
         assert.equal(Catalog[page].group, 'DEV', `${page} must stay in DEV experience`);
     }
 });
@@ -41,7 +41,7 @@ test('dev router exposes exactly 9 nav pages and blocks non-nav pages', () => {
     assert.equal(DevRouter.DEV_NAV.length, 9);
     assert.deepEqual(DevRouter.DEV_NAV, [
         'dev-overview', 'inspector', 'events', 'logs',
-        'incident-debug', 'runtime-state', 'b5-debug', 'diagnostics', 'config-debug'
+        'incident-debug', 'runtime-state', 'craft-debug', 'diagnostics', 'config-debug'
     ]);
     // builder/tools are DEV group but not in Dev nav.
     assert.equal(DevRouter.isDevNavPage('builder'), false);
@@ -79,7 +79,7 @@ test('dev-only endpoints require a running backend', () => {
         const controller = new DesktopController({ baseDir });
         // Stopped backend: either the running guard or the bot lookup fails closed.
         assert.throws(() => controller.botDevDetail('bot-01'), /not running|does not exist/);
-        assert.throws(() => controller.b5Trace('bot-01'), /not running/);
+        assert.throws(() => controller.craftTrace('bot-01'), /not running/);
     } finally {
         fs.rmSync(baseDir, { recursive: true, force: true });
     }
@@ -187,10 +187,25 @@ test('dev logLine shows all metadata keys without the 6-key cap', () => {
 test('dev pages expose all 9 presenters plus stateView helper', () => {
     const expected = ['stateView', 'fleetRows', 'botDetail', 'logLine', 'incidentTimeline',
         'inspectorView', 'eventStream', 'logStream', 'runtimeStateView',
-        'b5DebugView', 'diagnosticsView', 'configDebugView'];
+        'craftDebugView', 'diagnosticsView', 'configDebugView'];
     for (const name of expected) {
         assert.equal(typeof DevPages[name], 'function', `${name} must be a function`);
     }
+});
+
+test('craft debug view renders generic target/progress without B5 counters', () => {
+    const rendered = DevPages.craftDebugView([{
+        botId: 'bot-01',
+        crafting: { details: { state: 'RUNNING', targetItemId: 'titanium', completedUnits: 3, remaining: 7, lastBlocker: 'WAITING_MATERIALS' } }
+    }], null);
+    assert.ok(rendered.includes('bot-01'));
+    assert.ok(rendered.includes('target=titanium'));
+    assert.ok(rendered.includes('completedUnits=3'));
+    assert.ok(rendered.includes('remaining=7'));
+    assert.ok(rendered.includes('WAITING_MATERIALS'));
+    assert.equal(rendered.includes('completedB5'), false);
+    assert.equal(rendered.includes(' B5'), false);
+    assert.ok(DevPages.craftDebugView([], null).includes('Chưa có trạng thái chế tạo.'));
 });
 
 test('stateView helper renders loading, empty, error and content states', () => {
@@ -425,7 +440,7 @@ test('EventInspectorBridge keeps unknown events observable', () => {
     bridge.unwatch();
 });
 
-test('DesktopController dev detail has recentOperations and b5 history', () => {
+test('DesktopController dev detail has recentOperations and craft trace history', () => {
     const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcbot-dev-detail-'));
     try {
         const controller = new DesktopController({ baseDir });
@@ -439,7 +454,7 @@ test('DesktopController dev detail has recentOperations and b5 history', () => {
         controller.lifecycle = 'RUNNING';
         const detail = controller.botDevDetail('bot-01');
         assert.deepEqual(detail.recentOperations, bot.operation);
-        const trace = controller.b5Trace('bot-01');
+        const trace = controller.craftTrace('bot-01');
         assert.equal(trace.trace.traceId, 't1');
         assert.equal(trace.history.length, 1);
         assert.ok(trace.crafting, 'modes.crafting must be exposed');

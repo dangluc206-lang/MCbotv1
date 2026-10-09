@@ -41,7 +41,7 @@ function createRunningController() {
         getService(name) {
             if (name === 'craftingMode') return {
                 requestStorageProtectionRetry(request) {
-                    calls.push(['b5-retry', request]);
+                    calls.push(['craft-retry', request]);
                     return ok('SUCCESS', { accepted: true });
                 }
             };
@@ -65,7 +65,7 @@ function createRunningController() {
             requestConnection: async (botId, desired, options) => { calls.push(['connection', botId, desired, options]); return ok('SUCCESS'); },
             requestMode: async (botId, mode, options) => { calls.push(['mode', botId, mode, options]); return ok('SUCCESS'); },
             requestModeState: async (botId, state, options) => { calls.push(['mode-state', botId, state, options]); return ok('SUCCESS'); },
-            intent: botId => botId === 'bot-01' ? { desiredMode: 'collector-b5' } : null,
+            intent: botId => botId === 'bot-01' ? { desiredMode: 'crafting' } : null,
             restartMode: async (botId, mode, options) => { calls.push(['mode-restart', botId, mode, options]); return ok('SUCCESS'); }
         },
         configuration: { registry: { require: name => name === 'commands' ? { home: '/is', login: '/login' } : {} } },
@@ -114,19 +114,19 @@ test('DesktopController restarts the durable primary mode instead of guessing fr
     const { controller, calls } = createRunningController();
     const result = await controller.restartMode('bot-01');
     assert.equal(result.success, true);
-    assert.deepEqual(calls[0].slice(0, 3), ['mode-restart', 'bot-01', 'collector-b5']);
+    assert.deepEqual(calls[0].slice(0, 3), ['mode-restart', 'bot-01', 'crafting']);
 });
 
-test('DesktopController routes guarded B5 recovery through the mode use case without raw side effects', async () => {
+test('DesktopController routes guarded storage-protection recovery through the mode use case without raw side effects', async () => {
     const { controller, calls } = createRunningController();
-    const result = await controller.retryB5StorageProtection('bot-01', {
+    const result = await controller.retryStorageProtection('bot-01', {
         expectedGeneration: 7,
         episodeId: 'episode-1',
         incidentId: 'incident-1',
         idempotencyKey: 'desktop-request-1'
     });
     assert.equal(result.success, true);
-    assert.deepEqual(calls[0], ['b5-retry', {
+    assert.deepEqual(calls[0], ['craft-retry', {
         expectedBotId: 'bot-01', expectedGeneration: 7, episodeId: 'episode-1',
         incidentId: 'incident-1', idempotencyKey: 'desktop-request-1', reason: 'desktop-operator'
     }]);
@@ -163,15 +163,20 @@ test('DesktopController passes a dynamic generic craft request straight to craft
     const setResult = await controller.setCraftingRequest('bot-01', { targetItemId: 'titanium', quantity: 10 });
     assert.equal(setResult.success, true);
     assert.deepEqual(calls.set, [{ targetItemId: 'titanium', quantity: 10 }]);
-    const clearResult = await controller.clearB5CraftRequest('bot-01');
+    const clearResult = await controller.clearCraftingRequest('bot-01');
     assert.equal(clearResult.success, true);
     assert.deepEqual(calls.clear, ['desktop-operator']);
+    assert.equal(typeof controller.b5CraftItems, 'undefined');
+    assert.equal(typeof controller.setB5CraftRequest, 'undefined');
+    assert.equal(typeof controller.clearB5CraftRequest, 'undefined');
+    assert.equal(typeof controller.b5RulesConfig, 'undefined');
+    assert.equal(typeof controller.updateB5RulesConfig, 'undefined');
 });
 
 test('DesktopController refuses craft requests while the backend is not running', async () => {
     const controller = new DesktopController({ baseDir: process.cwd() });
     controller.lifecycle = 'STOPPED';
-    await assert.rejects(() => controller.setB5CraftRequest('bot-01', { targetItemId: 'titanium', quantity: 1 }));
+    await assert.rejects(() => controller.setCraftingRequest('bot-01', { targetItemId: 'titanium', quantity: 1 }));
 });
 
 test('DesktopController snapshot separates client online presence from connection phase', () => {

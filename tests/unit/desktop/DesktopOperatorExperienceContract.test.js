@@ -30,7 +30,9 @@ test('User UI stays Win10-simple: no runtime logic, snapshot-only, clear lifecyc
     assert.match(html, /Cấu hình chế độ \(nâng cao\)/);
     assert.match(html, /Chế độ tương thích \(nâng cao\)/);
     assert.match(html, /id="modeCards"/);
-    assert.match(html, /id="b5Journey"/);
+    // The modes page renders per-bot cards with embedded craft request panels;
+    // the standalone journey grid was removed in G19 (status lives in the card).
+    assert.doesNotMatch(html, /id="b5Journey"/);
     // Settings page keeps the lifecycle entry points at the top: start/restart/stop.
     assert.match(html, /id="startBackend"/);
     assert.match(html, /id="restartBackend"/);
@@ -56,9 +58,9 @@ test('XP-101 critical journeys use in-app dialogs, keyboard focus and accessible
 });
 
 test('XP-102 through XP-108 have renderer-to-preload product reachability', () => {
-    for (const symbol of ['readiness','health','incidents','b5Journey','openConfigWorkspace','configBackups','searchPresentation']) assert.match(fs.readFileSync(path.join(root, 'src/desktop/preload.js'), 'utf8'), new RegExp(`${symbol}:`));
+    for (const symbol of ['readiness','health','incidents','craftJourney','openConfigWorkspace','configBackups','searchPresentation']) assert.match(fs.readFileSync(path.join(root, 'src/desktop/preload.js'), 'utf8'), new RegExp(`${symbol}:`));
     assert.match(html, /id="page-incidents"/);
-    assert.match(html, /id="b5Journey"/);
+    assert.match(html, /id="dev-page-craft-debug"/);
     assert.match(html, /id="backupCatalog"/);
     assert.match(html, /id="commandPaletteDialog"/);
 });

@@ -16,14 +16,6 @@ class ModeConfigurationUseCases {
         Object.assign(this, { baseDir, bundleProvider, requireRunning, FishingEditorClass });
     }
 
-    async collector() {
-        throw Object.assign(new Error('collector-b5 mode was removed in G18.'), { code: 'COLLECTOR_B5_REMOVED' });
-    }
-
-    async updateCollector() {
-        throw Object.assign(new Error('collector-b5 mode was removed in G18.'), { code: 'COLLECTOR_B5_REMOVED' });
-    }
-
     async fishing(botId) {
         this.requireRunning();
         return Redactor.sanitize(await this.#fishingEditor().read(botId));

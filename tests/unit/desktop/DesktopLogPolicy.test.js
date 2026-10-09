@@ -12,7 +12,7 @@ test('DesktopLogPolicy hides low-level repetitive GUI/storage traces but keeps w
     assert.equal(policy.project(record('KHO READ START', 'info')), null);
     assert.equal(policy.project(record('GUI CLICK OK', 'info')), null);
     assert.equal(policy.project(record('STEP OK', 'info')), null);
-    assert.ok(policy.project(record('B5 thuần: đã chế và cất B5.', 'info', { botId: 'bot-01' })));
+    assert.ok(policy.project(record('CRAFT REQUEST SET.', 'info', { botId: 'bot-01', targetId: 'titanium', quantityMode: 'FIXED', quantity: 10 })));
     assert.ok(policy.project(record('Server changed unexpectedly.', 'warn', { botId: 'bot-01' })));
     assert.ok(policy.project(record('A failure happened.', 'error', { botId: 'bot-01' })));
 });
@@ -29,13 +29,13 @@ test('DesktopLogPolicy suppresses repeated visible records inside the repeat win
     assert.equal(next.repeatCount, 1);
 });
 
-test('DesktopLogPolicy renders B5 waiting summaries compactly and does not merge different blockers', () => {
+test('DesktopLogPolicy renders craft request summaries and does not merge different blockers', () => {
     let now = 1000;
     const policy = new DesktopLogPolicy({ repeatWindowMs: 15000, clock: () => now });
-    const diamond = policy.project(record('B5 PURE: cycle is waiting for a concrete prerequisite.', 'info', { botId: 'bot-01', waitingReason: 'materials', blocker: { reason: 'waiting-for-complete-b2-batch', baseId: 'diamond' } }));
-    assert.match(diamond.message, /diamond/);
-    assert.match(diamond.message, /waiting-for-complete-b2-batch/);
+    const diamond = policy.project(record('CRAFT REQUEST SET.', 'info', { botId: 'bot-01', targetId: 'diamond_block', quantityMode: 'FIXED', quantity: 5 }));
+    assert.match(diamond.message, /diamond_block/);
+    assert.match(diamond.message, /5/);
     now += 100;
-    const iron = policy.project(record('B5 PURE: cycle is waiting for a concrete prerequisite.', 'info', { botId: 'bot-01', waitingReason: 'materials', blocker: { reason: 'waiting-for-complete-b2-batch', baseId: 'iron_ingot' } }));
-    assert.ok(iron, 'different B5 blocker/resource must remain visible');
+    const iron = policy.project(record('CRAFT REQUEST SET.', 'info', { botId: 'bot-01', targetId: 'iron_block', quantityMode: 'FIXED', quantity: 5 }));
+    assert.ok(iron, 'different craft targets must remain visible');
 });

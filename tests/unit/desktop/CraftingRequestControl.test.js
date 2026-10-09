@@ -79,7 +79,7 @@ test('generic set forwards targetItemId untouched to craftingMode', async () => 
     assert.equal(calls.set[0].targetItemId, 'carbon');
 });
 
-test('generic control path never touches b5CraftMode', async () => {
+test('generic control path never touches legacy craft mode names', async () => {
     const { useCases, seenServices } = harness();
     useCases.items('bot-01');
     await useCases.set('bot-01', { targetItemId: 'titanium', quantity: 1 });
@@ -93,10 +93,19 @@ test('generic IPC channels are declared with the same permission contract', () =
     assert.equal(DesktopApiContract.CATALOG['mcbot:crafting:items:list']?.permission, 'READ');
     assert.equal(DesktopApiContract.CATALOG['mcbot:crafting:request:set']?.permission, 'PATCH');
     assert.equal(DesktopApiContract.CATALOG['mcbot:crafting:request:clear']?.permission, 'PATCH');
-    // Compat channels stay with identical permissions while the renderer migrates.
-    assert.equal(DesktopApiContract.CATALOG['mcbot:b5:craft-items:list']?.permission, 'READ');
-    assert.equal(DesktopApiContract.CATALOG['mcbot:b5:craft-request:set']?.permission, 'PATCH');
-    assert.equal(DesktopApiContract.CATALOG['mcbot:b5:craft-request:clear']?.permission, 'PATCH');
+    assert.equal(DesktopApiContract.CATALOG['mcbot:crafting:journey']?.permission, 'READ');
+    assert.equal(DesktopApiContract.CATALOG['mcbot:crafting:trace']?.permission, 'PATCH');
+    assert.equal(DesktopApiContract.CATALOG['mcbot:mode:retry-storage-protection']?.permission, 'PATCH');
+    assert.equal(DesktopApiContract.CATALOG['mcbot:config:crafting:get']?.permission, 'READ');
+    assert.equal(DesktopApiContract.CATALOG['mcbot:config:crafting:update']?.permission, 'PATCH');
+    // Removed B5/compat channels stay absent from the contract.
+    for (const channel of ['mcbot:b5:journey', 'mcbot:b5:trace', 'mcbot:mode:b5-retry-storage-protection',
+        'mcbot:b5:craft-items:list', 'mcbot:b5:craft-request:set', 'mcbot:b5:craft-request:clear',
+        'mcbot:config:collector:get', 'mcbot:config:collector:update',
+        'mcbot:config:b5-craft:get', 'mcbot:config:b5-craft:update',
+        'mcbot:config:b5-rules:get', 'mcbot:config:b5-rules:update']) {
+        assert.equal(DesktopApiContract.CATALOG[channel], undefined, `${channel} must be removed`);
+    }
 });
 
 test('generic use-case constructs with bundle provider and running guard', () => {

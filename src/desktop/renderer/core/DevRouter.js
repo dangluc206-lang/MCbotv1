@@ -8,7 +8,7 @@
   // tools) remain in the DEV group but are not part of the Dev nav.
   const DEV_NAV = Object.freeze([
     'dev-overview', 'inspector', 'events', 'logs',
-    'incident-debug', 'runtime-state', 'b5-debug', 'diagnostics', 'config-debug'
+    'incident-debug', 'runtime-state', 'craft-debug', 'diagnostics', 'config-debug'
   ]);
 
   function isDevNavPage(page) {

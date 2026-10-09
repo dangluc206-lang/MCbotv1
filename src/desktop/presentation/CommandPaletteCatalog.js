@@ -5,7 +5,7 @@ const { message } = require('./MessageCatalog');
 const ENTRIES = Object.freeze([
     { id: 'route-dashboard', label: 'Tổng quan vận hành', route: 'dashboard', group: 'OPERATE', requirement: 'NONE' },
     { id: 'route-bots', label: 'Thêm hoặc quản lý bot', route: 'bots', group: 'OPERATE', requirement: 'BACKEND_RUNNING_FOR_EDIT' },
-    { id: 'route-modes', label: 'Chạy chế độ B5', route: 'modes', group: 'OPERATE', requirement: 'BOT_ENABLED' },
+    { id: 'route-modes', label: 'Chạy chế độ chế tạo', route: 'modes', group: 'OPERATE', requirement: 'BOT_ENABLED' },
     { id: 'route-incidents', label: `Xử lý ${message('term.incident').toLocaleLowerCase('vi')}`, route: 'incidents', group: 'MAINTAIN', requirement: 'NONE' },
     { id: 'route-builder', label: 'Tạo chế độ', route: 'builder', group: 'BUILD', requirement: 'BACKEND_RUNNING' },
     { id: 'route-settings', label: 'Cấu hình an toàn', route: 'settings', group: 'MAINTAIN', requirement: 'NONE' },

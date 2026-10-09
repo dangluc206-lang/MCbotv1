@@ -15,7 +15,7 @@ const FakeDesktopRuntime = require('./FakeDesktopRuntime');
 // - the create-mode page (builder) has no nav item: the command palette
 //   (CommandPaletteCatalog route-builder) is its navigation contract.
 const USER_PAGES = Object.freeze(['dashboard', 'bots', 'bot-detail', 'modes', 'incidents', 'settings']);
-const DEV_PAGES = Object.freeze(['dev-overview', 'inspector', 'events', 'logs', 'incident-debug', 'runtime-state', 'b5-debug', 'diagnostics', 'config-debug']);
+const DEV_PAGES = Object.freeze(['dev-overview', 'inspector', 'events', 'logs', 'incident-debug', 'runtime-state', 'craft-debug', 'diagnostics', 'config-debug']);
 const PALETTE_PAGES = Object.freeze(['builder']);
 // The tour closes on the dashboard: renderDashboard() owns #setupBanner, so the
 // lifecycle FAILED snapshot below must arrive while that page is active.
@@ -31,17 +31,17 @@ const fixtureRoot = path.resolve(process.env.MCBOT_E2E_FIXTURE_ROOT || '');
 const artifactRoot = path.resolve(process.env.MCBOT_E2E_ARTIFACT_ROOT || '');
 const resultPrefix = 'MCBOT_E2E_RESULT:';
 const CHANNELS = Object.freeze([
-    'mcbot:backend:start', 'mcbot:backend:stop', 'mcbot:backend:restart', 'mcbot:snapshot', 'mcbot:health', 'mcbot:readiness', 'mcbot:b5:journey', 'mcbot:incidents:list',
+    'mcbot:backend:start', 'mcbot:backend:stop', 'mcbot:backend:restart', 'mcbot:snapshot', 'mcbot:health', 'mcbot:readiness', 'mcbot:crafting:journey', 'mcbot:incidents:list',
     'mcbot:profiles:list', 'mcbot:commands', 'mcbot:sky-commands:get', 'mcbot:config:groups',
     'mcbot:config:group:get', 'mcbot:config:workspace:open', 'mcbot:config:workspace:preview', 'mcbot:config:backups', 'mcbot:custom-mode:modules', 'mcbot:custom-mode:templates', 'mcbot:custom-mode:list',
-    'mcbot:config:b5-craft:get', 'mcbot:config:b5-rules:get', 'mcbot:config:storage-protection:get',
-    'mcbot:config:sky-auto-join:get', 'mcbot:config:collector:get', 'mcbot:config:fishing:get',
+    'mcbot:config:crafting:get', 'mcbot:config:storage-protection:get',
+    'mcbot:config:sky-auto-join:get', 'mcbot:config:fishing:get',
     'mcbot:logs', 'mcbot:diagnostics:list', 'mcbot:app:info', 'mcbot:update:local-status',
     'mcbot:update:migration-status', 'mcbot:preferences:get', 'mcbot:secrets:status',
     'mcbot:renderer:error', 'mcbot:support:preview',
     // Dev/read channels the renderer calls during the critical flow (declared in
     // DesktopApiContract GROUPS.dev and registered by src/desktop/main.js).
-    'mcbot:events:snapshot', 'mcbot:bot:dev-detail', 'mcbot:b5:trace', 'mcbot:presentation:search'
+    'mcbot:events:snapshot', 'mcbot:bot:dev-detail', 'mcbot:crafting:trace', 'mcbot:presentation:search'
 ]);
 
 function waitFor(webContents, expression, timeoutMs = 5000) {
@@ -74,7 +74,7 @@ async function openNavPage(webContents, pageId) {
     await waitFor(webContents, titleExpression(DEV_PAGES.includes(pageId) ? 'dev' : 'user', PageCatalog[pageId].title));
     if (pageId === 'modes') {
         await waitFor(webContents, `Boolean(document.querySelector('#modeCards'))`);
-        await waitFor(webContents, `Boolean(document.querySelector('#b5Journey'))`);
+        await waitFor(webContents, `Boolean(document.querySelector('#modeCards'))`);
         await waitFor(webContents, `document.querySelector('.user-advanced-config')?.open!==true`);
     }
     if (pageId === 'settings') {

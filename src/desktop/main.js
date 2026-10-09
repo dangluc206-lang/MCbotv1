@@ -243,7 +243,7 @@ function registerIpc() {
     safeHandle('mcbot:bot:detail', (botId, expectedRevision) => controller.botOperatorDetail(botId, expectedRevision));
     safeHandle('mcbot:health', options => controller.operatorHealth(options || {}));
     safeHandle('mcbot:readiness', () => readinessService.sample());
-    safeHandle('mcbot:b5:journey', botId => controller.b5OperatorJourney(botId));
+    safeHandle('mcbot:crafting:journey', botId => controller.craftOperatorJourney(botId));
     safeHandle('mcbot:incidents:list', options => controller.incidents(options || {}));
     safeHandle('mcbot:incidents:read', incidentId => controller.incident(incidentId));
     safeHandle('mcbot:incidents:transition', (incidentId, state, options) => controller.transitionIncident(incidentId, state, options || {}));
@@ -268,14 +268,10 @@ function registerIpc() {
     safeHandle('mcbot:mode:resume', botId => controller.resumeMode(botId));
     safeHandle('mcbot:mode:stop', botId => controller.stopMode(botId));
     safeHandle('mcbot:mode:restart', botId => controller.restartMode(botId));
-    safeHandle('mcbot:mode:b5-retry-storage-protection', (botId, request) => controller.retryB5StorageProtection(botId, request));
+    safeHandle('mcbot:mode:retry-storage-protection', (botId, request) => controller.retryStorageProtection(botId, request));
     safeHandle('mcbot:crafting:items:list', botId => controller.craftingItems(botId));
     safeHandle('mcbot:crafting:request:set', (botId, request) => controller.setCraftingRequest(botId, request));
     safeHandle('mcbot:crafting:request:clear', botId => controller.clearCraftingRequest(botId));
-    // Compat: older renderer/preload clients still use the B5-specific namespace.
-    safeHandle('mcbot:b5:craft-items:list', botId => controller.b5CraftItems(botId));
-    safeHandle('mcbot:b5:craft-request:set', (botId, request) => controller.setB5CraftRequest(botId, request));
-    safeHandle('mcbot:b5:craft-request:clear', botId => controller.clearB5CraftRequest(botId));
     safeHandle('mcbot:bot:home', botId => controller.goHome(botId));
     safeHandle('mcbot:fleet:action', action => controller.fleetAction(action));
     safeHandle('mcbot:commands', () => controller.commandOptions());
@@ -284,14 +280,10 @@ function registerIpc() {
     safeHandle('mcbot:sky-commands:save', definition => controller.upsertSkyCommand(definition));
     safeHandle('mcbot:sky-commands:delete', (skyId, commandId) => controller.deleteSkyCommand(skyId, commandId));
     safeHandle('mcbot:sky-commands:send', (botId, options) => controller.sendSkyCommand(botId, options));
-    safeHandle('mcbot:config:collector:get', botId => controller.collectorConfig(botId));
-    safeHandle('mcbot:config:collector:update', (botId, fields) => controller.updateCollectorConfig(botId, fields));
     safeHandle('mcbot:config:fishing:get', botId => controller.fishingConfig(botId));
     safeHandle('mcbot:config:fishing:update-area', (botId, fields) => controller.updateFishingArea(botId, fields));
-    safeHandle('mcbot:config:b5-craft:get', () => controller.b5CraftConfig());
-    safeHandle('mcbot:config:b5-rules:get', () => controller.b5RulesConfig());
-    safeHandle('mcbot:config:b5-rules:update', fields => controller.updateB5RulesConfig(fields));
-    safeHandle('mcbot:config:b5-craft:update', fields => controller.updateB5CraftConfig(fields));
+    safeHandle('mcbot:config:crafting:get', () => controller.craftConfig());
+    safeHandle('mcbot:config:crafting:update', fields => controller.updateCraftConfig(fields));
     safeHandle('mcbot:config:storage-protection:get', () => controller.storageProtectionConfig());
     safeHandle('mcbot:config:storage-protection:update', fields => controller.updateStorageProtectionConfig(fields));
     safeHandle('mcbot:config:sky-auto-join:get', () => controller.skyAutoJoinConfig());
@@ -323,7 +315,7 @@ function registerIpc() {
         typeof options === 'number' ? { limit: options } : (options || {})
     ));
     safeHandle('mcbot:bot:dev-detail', botId => controller.botDevDetail(botId));
-    safeHandle('mcbot:b5:trace', botId => controller.b5Trace(botId));
+    safeHandle('mcbot:crafting:trace', botId => controller.craftTrace(botId));
     safeHandle('mcbot:diagnostics:list', limit => controller.diagnostics({ limit }));
     safeHandle('mcbot:diagnostics:read', artifactId => controller.readDiagnostic(artifactId));
     safeHandle('mcbot:support:export', request => controller.exportSupportBundle(request));

@@ -18,7 +18,7 @@
   const craftingDetails = bot.modes?.crafting?.details || {};
   const craftingEpisode = craftingDetails.protectionEpisode || null;
   const craftingCanRetry = mode.id === 'crafting' && craftingDetails.recovery?.allowedActions?.includes('retry-storage-protection') && craftingEpisode;
-  return craftingCanRetry ? `<div class="actions"><button class="button warn" data-action="b5-retry-storage" data-bot="${esc(id)}">Thử lại bảo vệ kho</button></div>` : '';
+  return craftingCanRetry ? `<div class="actions"><button class="button warn" data-action="craft-retry-storage" data-bot="${esc(id)}">Thử lại bảo vệ kho</button></div>` : '';
     }
 
     function mainActionsHtml({ id, profile, connectionView }) {

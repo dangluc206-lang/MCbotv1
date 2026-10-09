@@ -59,7 +59,7 @@ class OperatorSnapshotProjector {
                     ageMs: Number(current.ageMs || 0)
                 } : null,
                 lastErrorCode: bot.state?.lastError?.code || null,
-                b5: bot.modes?.crafting ? {
+                crafting: bot.modes?.crafting ? {
                     batchId: bot.modes.crafting.details?.batchId || null,
                     protectionState: bot.modes.crafting.details?.protectionEpisode?.state || null,
                     safeState: bot.modes.crafting.details?.recovery?.safeState || null

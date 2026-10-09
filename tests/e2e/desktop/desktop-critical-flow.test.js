@@ -105,7 +105,7 @@ test('Desktop critical flow is deterministic without network or secrets', { time
     // must be reachable; the tour closes on the dashboard.
     assert.deepEqual(result.visitedPages, [
         'bots', 'bot-detail', 'modes', 'incidents', 'settings',
-        'dev-overview', 'inspector', 'events', 'logs', 'incident-debug', 'runtime-state', 'b5-debug', 'diagnostics', 'config-debug',
+        'dev-overview', 'inspector', 'events', 'logs', 'incident-debug', 'runtime-state', 'craft-debug', 'diagnostics', 'config-debug',
         'builder', 'dashboard'
     ]);
     assert.equal(result.fixtureVersion, packageJson.version);

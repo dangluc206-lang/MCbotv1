@@ -54,20 +54,15 @@ test('craftingMode file/schema stay generic: no postB5CooldownMs, no B5-only pol
     }
 });
 
-test('b5 compatibility config is preserved and still validates', () => {
-    const spec = specFor('b5');
-    assert.ok(spec, 'b5 spec must remain while compat consumers exist');
-    const b5 = loadJson(spec.file);
-    assert.equal(typeof b5.targetId, 'string');
-    const valid = groupSchemas.b5(b5);
-    assert.equal(valid.valid, true, `b5 must validate: ${valid.errors.join('; ')}`);
+test('b5 compatibility config group is removed; generic craftingMode stands alone', () => {
+    assert.equal(specFor('b5'), undefined, 'b5 spec must be removed with its compat consumers');
+    assert.equal(groupSchemas.b5, undefined, 'b5 schema must be removed');
 });
 
-test('reload path keeps generic reconfigure separate from B5 rules boundary', async () => {
+test('reload path keeps generic reconfigure without a B5 rules boundary', async () => {
     const calls = [];
     const fakeMode = {
         reconfigure(value) { calls.push(['reconfigure', value]); },
-        queueRulesConfig(value) { calls.push(['queueRulesConfig', value]); return { status: 'QUEUED' }; },
         status: () => ({ enabled: true })
     };
     const runtime = { getService: name => (name === 'craftingMode' ? fakeMode : null) };
@@ -78,10 +73,8 @@ test('reload path keeps generic reconfigure separate from B5 rules boundary', as
     assert.equal(calls[0][0], 'reconfigure');
 
     calls.length = 0;
-    const b5 = loadJson(specFor('b5').file);
-    assert.equal(await LiveConfigApplier.apply({ key: 'b5', value: b5, runtimes: [runtime] }), true);
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0][0], 'queueRulesConfig');
+    assert.equal(await LiveConfigApplier.apply({ key: 'b5', value: {}, runtimes: [runtime] }), false);
+    assert.equal(calls.length, 0, 'unknown b5 key must not reach the mode');
 });
 
 test('bootstrap wires generic craftingMode without serverTimings/postB5 merge', () => {

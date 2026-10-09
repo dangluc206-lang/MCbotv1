@@ -9,11 +9,9 @@ const IMPORTANT_INFO = Object.freeze([
     /^Pending reconnect cancelled\.$/,
     /^Automatic reconnect (suspended|resumed)\.$/,
     /^Skyblock auto join (attempting \/sky|succeeded)\.$/,
-    /^B5 PURE:/,
-    /^B5: Đang (chế B2|chế B3|chế B4|chế B5|cất B5|xác nhận B5)\.$/,
-    /^B5 thuần:/,
-    /^KHO HIGH-WATER PROTECTION ACTIVE\.$/,
-    /^B5 FAST DISPOSABLE SELL ALL EPISODE COMPLETE\.$/
+    /^CRAFT REQUEST (SET|CLEARED)\.$/,
+    /^CRAFT (START|PROGRESS|INPUT READY|QUANTITY DECISION|FINAL START|DEPOSIT SUCCESS|CRAFT SUCCESS|OK)$/,
+    /^KHO HIGH-WATER PROTECTION ACTIVE\.$/
 ]);
 
 const ALWAYS_HIDE = Object.freeze([
@@ -22,8 +20,6 @@ const ALWAYS_HIDE = Object.freeze([
     /^PV (OPEN|READ|TRANSFER|WITHDRAW|DEPOSIT)/,
     /^KHO (READ|OPEN|COMMAND|GUI VERIFIED|FORCE REOPEN)/,
     /^CRAFT (START|SNAPSHOT|OPEN|ENTRY|ENTER|MENU|LEARN|RECIPE|BIND|QUANTITY|PRE-CLICK|CLICK|POST-CLICK|VERIFY|OK)/,
-    /^B5 (PLAN SUMMARY|PROGRESS|FINAL START|DEPOSIT SUCCESS|CRAFT SUCCESS|INPUT READY|QUANTITY DECISION)/,
-    /^B5: Đang (chuẩn bị B1|chuẩn bị B2\/B3|tính các bước còn lại|đổi khối|bán|cất nguyên liệu|giải phóng chỗ trống)\.$/
 ]);
 
 const SIGNATURE_KEYS = Object.freeze([
@@ -97,11 +93,9 @@ class DesktopLogPolicy {
             'Skyblock auto join succeeded.': 'Tự động vào Skyblock thành công.'
         };
         let message = translations[record.message] || record.message;
-        if (String(record.message || '').startsWith('B5 PURE: cycle is waiting')) {
-            const blocker = meta.blocker && typeof meta.blocker === 'object' ? meta.blocker : {};
-            const resource = blocker.baseId || blocker.resource || blocker.targetId || '';
-            const reason = blocker.reason || blocker.status || meta.waitingReason || 'điều kiện';
-            message = `B5 thuần đang chờ${resource ? ` ${resource}` : ''}: ${reason}`;
+        if (String(record.message || '').startsWith('CRAFT REQUEST SET.') && meta.targetId) {
+            const quantity = meta.quantityMode === 'ALL' ? 'ALL' : (meta.quantity ?? '');
+            message = `Đã nhận yêu cầu chế${quantity !== '' ? ` ${quantity} ×` : ''} ${meta.targetId}.`;
         }
         return message === record.message ? record : { ...record, message };
     }

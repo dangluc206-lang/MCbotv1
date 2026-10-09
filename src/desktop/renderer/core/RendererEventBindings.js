@@ -82,17 +82,12 @@
     });
   }
 
-  function bindB5Journey(deps) {
-    const { $, handleBotAction, loadB5Journey, loadProfiles, loadB5PureConfig, saveB5PureConfig, loadB5Rules, syncB2InputSourceUi, saveB5Rules, loadStorageProtection, saveStorageProtection, runAction, refreshSnapshot, toast } = deps;
-    $('#refreshB5Journey').onclick = () => loadB5Journey().catch(error => toast(error.message, 'error'));
-    $('#b5Journey').addEventListener('click', event => { const button = event.target.closest('[data-b5-journey-retry]'); if (!button) return; button.dataset.action = 'b5-retry-storage'; button.dataset.bot = button.dataset.b5JourneyRetry; handleBotAction(button).then(loadB5Journey).catch(() => {}); });
+  function bindCraftModes(deps) {
+    const { $, loadProfiles, loadCraftConfig, saveCraftConfig, loadStorageProtection, saveStorageProtection, runAction, refreshSnapshot, toast } = deps;
     $('#refreshBtn').onclick = () => refreshSnapshot();
     $('#reloadProfiles').onclick = () => loadProfiles().catch(error => toast(error.message, 'error'));
-    $('#loadB5PureConfig').onclick = () => loadB5PureConfig().catch(error => toast(error.message, 'error'));
-    $('#saveB5PureConfig').onclick = event => runAction({ key: 'b5-pure-config', button: event.currentTarget, success: 'Đã lưu cấu hình chế tạo.', refresh: false, fn: saveB5PureConfig }).catch(() => {});
-    $('#loadB5Rules').onclick = () => loadB5Rules().catch(error => toast(error.message, 'error'));
-    $('#b5B2InputSource').addEventListener('change', syncB2InputSourceUi);
-    $('#saveB5Rules').onclick = event => runAction({ key: 'b5-rules-config', button: event.currentTarget, success: 'Đã lưu quy tắc B5. Hãy khởi động lại hệ thống nền để áp dụng đầy đủ.', refresh: false, fn: saveB5Rules }).catch(() => {});
+    $('#loadCraftConfig').onclick = () => loadCraftConfig().catch(error => toast(error.message, 'error'));
+    $('#saveCraftConfig').onclick = event => runAction({ key: 'craft-config', button: event.currentTarget, success: 'Đã lưu cấu hình chế tạo.', refresh: false, fn: saveCraftConfig }).catch(() => {});
     $('#loadStorageProtect').onclick = () => loadStorageProtection().catch(error => toast(error.message, 'error'));
     $('#saveStorageProtect').onclick = event => runAction({ key: 'storage-protect-config', button: event.currentTarget, success: 'Đã lưu và áp dụng mức bảo vệ kho cho các bot đang chạy.', refresh: false, fn: saveStorageProtection }).catch(() => {});
   }
@@ -375,11 +370,8 @@
     }}).catch(() => {});
   }
 
-  function bindCollectorFishing(deps) {
-    const { $, api, runAction, loadCollectorConfig, loadFishingConfig, fillFishingArea } = deps;
-    $('#loadCollectorConfig').onclick = loadCollectorConfig;
-    $('#collectorConfigBot').onchange = loadCollectorConfig;
-    $('#saveCollectorConfig').onclick = event => runAction({ key: 'collector-config', button: event.currentTarget, success: 'Đã lưu cấu hình Collector+B5.', refresh: false, fn: () => api(window.mcbot.updateCollectorConfig($('#collectorConfigBot').value, { pickupLocation: { x: Number($('#collectorX').value), y: Number($('#collectorY').value), z: Number($('#collectorZ').value) }, craftLoopDelayMs: Number($('#collectorDelay').value), pollSeconds: Number($('#collectorPoll').value), reanchorRadius: Number($('#collectorRadius').value) })) }).catch(() => {});
+  function bindFishingConfig(deps) {
+    const { $, api, runAction, loadFishingConfig, fillFishingArea } = deps;
     $('#loadFishingConfig').onclick = loadFishingConfig;
     $('#fishingConfigBot').onchange = loadFishingConfig;
     $('#fishingArea').onchange = fillFishingArea;
@@ -387,7 +379,7 @@
   }
 
   function bindDevInspector(deps) {
-    const { $, state, toast, renderBotDetail, renderInspector, renderEventStream, copyEventRecord, reportRendererError, renderIncidentDebug, renderIncidentDebugDetail, renderRuntimeState, renderB5Debug, loadConfigDebug, loadIncidents, loadB5Journey, refreshSnapshot, clearEventView } = deps;
+    const { $, state, toast, renderBotDetail, renderInspector, renderEventStream, copyEventRecord, reportRendererError, renderIncidentDebug, renderIncidentDebugDetail, renderRuntimeState, renderCraftDebug, loadConfigDebug, loadIncidents, loadCraftJourney, refreshSnapshot, clearEventView } = deps;
     $('#botDetailSelect').onchange = renderBotDetail;
     $('#inspectorBotSelect').onchange = () => renderInspector().catch(() => {});
     $('#inspectorRefresh').onclick = () => renderInspector().catch(() => {});
@@ -412,8 +404,8 @@
     $('#refreshIncidentDebug').onclick = () => loadIncidents().then(() => { renderIncidentDebug(); return renderIncidentDebugDetail(); }).catch(error => toast(error.message, 'error'));
     $('#runtimeStateRefresh').onclick = () => refreshSnapshot({ quiet: true }).then(renderRuntimeState);
     $('#runtimeStateCopy').onclick = () => navigator.clipboard.writeText($('#runtimeStateOutput').textContent || '').then(() => toast('Đã sao chép snapshot JSON.')).catch(error => toast(error.message, 'error'));
-    $('#b5DebugBotSelect').onchange = () => renderB5Debug().catch(() => {});
-    $('#b5DebugRefresh').onclick = () => loadB5Journey().then(renderB5Debug).catch(error => toast(error.message, 'error'));
+    $('#craftDebugBotSelect').onchange = () => renderCraftDebug().catch(() => {});
+    $('#craftDebugRefresh').onclick = () => loadCraftJourney().then(renderCraftDebug).catch(error => toast(error.message, 'error'));
     $('#configDebugLoad').onclick = () => loadConfigDebug().catch(error => toast(error.message, 'error'));
   }
 
@@ -441,7 +433,7 @@
       bindCommandPalette(deps);
       bindFirstRun(deps);
       bindIncidents(deps);
-      bindB5Journey(deps);
+      bindCraftModes(deps);
       bindSkyCommands(deps);
       bindAdvancedConfig(deps);
       bindBuilder(deps);
@@ -452,7 +444,7 @@
       bindSecrets(deps);
       bindUpdates(deps);
       bindPreferences(deps);
-      bindCollectorFishing(deps);
+      bindFishingConfig(deps);
       bindDevInspector(deps);
       bindGlobalKeys(deps);
     } });

@@ -92,67 +92,44 @@
       <section class="page" id="page-modes">
         <div class="section-head"><div><h2>Chế độ</h2><p>Chọn bot → kết nối → chọn chế độ → chạy → xử lý lỗi → dừng</p></div></div>
         <div id="modeCards" class="bot-grid"></div>
-        <div class="section-head"><div><h2>Hành trình chế tạo</h2><p>Tóm tắt trạng thái, baseline và bước hiện tại.</p></div><button class="button ghost" id="refreshB5Journey">Làm mới</button></div>
-        <div id="b5Journey" class="b5-journey-grid"><div class="empty panel">Chưa có trạng thái chế tạo.</div></div>
         <details class="panel section-gap user-advanced-config" data-experience="advanced">
           <summary class="panel-title"><h2>Cấu hình chế độ (nâng cao)</h2><span class="tag">DEV</span></summary>
           <div class="two-column user-advanced-config-body">
             <div class="panel form-panel accent-panel">
-              <div class="panel-title"><h2>Chế tạo thuần</h2><span class="tag">KHUYẾN NGHỊ</span></div>
+              <div class="panel-title"><h2>Chế tạo</h2><span class="tag">KHUYẾN NGHỊ</span></div>
             <p>Khi bật mode: yêu cầu đúng Sky của bot, <code>/is</code>, chạy Bảo vệ kho bắt buộc rồi chế tạo mục tiêu. Không tự di chuyển.</p>
-            <label class="check"><input id="b5PureEnabled" type="checkbox"> Cho phép chế độ</label>
-            <label class="check"><input id="b5PureHome" type="checkbox"> Tự <code>/is</code> khi bắt đầu / kết nối lại</label>
-            <label class="check"><input id="b5PureResume" type="checkbox"> Tự tiếp tục sau khi kết nối lại</label>
-            <div class="inline-fields"><label>Chu kỳ đọc/kế hoạch (ms)<input id="b5PurePoll" type="number" min="500"></label><label>Độ trễ sau chế tạo (ms)<input id="b5PureCraftDelay" type="number" min="1"></label></div>
-            <label>Nghỉ sau khi hoàn tất mục tiêu (phút)<input id="b5PureCooldownMinutes" type="number" min="1"></label>
-            <label>Chờ trước khi thử lại lỗi (ms)<input id="b5PureRetry" type="number" min="100"></label>
-            <div class="inline-fields"><label>Chu kỳ khi mất kết nối (ms)<input id="b5PureDisconnectedPoll" type="number" min="100"></label><label>Trần backoff lỗi (ms)<input id="b5PureRetryMax" type="number" min="100"></label></div>
+            <label class="check"><input id="craftEnabled" type="checkbox"> Cho phép chế độ</label>
+            <label class="check"><input id="craftHome" type="checkbox"> Tự <code>/is</code> khi bắt đầu / kết nối lại</label>
+            <label class="check"><input id="craftResume" type="checkbox"> Tự tiếp tục sau khi kết nối lại</label>
+            <div class="inline-fields"><label>Chu kỳ đọc/kế hoạch (ms)<input id="craftPoll" type="number" min="500"></label><label>Độ trễ sau chế tạo (ms)<input id="craftDelay" type="number" min="1"></label></div>
+            <label>Nghỉ sau khi hoàn tất mục tiêu (phút)<input id="craftCooldownMinutes" type="number" min="1"></label>
+            <label>Chờ trước khi thử lại lỗi (ms)<input id="craftRetry" type="number" min="100"></label>
+            <div class="inline-fields"><label>Chu kỳ khi mất kết nối (ms)<input id="craftDisconnectedPoll" type="number" min="100"></label><label>Trần backoff lỗi (ms)<input id="craftRetryMax" type="number" min="100"></label></div>
             <p class="muted">Bảo vệ kho và đối soát sau click là bắt buộc; không có công tắc tắt trong chế độ chế tạo.</p>
-            <div class="inline-fields"><label>Số lần đọc mới để đối soát<input id="b5PureReconcileReads" type="number" min="1" step="1"></label><label>Khoảng chờ đối soát (ms)<input id="b5PureReconcileRetry" type="number" min="100"></label></div>
-            <div class="inline-fields"><label>Chu kỳ chờ khi còn bất định (ms)<input id="b5PureReconcileUnresolved" type="number" min="100"></label><label class="check"><input id="b5PureRetryAfterNoEffect" type="checkbox"> Chỉ cho phép lập kế hoạch lại khi chứng minh input quan sát được không hề bị tiêu thụ</label></div>
-            <div class="inline-fields"><label>Backoff khi không tiến triển (ms)<input id="b5PureNoProgressBase" type="number" min="100"></label><label>Trần backoff chờ (ms)<input id="b5PureNoProgressMax" type="number" min="100"></label></div>
-            <div class="inline-fields"><label>Số lần cùng blocker trước backoff<input id="b5PureBlockerThreshold" type="number" min="1" step="1"></label><label>Ghi log lại mỗi N lần<input id="b5PureLogEvery" type="number" min="1" step="1"></label></div>
-            <div class="actions"><button class="button ghost" id="loadB5PureConfig">Tải cấu hình</button><button class="button primary" id="saveB5PureConfig">Lưu + áp dụng</button></div>
+            <div class="inline-fields"><label>Số lần đọc mới để đối soát<input id="craftReconcileReads" type="number" min="1" step="1"></label><label>Khoảng chờ đối soát (ms)<input id="craftReconcileRetry" type="number" min="100"></label></div>
+            <div class="inline-fields"><label>Chu kỳ chờ khi còn bất định (ms)<input id="craftReconcileUnresolved" type="number" min="100"></label><label class="check"><input id="craftRetryAfterNoEffect" type="checkbox"> Chỉ cho phép lập kế hoạch lại khi chứng minh input quan sát được không hề bị tiêu thụ</label></div>
+            <div class="inline-fields"><label>Backoff khi không tiến triển (ms)<input id="craftNoProgressBase" type="number" min="100"></label><label>Trần backoff chờ (ms)<input id="craftNoProgressMax" type="number" min="100"></label></div>
+            <div class="inline-fields"><label>Số lần cùng blocker trước backoff<input id="craftBlockerThreshold" type="number" min="1" step="1"></label><label>Ghi log lại mỗi N lần<input id="craftLogEvery" type="number" min="1" step="1"></label></div>
+            <div class="actions"><button class="button ghost" id="loadCraftConfig">Tải cấu hình</button><button class="button primary" id="saveCraftConfig">Lưu + áp dụng</button></div>
           </div>
           <div class="panel form-panel">
             <div class="panel-title"><h2>Bảo vệ kho</h2><span class="tag">/kho</span></div>
-            <p>Mỗi đợt B5 chạy theo thứ tự: đọc mới <code>/kho</code> → nung sắt/vàng raw → nén toàn bộ B1 → bán phần dư → giữ lại mức dự trữ.</p>
-            <p><strong>Dự trữ B1:</strong> 1,5 B5 (cố định theo contract B5).</p>
-            <p class="muted">Bán surplus của baseline là bước bắt buộc của B5 protection; nếu capability bán bị tắt/không khả dụng thì gate sẽ dừng thay vì bỏ qua.</p>
+            <p>Mỗi đợt chế tạo chạy theo thứ tự: đọc mới <code>/kho</code> → nung sắt/vàng raw → nén toàn bộ vật liệu nền → bán phần dư → giữ lại mức dự trữ.</p>
+            <p><strong>Dự trữ vật liệu nền:</strong> 1,5 lần mục tiêu (cố định theo contract).</p>
+            <p class="muted">Bán surplus là bước bắt buộc của bảo vệ kho; nếu capability bán bị tắt/không khả dụng thì gate sẽ dừng thay vì bỏ qua.</p>
             <label class="check"><input id="storageBlockOnly" type="checkbox"> Chỉ bán dạng khối nén</label>
             <hr>
-            <p><strong>Nhặt + B5:</strong> chỉ mode này dùng giới hạn bung B1 để giữ headroom khi kho vẫn đang được nạp.</p>
-            <label>Trần dung lượng khi bung B1 (%)<input id="collectorDecompressMax" type="number" min="1" max="100" step="1"></label>
-            <label class="check"><input id="collectorRequireKnown" type="checkbox"> Chỉ bung B1 khi đọc được dung lượng kho</label>
+            <p><strong>Giới hạn bung vật liệu nền:</strong> chế độ chế tạo dùng giới hạn bung để giữ headroom khi kho vẫn đang được nạp.</p>
+            <label>Trần dung lượng khi bung vật liệu nền (%)<input id="collectorDecompressMax" type="number" min="1" max="100" step="1"></label>
+            <label class="check"><input id="collectorRequireKnown" type="checkbox"> Chỉ bung khi đọc được dung lượng kho</label>
             <div class="actions"><button class="button ghost" id="loadStorageProtect">Tải cấu hình</button><button class="button primary" id="saveStorageProtect">Lưu + áp dụng ngay</button></div>
           </div>
-          <div class="panel form-panel">
-            <div class="panel-title"><h2>Quy tắc chế B5</h2><span class="tag">NÂNG CAO</span></div>
-            <p>Điều chỉnh khoảng trống an toàn, cách dùng ALL và ngưỡng chống đầy PV2. Các thay đổi này cần khởi động lại hệ thống nền.</p>
-            <div class="inline-fields"><label>Ô trống an toàn trong túi đồ<input id="b5InventorySafety" type="number" min="0" step="1"></label><label>Ô trống tối thiểu để B3 dùng ALL<input id="b5B3MinSlots" type="number" min="0" step="1"></label></div>
-            <div class="inline-fields"><label>PV2: ô trống mục tiêu<input id="b5PvMinEmpty" type="number" min="0" step="1"></label><label>PV2: ngưỡng ô trống tối thiểu<input id="b5PvHardMin" type="number" min="0" step="1"></label></div>
-            <div class="inline-fields"><label>Nguồn B1 khi chế B2<select id="b5B2InputSource"><option value="storage">Dùng trực tiếp trong kho</option><option value="inventory">Rút ra inventory trước khi chế</option></select></label><label>Kích thước mẻ B2<input id="b5BatchSize" type="number" min="1" step="1"></label><label class="check"><input id="b5QuantityEnabled" type="checkbox"> Bật tối ưu số lượng</label></div>
-            <label class="check"><input id="b5B2UseAll" type="checkbox"> Cho B2 dùng ALL</label>
-            <label class="check"><input id="b5B3UseAll" type="checkbox"> Cho B3 dùng ALL khi đủ ô trống an toàn</label>
-            <label class="check"><input id="b5B4UseAllExact" type="checkbox"> Cho B4 dùng ALL khi số lượng khớp chính xác</label>
-            <label class="check"><input id="b5B5UseAll" type="checkbox"> Cho B5 dùng ALL</label>
-            <label class="check"><input id="b5KeepSurplusPv2" type="checkbox"> Giữ phần dư ở PV2 (bắt buộc để bảo toàn luồng)</label>
-            <div class="actions"><button class="button ghost" id="loadB5Rules">Tải cấu hình</button><button class="button primary" id="saveB5Rules">Lưu (cần khởi động lại hệ thống nền)</button></div>
           </div>
           </div>
         </details>
         <details class="panel section-gap user-advanced-config" data-experience="advanced">
           <summary class="panel-title"><h2>Chế độ tương thích (nâng cao)</h2><span class="tag">DEV</span></summary>
           <div class="two-column user-advanced-config-body">
-            <div class="panel form-panel">
-              <div class="panel-title"><h2>Collector + B5 (cũ)</h2><span class="tag">TƯƠNG THÍCH</span></div>
-              <label>Bot<select id="collectorConfigBot"></select></label>
-              <div class="coordinate-grid"><label>X<input id="collectorX" type="number" step="0.1"></label><label>Y<input id="collectorY" type="number" step="0.1"></label><label>Z<input id="collectorZ" type="number" step="0.1"></label></div>
-              <label>Độ trễ vòng chế tạo (ms)<input id="collectorDelay" type="number" min="1"></label>
-              <label>Chu kỳ kiểm tra (giây)<input id="collectorPoll" type="number" min="0.1" step="0.1"></label>
-              <label>Bán kính trở lại điểm đứng<input id="collectorRadius" type="number" min="0.1" step="0.1"></label>
-              <div class="actions"><button class="button ghost" id="loadCollectorConfig">Tải cấu hình</button><button class="button primary" id="saveCollectorConfig">Lưu + nạp lại</button></div>
-            </div>
             <div class="panel form-panel">
               <div class="panel-title"><h2>Câu cá</h2><span class="tag">TƯƠNG THÍCH</span></div>
               <label>Bot<select id="fishingConfigBot"></select></label><label>Khu vực AFK<select id="fishingArea"></select></label>
@@ -241,7 +218,7 @@
             <button class="dev-nav-item" data-dev-page="logs"><span>04</span>Logs <b id="logUnreadBadge" class="nav-badge hidden">0</b></button>
             <button class="dev-nav-item" data-dev-page="incident-debug"><span>05</span>Incident Debug</button>
             <button class="dev-nav-item" data-dev-page="runtime-state"><span>06</span>Runtime State</button>
-            <button class="dev-nav-item" data-dev-page="b5-debug"><span>07</span>Craft Debug</button>
+            <button class="dev-nav-item" data-dev-page="craft-debug"><span>07</span>Craft Debug</button>
             <button class="dev-nav-item" data-dev-page="diagnostics"><span>08</span>Diagnostics</button>
             <button class="dev-nav-item" data-dev-page="config-debug"><span>09</span>Config Debug</button>
           </nav>
@@ -307,11 +284,11 @@
             <pre id="runtimeStateOutput" class="log-console panel">Chưa có snapshot.</pre>
           </section>
 
-          <section class="dev-page" id="dev-page-b5-debug">
-            <div class="section-head"><div><h2>Chế tạo Debug</h2><p>Journey operator + trace replay fixture của chế tạo (tương thích B5)</p></div><label>Bot<select id="b5DebugBotSelect"></select></label><button class="button ghost" id="b5DebugRefresh">Làm mới</button></div>
-            <div id="b5DebugJourney" class="b5-journey-grid"><div class="empty panel">Chưa có trạng thái chế tạo.</div></div>
-            <div class="section-head"><div><h2>Trace replay fixture</h2><p>Planning input/digest để replay offline qua scripts/replay-b5-plan.js</p></div></div>
-            <pre id="b5DebugTrace" class="log-console panel">Chọn một bot để đọc trace.</pre>
+          <section class="dev-page" id="dev-page-craft-debug">
+            <div class="section-head"><div><h2>Chế tạo Debug</h2><p>Journey operator + trace replay fixture của chế tạo</p></div><label>Bot<select id="craftDebugBotSelect"></select></label><button class="button ghost" id="craftDebugRefresh">Làm mới</button></div>
+            <div id="craftDebugJourney" class="craft-journey-grid"><div class="empty panel">Chưa có trạng thái chế tạo.</div></div>
+            <div class="section-head"><div><h2>Trace replay fixture</h2><p>Planning input/digest để replay offline</p></div></div>
+            <pre id="craftDebugTrace" class="log-console panel">Chọn một bot để đọc trace.</pre>
           </section>
 
           <section class="dev-page" id="dev-page-diagnostics" data-page="diagnostics">
@@ -335,7 +312,7 @@
 
       <!-- ===== Dev-only pages accessible via command palette / URL (not in Dev nav) ===== -->
       <section class="page" id="page-builder" data-page="builder" data-experience="advanced">
-        <div class="section-head"><div><h2>Trình tạo chế độ bằng mô-đun</h2><p>Ghép các bước an toàn: lệnh đã đăng ký, nhấp GUI, di chuyển, chờ, /is, vào Sky, đọc kho, bảo vệ kho, chế B5, điều kiện và lặp.</p></div></div>
+        <div class="section-head"><div><h2>Trình tạo chế độ bằng mô-đun</h2><p>Ghép các bước an toàn: lệnh đã đăng ký, nhấp GUI, di chuyển, chờ, /is, vào Sky, đọc kho, bảo vệ kho, chế tạo, điều kiện và lặp.</p></div></div>
         <div class="builder-layout">
           <div class="panel form-panel">
             <div class="panel-title"><h2>Thông tin chế độ</h2><span class="tag">KHÔNG EVAL</span></div>
@@ -349,7 +326,7 @@
           </div>
           <div class="panel">
             <div class="panel-title"><h2>Kho mô-đun</h2><span id="moduleCount" class="tag">0</span></div>
-            <label>Tìm mô-đun<input id="moduleSearch" placeholder="B5, GUI, lệnh, chờ…"></label>
+            <label>Tìm mô-đun<input id="moduleSearch" placeholder="Chế tạo, GUI, lệnh, chờ…"></label>
             <div class="actions compact"><select id="customModeTemplate"><option value="">— Thư viện mẫu —</option></select><button class="button ghost small" id="applyCustomTemplate">Dùng mẫu</button></div>
             <div id="modulePalette" class="module-palette"></div>
           </div>
@@ -430,10 +407,7 @@
   <script src="components/AccessibleDialog.js"></script>
   <script src="pages/PageCatalog.js"></script>
   <script src="pages/ConfigGroupCatalog.js"></script>
-  <script src="features/b5/B5ViewModel.js"></script>
-  <script src="features/b5/B5JourneyPresenter.js"></script>
   <script src="features/crafting/CraftingRequestPanel.js"></script>
-  <script src="features/b5/B5CraftRequestPanel.js"></script>
   <script src="features/incidents/IncidentViewModel.js"></script>
   <script src="features/incidents/IncidentPresenter.js"></script>
   <script src="features/builder/TypedModuleEditor.js"></script>

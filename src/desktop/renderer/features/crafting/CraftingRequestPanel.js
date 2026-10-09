@@ -57,12 +57,12 @@
   // UI-boundary validation only. The authoritative request validation stays in
   // CraftingModeService.setCraftRequest / CraftingRequest.
   function readForm(container) {
-    const root = container?.closest?.('[data-craft-request-bot]') || container?.closest?.('[data-b5-request-bot]') || container;
-    const itemId = String(root?.querySelector?.('[data-craft-request-item]')?.value || root?.querySelector?.('[data-b5-request-item]')?.value || '').trim();
+    const root = container?.closest?.('[data-craft-request-bot]') || container;
+    const itemId = String(root?.querySelector?.('[data-craft-request-item]')?.value || '').trim();
     if (!itemId) throw new Error('Hãy chọn vật phẩm cần chế.');
-    const allChecked = Boolean(root?.querySelector?.('[data-craft-request-all]')?.checked || root?.querySelector?.('[data-b5-request-all]')?.checked);
+    const allChecked = Boolean(root?.querySelector?.('[data-craft-request-all]')?.checked);
     if (allChecked) return { targetItemId: itemId, quantity: 'ALL' };
-    const raw = String(root?.querySelector?.('[data-craft-request-quantity]')?.value ?? root?.querySelector?.('[data-b5-request-quantity]')?.value ?? '').trim();
+    const raw = String(root?.querySelector?.('[data-craft-request-quantity]')?.value ?? '').trim();
     if (!raw) throw new Error('Hãy nhập số lượng hoặc chọn ALL.');
     const quantity = Number(raw);
     if (!Number.isSafeInteger(quantity) || quantity <= 0) throw new Error('Số lượng phải là số nguyên dương.');

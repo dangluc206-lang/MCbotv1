@@ -4,20 +4,20 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const OperatorHealthService = require('../../../src/desktop/health/OperatorHealthService');
 
-test('OperatorHealthService differentiates intentional disconnect and B5 blocked dwell', async () => {
+test('OperatorHealthService differentiates intentional disconnect and storage blocked dwell', async () => {
     let now = 200000;
     let calls = 0;
     const service = new OperatorHealthService({ now: () => now, cacheTtlMs: 1000, snapshotProvider: () => {
         calls += 1;
         return { lifecycle: 'RUNNING', system: {}, bots: [
             { botId: 'off', profile: { enabled: false }, intent: { desiredConnection: 'DISCONNECTED' }, state: { connectionState: 'DISCONNECTED' } },
-            { botId: 'b5', profile: { enabled: true }, intent: { desiredConnection: 'CONNECTED' }, state: { connectionState: 'CONNECTED' }, modeOwner: { modeId: 'crafting' }, operation: { operations: [] }, modes: { crafting: { details: { protectionEpisode: { state: 'WAITING_BLOCKED', lastAttemptAt: new Date(now - 70000).toISOString() } } } } }
+            { botId: 'craft-01', profile: { enabled: true }, intent: { desiredConnection: 'CONNECTED' }, state: { connectionState: 'CONNECTED' }, modeOwner: { modeId: 'crafting' }, operation: { operations: [] }, modes: { crafting: { details: { protectionEpisode: { state: 'WAITING_BLOCKED', lastAttemptAt: new Date(now - 70000).toISOString() } } } } }
         ] };
     } });
     const result = await service.sample();
     assert.equal(result.overall, 'UNHEALTHY');
     assert.equal(result.probes.some(entry => entry.botId === 'off' && entry.id === 'reconnect' && entry.status === 'NOT_APPLICABLE'), true);
-    assert.equal(result.probes.some(entry => entry.botId === 'b5' && entry.id === 'b5-blocker-dwell' && entry.status === 'UNHEALTHY'), true);
+    assert.equal(result.probes.some(entry => entry.botId === 'craft-01' && entry.id === 'storage-blocker-dwell' && entry.status === 'UNHEALTHY'), true);
     const cached = await service.sample();
     assert.equal(cached.cached, true);
     assert.equal(calls, 1);
