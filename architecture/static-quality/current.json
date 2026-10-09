@@ -4,7 +4,6 @@
   "managedRoots": [
     "src/bootstrap/installers",
     "src/desktop/backup",
-    "src/desktop/b5",
     "src/desktop/contracts",
     "src/desktop/health",
     "src/desktop/incidents",
@@ -19,10 +18,6 @@
     "src/diagnostics/metrics",
     "src/connection",
     "src/gui",
-    "src/modes/b5-craft/campaign",
-    "src/modes/b5-craft/fault",
-    "src/modes/b5-craft/status",
-    "src/modes/b5-craft/storage",
     "src/modes/composable",
     "src/planning/storage",
     "src/server-features/crafting",
@@ -184,15 +179,6 @@
       "owner": "GUI knowledge maintainer",
       "reason": "Existing learned-identity registry is frozen; no metric may increase.",
       "expiresAfter": "GUI knowledge persistence split"
-    },
-    "src/server-features/crafting/B5PlanningService.js": {
-      "maxFileLines": 479,
-      "maxFunctionLines": 157,
-      "maxFunctionStatements": 50,
-      "maxCyclomaticComplexity": 50,
-      "owner": "B5 planning maintainer",
-      "reason": "Existing progress projection exceeds the new AST function budget and is frozen.",
-      "expiresAfter": "B5 progress projection extraction"
     },
     "src/server-features/crafting/CraftPlanningService.js": {
       "maxFileLines": 568,

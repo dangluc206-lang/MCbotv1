@@ -107,7 +107,6 @@ function fastGateDefinitions() {
             'tests/unit/modes/ModeLeaseSession.test.js',
             'tests/unit/modes/LegacyModeAdapter.test.js',
             'tests/unit/modes/LegacyModeTaskSupervision.test.js',
-            'tests/unit/modes/CollectorB5ModeService.test.js',
             'tests/unit/modes/ComposableModePlatform.test.js',
             'tests/unit/core/TaskSupervisor.test.js',
             'tests/unit/modes/TaskResourceClaimContract.test.js',
@@ -127,10 +126,7 @@ function fastGateDefinitions() {
         () => runNodeTests('planner-replay', 'WP-300/WP-302/WP-303', 'Planner purity, decision replay and B5 reference conformance', [
             'tests/unit/shared/DecisionReplayEnvelope.test.js',
             'tests/unit/planning/B1StorageProtectionPlanner.test.js',
-            'tests/unit/simulation/B5PlannerReplay.test.js',
-            'tests/unit/modes/B5ReferenceConformance.test.js',
-            'tests/unit/planning/CraftTargetPlanningPipeline.test.js',
-            'tests/unit/server-features/B5PlanningService.test.js'
+            'tests/unit/planning/CraftTargetPlanningPipeline.test.js'
         ]),
         () => runNodeTests('event-generation', 'WP-005', 'Event scope/generation/stale callback contracts', [
             'tests/unit/core/EventBusScopeContract.test.js',

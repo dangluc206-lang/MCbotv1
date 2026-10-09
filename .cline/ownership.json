@@ -214,7 +214,7 @@
       "scope": "bot/server-feature",
       "owns": [
         "B1 storage material preparation",
-        "current B5 protection coupling"
+        "storage batch protection coupling"
       ]
     },
     "src/server-profiles/ServerProfile.js": {
@@ -236,12 +236,6 @@
         "generic crafting mode orchestration",
         "operator CraftingRequest lifecycle (target/quantity)",
         "craft campaign boundary (storage protection, smelt, compact, deposit)"
-      ]
-    },
-    "src/server-features/crafting/B5PlanningService.js": {
-      "scope": "bot/server-feature",
-      "owns": [
-        "current B5-specific planning integration"
       ]
     },
     "src/server-features/crafting/CraftAutomationService.js": {

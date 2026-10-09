@@ -26,10 +26,10 @@
     {
       "id": "inventory-inflow-after-baseline",
       "faultClass": "INVENTORY",
-      "injection": "new B1 inflow arrives during immutable sell episode",
+      "injection": "new inflow arrives during immutable sell episode",
       "expectedState": "DEFERRED_TO_NEXT_EPISODE",
       "allowedActions": ["inspect-diagnostic"],
-      "artifact": "B5 protection episode progress",
+      "artifact": "storage protection episode progress",
       "cleanupAssertion": "current click budget never expands",
       "evidenceTest": "tests/unit/server-features/B1StorageMaterialService.test.js"
     },
@@ -39,7 +39,7 @@
       "injection": "generation changes during protection/craft/reconciliation",
       "expectedState": "STALE_ABORT_OR_FRESH_RECONCILE",
       "allowedActions": ["inspect-diagnostic", "reconnect-bot"],
-      "artifact": "B5 trace with explicit generation",
+      "artifact": "craft trace with explicit generation",
       "cleanupAssertion": "old result cannot release or mutate new generation",
       "evidenceTest": "tests/unit/modes/CraftingModeService.test.js"
     },
