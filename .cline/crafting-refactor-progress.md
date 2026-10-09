@@ -1,7 +1,7 @@
 # Crafting Refactor Progress
 
 ## Current Phase
-G12.1 — Quantity Resolver Hardening (COMMITTED as 3046425; working tree clean)
+G16 — Genericize Storage / Input Acquisition (COMMITTED as 2fd73c4; closeout pending)
 
 ## Status
 IN_PROGRESS
@@ -19,11 +19,18 @@ IN_PROGRESS
 - G10 exact planner: batches live in QuantityStrategy/CraftingService.executeStep
 - G11 quantity strategy: button-batch/repeat/command-quantity/custom
 - G12 GUI resolution hardening (CraftingQuantityResolver/CraftingGuiNavigator: live GUI inspection first, configured slots as fallback; guiIdentityOverride authoritative)
-- G12.1 quantity batch execution (this act, uncommitted working tree):
+- G12.1 quantity batch execution (COMMITTED as 3046425 + closeout d6d4b1f):
   - CraftingQuantityResolver.describeActions: frozen verified GUI capabilities (live first, configured fallback; ALL never listed as a fixed batch)
   - CraftingOperation: ALL keeps single-click semantics; any positive integer runs a verified batch loop (observed 64/1 actions, greedy exact, per-batch click + output verification, single close at end, totals reported)
   - Navigation no longer resolves the full amount in batch mode (menu open only; per-batch slots resolved in-loop)
   - Partial failure surfaces the existing UNCERTAIN contract with reconciliation baseline; missing buttons fail closed with zero side effects
+  - Verified by mock/unit tests only; live /ks GUI behavior remains unproven
+- G16 storage/input genericization (COMMITTED as 2fd73c4):
+  - CraftInputSourcePolicy (new, pure): explicit inventory-vs-storage policy with default + per-material overrides; legacy b2InputSource mapped once at the boundary
+  - CraftInputAcquisitionFlow: routes per-material via policy (storage = no-withdrawal readiness report; inventory = withdrawB1); `source` string + `sourceFor()` kept as compat
+  - CraftBaseInventoryCoordinator: withdrawal Result failure now throws CRAFT_B1_WITHDRAW_FAILED (was silently treated as prepared input); post-withdrawal inventory reconcile via waitForIncrease; cancellation checked on entry
+  - CraftAutomationService/CraftStorageFlow: generic `storageMaterials` key (same instance as b1Materials alias); `flows.inputAcquisition` alias shares the b2Input instance; composition root passes the generic key
+  - Deliberately NOT changed: KhoService.withdrawB1 API + step names (shared storage primitive, case 3), B1StorageMaterialService batch-protection/targetId semantics (mode-level, not input acquisition), decompressionPolicy key (genuine capacity safety), quantity batching (G12.1 untouched)
 - B5 runtime/config deletion completed separately (verified on HEAD 2de2dc6 + disk):
   - src/server-features/crafting/b5/B5CycleCoordinator.js — ABSENT (git + disk)
   - src/server-features/crafting/B5PlanningService.js — ABSENT (git + disk)
@@ -43,11 +50,27 @@ IN_PROGRESS
 - G15 reconciliation: flaky/failure paths tested, never report success on failure
 - G17 validation: schema + cross-ref (recipe→procedure, cycle detection, target policy)
 
-## Changed (G12.1 commit 3046425)
-- src/server-features/crafting/CraftingQuantityResolver.js (describeActions + #tryResolve source tracking)
-- src/server-features/crafting/CraftingOperation.js (#executeBatches loop, #executeSingleBatch, per-batch slot resolve, totals reporting, navigation defers full-amount resolve in batch mode)
-- tests/unit/server-features/CraftQuantityBatchExecution.test.js (new, 10 tests)
-- tests/unit/server-features/CraftingQuantityTiming.test.js (batch order: verify-while-open scoped to bot-inventory, single close at end)
+## Changed (G16 commit 2fd73c4)
+- src/server-features/crafting/support/CraftInputSourcePolicy.js (new, pure policy)
+- src/server-features/crafting/flows/CraftInputAcquisitionFlow.js (per-material policy routing)
+- src/server-features/crafting/coordinators/CraftBaseInventoryCoordinator.js (withdrawal-failure fail-closed, post-withdrawal reconcile, entry cancellation check)
+- src/server-features/crafting/CraftAutomationService.js (storageMaterials key + inputAcquisition alias)
+- src/server-features/crafting/flows/CraftStorageFlow.js (storageMaterials key, readiness-var fix)
+- src/bootstrap/registerBotServices.js (generic storageMaterials key at composition root)
+- tests/unit/server-features/CraftInputAcquisition.test.js (new, 9 tests)
+
+## Tests (G16 closeout, run on working tree over HEAD 2fd73c4's parent state)
+- `node --test tests/unit/server-features/CraftInputAcquisition.test.js` -> PASS 9/9 (policy, sufficient-stock no-withdraw, missing-acquired + reconcile asserted, insufficient blocks, uncertain surfaces, storage-source, per-material routing, boundary aliases, cancellation)
+- storage/crafting batch (13 files) -> PASS 92/96; 4 failures reproduced IDENTICALLY on detached worktree at d6d4b1f (pre-G16):
+  - CraftStep2BaseInventory: MODULE_NOT_FOUND b5/B5B1InventoryCoordinator (line 8 require)
+  - CraftStep3ReserveChain: MODULE_NOT_FOUND b5/B5ReserveChainCoordinator (line 7 require)
+  - CraftStep4Intermediate: MODULE_NOT_FOUND b5/B5IntermediateCoordinator (line 7 require)
+  - KhoWithdrawOperation 'withdrawal emits one aggregated metric': batchCount:1 counter drift (same diff on baseline)
+  Classification: 4x reproduced baseline failure, 0x G16 regression, 0x inconclusive.
+- planning/bootstrap/modes/quantity batch (8 files) -> PASS 96/96
+- shared-storage suites (B1StorageMaterialService, Storage, KhoWithdrawActionModel + G16) -> PASS 62/62
+- `node scripts/validate-config.js` -> PASS 31/31 schema + cross-ref PASS
+- Mock/unit verification only; no live-server proof claimed. G16 is NOT fully green: the 4 baseline failures above remain.
 
 ## Tests (G12.1, actually run)
 - `node --test tests/unit/server-features/CraftQuantityBatchExecution.test.js` -> PASS 10/10 (exact 1/9/64/65/137/1000, 1-button-only, no-buttons fail-closed, UNCERTAIN partial, capability listing)
@@ -76,13 +99,13 @@ Full unit suite (242 files) was run in per-directory chunks because `node --test
 ## Known Issues
 - Pre-existing: 3 unauthorized task MDs fail structure/architecture gates (task docs, not refactor)
 - B5 architecture/SLO/fault-matrix/static-quality metadata cleanup still pending (future phase; runtime/config deletion is DONE, do not re-delete)
-- CraftingQuantityResolver now reports verified button capabilities + executes exact batches (G12.1, this act); live-GUI proof still pending
-- Storage/input still B5-named in places (G16 pending, out of scope for this act)
+- CraftingQuantityResolver now reports verified button capabilities + executes exact batches (G12.1 committed); live-GUI proof still pending
+- Storage/input genericized at the crafting boundary (G16, this act); shared storage primitives untouched
 - Procedure Builder/Recorder foundations exist but production Builder/Recorder wiring (G20/G21) pending
 - Special procedures (forge/npc) validated at executor level only; GUI operation intentionally rejects them fail-closed until their owners exist
 
 ## Next Action
-- G12.1 is committed (3046425). No further action in this act. G16/G18 and later phases start only with explicit instruction — do not auto-advance.
+- G16 is implemented (2fd73c4) + closeout-tested. No further action in this act. G18 and later phases start only with explicit instruction — do not auto-advance. Not pushed; push is a separate explicit decision.
 
 ## Completion Evidence
 - (pending full G1-G24)
