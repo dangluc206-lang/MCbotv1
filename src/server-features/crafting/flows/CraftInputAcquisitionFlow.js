@@ -4,19 +4,25 @@ const Result = require('../../../shared/result/Result');
 const CraftInputSourcePolicy = require('../support/CraftInputSourcePolicy');
 
 class CraftInputAcquisitionFlow {
-    constructor({ storage, source = 'storage', inputSourcePolicy = null } = {}) {
+    constructor({ storage, source = 'storage', inputSourcePolicy = null, inputSourceOverrides = null } = {}) {
         if (!storage) throw new TypeError('CraftInputAcquisitionFlow storage is required.');
         this.storage = storage;
-        // G16: explicit policy object wins; bare `source` string stays as compat.
-        this.inputSourcePolicy = inputSourcePolicy || CraftInputSourcePolicy.fromConfig({ inputSource: source });
+        // G16.1: explicit policy object wins; otherwise build from the full
+        // config surface (default + overrides) so overrides are never dropped.
+        this.inputSourcePolicy = inputSourcePolicy
+            || CraftInputSourcePolicy.fromConfig({ inputSource: source, inputSourceOverrides });
         this.source = this.inputSourcePolicy.default;
     }
 
-    reconfigure({ source = 'storage', inputSourcePolicy = null } = {}) {
+    reconfigure({ source, inputSourcePolicy = null, inputSourceOverrides } = {}) {
         if (inputSourcePolicy) {
             this.inputSourcePolicy = inputSourcePolicy;
-        } else {
-            this.inputSourcePolicy = CraftInputSourcePolicy.fromConfig({ inputSource: source });
+        } else if (source !== undefined || inputSourceOverrides !== undefined) {
+            const current = this.inputSourcePolicy;
+            this.inputSourcePolicy = CraftInputSourcePolicy.fromConfig({
+                inputSource: source !== undefined ? source : current.default,
+                inputSourceOverrides: inputSourceOverrides !== undefined ? inputSourceOverrides : current.overrides
+            });
         }
         this.source = this.inputSourcePolicy.default;
     }

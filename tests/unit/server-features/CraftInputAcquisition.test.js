@@ -22,8 +22,9 @@ function context() {
   return { cancellation: { token: { throwIfCancelled() {} } }, connectionGeneration: 3, trace: null };
 }
 
-function coordinator({ source = 'inventory', withdrawResult = null, counts = {} } = {}) {
+function coordinator({ source = 'inventory', withdrawResult = null, counts = {}, overrides = null, prepared = null } = {}) {
   const withdrawn = [];
+  const preparedCalls = [];
   const storage = {
     async withdrawB1(id, options) {
       withdrawn.push({ id, requiredAmount: options?.requiredAmount });
@@ -32,20 +33,27 @@ function coordinator({ source = 'inventory', withdrawResult = null, counts = {} 
   };
   const countsState = { ...counts };
   const coord = new CraftBaseInventoryCoordinator({
-    storageFlow: { async returnBaseInventory() { return Result.ok({ ready: true, moved: 0 }); } },
-    inputAcquisition: new CraftInputAcquisitionFlow({ storage, source }),
+    storageFlow: {
+      async returnBaseInventory() { return Result.ok({ ready: true, moved: 0 }); },
+      async prepareBase(baseId, required, options) {
+        preparedCalls.push({ baseId, required });
+        if (prepared) return prepared(baseId, required, options);
+        return Result.ok({ baseId, required, ready: true, available: Math.max(0, Number(required || 0)) });
+      }
+    },
+    inputAcquisition: new CraftInputAcquisitionFlow({ storage, source, inputSourceOverrides: overrides }),
     inventoryState: {
       count: id => Number(countsState[id] || 0),
       spaceSnapshot: () => ({ emptySlotCount: 10 }),
       waitForIncrease: async id => Number(countsState[id] || 0)
     },
     recipeRegistry: { require: () => ({ inputs: { iron_ingot: 64 } }) },
-    config: { inputSource: source },
+    config: { inputSource: source, ...(overrides ? { inputSourceOverrides: overrides } : {}) },
     runStep: async (_ctx, _meta, fn) => fn(),
     childOptions: (_ctx, extra) => extra || {},
     verificationService: { requireInputReady() {}, handoff: () => ({ ready: true }) }
   });
-  return { coord, withdrawn, countsState };
+  return { coord, withdrawn, countsState, preparedCalls };
 }
 
 
@@ -124,12 +132,40 @@ test('G16 uncertain withdrawal outcome surfaces, does not proceed silently', asy
   );
 });
 
-test('G16 storage source: no withdrawal, planned availability asserted ready', async () => {
-  const { coord, withdrawn } = coordinator({ source: 'storage', counts: { iron_ingot: 0 } });
+test('G16 storage source: preparation authority decides ready from real availability', async () => {
+  const { coord, withdrawn, preparedCalls } = coordinator({ source: 'storage', counts: { iron_ingot: 0 } });
   const result = await coord.acquire(chain(), context(), { intermediateRemaining: 2, minFreeForOutputAll: 1 });
   assert.equal(result.ready, true);
   assert.equal(result.source, 'storage');
   assert.deepEqual(withdrawn, [], 'storage source prepares in /kho; no inventory withdrawal');
+  assert.equal(preparedCalls.length, 1);
+  assert.equal(preparedCalls[0].baseId, 'iron_ingot');
+  // available comes from the preparation result (128 for 2 crafts x 64), not the request echo.
+  assert.equal(result.available, 128);
+  assert.equal(result.craftable, 2);
+});
+
+test('G16 storage source: insufficient real availability reports waiting, never ready', async () => {
+  const { coord, withdrawn } = coordinator({
+    source: 'storage', counts: { iron_ingot: 0 },
+    prepared: (baseId, required) => Result.ok({ baseId, required, ready: true, available: 10 })
+  });
+  const result = await coord.acquire(chain(), context(), { intermediateRemaining: 2, minFreeForOutputAll: 1 });
+  assert.equal(result.ready, false);
+  assert.equal(result.reason, 'storage-base-not-ready');
+  assert.equal(result.available, 10);
+  assert.deepEqual(withdrawn, []);
+});
+
+test('G16 storage source: preparation failure throws, never reports ready', async () => {
+  const { coord } = coordinator({
+    source: 'storage', counts: { iron_ingot: 0 },
+    prepared: (baseId, required) => Result.fail('FAILED', 'kho unreadable', new Error('down'))
+  });
+  await assert.rejects(
+    () => coord.acquire(chain(), context(), { intermediateRemaining: 1, minFreeForOutputAll: 1 }),
+    error => /CRAFT_B1_STORAGE_PREP_FAILED/.test(error?.code || '')
+  );
 });
 
 test('G16 acquisition flow routes per-material policy, not global default', async () => {
@@ -172,4 +208,117 @@ test('G16 cancellation aborts acquisition before withdrawal side effects', async
   const cancelled = { cancellation: { token: { throwIfCancelled() { throw Object.assign(new Error('stop'), { code: 'CANCELLED' }); } } }, connectionGeneration: 3, trace: null };
   await assert.rejects(() => coord.acquire(chain(), cancelled, { intermediateRemaining: 1, minFreeForOutputAll: 1 }), error => /CANCELLED/.test(error?.code || error?.message || ''));
   assert.deepEqual(withdrawn, [], 'cancelled acquisition must not withdraw');
+});
+
+test('G16.1 default storage + inventory override: overridden material withdraws and reconciles', async () => {
+  const delivered = {};
+  const withdrawn = [];
+  const reconciled = [];
+  const storage = {
+    async withdrawB1(id, options) {
+      withdrawn.push(id);
+      delivered[id] = Number(options?.requiredAmount || 0);
+      return Result.ok({ moved: delivered[id] });
+    }
+  };
+  const countsState = { iron_ingot: 0 };
+  const coord = new CraftBaseInventoryCoordinator({
+    storageFlow: {
+      async returnBaseInventory() { return Result.ok({ ready: true, moved: 0 }); },
+      async prepareBase(baseId, required) { return Result.ok({ baseId, required, ready: true, available: Number(required || 0) }); }
+    },
+    inputAcquisition: new CraftInputAcquisitionFlow({
+      storage, source: 'storage', inputSourceOverrides: { iron_ingot: 'inventory' }
+    }),
+    inventoryState: {
+      count: id => Number(countsState[id] || 0) + Number(delivered[id] || 0),
+      spaceSnapshot: () => ({ emptySlotCount: 10 }),
+      waitForIncrease: async (id, before) => { reconciled.push({ id, before }); return 64; }
+    },
+    recipeRegistry: { require: () => ({ inputs: { iron_ingot: 64 } }) },
+    config: { inputSource: 'storage', inputSourceOverrides: { iron_ingot: 'inventory' } },
+    runStep: async (_ctx, _meta, fn) => fn(),
+    childOptions: (_ctx, extra) => extra || {},
+    verificationService: { requireInputReady() {}, handoff: () => ({ ready: true }) }
+  });
+  const result = await coord.acquire(chain(), context(), { intermediateRemaining: 1, minFreeForOutputAll: 1 });
+  assert.equal(result.ready, true);
+  assert.equal(result.source, 'inventory');
+  assert.deepEqual(withdrawn, ['iron_ingot'], 'override routes THIS material through withdrawal despite storage default');
+  assert.deepEqual(reconciled, [{ id: 'iron_ingot', before: 0 }]);
+});
+
+test('G16.1 default inventory + storage override: overridden material never withdraws', async () => {
+  const { coord, withdrawn, preparedCalls } = coordinator({
+    source: 'inventory', counts: { coal: 0 }, overrides: { coal: 'storage' }
+  });
+  const coalChain = { baseId: 'coal', intermediateId: 'refined_coal', intermediateRecipeId: 'refined_coal', intermediatePerOutput: 1, outputId: 'refined_coal' };
+  coord.recipeRegistry = { require: () => ({ inputs: { coal: 16 } }) };
+  const result = await coord.acquire(coalChain, context(), { intermediateRemaining: 1, minFreeForOutputAll: 1 });
+  assert.equal(result.ready, true);
+  assert.equal(result.source, 'storage');
+  assert.deepEqual(withdrawn, [], 'storage-routed material must not withdraw despite inventory default');
+  assert.equal(preparedCalls.length, 1);
+  assert.equal(preparedCalls[0].baseId, 'coal');
+});
+
+test('G16.1 two materials with different sources route independently in one request', async () => {
+  const withdrawn = [];
+  const storage = {
+    async withdrawB1(id, options) { withdrawn.push(id); return Result.ok({ moved: Number(options?.requiredAmount || 0) }); }
+  };
+  const policy = CraftInputSourcePolicy.fromConfig({ inputSource: 'storage', inputSourceOverrides: { iron_ingot: 'inventory' } });
+  const flow = new CraftInputAcquisitionFlow({ storage, inputSourcePolicy: policy });
+  assert.equal(flow.source, 'storage', '.source stays the default surface');
+  await flow.acquire('iron_ingot', 64, {});
+  const coalResult = await flow.acquire('coal', 16, {});
+  assert.deepEqual(withdrawn, ['iron_ingot'], 'only the inventory-routed material withdraws');
+  assert.equal(coalResult.data.withdrawalRequired, false);
+});
+
+test('G16.1 reconfigure default keeps intentional overrides; explicit overrides replace', () => {
+  const flow = new CraftInputAcquisitionFlow({
+    storage: { async withdrawB1() { return Result.ok({}); } },
+    source: 'storage', inputSourceOverrides: { iron_ingot: 'inventory' }
+  });
+  flow.reconfigure({ source: 'inventory' });
+  assert.equal(flow.source, 'inventory');
+  assert.equal(flow.sourceFor('iron_ingot'), 'inventory', 'default-only change must not drop overrides');
+  assert.equal(flow.sourceFor('coal'), 'inventory');
+  flow.reconfigure({ source: 'inventory', inputSourceOverrides: {} });
+  assert.equal(flow.sourceFor('iron_ingot'), 'inventory', 'cleared overrides fall back to the new default');
+  assert.equal(flow.sourceFor('coal'), 'inventory');
+});
+
+test('G16.1 automation service plumbing: overrides survive construction and reconfigure', () => {
+  const readiness = { storage: null, logger: null, compact() {}, ensureBaseAvailable() {}, compactAll() {} };
+  const automation = new CraftAutomationService({
+    planningService: { inspectAdditional: async () => ({ success: true, data: {} }) },
+    crafting: { craft: async () => ({ success: true }) },
+    personalVault: { deposit: async () => ({ success: true }), withdraw: async () => ({ success: true }) },
+    storage: { async withdrawB1() { return Result.ok({ moved: 1 }); } },
+    storageMaterials: readiness,
+    inventoryReader: {}, inventoryCounter: {}, recipeRegistry: { require: () => ({}) },
+    operationManager: null,
+    config: { inputSource: 'storage', inputSourceOverrides: { iron_ingot: 'inventory' } },
+    craftingVerificationService: { requireInputReady() {}, handoff: () => ({}), verifyOutput() {}, requireSettled() {} }
+  });
+  assert.equal(automation.flows.b2Input.sourceFor('iron_ingot'), 'inventory');
+  assert.equal(automation.flows.b2Input.sourceFor('coal'), 'storage');
+  assert.equal(automation.flows.inputAcquisition, automation.flows.b2Input, 'alias shares the instance');
+  automation.reconfigure({ inputSource: 'inventory' });
+  assert.equal(automation.flows.b2Input.sourceFor('iron_ingot'), 'inventory', 'overrides survive default-only reconfigure');
+  assert.equal(automation.flows.b2Input.sourceFor('coal'), 'inventory');
+});
+
+test('G16.1 invalid override value falls back to default (never a silent wrong-side choice)', () => {
+  const policy = CraftInputSourcePolicy.fromConfig({ inputSource: 'storage', inputSourceOverrides: { iron_ingot: 'teleport' } });
+  assert.equal(policy.resolve('iron_ingot'), 'storage', 'unknown override value must not route anywhere unconfigured');
+});
+
+test('G16.1 returnToStorage follows the material source, not the default', async () => {
+  const { coord } = coordinator({ source: 'inventory', counts: { iron_ingot: 5 }, overrides: { iron_ingot: 'storage' } });
+  const skipped = await coord.returnToStorage(chain(), context());
+  assert.equal(skipped.skipped, true);
+  assert.equal(skipped.source, 'storage', 'storage-routed material has nothing to return');
 });

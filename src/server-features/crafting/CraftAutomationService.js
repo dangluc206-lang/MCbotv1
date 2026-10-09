@@ -28,9 +28,13 @@ function normalizeAutomationConfig(next = {}, current = {}) {
     const merged = {
         ...current,
         ...source,
-        inputSource: source.inputSource ?? source.b2InputSource ?? current?.inputSource
+        inputSource: source.inputSource ?? source.b2InputSource ?? current?.inputSource,
+        // G16.1: per-material overrides are first-class config. Generic key
+        // wins, legacy `inputSources` maps once, then both live on explicitly.
+        inputSourceOverrides: source.inputSourceOverrides ?? source.inputSources ?? current?.inputSourceOverrides
     };
     delete merged.b2InputSource;
+    delete merged.inputSources;
     return Object.freeze(merged);
 }
 
@@ -90,7 +94,10 @@ class CraftAutomationService {
             storage: flows.storage || new CraftStorageFlow({ storageMaterials: materialReadiness }),
             b2Input: flows.b2Input || flows.inputAcquisition || new CraftInputAcquisitionFlow({
                 storage,
-                source: (config?.inputSource ?? config?.b2InputSource) === 'inventory' ? 'inventory' : 'storage'
+                source: (config?.inputSource ?? config?.b2InputSource) === 'inventory' ? 'inventory' : 'storage',
+                // G16.1: full policy surface — default plus per-material
+                // overrides travel together so overrides survive construction.
+                inputSourceOverrides: config?.inputSourceOverrides ?? config?.inputSources ?? null
             }),
             deposit: flows.deposit || new PersonalVaultStorageFlow({ personalVault, config: { verify: true } }),
             withdraw: flows.withdraw || new CraftWithdrawFlow({ personalVault }),
@@ -145,7 +152,13 @@ class CraftAutomationService {
         this.config = next;
         this.inventoryState.config = next;
         this.recipeResolver.config = next;
-        this.flows.b2Input.reconfigure?.({ source: next.inputSource === 'inventory' ? 'inventory' : 'storage' });
+        // G16.1: reconfigure carries the full policy surface. Overrides the
+        // operator set intentionally survive a default-only change; an
+        // explicit overrides value (including {}) replaces them.
+        this.flows.b2Input.reconfigure?.({
+            source: next.inputSource === 'inventory' ? 'inventory' : 'storage',
+            inputSourceOverrides: config?.inputSourceOverrides ?? config?.inputSources
+        });
         this.baseInventory.reconfigure(next);
         this.b1Inventory.reconfigure(next);
         this.finalCraft.reconfigure(next);
