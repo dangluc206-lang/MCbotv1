@@ -14,6 +14,7 @@ class CraftBaseInventoryCoordinator {
 
     async acquire(chain, context, options = {}) {
         chain = CraftBaseInventoryCoordinator.normalize(chain);
+        context?.cancellation?.token?.throwIfCancelled?.();
         this.#assertContract(chain, context);
         const request = this.#request(chain, options);
         if (this.inputAcquisition.source === 'storage') {
@@ -121,6 +122,21 @@ class CraftBaseInventoryCoordinator {
         }, () => this.inputAcquisition.acquire(chain.baseId, targetAmount, this.childOptions(context, {
             outputId: chain.intermediateId, expectedOutputAmount: Math.max(1, Math.min(request.plannedCrafts, 64)), minimumFreeSlots: request.reserveSlots
         })));
+        // G16: a failed withdrawal is never mistaken for prepared input.
+        // Crafting must not continue when acquisition reports failure.
+        if (result?.success === false) {
+            throw FlowError.fromResult(result, {
+                code: 'CRAFT_B1_WITHDRAW_FAILED', subsystem: 'crafting', operation: 'CraftBaseInventoryCoordinator',
+                step: 'acquire-b1-for-b2', action: 'withdraw prepared B1 into inventory before B2',
+                resource: chain.baseId, retryable: true
+            });
+        }
+        // G16: reconcile inventory after the state-changing withdrawal before
+        // computing craftability — the withdraw GUI just closed and stack
+        // delivery may still be settling.
+        const token = context?.cancellation?.token || null;
+        await this.inventoryState.waitForIncrease?.(chain.baseId, state.available, token).catch(() => null);
+        token?.throwIfCancelled?.();
         return { transfer: result?.data || null, maxAmount };
     }
 

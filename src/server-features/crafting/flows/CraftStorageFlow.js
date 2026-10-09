@@ -4,11 +4,15 @@ const Result = require('../../../shared/result/Result');
 const KhoMaterialTransfer = require('../../storage/KhoMaterialTransfer');
 
 class CraftStorageFlow {
-    constructor({ b1Materials }) {
-        if (!b1Materials) throw new TypeError('CraftStorageFlow b1Materials is required.');
-        this.b1Materials = b1Materials;
-        this.storage = b1Materials.storage || null;
-        this.logger = b1Materials.logger || null;
+    constructor({ b1Materials = null, storageMaterials = null } = {}) {
+        // G16: `storageMaterials` is the generic material-readiness authority;
+        // `b1Materials` stays as a compat alias. Same instance either way.
+        const readiness = storageMaterials || b1Materials || null;
+        if (!readiness) throw new TypeError('CraftStorageFlow storageMaterials is required.');
+        this.b1Materials = readiness;
+        this.storageMaterials = readiness;
+        this.storage = readiness.storage || null;
+        this.logger = readiness.logger || null;
         this.transfer = this.storage ? new KhoMaterialTransfer({ storage: this.storage, logger: this.logger }) : null;
         this.activeBaseId = null;
         this.activeGeneration = null;

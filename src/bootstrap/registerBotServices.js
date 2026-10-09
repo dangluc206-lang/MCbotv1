@@ -618,7 +618,8 @@ function registerBotServices({ profile, configuration, shared }) {
     crafting,
     personalVault,
     storage,
-    b1Materials,
+    // G16: generic material-readiness key; the service keeps b1Materials as alias.
+    storageMaterials: b1Materials,
     inventoryReader,
     inventoryCounter,
     recipeRegistry,

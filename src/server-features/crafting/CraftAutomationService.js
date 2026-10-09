@@ -40,7 +40,8 @@ class CraftAutomationService {
         crafting,
         personalVault,
         storage,
-        b1Materials,
+        b1Materials = null,
+        storageMaterials = null,
         inventoryReader,
         inventoryCounter,
         recipeRegistry,
@@ -57,12 +58,18 @@ class CraftAutomationService {
         if (!craftingVerificationService) {
             throw new TypeError('CraftAutomationService craftingVerificationService is required.');
         }
+        // G16: generic material-readiness authority. `storageMaterials` is the
+        // generic name (matches CraftPlanningService); `b1Materials` stays as a
+        // compat alias for existing compositions. Same instance either way —
+        // no second implementation.
+        const materialReadiness = storageMaterials || b1Materials || null;
         Object.assign(this, {
             planningService,
             crafting,
             personalVault,
             storage,
-            b1Materials,
+            b1Materials: materialReadiness,
+            storageMaterials: materialReadiness,
             inventoryReader,
             inventoryCounter,
             recipeRegistry,
@@ -80,8 +87,8 @@ class CraftAutomationService {
         this.quantity = quantity || CraftQuantityPolicy.fromConfig(config);
         this.flows = Object.freeze({
             read: flows.read || new CraftReadFlow({ planningService, storage, personalVault, inventoryReader }),
-            storage: flows.storage || new CraftStorageFlow({ b1Materials }),
-            b2Input: flows.b2Input || new CraftInputAcquisitionFlow({
+            storage: flows.storage || new CraftStorageFlow({ storageMaterials: materialReadiness }),
+            b2Input: flows.b2Input || flows.inputAcquisition || new CraftInputAcquisitionFlow({
                 storage,
                 source: (config?.inputSource ?? config?.b2InputSource) === 'inventory' ? 'inventory' : 'storage'
             }),
@@ -89,6 +96,8 @@ class CraftAutomationService {
             withdraw: flows.withdraw || new CraftWithdrawFlow({ personalVault }),
             craft: flows.craft || new CraftCraftFlow({ crafting })
         });
+        // G16: generic alias — same instance, no second flow.
+        this.flows = Object.freeze({ ...this.flows, inputAcquisition: this.flows.b2Input });
         this.finalCraft = new CraftFinalCraftCoordinator({
             recipeRegistry,
             inventoryState: this.inventoryState,
