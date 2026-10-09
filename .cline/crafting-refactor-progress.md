@@ -1,7 +1,7 @@
 # Crafting Refactor Progress
 
 ## Current Phase
-G16 — Genericize Storage / Input Acquisition (COMMITTED as 2fd73c4; closeout pending)
+G16 — Genericize Storage / Input Acquisition (CLOSED: implemented 2fd73c4, closeout ae805b2, pushed to origin/main)
 
 ## Status
 IN_PROGRESS
@@ -100,12 +100,12 @@ Full unit suite (242 files) was run in per-directory chunks because `node --test
 - Pre-existing: 3 unauthorized task MDs fail structure/architecture gates (task docs, not refactor)
 - B5 architecture/SLO/fault-matrix/static-quality metadata cleanup still pending (future phase; runtime/config deletion is DONE, do not re-delete)
 - CraftingQuantityResolver now reports verified button capabilities + executes exact batches (G12.1 committed); live-GUI proof still pending
-- Storage/input genericized at the crafting boundary (G16, this act); shared storage primitives untouched
+- Storage/input genericized at the crafting boundary (G16 closed + pushed); shared storage primitives untouched
 - Procedure Builder/Recorder foundations exist but production Builder/Recorder wiring (G20/G21) pending
 - Special procedures (forge/npc) validated at executor level only; GUI operation intentionally rejects them fail-closed until their owners exist
 
 ## Next Action
-- G16 is implemented (2fd73c4) + closeout-tested. No further action in this act. G18 and later phases start only with explicit instruction — do not auto-advance. Not pushed; push is a separate explicit decision.
+- G16 is CLOSED (implementation 2fd73c4, closeout ae805b2, pushed to origin/main). The next eligible phase is G18 (architecture/config metadata cleanup), but it must be performed ONLY in a separate explicit act — do not auto-advance, do not start it here.
 
 ## Completion Evidence
 - (pending full G1-G24)
