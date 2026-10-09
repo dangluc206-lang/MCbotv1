@@ -1,10 +1,10 @@
 # Crafting Refactor Progress
 
 ## Current Phase
-G19 — Desktop UI Cleanup (IN_PROGRESS: source edits complete, tests green, commit pending)
+G19 — Desktop UI Cleanup (CLOSED: implementation + closeout 0a1fd93, verified on origin/main)
 
 ## Status
-G16.1 CLOSED. Overall refactor G1–G24 remains IN PROGRESS; G19 implementation done, closeout pending (commit + push + remote verify).
+G16.1 CLOSED. G19 CLOSED. Overall refactor G1–G24 remains IN PROGRESS; G20 not started.
 
 ## Completed
 - G1 scope freeze + baseline
@@ -135,7 +135,7 @@ Full unit suite (242 files) was run in per-directory chunks because `node --test
 - CraftingQuantityResolver now reports verified button capabilities + executes exact batches (G12.1 committed); live-GUI proof still pending
 - Storage/input genericized at the crafting boundary (G16 closed + pushed); shared storage primitives untouched
 - G16.1 per-material policy fix closed (implementation aaf3bd4); mock/unit only, no live-server proof
-- G19 Desktop UI cleanup IN_PROGRESS: B5 config/rules/compat-mode/storage-protection-UI/controls/labels removed from Desktop (controller/main/preload/contract/renderer/log-policy/health/projection); generic crafting channels (crafting:journey/trace, retry-storage-protection, config:crafting) + craft-debug dev page; RuntimeConfigMigrations + CraftingModeService engine preserved; commit pending
+- G19 Desktop UI cleanup CLOSED (implementation + closeout 0a1fd93, verified on origin/main): B5 config/rules/compat-mode/controls/labels removed from Desktop (controller/main/preload/contract/renderer/log-policy/health/projection); generic crafting channels (crafting:journey/trace, retry-storage-protection, config:crafting) + craft-debug dev page; RuntimeConfigMigrations + CraftingModeService engine preserved
 - Procedure Builder/Recorder foundations exist but production Builder/Recorder wiring (G20/G21) pending
 - Special procedures (forge/npc) validated at executor level only; GUI operation intentionally rejects them fail-closed until their owners exist
 
