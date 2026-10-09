@@ -1,7 +1,7 @@
 # Crafting Refactor Progress
 
 ## Current Phase
-G12.1 — Quantity Resolver Hardening (uncommitted working tree; G14.2 closeout 668de54 is HEAD)
+G12.1 — Quantity Resolver Hardening (COMMITTED as 3046425; working tree clean)
 
 ## Status
 IN_PROGRESS
@@ -43,7 +43,7 @@ IN_PROGRESS
 - G15 reconciliation: flaky/failure paths tested, never report success on failure
 - G17 validation: schema + cross-ref (recipe→procedure, cycle detection, target policy)
 
-## Changed (G12.1, uncommitted)
+## Changed (G12.1 commit 3046425)
 - src/server-features/crafting/CraftingQuantityResolver.js (describeActions + #tryResolve source tracking)
 - src/server-features/crafting/CraftingOperation.js (#executeBatches loop, #executeSingleBatch, per-batch slot resolve, totals reporting, navigation defers full-amount resolve in batch mode)
 - tests/unit/server-features/CraftQuantityBatchExecution.test.js (new, 10 tests)
@@ -53,7 +53,9 @@ IN_PROGRESS
 - `node --test tests/unit/server-features/CraftQuantityBatchExecution.test.js` -> PASS 10/10 (exact 1/9/64/65/137/1000, 1-button-only, no-buttons fail-closed, UNCERTAIN partial, capability listing)
 - 10 adjacent suites -> PASS 40/40, zero regressions (incl. updated timing order + G14.2 wiring)
 - `node scripts/validate-config.js` -> PASS 31/31 schema + cross-ref PASS
-- Verified by mock/unit tests only; no live-GUI runtime proof claimed.
+- Verified by mock/unit tests only; no live-GUI runtime proof claimed. Quantity behavior
+  against the real /ks GUI is NOT proven — the new tests use stub GUIs with
+  scripted inventory deltas.
 
 ## Tests (closeout act, actually run on HEAD 2de2dc6)
 Full unit suite (242 files) was run in per-directory chunks because `node --test tests/unit/` is not accepted by this Node version and a single `npm test` run exceeds the 30s tool limit:
@@ -80,7 +82,7 @@ Full unit suite (242 files) was run in per-directory chunks because `node --test
 - Special procedures (forge/npc) validated at executor level only; GUI operation intentionally rejects them fail-closed until their owners exist
 
 ## Next Action
-- G12.1 is implemented + unit-tested (uncommitted). Commit G12.1 in a closeout act after re-running the affected suites. G16/G18 and later phases start only with explicit instruction — do not auto-advance.
+- G12.1 is committed (3046425). No further action in this act. G16/G18 and later phases start only with explicit instruction — do not auto-advance.
 
 ## Completion Evidence
 - (pending full G1-G24)
