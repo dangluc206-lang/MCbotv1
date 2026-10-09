@@ -1,7 +1,7 @@
 # Crafting Refactor Progress
 
 ## Current Phase
-G18 — Architecture / Config Metadata Cleanup (CLOSED: implementation d41954c; closeout pending)
+G16.1 — Per-Material Input Policy Integration Fix (CLOSED: implementation aaf3bd4; closeout pending)
 
 ## Status
 IN_PROGRESS
@@ -26,7 +26,7 @@ IN_PROGRESS
   - Partial failure surfaces the existing UNCERTAIN contract with reconciliation baseline; missing buttons fail closed with zero side effects
   - Verified by mock/unit tests only; live /ks GUI behavior remains unproven
 - G16 storage/input genericization (CLOSED: 2fd73c4 + closeout ae805b2, pushed):
-- G18 architecture/config metadata cleanup (this act, uncommitted working tree):
+- G18 architecture/config metadata cleanup (CLOSED: d41954c + closeout fbac1a2):
   - static-quality: removed dead B5PlanningService.js budget + nonexistent managedRoots (src/desktop/b5, src/modes/b5-craft/*)
   - slo: removed producer-less b5-batch-outcome + b5-blocker-dwell objectives (no src producer, no test asserts them; no invented replacement)
   - fault-matrix r1: generalized B5 wording to storage/craft trace (evidence tests untouched)
@@ -36,11 +36,12 @@ IN_PROGRESS
   - .cline/crafting-contract: executors point at existing generic coordinators; tierConfig + B5 consumer refs removed
   - Preserved: catalog forbiddenPatterns guards, legacy-mode-debt (fishing-only), crafting-targets (clean), routing (no B5), B1-named runtime (live concept, out of scope)
   - Runtime/config B5 deletion NOT repeated (verified absent on HEAD, untouched)
-  - CraftInputSourcePolicy (new, pure): explicit inventory-vs-storage policy with default + per-material overrides; legacy b2InputSource mapped once at the boundary
-  - CraftInputAcquisitionFlow: routes per-material via policy (storage = no-withdrawal readiness report; inventory = withdrawB1); `source` string + `sourceFor()` kept as compat
-  - CraftBaseInventoryCoordinator: withdrawal Result failure now throws CRAFT_B1_WITHDRAW_FAILED (was silently treated as prepared input); post-withdrawal inventory reconcile via waitForIncrease; cancellation checked on entry
-  - CraftAutomationService/CraftStorageFlow: generic `storageMaterials` key (same instance as b1Materials alias); `flows.inputAcquisition` alias shares the b2Input instance; composition root passes the generic key
-  - Deliberately NOT changed: KhoService.withdrawB1 API + step names (shared storage primitive, case 3), B1StorageMaterialService batch-protection/targetId semantics (mode-level, not input acquisition), decompressionPolicy key (genuine capacity safety), quantity batching (G12.1 untouched)
+- G16.1 per-material input policy integration fix (CLOSED: implementation aaf3bd4; closeout pending):
+  - Root cause (verified in source): coordinator branched on flow-wide `inputAcquisition.source` default (lines 20/55/72/75), ignoring per-material overrides; automation service built the flow from the `source` string only (overrides never reached the policy; reconfigure dropped them); storage branch reported ready from requested-amount math instead of storage data
+  - CraftInputAcquisitionFlow: policy built from full surface (default + overrides); reconfigure merges (default-only change preserves overrides, explicit overrides replace)
+  - CraftAutomationService: constructs + reconfigures the flow with overrides; normalizeAutomationConfig carries inputSourceOverrides explicitly (legacy inputSources mapped once)
+  - CraftBaseInventoryCoordinator: `#sourceFor(chain)` resolves per material; storage branch goes through `storageFlow.prepareBase` (real availability, fail-closed when unavailable); inventory return carries `source: 'inventory'` so downstream accounting is per-material; contract keeps legacy-default check for non-policy flows
+  - Deliberately NOT changed: KhoService.withdrawB1 / KhoWithdrawOperation / shared primitives, decompressionPolicy, batch protection, G12.1 batching, G14.2 runtime
 - B5 runtime/config deletion completed separately (verified on HEAD 2de2dc6 + disk):
   - src/server-features/crafting/b5/B5CycleCoordinator.js — ABSENT (git + disk)
   - src/server-features/crafting/B5PlanningService.js — ABSENT (git + disk)
@@ -69,13 +70,20 @@ IN_PROGRESS
 - src/bootstrap/registerBotServices.js (generic storageMaterials key at composition root)
 - tests/unit/server-features/CraftInputAcquisition.test.js (new, 9 tests)
 
+## Tests (G16.1, actually run on working tree)
+- `node --test tests/unit/server-features/CraftInputAcquisition.test.js` -> PASS 18/18 (10 G16 + 8 G16.1: per-material override both directions, independent routing, reconfigure preservation, invalid-override fallback, returnToStorage source, service plumbing)
+- Affected suites: planning/parity/bootstrap/modes/quantity batch -> PASS 149/149; shared-storage suites -> PASS 62/62
+- `node scripts/validate-config.js` -> PASS 31/31 schema + cross-ref PASS; `git diff --check` clean
+- Mock/unit only; no live-server proof claimed. G19 NOT started.
+
 ## Tests (G18, actually run on working tree)
 - Pre-edit baseline: validate-config 31/31 PASS; check-slo-contract PASS (9 objectives); check-static-quality FAIL x2 (B5PlanningService missing-entry [G18 target] + CraftingOperation 556>500 lines [pre-existing G12.1, out of scope])
 - Post-edit: validate-config 31/31 PASS; check-slo-contract PASS (7 objectives); check-static-quality FAIL x1 (only the pre-existing CraftingOperation budget remains — G18 fixed its target failure)
 - arch/config suites: SloMetricContract + StaticQualityAst + ConfigurationContracts + CraftGenericParity2 + CraftingModeService -> PASS 80/80
 - fault-matrix suites (R1/R5/FaultMatrixContract) -> PASS 11/11
 - `git diff --check` clean
-- Mock/unit only; G19 NOT started.
+
+## Tests (G16 closeout, run on detached worktree at d6d4b1f for baseline + working tree for scope)
 - `node --test tests/unit/server-features/CraftInputAcquisition.test.js` -> PASS 9/9 (policy, sufficient-stock no-withdraw, missing-acquired + reconcile asserted, insufficient blocks, uncertain surfaces, storage-source, per-material routing, boundary aliases, cancellation)
 - storage/crafting batch (13 files) -> PASS 92/96; 4 failures reproduced IDENTICALLY on detached worktree at d6d4b1f (pre-G16):
   - CraftStep2BaseInventory: MODULE_NOT_FOUND b5/B5B1InventoryCoordinator (line 8 require)
@@ -114,14 +122,15 @@ Full unit suite (242 files) was run in per-directory chunks because `node --test
 
 ## Known Issues
 - Pre-existing: 3 unauthorized task MDs fail structure/architecture gates (task docs, not refactor)
-- B5 architecture/SLO/fault-matrix/static-quality metadata cleaned (G18, this act); runtime/config deletion was already DONE and was not repeated
+- B5 architecture/SLO/fault-matrix/static-quality metadata cleaned (G18 closed); runtime/config deletion was already DONE and was not repeated
 - CraftingQuantityResolver now reports verified button capabilities + executes exact batches (G12.1 committed); live-GUI proof still pending
 - Storage/input genericized at the crafting boundary (G16 closed + pushed); shared storage primitives untouched
+- G16.1 per-material policy fix closed (implementation aaf3bd4); mock/unit only, no live-server proof
 - Procedure Builder/Recorder foundations exist but production Builder/Recorder wiring (G20/G21) pending
 - Special procedures (forge/npc) validated at executor level only; GUI operation intentionally rejects them fail-closed until their owners exist
 
 ## Next Action
-- G18 is implemented (d41954c) + verified. Closeout commit pending, keep local (no push in this act). G19 starts only with explicit instruction — do not auto-advance.
+- G16.1 is CLOSED (implementation aaf3bd4). G19 starts only with explicit instruction — do not auto-advance. No push in this act.
 
 ## Completion Evidence
 - (pending full G1-G24)
