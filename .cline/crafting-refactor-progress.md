@@ -1,12 +1,14 @@
 # Crafting Refactor Progress
 
 ## Current Phase
-G23 — Architecture tests (CLOSED)
+G24 — Final refactor and architecture cleanup (CLOSED)
 
 ## Status
 G16.1 CLOSED. G19 CLOSED. G20 CLOSED. G20.1 CLOSED. G21 CLOSED. G22 CLOSED.
-G23 CLOSED (commit ecee64d, pushed + verified on origin/main: HEAD == origin/main).
-Overall refactor G1–G24 remains IN PROGRESS; G24 next (PLANNED -> IN_PROGRESS).
+G23 CLOSED. G24 CLOSED (commit 5f516bc, pushed + verified on origin/main:
+HEAD == origin/main).
+Overall refactor G1–G24 COMPLETE (all required phases CLOSED, every closeout
+verified on origin/main).
 
 ## G21 — Procedure Recorder (CLOSED: commit 64b9823, verified on origin/main)
 Scope (roadmap G21): a foundation for recording interaction sequences that maps
@@ -151,7 +153,7 @@ Implementation:
 - `git diff --check` clean. Mock/unit + Electron-harness only; no live-server/GUI
   proof claimed.
 
-## G24 — Final refactor and architecture cleanup (IN_PROGRESS, revised scope)
+## G24 — Final refactor and architecture cleanup (CLOSED: commit 5f516bc, verified on origin/main)
 Scope (roadmap G24): once behavior is stable — split large facades only where
 responsibility is clear (candidate: CraftRequestService / CraftingPlanner /
 RecipeRegistry / ItemRegistry / ProcedureRegistry / ProcedureExecutor /
