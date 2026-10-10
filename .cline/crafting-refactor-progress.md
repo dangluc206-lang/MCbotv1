@@ -1,10 +1,88 @@
 # Crafting Refactor Progress
 
 ## Current Phase
-G19 — Desktop UI Cleanup (CLOSED: implementation + closeout 0a1fd93, verified on origin/main)
+G21 — Procedure Recorder (PLANNED)
 
 ## Status
-G16.1 CLOSED. G19 CLOSED. Overall refactor G1–G24 remains IN PROGRESS; G20 not started.
+G16.1 CLOSED. G19 CLOSED. G20 CLOSED. Overall refactor G1–G24 remains IN PROGRESS; G21 open.
+
+## G20 — Procedure Builder (CLOSED)
+Scope (roadmap G20): operator can add / remove / reorder / edit parameters / validate /
+save / dry-run a procedure, using the exact Procedure Engine schema. No second UI
+schema; nothing the runtime rejects; no runtime step the builder cannot express.
+
+Implementation:
+- `src/server-features/crafting/procedure/ProcedureStepCatalog.js` (new): single
+  source of truth for the operator surface, derived from `ProcedureRegistry.STEP_TYPES`
+  with typed presentation fields in the workflow-module shape so `TypedModuleEditor`
+  renders parameters without a second editor schema. Fail-closed at require time in
+  BOTH directions (declared vs runtime sets compared); each entry records its runtime
+  owner (`runtime` executes it, `operation` fails closed with
+  `CRAFTING_PROCEDURE_STEP_NOT_OWNED` if run standalone).
+- `src/server-features/crafting/procedure/ProcedureBuilder.js` (existing): domain
+  add/edit/remove/reorder/validate/save; validation IS the runtime schema.
+- `src/desktop/use-cases/ProcedureBuilderUseCases.js` (new): catalog / validate /
+  dry-run. Dry-run is pure (`capabilityCalls: 0`, `simulatedOnly: true`) and reuses the
+  existing `QuantityStrategy.plan` for the batch preview, so the builder previews the
+  same batching the runtime executes.
+- `src/desktop/DesktopController.js`: `procedureCatalog` / `procedureValidate` /
+  `procedureDryRun` / `saveProcedure`. Save validates through `ProcedureRegistry`, then
+  persists via the generic `saveConfigGroup('procedures', …)` path (schema +
+  cross-reference + atomic backup + reload + `#configMutation` queue) and reports
+  `restartRequired` — fail-closed, never claimed live, because per-bot
+  `ProcedureRegistry` instances are built at boot. Use case is lazily constructed so
+  the frozen constructor budget is unchanged.
+- `src/desktop/contracts/DesktopApiContract.js` + `main.js` + `preload.js`: four new
+  channels (`mcbot:procedure:catalog|validate|dry-run|save`) cataloged with
+  READ/READ/READ/DEVELOP permissions; no channel outside the contract.
+- `src/desktop/renderer/features/procedure/ProcedureBuilderBindings.js` (new renderer
+  feature boundary, declared in `architecture/catalog.json` runtimeEntrypoints and
+  loaded before app.js): owns the procedure builder DOM wiring.
+  `RendererEventBindings.js` keeps only a 5-line delegating resolver, so the frozen
+  legacy facade budget (463 file / 458 function lines) is respected and no procedure
+  logic leaks into the shared facade.
+- `src/desktop/renderer/app.js` + `index.html` + `RendererStore.js`: builder page panel
+  (metadata, quantity strategy/maxBatch, step palette with search, reorderable step
+  list, typed step editor, pure dry-run output, advanced raw JSON), state keys.
+
+Contract checks (G20 "không được"):
+- Builder cannot emit JSON the runtime rejects: validate() normalizes through
+  `ProcedureRegistry`, and the config `procedures` schema re-validates on save.
+- Builder can express every runtime step without code: catalog is derived from
+  `ProcedureRegistry.STEP_TYPES`, drift throws at module load in both directions.
+
+## Tests (G20, actually run)
+- `node --test tests/unit/desktop/ProcedureBuilderUseCases.test.js` -> PASS 6/6
+  (catalog/runtime parity + owner tagging, required-param/pattern/unknown-type
+  rejection, all shipped procedures round-trip without drift, dry-run purity +
+  exact 137 -> [64,64,1x9] plan, dry-run fail-closed on invalid draft/request,
+  command-quantity single full-amount batch)
+- `node --test tests/unit/desktop/DesktopProcedureBuilder.test.js` -> PASS 4/4
+  (end-to-end boundary wiring incl. catalog runtimeEntrypoint + delegation-not-ownership,
+  builder controls present, frozen module surface, deps forwarding + every control
+  wired + `bind()` throws on missing deps — the regression the E2E caught)
+- `node --test` desktop batch (14 files: DesktopApiContract, RendererEventBindings,
+  RendererDecompositionContract, DesktopOperatorExperienceContract, DesktopDevExperience,
+  DesktopControllerActions, CraftingRequestControl, DesktopLogPolicy, OperatorHealthService,
+  BotCardPresenter, ProcedureBuilderUseCases, DesktopProcedureBuilder) + server-features
+  procedure batch (CraftProcedureBuilder, CraftGenericProcedure, CraftProcedureDiversity,
+  CraftProcedureRuntimeWiring) -> PASS 106/106
+- `node --test tests/e2e/desktop/desktop-critical-flow.test.js` -> PASS 1/1 (real Electron)
+- `node --test` modes/configuration/planning/items/shared (47 files) -> PASS 326 / FAIL 2,
+  both reproduced IDENTICALLY on a clean stashed HEAD: ComposableModePlatform WP-204
+  (`window.mcbot.saveCustomMode` expectedDigest regex) and LegacyModeTaskSupervision
+  (`new TaskSupervisor(` in CraftingModeService). Classification: 2x verified baseline
+  failure, 0x G20 regression, 0x inconclusive.
+- `node scripts/validate-config.js` -> PASS 31/31 schema + cross-ref PASS
+- `node scripts/check-slo-contract.js` -> PASS (7 objectives)
+- `node scripts/check-static-quality.js` -> FAIL 1 (only the pre-existing
+  CraftingOperation 556>500 G12.1 baseline; RendererEventBindings and DesktopController
+  regressions introduced mid-phase were removed by extracting the renderer feature
+  module and lazily constructing the use case)
+- `node scripts/validate-architecture.js` -> FAIL 3 (only the 3 pre-existing
+  MARKDOWN_UNAUTHORIZED roadmap docs; 420/420 source reachable, no orphans, no cycles)
+- Mock/unit + Electron-harness verification only; no live-server or live-GUI proof
+  claimed. Saving a procedure requires a backend restart to load the new registry.
 
 ## Completed
 - G1 scope freeze + baseline

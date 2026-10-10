@@ -25,6 +25,7 @@ const BotProfileUseCases = require('./use-cases/BotProfileUseCases');
 const ModeConfigurationUseCases = require('./use-cases/ModeConfigurationUseCases');
 const FleetControlUseCases = require('./use-cases/FleetControlUseCases');
 const CraftingRequestUseCases = require('./use-cases/CraftingRequestUseCases');
+const ProcedureBuilderUseCases = require('./use-cases/ProcedureBuilderUseCases');
 const ProfileDomain = require('./domains/ProfileDomain');
 const FleetDomain = require('./domains/FleetDomain');
 const IncidentDomain = require('./domains/IncidentDomain');
@@ -464,6 +465,45 @@ class DesktopController {
     craftingItems(botId) { return this.fleetDomain.craftingItems(botId); }
     setCraftingRequest(botId, request) { return this.fleetDomain.setCraftingRequest(botId, request); }
     clearCraftingRequest(botId) { return this.fleetDomain.clearCraftingRequest(botId); }
+
+    // G20: Procedure Builder. Catalog is static (derived from the runtime step
+    // schema); validate/dry-run are pure; save validates through the same
+    // ProcedureRegistry the runtime consumes, then persists via the generic
+    // config group path (schema + cross-reference + atomic backup + reload).
+    #procedureBuilder() {
+        // Lazily built: the use case is stateless and holds no bundle, so the
+        // constructor budget is not spent on an object only the builder needs.
+        return this.procedureBuilderUseCases ||= new ProcedureBuilderUseCases();
+    }
+
+    procedureCatalog() { return this.#procedureBuilder().catalog(); }
+
+    procedureValidate(draft) {
+        const validation = this.#procedureBuilder().validate(draft);
+        if (!validation.valid) {
+            throw Object.assign(new Error(validation.errors.join(' · ')), { code: 'PROCEDURE_INVALID', errors: validation.errors });
+        }
+        return { valid: true, id: validation.normalized.id, steps: validation.normalized.steps.length };
+    }
+
+    procedureDryRun(draft, options = {}) {
+        return Redactor.sanitize(this.#procedureBuilder().dryRun(draft, options));
+    }
+
+    async saveProcedure(draft) {
+        const validation = this.#procedureBuilder().validate(draft);
+        if (!validation.valid) {
+            throw Object.assign(new Error(validation.errors.join(' · ')), { code: 'PROCEDURE_INVALID', errors: validation.errors });
+        }
+        const { id, label, description, quantityStrategy, maxBatch, steps } = validation.normalized;
+        this.#requireRunning();
+        const current = this.bundle.configuration.registry.require('procedures');
+        const next = { ...current, [id]: { label, description, quantityStrategy, maxBatch, steps } };
+        // Per-bot ProcedureRegistry instances are built at boot: the generic
+        // reload path has no live reconfigure branch for 'procedures', so the
+        // save result reports restartRequired (fail-closed, never claimed live).
+        return this.saveConfigGroup('procedures', next);
+    }
 
     reconcileFleet(reason = 'desktop-reconcile') { return this.fleetDomain.reconcile(reason); }
     fleetAction(action) { return this.fleetDomain.fleetAction(action); }

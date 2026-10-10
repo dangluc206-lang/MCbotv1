@@ -34,6 +34,7 @@ const CHANNELS = Object.freeze([
     'mcbot:backend:start', 'mcbot:backend:stop', 'mcbot:backend:restart', 'mcbot:snapshot', 'mcbot:health', 'mcbot:readiness', 'mcbot:crafting:journey', 'mcbot:incidents:list',
     'mcbot:profiles:list', 'mcbot:commands', 'mcbot:sky-commands:get', 'mcbot:config:groups',
     'mcbot:config:group:get', 'mcbot:config:workspace:open', 'mcbot:config:workspace:preview', 'mcbot:config:backups', 'mcbot:custom-mode:modules', 'mcbot:custom-mode:templates', 'mcbot:custom-mode:list',
+    'mcbot:procedure:catalog', 'mcbot:procedure:validate', 'mcbot:procedure:dry-run', 'mcbot:procedure:save',
     'mcbot:config:crafting:get', 'mcbot:config:storage-protection:get',
     'mcbot:config:sky-auto-join:get', 'mcbot:config:fishing:get',
     'mcbot:logs', 'mcbot:diagnostics:list', 'mcbot:app:info', 'mcbot:update:local-status',

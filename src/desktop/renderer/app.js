@@ -743,7 +743,10 @@ function switchPage(page) {
   if (page === 'modes') { renderModes(); Promise.all([loadCraftConfig(), loadStorageProtection(), loadCraftJourney()]).catch(error => toast(error.message, 'error')); }
   if (page === 'incidents') loadIncidents().catch(error => toast(error.message, 'error'));
   if (page === 'bots' && !state.profilesLoaded) loadProfiles().catch(error => toast(error.message, 'error'));
-  if (page === 'builder' && state.snapshot?.lifecycle === 'RUNNING') loadCustomModeCatalog().catch(error => toast(error.message, 'error'));
+  if (page === 'builder' && state.snapshot?.lifecycle === 'RUNNING') {
+    loadCustomModeCatalog().catch(error => toast(error.message, 'error'));
+    loadProcedureBuilder().catch(error => toast(error.message, 'error'));
+  }
   if (page === 'settings') { loadBackupCatalog().catch(error => toast(error.message, 'error')); if (state.snapshot?.lifecycle === 'RUNNING' && state.configGroups.length) loadAdvancedConfig().catch(error => toast(error.message, 'error')); }
   if (page === 'logs') { state.logUnread = 0; renderLogs(); }
   if (page === 'diagnostics') refreshDiagnostics();
@@ -1097,6 +1100,106 @@ function changeWorkflowStep(button) {
   fillCustomBuilder(draft);
 }
 
+// ---- G20: Procedure Builder (runtime STEP_TYPES schema, no second schema) ----
+
+function newProcedureDraft() {
+  return { id: '', label: '', description: '', quantityStrategy: 'button-batch', maxBatch: 64, steps: [] };
+}
+
+function defaultProcedureStep(type) {
+  const commandKey = state.commands?.find(command => command.key !== 'login')?.key || '';
+  const defaults = {
+    command: { type, commandKey, timeoutMs: 5000 },
+    'slash-command': { type, command: '/is' },
+    'open-gui': { type, guiId: '' },
+    'resolve-gui': { type, guiId: '' },
+    'wait-for-gui': { type, guiId: '', timeoutMs: 5000 },
+    'find-logical-item': { type, itemId: '' },
+    'find-slot': { type, slot: 0 },
+    click: { type },
+    wait: { type, ms: 1000 },
+    'wait-for-transition': { type, ms: 1000 },
+    'wait-for-message': { type, params: { pattern: '' }, timeoutMs: 5000 },
+    'wait-for-output': { type, timeoutMs: 5000 },
+    'close-gui': { type },
+    'verify-item': { type },
+    'verify-quantity': { type, amount: '$execution.remaining' }
+  };
+  return JSON.parse(JSON.stringify(defaults[type] || { type }));
+}
+
+function procedureDraftFromBuilder() {
+  return {
+    id: $('#procedureId').value.trim(),
+    label: $('#procedureLabel').value.trim(),
+    description: $('#procedureDescription').value.trim(),
+    quantityStrategy: $('#procedureQuantityStrategy').value,
+    maxBatch: Number($('#procedureMaxBatch').value || 64),
+    steps: readProcedureSteps()
+  };
+}
+
+function readProcedureSteps() {
+  return [...$('#procedureSteps').querySelectorAll(':scope > .workflow-step')].map(row => {
+    const type = row.querySelector('.step-type').value;
+    return window.MCbotTypedModuleEditor.read(row, type);
+  });
+}
+
+function renderProcedureStepList(steps) {
+  const root = $('#procedureSteps');
+  const catalog = state.procedureCatalog || [];
+  root.innerHTML = steps.length ? steps.map((step, index) => {
+    const descriptor = catalog.find(item => item.type === step.type) || { type: step.type, owner: 'runtime', presentation: { fields: [] } };
+    return `<div class="workflow-step" data-procedure-index="${index}"><span class="step-index">${index + 1}</span><select class="step-type" aria-label="Loại bước">${catalog.map(item => `<option value="${esc(item.type)}" ${item.type === step.type ? 'selected' : ''}>${esc(item.label)}</option>`).join('')}</select><div class="step-editor">${window.MCbotTypedModuleEditor.render(step, descriptor, catalog, esc)}</div><span class="step-index" title="Chủ sở hữu lúc thực thi">${esc(descriptor.owner || 'runtime')}</span><div class="step-buttons"><button class="button ghost small" data-procedure-action="up">↑</button><button class="button ghost small" data-procedure-action="down">↓</button><button class="button danger small" data-procedure-action="remove">×</button></div></div>`;
+  }).join('') : '<div class="empty">Chưa có bước.</div>';
+}
+
+function fillProcedureBuilder(definition = null) {
+  const d = definition ? JSON.parse(JSON.stringify(definition)) : newProcedureDraft();
+  state.procedureDraft = d;
+  $('#procedureId').value = d.id || '';
+  $('#procedureLabel').value = d.label || '';
+  $('#procedureDescription').value = d.description || '';
+  $('#procedureQuantityStrategy').value = ['button-batch', 'repeat', 'command-quantity', 'custom'].includes(d.quantityStrategy) ? d.quantityStrategy : 'button-batch';
+  $('#procedureMaxBatch').value = d.maxBatch ?? 64;
+  renderProcedureStepList(d.steps || []);
+  $('#procedureJson').value = JSON.stringify(d, null, 2);
+}
+
+function renderProcedurePalette(query = '') {
+  const catalog = state.procedureCatalog || [];
+  $('#procedureStepCount').textContent = String(catalog.length);
+  const needle = String(query).trim().toLowerCase();
+  const entries = catalog.filter(entry => !needle || `${entry.type} ${entry.label} ${entry.description}`.toLowerCase().includes(needle));
+  $('#procedureStepPalette').innerHTML = entries.map(entry => `<div class="module-card"><strong>${esc(entry.label)}</strong><span>${esc(entry.description)}</span><small>${esc(entry.type)} · ${esc(entry.owner)}</small><div class="actions compact"><button class="button primary small" data-procedure-add="${esc(entry.type)}">+ Thêm bước</button></div></div>`).join('') || '<div class="empty">Không có bước phù hợp.</div>';
+}
+
+function changeProcedureStep(button) {
+  const row = button.closest('.workflow-step');
+  if (!row) return;
+  let draft;
+  try { draft = procedureDraftFromBuilder(); } catch (error) { toast(`JSON bước không hợp lệ: ${error.message}`, 'error'); return; }
+  const index = Number(row.dataset.procedureIndex);
+  const action = button.dataset.procedureAction;
+  if (action === 'remove') draft.steps.splice(index, 1);
+  if (action === 'up' && index > 0) [draft.steps[index - 1], draft.steps[index]] = [draft.steps[index], draft.steps[index - 1]];
+  if (action === 'down' && index < draft.steps.length - 1) [draft.steps[index + 1], draft.steps[index]] = [draft.steps[index], draft.steps[index + 1]];
+  fillProcedureBuilder(draft);
+}
+
+async function loadProcedureBuilder() {
+  if (state.snapshot?.lifecycle !== 'RUNNING') return;
+  const [group, catalog] = await Promise.all([api(window.mcbot.configGroup('procedures')), api(window.mcbot.procedureCatalog())]);
+  state.procedures = group.value || {};
+  state.procedureCatalog = catalog;
+  renderProcedurePalette();
+  const current = $('#procedureSelect')?.value || '';
+  const options = '<option value="">— Tạo mới —</option>' + Object.keys(state.procedures).sort().map(id => `<option value="${esc(id)}">${esc(state.procedures[id]?.label || id)}</option>`).join('');
+  syncSelect($('#procedureSelect'), options, current);
+  if (!state.procedureDraft) fillProcedureBuilder();
+}
+
 // Event bindings: the legacy bindEvents body lives in core/RendererEventBindings.js.
 // The facade keeps this alias so initialize() behavior is unchanged.
 const { bindEvents } = window.MCbotRendererEventBindings.create({
@@ -1117,6 +1220,8 @@ const { bindEvents } = window.MCbotRendererEventBindings.create({
   loadStorageProtection, saveStorageProtection, defaultModuleStep, newCustomDraft,
   modulePayload, renderWorkflowList, draftFromBuilder, readCustomSteps, fillCustomBuilder,
   renderModulePalette, customModeEntryId, loadCustomModeCatalog, changeWorkflowStep,
+  defaultProcedureStep, newProcedureDraft, procedureDraftFromBuilder, fillProcedureBuilder,
+  renderProcedurePalette, changeProcedureStep, loadProcedureBuilder,
   runAction, refreshSnapshot, confirmInApp, reportRendererError, captureCraftingDraft,
   applyPresentationPreferences, clearEventView
 });

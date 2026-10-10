@@ -304,6 +304,10 @@ function registerIpc() {
     safeHandle('mcbot:custom-mode:list', () => controller.customModes());
     safeHandle('mcbot:custom-mode:save', (definition, options) => controller.saveCustomMode(definition, options || {}));
     safeHandle('mcbot:custom-mode:delete', modeId => controller.deleteCustomMode(modeId));
+    safeHandle('mcbot:procedure:catalog', () => controller.procedureCatalog());
+    safeHandle('mcbot:procedure:validate', draft => controller.procedureValidate(draft));
+    safeHandle('mcbot:procedure:dry-run', (draft, options) => controller.procedureDryRun(draft, options || {}));
+    safeHandle('mcbot:procedure:save', draft => controller.saveProcedure(draft));
     safeHandle('mcbot:config:backup', () => controller.backupConfig());
     safeHandle('mcbot:config:backups', options => controller.backupCatalog(options || {}));
     safeHandle('mcbot:config:restore-preview', backupId => controller.previewConfigRestore(backupId));

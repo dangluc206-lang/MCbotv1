@@ -208,6 +208,13 @@
     $('#applyCustomJson').onclick = () => { try { fillCustomBuilder(JSON.parse($('#customModeJson').value)); toast('Đã áp dụng JSON vào trình dựng.'); } catch (error) { toast(`JSON không hợp lệ: ${error.message}`, 'error'); } };
   }
 
+  // G20: procedure builder wiring owns its own renderer feature module (XP-200).
+  function bindProcedureBuilder(deps) {
+    const bindings = deps.procedureBuilderBindings || globalThis.MCbotProcedureBuilderBindings || (typeof require === 'function' && require('../features/procedure/ProcedureBuilderBindings'));
+    if (!bindings?.create) throw new Error('Procedure builder bindings module is not loaded.');
+    return bindings.create(deps).bind();
+  }
+
   function bindProfiles(deps) {
     const { $, api, runAction, loadProfiles, refreshSnapshot } = deps;
     $('#createProfileBtn').onclick = event => runAction({ key: 'profile-create', button: event.currentTarget, success: 'Đã tạo bot mới.', refresh: false, fn: async () => {
@@ -434,6 +441,7 @@
       bindFirstRun(deps);
       bindIncidents(deps);
       bindCraftModes(deps);
+      bindProcedureBuilder(deps);
       bindSkyCommands(deps);
       bindAdvancedConfig(deps);
       bindBuilder(deps);

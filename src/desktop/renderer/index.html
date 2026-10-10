@@ -337,6 +337,31 @@
         </div>
         <pre id="customModeSimulation" class="panel section-gap">Chưa chạy mô phỏng.</pre>
         <details class="panel section-gap advanced-builder"><summary>Cấu hình JSON nâng cao của chế độ</summary><textarea id="customModeJson" aria-label="Cấu hình JSON nâng cao của chế độ" class="code-editor" rows="18" spellcheck="false"></textarea><div class="actions"><button class="button ghost" id="applyCustomJson">Áp dụng JSON vào trình dựng</button></div></details>
+        <div class="panel section-gap">
+          <div class="panel-title"><div><h2>Trình tạo quy trình chế tạo (Procedure)</h2><p class="helper">Các bước dùng đúng runtime schema của Procedure Engine. Lưu kiểm tra qua ProcedureRegistry; backend cần khởi động lại để nạp registry.</p></div><div class="actions compact"><button class="button ghost" id="procedureValidate">Kiểm tra</button><button class="button ghost" id="procedureDryRun">Chạy mô phỏng</button><button class="button primary" id="procedureSave">Lưu procedure</button></div></div>
+          <div class="builder-layout">
+            <div class="panel form-panel">
+              <div class="panel-title"><h2>Thông tin procedure</h2><span class="tag">PROCEDURE</span></div>
+              <label>Procedure đã lưu<select id="procedureSelect"><option value="">— Tạo mới —</option></select></label>
+              <label>ID procedure<input id="procedureId" placeholder="minerals-crafting"></label>
+              <label>Tên hiển thị<input id="procedureLabel"></label>
+              <label>Mô tả<textarea id="procedureDescription" rows="2"></textarea></label>
+              <div class="inline-fields"><label>Chiến lược số lượng<select id="procedureQuantityStrategy"><option value="button-batch">button-batch</option><option value="repeat">repeat</option><option value="command-quantity">command-quantity</option><option value="custom">custom</option></select></label><label>Max batch<input id="procedureMaxBatch" type="number" min="1" step="1" value="64"></label></div>
+              <div class="actions"><button class="button ghost" id="procedureNew">Mới</button></div>
+            </div>
+            <div class="panel">
+              <div class="panel-title"><h2>Thư viện bước</h2><span id="procedureStepCount" class="tag">0</span></div>
+              <label>Tìm bước<input id="procedureStepSearch" placeholder="lệnh, GUI, chờ, xác minh…"></label>
+              <div id="procedureStepPalette" class="module-palette"></div>
+            </div>
+          </div>
+          <div class="panel section-gap">
+            <div class="panel-title"><div><h2>Danh sách bước</h2><p class="helper">Thêm từ thư viện, sắp xếp bằng ↑/↓, sửa tham số có kiểu. Bước operation-owned được đánh dấu riêng.</p></div><div class="actions compact"><button class="button ghost" id="procedureClearSteps">Xóa bước</button></div></div>
+            <div id="procedureSteps" class="workflow-list"></div>
+          </div>
+          <pre id="procedureSimulation" class="panel section-gap">Chưa chạy mô phỏng.</pre>
+          <details class="panel section-gap advanced-builder"><summary>Cấu hình JSON nâng cao của procedure</summary><textarea id="procedureJson" aria-label="Cấu hình JSON nâng cao của procedure" class="code-editor" rows="14" spellcheck="false"></textarea><div class="actions"><button class="button ghost" id="procedureApplyJson">Áp dụng JSON vào trình dựng</button></div></details>
+        </div>
       </section>
 
       <section class="page" id="page-tools" data-page="tools" data-experience="advanced">
@@ -411,6 +436,7 @@
   <script src="features/incidents/IncidentViewModel.js"></script>
   <script src="features/incidents/IncidentPresenter.js"></script>
   <script src="features/builder/TypedModuleEditor.js"></script>
+  <script src="features/procedure/ProcedureBuilderBindings.js"></script>
   <script src="features/modes/ModeViewModel.js"></script>
   <script src="features/connection/ConnectionViewModel.js"></script>
   <script src="features/operator/OperatorPresenter.js"></script>

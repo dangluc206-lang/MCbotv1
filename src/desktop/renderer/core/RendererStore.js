@@ -18,6 +18,7 @@
       pending: new Set(), selectorSignature: '',
       configGroups: [], customModes: [], customModules: [],
       customTemplates: [], customDraft: null, localUpdate: null,
+      procedureCatalog: [], procedures: {}, procedureDraft: null,
       updateMigration: null, readiness: null, health: null,
       incidents: [], selectedIncidentId: null, incidentEvidenceIndex: 0,
       craftJourney: [], configWorkspace: null, backupCatalog: [],

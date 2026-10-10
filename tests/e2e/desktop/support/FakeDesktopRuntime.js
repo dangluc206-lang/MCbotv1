@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const CommandPaletteCatalog = require('../../../../src/desktop/presentation/CommandPaletteCatalog');
+const ProcedureStepCatalog = require('../../../../src/server-features/crafting/procedure/ProcedureStepCatalog');
 
 const FIXED_TIME = '2026-08-24T00:00:00.000Z';
 
@@ -110,6 +111,10 @@ class FakeDesktopRuntime {
         case 'mcbot:custom-mode:modules': return [];
         case 'mcbot:custom-mode:templates': return [];
         case 'mcbot:custom-mode:list': return [];
+        case 'mcbot:procedure:catalog': return ProcedureStepCatalog.list();
+        case 'mcbot:procedure:validate': return { valid: true, id: 'e2e', steps: 0 };
+        case 'mcbot:procedure:dry-run': return { contract: 'procedure-dry-run-v1', valid: true, simulatedOnly: true };
+        case 'mcbot:procedure:save': return { key: 'procedures', saved: true, restartRequired: true };
         case 'mcbot:config:crafting:get': return this.configGroup('craftingMode');
         case 'mcbot:config:storage-protection:get': return { value: { sellBlockOnly: true, collectorB1Decompression: { maxUsageRatio: 0.8, requireKnownCapacity: true } } };
         case 'mcbot:config:sky-auto-join:get': return { value: clone(this.configByKey.get('skyblock')) };
