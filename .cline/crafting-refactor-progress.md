@@ -1,14 +1,48 @@
 # Crafting Refactor Progress
 
 ## Current Phase
-G24 — Final refactor and architecture cleanup (CLOSED)
+G20.2 — Procedure Builder nested-field validation (IN_PROGRESS)
 
 ## Status
 G16.1 CLOSED. G19 CLOSED. G20 CLOSED. G20.1 CLOSED. G21 CLOSED. G22 CLOSED.
-G23 CLOSED. G24 CLOSED (commit 5f516bc, pushed + verified on origin/main:
-HEAD == origin/main).
-Overall refactor G1–G24 COMPLETE (all required phases CLOSED, every closeout
-verified on origin/main).
+G23 CLOSED. G24 CLOSED (commit 7e31849, pushed + verified on origin/main).
+Post-closeout audit sweep IN PROGRESS: G20.2 (this section) -> G21.1 -> G23.1,
+each its own commit/push/verify. Base phases stay CLOSED, never replayed.
+
+## G20.2 — Procedure Builder nested-field validation (IN_PROGRESS)
+Linked defect (found after G24 closeout in source audit): catalog declares
+`wait-for-message` field `params.pattern` (dotted key = nested step data), but
+`validateStepParams()` compared raw top-level keys against declared keys, so a
+valid draft `{ type: 'wait-for-message', params: { pattern } }` was rejected as
+"unsupported field: params". Reproduced before the fix: valid nested draft ->
+`valid=false`. Second defect in the same file: integer-string contract comment
+claimed whitespace-padded strings are rejected while the code trims first —
+contract now pinned as "surrounding whitespace tolerated, trimmed before
+normalize".
+Scope: validator dotted-key handling only — no second schema, no UI rewrite.
+
+Implementation:
+- `checkContainer()`: a top-level container (e.g. `params`) is accepted only
+  when the catalog declares children beneath it; the container must be a plain
+  object holding ONLY declared children (arrays/null/primitives/undeclared
+  nested keys rejected). Per-field checks still run through `valueAtPath()` +
+  `setAtPath()`, so `{ type, params: { pattern } }` validates AND normalizes
+  with the nested structure intact (Registry round-trip verified).
+- Integer-string contract comment corrected to match the code (trim tolerated);
+  new test pins `' 5000 '` -> 5000 plus rejections of '5.0'/'0x10'/'5e2'/''/'  '.
+
+## Tests (G20.2, actually run)
+- `node --test tests/unit/desktop/ProcedureBuilderUseCases.test.js` -> PASS 14/14
+  (12 G20/G20.1 + 2 new: nested params.pattern matrix incl. Registry round-trip;
+  integer-string whitespace contract).
+- Controller/binding/contract suites -> PASS 24/24 (single authority still shared
+  by validate/dry-run/save; no persistence-path change).
+- Server suites (Conformance/SpecialProcedures/GenericProcedure/Recording) ->
+  PASS 29/29.
+- `validate-config.js` 31/31 PASS. `check-slo-contract` PASS 7.
+- `check-static-quality.js` FAIL 1 (pre-existing CraftingOperation 556>500 only).
+- `validate-architecture.js` FAIL 3 (pre-existing MARKDOWN_UNAUTHORIZED only).
+- `git diff --check` clean. Mock/unit only; no live-server/GUI proof claimed.
 
 ## G21 — Procedure Recorder (CLOSED: commit 64b9823, verified on origin/main)
 Scope (roadmap G21): a foundation for recording interaction sequences that maps

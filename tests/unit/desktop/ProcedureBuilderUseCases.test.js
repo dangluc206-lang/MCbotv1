@@ -107,6 +107,43 @@ test('G20 command-quantity procedures plan a single full-amount batch', () => {
     assert.equal(report.batches[0].expectedOutput, 137);
 });
 
+test('G20.2 wait-for-message validates the nested params.pattern contract', () => {
+    const useCases = new ProcedureBuilderUseCases();
+    const message = params => draftOf('p', [{ type: 'wait-for-message', ...(params === undefined ? {} : { params }) }]);
+
+    const valid = useCases.validate(message({ pattern: 'hello' }));
+    assert.equal(valid.valid, true);
+    assert.deepEqual(valid.normalized.steps[0], { type: 'wait-for-message', params: { pattern: 'hello' } });
+
+    assert.equal(useCases.validate(message(undefined)).valid, false);
+    assert.equal(useCases.validate(message({})).valid, false);
+    assert.equal(useCases.validate(message({ pattern: '   ' })).valid, false);
+    assert.equal(useCases.validate(message({ pattern: 42 })).valid, false);
+    assert.equal(useCases.validate(message({ pattern: null })).valid, false);
+    assert.equal(useCases.validate(message({ pattern: 'x', bogus: 1 })).valid, false);
+    assert.equal(useCases.validate(message(['x'])).valid, false);
+    assert.equal(useCases.validate(message('x')).valid, false);
+    // A top-level `pattern` is NOT the declared nested key — it would be dropped.
+    assert.equal(useCases.validate(draftOf('p', [{ type: 'wait-for-message', pattern: 'x' }])).valid, false);
+
+    // Normalized shape round-trips through the Registry without data loss.
+    const reread = new ProcedureRegistry({ [valid.normalized.id]: valid.normalized }).require(valid.normalized.id);
+    assert.deepEqual(reread.steps[0], { type: 'wait-for-message', params: { pattern: 'hello' } });
+});
+
+test('G20.2 integer strings tolerate surrounding whitespace, nothing else', () => {
+    const useCases = new ProcedureBuilderUseCases();
+    const timeout = timeoutMs => draftOf('p', [{ type: 'command', commandKey: 'minerals', timeoutMs }]);
+
+    const padded = useCases.validate(timeout(' 5000 '));
+    assert.equal(padded.valid, true);
+    assert.equal(padded.normalized.steps[0].timeoutMs, 5000);
+
+    for (const bad of ['5.0', '0x10', '5e2', '', '  ']) {
+        assert.equal(useCases.validate(timeout(bad)).valid, false, `${JSON.stringify(bad)} must be rejected`);
+    }
+});
+
 test('G20.1 optional integer fields validate type and bounds when provided', () => {
     const useCases = new ProcedureBuilderUseCases();
     const timeout = timeoutMs => draftOf('p', [{ type: 'command', commandKey: 'minerals', ...(timeoutMs === undefined ? {} : { timeoutMs }) }]);

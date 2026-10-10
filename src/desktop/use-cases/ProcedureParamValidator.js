@@ -4,7 +4,8 @@ const INTEGER_RE = /^-?\d+$/;
 const INTEGER_MAX_SAFE_DIGITS = 16;
 
 /**
- * Single validation authority for procedure step parameters (G20.1).
+ * Single validation authority for procedure step parameters (G20.1; nested
+ * dotted-key support fixed in G20.2).
  * `ProcedureStepCatalog` stays the declarative field metadata; this module is
  * the pure checker that every entry point (validate / dry-run / save) shares.
  *
@@ -16,15 +17,23 @@ const INTEGER_MAX_SAFE_DIGITS = 16;
  *   A malformed value like "abc" in an integer field is NEVER treated as absent.
  * - Integer: actual number or canonical integer string only. No floats, NaN,
  *   Infinity, booleans, objects, arrays, or ambiguous coercions.
+ * - Integer strings must be canonical: optional surrounding whitespace is
+ *   tolerated (and trimmed before normalize), but anything else ("5.0", "0x10",
+ *   "5e2", empty) is rejected.
  * - Bounds are inclusive on both ends.
  * - Unknown field keys (not in the catalog for that step type) -> REJECT, so a
  *   Registry normalization drop can never silently lose builder data.
+ * - Dotted field keys (e.g. 'params.pattern') address NESTED step data:
+ *   `{ type, params: { pattern } }`. A top-level container (e.g. `params`) is
+ *   allowed only when the catalog declares at least one child under it; nested
+ *   keys outside the catalog are rejected, and non-object containers are
+ *   rejected (never coerced).
  *
  * Integer strings: TypedModuleEditor sends `Number(value)` for number inputs,
  * so IPC drafts carry real numbers. The builder advanced-JSON path (and any
  * hand-written draft) can carry strings, so canonical integer strings
- * ("5000") normalize to numbers; anything else ("5.0", "0x10", "5e2",
- * whitespace-padded, empty) is rejected.
+ * ("5000", " 5000 ") normalize to numbers; anything else ("5.0", "0x10",
+ * "5e2", empty) is rejected.
  */
 function valueAtPath(object, dottedKey) {
     return dottedKey.split('.').reduce((value, key) => (value == null ? value : value[key]), object);
@@ -43,6 +52,31 @@ function isProvided(value) {
 
 function isEmptyText(value) {
     return typeof value === 'string' && !value.trim();
+}
+
+// A declared container (e.g. `params` for 'params.pattern') must be a plain
+// object holding ONLY catalog-declared children. Anything else — arrays, null,
+// primitives, or undeclared nested keys — is rejected so undeclared data can
+// never ride into the normalized draft inside a container.
+function checkContainer(step, containerKey, declared) {
+    const label = `step '${step.type}' tham số ${containerKey}`;
+    const container = step[containerKey];
+    if (container === null || typeof container !== 'object' || Array.isArray(container)) {
+        return [`${label}: phải là object chứa các tham số đã khai báo.`];
+    }
+    const allowed = new Set(
+        [...declared.keys()]
+            .filter(key => key === containerKey || key.startsWith(`${containerKey}.`))
+            .map(key => key.slice(containerKey.length + 1))
+            .filter(child => child && !child.includes('.'))
+    );
+    const problems = [];
+    for (const child of Object.keys(container)) {
+        if (!allowed.has(child)) {
+            problems.push(`${label}.${child}: tham số lồng nhau không được hỗ trợ (runtime sẽ loại bỏ, gây mất dữ liệu).`);
+        }
+    }
+    return problems;
 }
 
 function checkInteger(value, field, label) {
@@ -81,16 +115,28 @@ function checkText(value, field, label) {
 
 /**
  * Validates one step against its catalog fields.
+ * Dotted catalog keys (e.g. 'params.pattern') address nested step data, so
+ * the unknown-key sweep accepts a top-level container only when the catalog
+ * declares at least one child beneath it — never as a free-form object.
  * @returns {{ errors: string[], normalizedStep: object }} normalizedStep drops
  * empty optional text fields so they are stored as "not provided".
  */
 function validateStepParams(step, catalogFields) {
     const errors = [];
     const declared = new Map((catalogFields || []).map(field => [field.key, field]));
+    const containers = new Set(
+        [...declared.keys()]
+            .filter(key => key.includes('.'))
+            .map(key => key.split('.')[0])
+    );
     for (const key of Object.keys(step).filter(key => key !== 'type')) {
-        if (!declared.has(key)) {
-            errors.push(`step '${step.type}' có tham số không được hỗ trợ: ${key} (runtime sẽ loại bỏ, gây mất dữ liệu).`);
+        if (declared.has(key)) continue;
+        if (containers.has(key)) {
+            const problems = checkContainer(step, key, declared);
+            errors.push(...problems);
+            continue;
         }
+        errors.push(`step '${step.type}' có tham số không được hỗ trợ: ${key} (runtime sẽ loại bỏ, gây mất dữ liệu).`);
     }
     const normalizedStep = { type: step.type };
     for (const field of declared.values()) {
