@@ -1,14 +1,14 @@
 # Crafting Refactor Progress
 
 ## Current Phase
-G21 — Procedure Recorder (IN_PROGRESS)
+G21 — Procedure Recorder (CLOSED)
 
 ## Status
-G16.1 CLOSED. G19 CLOSED. G20 CLOSED. G20.1 CLOSED
-(commit 655a86c, pushed + verified on origin/main: HEAD == origin/main).
-Overall refactor G1–G24 remains IN PROGRESS; G21 IN PROGRESS.
+G16.1 CLOSED. G19 CLOSED. G20 CLOSED. G20.1 CLOSED. G21 CLOSED
+(commit 64b9823, pushed + verified on origin/main: HEAD == origin/main).
+Overall refactor G1–G24 remains IN PROGRESS; G22 next (PLANNED -> IN_PROGRESS).
 
-## G21 — Procedure Recorder (IN_PROGRESS)
+## G21 — Procedure Recorder (CLOSED: commit 64b9823, verified on origin/main)
 Scope (roadmap G21): a foundation for recording interaction sequences that maps
 `user action -> logical procedure step` instead of raw slot clicks. Raw slots must
 never become the sole contract; recording must not depend absolutely on one
@@ -58,6 +58,54 @@ Implementation:
 - `node scripts/validate-architecture.js` -> FAIL 3: only pre-existing
   MARKDOWN_UNAUTHORIZED roadmap docs (reproduced on stashed baseline; 422/422
   source reachable, procedureRecording wired, no orphans).
+- `git diff --check` clean. Mock/unit + Electron-harness only; no live-server/GUI
+  proof claimed.
+
+## G22 — Special procedures (PLANNED -> IN_PROGRESS)
+Scope (roadmap G22): when a new recipe appears —
+(A) sequence already expressible -> add recipe only, no source change;
+(B) same procedure, different params -> add procedure param/config, no recipe-specific class;
+(C) genuinely new capability -> add one reusable primitive/procedure capability many recipes share.
+Forbidden: 1 recipe = 1 implementation class (except truly inexpressible cases).
+
+Inventory (source-checked):
+- All 21 shipped recipes reference existing items AND the shared
+  `minerals-crafting` procedure; explorer probe found zero missing item/procedure refs.
+- `forge-crafting` (repeat/1: command forge -> click -> wait -> verify-item) and
+  `npc-crafting` (command-quantity: open-gui npc -> find -> verify-quantity) exist
+  as EXECUTOR-level diversity proofs, but the shipped /ks GUI operation
+  (`CraftingOperation.#runProcedureNavigation`) intentionally FAILS CLOSED on them:
+  only command-driven procedures containing BOTH a command step and a
+  find-logical-item step run; forge/npc shapes throw CRAFTING_PROCEDURE_NOT_SUPPORTED.
+- Smelting (`SmeltingOperation`: /nung -> click material, no quantity GUI) is a
+  separate source-owned service — NOT a crafting recipe/procedure consumer.
+- So no Case C capability exists that the engine cannot already express, and no
+  new recipe is demanded by any evidence. G22 therefore = Case A/B conformance
+  proof: add the data (recipes reusing existing procedures) + tests, zero new
+  capability classes, zero engine changes.
+- First work: representative Case A recipe (reuses minerals-crafting, existing
+  items only) + negative test pinning the fail-closed boundary + contract tests
+  proving all recipes resolve through (recipeRegistry x procedureRegistry).
+
+Implementation (no source change needed — that IS the G22 proof):
+- `tests/unit/server-features/CraftSpecialProcedures.test.js` (new, 4 tests):
+  Case A data-only recipe (`my_item`, already shipped) resolves through the same
+  registries + plans exactly (3 crafts, no missing); Case B (20+ recipes share
+  `minerals-crafting`, distinct menuSlots, zero recipe-specific classes in
+  crafting/modes roots); Case C negative pin (forge/npc shapes fail the
+  minerals-shape predicate; no shipped recipe references them).
+
+## Tests (G22 so far, actually run)
+- `node --test tests/unit/server-features/CraftSpecialProcedures.test.js` -> PASS 4/4.
+- Adjacent suites (GenericProcedure/Diversity/RuntimeWiring/Builder/Recording/
+  GenericExecution/GenericParity/GenericParity2/PlanningParity/VerificationParity/
+  ConfigurationContracts) -> PASS 61/61 total incl. the 4 new G22 tests.
+- `node --test tests/e2e/desktop/desktop-critical-flow.test.js` -> PASS 1/1.
+- `node scripts/validate-config.js` -> 31/31 PASS. `check-slo-contract` -> PASS 7.
+- `node scripts/check-static-quality.js` -> FAIL 1: only pre-existing
+  CraftingOperation 556>500 (same single failure as G20.1/G21 baselines).
+- `node scripts/validate-architecture.js` -> FAIL 3: only pre-existing
+  MARKDOWN_UNAUTHORIZED roadmap docs (422/422 reachable, no orphans).
 - `git diff --check` clean. Mock/unit + Electron-harness only; no live-server/GUI
   proof claimed.
 
