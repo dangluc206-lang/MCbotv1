@@ -307,6 +307,72 @@ test('DesktopController.customModeModules() returns IPC-safe DTO without executo
     assert.equal(commandModule.cancellable, true);
 });
 
+test('DesktopController procedure paths share one validation contract (G20.1)', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcbot-desktop-procedure-'));
+    const target = path.join(dir, 'config', 'server-data', 'procedures.json');
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    const current = {
+        'minerals-crafting': {
+            label: 'Minerals crafting (/ks)', description: '', quantityStrategy: 'button-batch', maxBatch: 64,
+            steps: [{ type: 'command', commandKey: 'minerals' }, { type: 'click' }]
+        }
+    };
+    fs.writeFileSync(target, `${JSON.stringify(current, null, 2)}\n`);
+    const persistenceCalls = [];
+    let snapshot = { procedures: current };
+    const controller = new DesktopController({ baseDir: dir });
+    controller.lifecycle = 'RUNNING';
+    controller.bundle = {
+        fleetControl: { profileSnapshot: () => ({}) },
+        configuration: {
+            registry: { require: key => snapshot[key], get: key => snapshot[key], snapshot: () => snapshot },
+            validator: { assertValid: (schema, value) => { persistenceCalls.push(['assertValid', schema]); } },
+            crossValidator: { assertValid: () => { persistenceCalls.push(['crossValid']); } },
+            service: {
+                async reload(key) {
+                    persistenceCalls.push(['reload', key]);
+                    snapshot = { ...snapshot, [key]: JSON.parse(fs.readFileSync(target, 'utf8')) };
+                    return { success: true };
+                }
+            }
+        },
+        application: { listRuntimes: () => [] }
+    };
+
+    const invalid = { id: 'bad', steps: [{ type: 'command', commandKey: 'minerals', timeoutMs: 99 }] };
+    // NOTE: procedureValidate/saveProcedure are sync-throw methods (not async),
+    // so capture the failure with try/catch rather than assert.rejects.
+    const invalidFailures = [];
+    try { controller.procedureValidate(invalid); } catch (error) { invalidFailures.push(error); }
+    try { controller.procedureDryRun(invalid); } catch (error) { invalidFailures.push(error); }
+    try { await controller.saveProcedure(invalid); } catch (error) { invalidFailures.push(error); }
+    assert.equal(invalidFailures.length, 3);
+    for (const failure of invalidFailures) {
+        assert.equal(failure.code, 'PROCEDURE_INVALID');
+        assert.match(failure.message, /timeoutMs/);
+    }
+    assert.equal(persistenceCalls.length, 0, 'invalid draft must not reach config persistence');
+
+    const valid = { id: 'good', label: 'Good', steps: [{ type: 'command', commandKey: 'minerals', timeoutMs: '5000' }] };
+    const validated = await controller.procedureValidate(valid);
+    assert.equal(validated.valid, true);
+    const report = controller.procedureDryRun(valid, { requested: 1 });
+    assert.equal(report.valid, true);
+    const saved = await controller.saveProcedure(valid);
+    assert.equal(saved.key, 'procedures');
+    assert.ok(persistenceCalls.length > 0, 'valid draft must persist through the generic path');
+    const persisted = JSON.parse(fs.readFileSync(target, 'utf8'));
+    assert.equal(persisted.good.steps[0].timeoutMs, 5000, 'string form normalizes to a number on disk');
+
+    // Shipped procedures still round-trip through the same save path unchanged.
+    const shipped = require('../../../config/server-data/procedures.json');
+    for (const [id, definition] of Object.entries(shipped)) {
+        const roundTrip = await controller.procedureValidate({ id, ...definition });
+        assert.equal(roundTrip.valid, true, id);
+    }
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test('DesktopController updates mode-driven Sky gateway timing without restoring autoJoin/maxAttempts', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcbot-desktop-config-'));
     const target = path.join(dir, 'config', 'skyblock', 'join.json');

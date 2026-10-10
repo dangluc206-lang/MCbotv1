@@ -1,10 +1,59 @@
 # Crafting Refactor Progress
 
 ## Current Phase
-G21 — Procedure Recorder (PLANNED)
+G20.1 — Procedure Builder validation fix (IN_PROGRESS: contract fixed + tests green; closeout pending)
 
 ## Status
-G16.1 CLOSED. G19 CLOSED. G20 CLOSED. Overall refactor G1–G24 remains IN PROGRESS; G21 open.
+G16.1 CLOSED. G19 CLOSED. G20 CLOSED. G20.1 IN PROGRESS (corrective sub-phase of G20,
+linked to the validation defect below — NOT a G20 replay).
+Overall refactor G1–G24 remains IN PROGRESS; G21 still PLANNED.
+
+## G20.1 — Procedure Builder validation contract fix (IN_PROGRESS)
+Linked defect (found after G20 closed in source review): `missingRequired()` in
+`src/desktop/use-cases/ProcedureBuilderUseCases.js` skipped every non-required field
+before type/min/max/pattern checks, so a provided optional value (e.g.
+`command.timeoutMs: 99`, `1.5`, `"abc"`) passed validation. Reproduced before the fix:
+all five probe cases validated `true`.
+Scope: validation contract only — one pure authority, no second step schema, no UI
+rewrite, no Recorder work, no new step types.
+
+Implementation (staged; committing now):
+- `src/desktop/use-cases/ProcedureParamValidator.js` (new pure module): single
+  validation authority. Required missing/null/empty -> reject; optional absent ->
+  accept; optional provided -> full type/min/max/pattern checks. Empty optional
+  text drops as not-provided; canonical integer strings normalize to numbers;
+  floats/NaN/Infinity/booleans/objects/hex/scientific/padded strings reject;
+  bounds inclusive; unknown keys reject (Registry would silently drop them).
+- `ProcedureBuilderUseCases.validate()`: delegates per-step to the validator,
+  feeds ONLY canonical normalized steps into `ProcedureRegistry`.
+- `DesktopController.procedureValidate/procedureDryRun/saveProcedure` already share
+  `validate()` (verified in source) — invalid drafts now rejected before any config
+  persistence on all three paths.
+
+## Tests (G20.1, actually run)
+- `node --test tests/unit/desktop/ProcedureBuilderUseCases.test.js` -> PASS 12/12
+  (6 G20 + 6 new: optional-integer matrix incl. 100/30000 valid, 99/30001/1.5/NaN/
+  Infinity/"abc"/"5.0"/"0x10"/"5e2"/""/bool/object/array invalid, string "5000"
+  normalizes; wait.ms 0/3600000 valid, -1/3600001/0.5 invalid; verify-item.amount
+  absent valid, 1 valid, 0/2.5 invalid; required/pattern/non-string rejects;
+  empty optional text dropped; unknown field rejected; Registry round-trip clean)
+- `node --test DesktopControllerActions + DesktopProcedureBuilder + DesktopApiContract`
+  -> PASS 36/36 incl. new boundary test: invalid draft rejected on all three
+  controller paths BEFORE any persistence call; valid draft validates/dry-runs/saves
+  with "5000" persisted as number 5000; shipped procedures still validate.
+- Server procedure suites (CraftProcedureBuilder/GenericProcedure/Diversity/
+  RuntimeWiring) -> PASS 17/17 (incl. updated stale-constructor recorder test).
+- `node scripts/validate-config.js` -> 31/31 PASS. `check-slo-contract` -> PASS 7.
+- `node scripts/check-static-quality.js` -> FAIL 1: only pre-existing
+  CraftingOperation 556>500 (reproduced on stashed baseline).
+- `node scripts/validate-architecture.js` -> FAIL 3: only pre-existing
+  MARKDOWN_UNAUTHORIZED roadmap docs (reproduced on stashed baseline).
+- `git diff --check` clean. Mock/unit only; no live-server/GUI proof claimed.
+
+NOTE (unstaged, kept for G21, NOT part of G20.1): `ProcedureRecorder.js` rewrite,
+`ProcedureRecordingRuntime.js`, `ServerFeatureFacade.procedureRecording`,
+`registerBotServices` recording wiring, recorder tests (9 passing). These remain in
+the working tree after the G20.1 commit and belong to the G21 phase.
 
 ## G20 — Procedure Builder (CLOSED)
 Scope (roadmap G20): operator can add / remove / reorder / edit parameters / validate /

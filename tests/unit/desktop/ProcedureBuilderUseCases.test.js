@@ -106,3 +106,87 @@ test('G20 command-quantity procedures plan a single full-amount batch', () => {
     assert.equal(report.batches[0].action, 'command-quantity');
     assert.equal(report.batches[0].expectedOutput, 137);
 });
+
+test('G20.1 optional integer fields validate type and bounds when provided', () => {
+    const useCases = new ProcedureBuilderUseCases();
+    const timeout = timeoutMs => draftOf('p', [{ type: 'command', commandKey: 'minerals', ...(timeoutMs === undefined ? {} : { timeoutMs }) }]);
+
+    assert.equal(useCases.validate(timeout(undefined)).valid, true);
+    assert.equal(useCases.validate(timeout(100)).valid, true);
+    assert.equal(useCases.validate(timeout(30000)).valid, true);
+    // Canonical integer strings normalize explicitly (advanced-JSON path).
+    const asString = useCases.validate(timeout('5000'));
+    assert.equal(asString.valid, true);
+    assert.equal(asString.normalized.steps[0].timeoutMs, 5000);
+
+    for (const bad of [99, 30001, 1.5, NaN, Infinity, 'abc', '5.0', '0x10', '5e2', '', '  ', true, false, {}, []]) {
+        const result = useCases.validate(timeout(bad));
+        assert.equal(result.valid, false, `timeoutMs=${JSON.stringify(String(bad))} must be rejected`);
+        assert.match(result.errors.join(' '), /timeoutMs/);
+    }
+    // min/max are inclusive on both ends.
+    const lo = useCases.validate(draftOf('p', [{ type: 'wait-for-gui', guiId: 'crafting', timeoutMs: 100 }]));
+    assert.equal(lo.valid, true);
+    const hi = useCases.validate(draftOf('p', [{ type: 'wait-for-gui', guiId: 'crafting', timeoutMs: 30000 }]));
+    assert.equal(hi.valid, true);
+});
+
+test('G20.1 wait.ms and verify-item.amount bounds are enforced', () => {
+    const useCases = new ProcedureBuilderUseCases();
+
+    assert.equal(useCases.validate(draftOf('p', [{ type: 'wait', ms: 0 }])).valid, true);
+    assert.equal(useCases.validate(draftOf('p', [{ type: 'wait', ms: 3600000 }])).valid, true);
+    assert.equal(useCases.validate(draftOf('p', [{ type: 'wait', ms: -1 }])).valid, false);
+    assert.equal(useCases.validate(draftOf('p', [{ type: 'wait', ms: 3600001 }])).valid, false);
+    assert.equal(useCases.validate(draftOf('p', [{ type: 'wait', ms: 0.5 }])).valid, false);
+
+    // verify-item.amount is optional per the catalog: absent is fine, provided is checked.
+    assert.equal(useCases.validate(draftOf('p', [{ type: 'verify-item' }])).valid, true);
+    assert.equal(useCases.validate(draftOf('p', [{ type: 'verify-item', amount: 1 }])).valid, true);
+    assert.equal(useCases.validate(draftOf('p', [{ type: 'verify-item', amount: 0 }])).valid, false);
+    assert.equal(useCases.validate(draftOf('p', [{ type: 'verify-item', amount: 2.5 }])).valid, false);
+});
+
+test('G20.1 required, text-type and pattern rules hold for optional fields too', () => {
+    const useCases = new ProcedureBuilderUseCases();
+
+    assert.equal(useCases.validate(draftOf('p', [{ type: 'open-gui', guiId: '   ' }])).valid, false);
+    assert.equal(useCases.validate(draftOf('p', [{ type: 'open-gui' }])).valid, false);
+    assert.equal(useCases.validate(draftOf('p', [{ type: 'open-gui', guiId: null }])).valid, false);
+    assert.equal(useCases.validate(draftOf('p', [{ type: 'slash-command', command: 'is' }])).valid, false);
+    assert.equal(useCases.validate(draftOf('p', [{ type: 'slash-command', command: '/is' }])).valid, true);
+    // Non-string into a text field is rejected, never coerced.
+    assert.equal(useCases.validate(draftOf('p', [{ type: 'command', commandKey: 42 }])).valid, false);
+    assert.equal(useCases.validate(draftOf('p', [{ type: 'command', commandKey: { id: 'minerals' } }])).valid, false);
+});
+
+test('G20.1 empty optional text is dropped as not-provided; malformed values are not', () => {
+    const useCases = new ProcedureBuilderUseCases();
+
+    const dropped = useCases.validate(draftOf('p', [{ type: 'verify-item', itemId: '   ' }]));
+    assert.equal(dropped.valid, true);
+    assert.deepEqual(dropped.normalized.steps[0], { type: 'verify-item' });
+
+    assert.equal(useCases.validate(draftOf('p', [{ type: 'command', commandKey: 'minerals', timeoutMs: '' }])).valid, false);
+    assert.equal(useCases.validate(draftOf('p', [{ type: 'command', commandKey: 'minerals', timeoutMs: 'abc' }])).valid, false);
+});
+
+test('G20.1 unknown fields are rejected so Registry drops cannot lose data', () => {
+    const useCases = new ProcedureBuilderUseCases();
+    const result = useCases.validate(draftOf('p', [{ type: 'command', commandKey: 'minerals', bogusField: 'x' }]));
+    assert.equal(result.valid, false);
+    assert.match(result.errors.join(' '), /không được hỗ trợ/);
+});
+
+test('G20.1 validation normalizes canonical values the Registry accepts unchanged', () => {
+    const useCases = new ProcedureBuilderUseCases();
+    const result = useCases.validate(draftOf('p', [
+        { type: 'command', commandKey: 'minerals', timeoutMs: '5000' },
+        { type: 'find-logical-item', itemId: '$recipe.output' }
+    ]));
+    assert.equal(result.valid, true);
+    // The validator already stored a number; nothing is lost through the Registry.
+    assert.equal(result.normalized.steps[0].timeoutMs, 5000);
+    const reread = new ProcedureRegistry({ [result.normalized.id]: result.normalized }).require(result.normalized.id);
+    assert.deepEqual(reread.steps, result.normalized.steps);
+});

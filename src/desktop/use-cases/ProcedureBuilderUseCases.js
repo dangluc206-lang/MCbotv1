@@ -3,33 +3,18 @@
 const ProcedureRegistry = require('../../server-features/crafting/procedure/ProcedureRegistry');
 const ProcedureStepCatalog = require('../../server-features/crafting/procedure/ProcedureStepCatalog');
 const QuantityStrategy = require('../../server-features/crafting/quantity/QuantityStrategy');
-
-function valueAtPath(object, dottedKey) {
-    return dottedKey.split('.').reduce((value, key) => (value == null ? value : value[key]), object);
-}
-
-function missingRequired(step) {
-    const errors = [];
-    const { fields } = ProcedureStepCatalog.require(step.type);
-    for (const field of fields) {
-        if (!field.required) continue;
-        const value = valueAtPath(step, field.key);
-        const empty = value == null
-            || (typeof value === 'string' && !value.trim())
-            || (field.type === 'integer' && !Number.isInteger(Number(value)));
-        if (empty) errors.push(`step '${step.type}' thiếu tham số bắt buộc: ${field.key}`);
-        else if (field.pattern && !new RegExp(field.pattern).test(String(value))) {
-            errors.push(`step '${step.type}' tham số ${field.key} không khớp pattern ${field.pattern}`);
-        }
-    }
-    return errors;
-}
+const { validateStepParams } = require('./ProcedureParamValidator');
 
 /**
- * Procedure Builder use-case (G20).
+ * Procedure Builder use-case (G20; validation contract fixed in G20.1).
  * Operator-facing entry point over the domain ProcedureBuilder inputs:
  * catalog / validate / dry-run. Dry-run is pure: registry normalization plus
  * the existing QuantityStrategy batch plan, zero capability calls.
+ *
+ * Single validation authority: validate() runs validateStepParams() for every
+ * step against the catalog, feeds ONLY the canonical normalized steps into
+ * ProcedureRegistry, and is shared by procedureValidate / procedureDryRun /
+ * saveProcedure. No entry point may bypass it.
  */
 class ProcedureBuilderUseCases {
     constructor({ quantityStrategy = null } = {}) {
@@ -49,11 +34,15 @@ class ProcedureBuilderUseCases {
         if (!id) errors.push('procedure id là bắt buộc.');
         const steps = Array.isArray(draft.steps) ? draft.steps : [];
         if (!steps.length) errors.push('procedure phải có ít nhất một step.');
+        const normalizedSteps = [];
         steps.forEach((step, index) => {
             if (!step || typeof step !== 'object') { errors.push(`step ${index} phải là object.`); return; }
-            try { ProcedureStepCatalog.require(step.type); }
+            let fields;
+            try { fields = ProcedureStepCatalog.require(step.type).fields; }
             catch (error) { errors.push(`step ${index}: ${error.message}`); return; }
-            errors.push(...missingRequired(step).map(message => `step ${index}: ${message}`));
+            const { errors: stepErrors, normalizedStep } = validateStepParams(step, fields);
+            errors.push(...stepErrors.map(message => `step ${index}: ${message}`));
+            normalizedSteps.push(normalizedStep);
         });
         if (errors.length) return { valid: false, errors };
         try {
@@ -62,7 +51,7 @@ class ProcedureBuilderUseCases {
                 description: draft.description || '',
                 quantityStrategy: draft.quantityStrategy || 'button-batch',
                 maxBatch: draft.maxBatch,
-                steps
+                steps: normalizedSteps
             } }).require(id);
             return { valid: true, errors: [], normalized };
         } catch (error) {
