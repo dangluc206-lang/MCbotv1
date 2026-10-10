@@ -36,11 +36,19 @@ test('G21 recorder turns user actions into logical steps, never a bare slot cont
 
   const procedure = recorder.toProcedure({ id: 'recorded-minerals' });
   assert.deepEqual(procedure.steps.map(step => step.type), [
-    'command', 'open-gui', 'find-logical-item', 'find-logical-item', 'find-logical-item', 'wait-for-output'
+    'command', 'open-gui',
+    'find-logical-item', 'click',
+    'find-logical-item', 'click',
+    'find-logical-item', 'click',
+    'wait-for-output'
   ]);
   assert.deepEqual(procedure.steps[2], { type: 'find-logical-item', itemId: 'menu_crafting' });
-  assert.deepEqual(procedure.steps[3], { type: 'find-logical-item', itemId: 'super_cobblestone' });
-  assert.deepEqual(procedure.steps[4], { type: 'find-logical-item', itemId: 'quantity:64' });
+  assert.deepEqual(procedure.steps[3], { type: 'click' });
+  assert.deepEqual(procedure.steps[4], { type: 'find-logical-item', itemId: 'super_cobblestone' });
+  assert.deepEqual(procedure.steps[5], { type: 'click' });
+  assert.deepEqual(procedure.steps[6], { type: 'find-logical-item', itemId: 'quantity:64' });
+  // G21.1: quantity clicks keep their amount on the executable click step.
+  assert.deepEqual(procedure.steps[7], { type: 'click', amount: 64 });
   assert.deepEqual(procedure.unresolved, []);
   // Every recorded step is a runtime step type, so the runtime can execute it.
   for (const step of procedure.steps) assert.ok(ProcedureRegistry.STEP_TYPES.includes(step.type), step.type);
@@ -51,10 +59,16 @@ test('G21 unresolved identity degrades to find-slot and is reported, never silen
   const procedure = recorder.toProcedure({ id: 'partial' });
 
   assert.deepEqual(procedure.steps.map(step => step.type), [
-    'command', 'open-gui', 'find-slot', 'find-slot', 'find-slot', 'wait-for-output'
+    'command', 'open-gui',
+    'find-slot', 'click',
+    'find-slot', 'click',
+    'find-slot', 'click',
+    'wait-for-output'
   ]);
   assert.deepEqual(procedure.unresolved.map(entry => entry.slot), [11, 20, 22]);
-  assert.deepEqual(procedure.unresolved.map(entry => entry.index), [2, 3, 4]);
+  assert.deepEqual(procedure.unresolved.map(entry => entry.kind), ['click', 'click', 'select-quantity']);
+  assert.deepEqual(procedure.unresolved.map(entry => entry.amount), [null, null, 64]);
+  assert.deepEqual(procedure.unresolved.map(entry => entry.index), [2, 4, 6]);
   assert.equal(procedure.identityComplete, false);
 });
 
@@ -141,12 +155,15 @@ test('G21 recording runtime binds live GUI knowledge and reports identity comple
   runtime.recordWaitForOutput(5000);
 
   const procedure = runtime.toProcedure({ id: 'recorded-ks' });
-  assert.equal(procedure.stepCount, 6);
+  assert.equal(procedure.stepCount, 9);
   assert.equal(procedure.identityComplete, false);
   assert.deepEqual(procedure.unresolved.map(entry => entry.slot), [30]);
   assert.deepEqual(procedure.steps[2], { type: 'find-logical-item', itemId: 'menu_crafting' });
-  assert.deepEqual(procedure.steps[3], { type: 'find-logical-item', itemId: 'quantity:64' });
-  assert.equal(procedure.steps[4].type, 'find-slot');
+  assert.deepEqual(procedure.steps[3], { type: 'click' });
+  assert.deepEqual(procedure.steps[4], { type: 'find-logical-item', itemId: 'quantity:64' });
+  assert.deepEqual(procedure.steps[5], { type: 'click', amount: 64 });
+  assert.deepEqual(procedure.steps[6], { type: 'find-slot', slot: 30 });
+  assert.deepEqual(procedure.steps[7], { type: 'click' });
 
   // Resolved quantity identity is persisted through GUI knowledge immediately.
   assert.equal(learned.length, 1);
@@ -169,7 +186,7 @@ test('G21 recording hands off to the G20 builder and saves into a live registry'
   const draft = runtime.toBuilderDraft({ id: 'recorded-handoff', label: 'Recorded' });
   assert.equal(draft.id, 'recorded-handoff');
   assert.equal(draft.identityComplete, true);
-  assert.deepEqual(draft.steps.map(step => step.type), ['command', 'open-gui', 'find-logical-item']);
+  assert.deepEqual(draft.steps.map(step => step.type), ['command', 'open-gui', 'find-logical-item', 'click']);
   // The builder accepts the recorded draft unchanged (same runtime schema).
   assert.deepEqual(ProcedureBuilder.fromDefinition(draft).toDefinition().steps, draft.steps);
 

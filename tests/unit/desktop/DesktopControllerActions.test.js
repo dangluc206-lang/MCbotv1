@@ -373,6 +373,53 @@ test('DesktopController procedure paths share one validation contract (G20.1)', 
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test('DesktopController procedure recording previews over a live snapshot, never side-effect replay (G21.1)', () => {
+    const controller = new DesktopController({ baseDir: fs.mkdtempSync(path.join(os.tmpdir(), 'mcbot-desktop-record-')) });
+    controller.lifecycle = 'RUNNING';
+    const recorded = [];
+    const recorder = {
+        reset() { recorded.length = 0; return this; },
+        record(event) { recorded.push(event); return { index: recorded.length - 1, step: event }; },
+        toProcedure: ({ id }) => ({
+            id, label: id, description: '', quantityStrategy: 'button-batch', maxBatch: 64,
+            steps: [
+                { type: 'command', commandKey: 'minerals' },
+                { type: 'open-gui', guiId: 'minerals' },
+                { type: 'find-logical-item', itemId: 'menu_crafting' },
+                { type: 'click' }
+            ],
+            stepCount: 4, unresolved: []
+        })
+    };
+    const inspection = { lastSnapshot: () => ({ commandKey: 'minerals', guiId: 'minerals', window: { slots: [] } }) };
+    controller.bundle = {
+        fleetControl: { profileSnapshot: () => ({}) },
+        configuration: { registry: { require: () => ({ minerals: '/ks' }) } },
+        application: {
+            getRuntime: () => ({
+                requireService: name => { assert.equal(name, 'guiInspectionService'); return inspection; },
+                getService: name => (name === 'crafting' ? { procedureRecording: recorder } : null)
+            })
+        }
+    };
+
+    const preview = controller.recordProcedureFromInspection('bot-01', {
+        procedureId: 'recorded-g211', commandKey: 'minerals', slots: [11]
+    });
+    assert.equal(preview.contract, 'procedure-recording-preview-v1');
+    assert.equal(preview.identityComplete, true);
+    assert.equal(preview.valid, true);
+    assert.deepEqual(recorded.map(entry => entry.kind || entry.type), ['command', 'open-gui', 'click']);
+    assert.deepEqual(preview.steps.map(step => step.type), ['command', 'open-gui', 'find-logical-item', 'click']);
+
+    // Stale snapshot: recording refuses instead of replaying against the wrong GUI.
+    inspection.lastSnapshot = () => ({ commandKey: 'other', guiId: 'other', window: { slots: [] } });
+    assert.throws(
+        () => controller.recordProcedureFromInspection('bot-01', { procedureId: 'x', commandKey: 'minerals', slots: [11] }),
+        /không khớp/
+    );
+});
+
 test('DesktopController updates mode-driven Sky gateway timing without restoring autoJoin/maxAttempts', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcbot-desktop-config-'));
     const target = path.join(dir, 'config', 'skyblock', 'join.json');

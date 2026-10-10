@@ -159,6 +159,40 @@ class CraftingGuiNavigator {
         return this.fallbackRecipeSlot(session.window, recipe);
     }
 
+    /**
+     * G21.1: general logical-target resolution for recorded procedures.
+     * Entry/recipe/quantity keep their dedicated resolvers (config semantics
+     * preserved). Any OTHER logical identity resolves through GUI knowledge
+     * against the live window and fails closed (-1) when unresolvable — never
+     * hard-coded to a recipe slot, never an invented slot.
+     */
+    async resolveLogicalSlot(session, itemId, source) {
+        const logicalItemId = String(itemId || '').trim();
+        if (!logicalItemId) return -1;
+        if (!session?.window) return -1;
+        if (this.guiKnowledge?.resolveSlot) {
+            try {
+                return await this.guiKnowledge.resolveSlot(session, {
+                    source: source || session.source || null,
+                    roleId: `recorded:${logicalItemId}`,
+                    bootstrapSlot: null,
+                    logicalItemId,
+                    context: 'crafting-recorded'
+                });
+            } catch {
+                return -1;
+            }
+        }
+        if (this.itemResolver?.matches) {
+            const slot = findContainerSlot(session.window, item => {
+                try { return item && this.itemResolver.matches(item, logicalItemId, 'crafting-recorded')?.matched; }
+                catch { return false; }
+            });
+            return Number.isInteger(slot) ? slot : -1;
+        }
+        return -1;
+    }
+
     async resolveQuantitySlot(session, amount, source) {
         try {
             const candidates = this.quantityResolver.describeCandidates?.(session.window) || [];

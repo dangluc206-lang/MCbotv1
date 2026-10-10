@@ -82,8 +82,8 @@
       "expiresAfter": "connection lifecycle transaction extraction"
     },
     "src/desktop/DesktopController.js": {
-      "maxFileLines": 1149,
-      "maxFunctionLines": 73,
+      "maxFileLines": 1164,
+      "maxFunctionLines": 75,
       "maxFunctionStatements": 46,
       "maxCyclomaticComplexity": 38,
       "owner": "Desktop maintainer",

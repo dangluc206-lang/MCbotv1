@@ -17,11 +17,15 @@ class GuiInspectionService {
         observationService = null,
         logger = null
     }) {
+        this.last = null;
         Object.assign(this, {
             botId, context, eventBus, commandService, guiManager, serializer,
             operationManager, observationService, logger
         });
     }
+
+    /** Latest inspect-only GUI snapshot (G21.1: recording input — never a replay). */
+    lastSnapshot() { return this.last || null; }
 
     async capture({
         commandKey,
@@ -136,6 +140,14 @@ class GuiInspectionService {
             session
         });
         const output = Object.freeze({ ...snapshot, clicks: Object.freeze([...slots]) });
+        // G21.1: keep the live snapshot as the recording input. Recording replays
+        // the verified command+slots through the pure recorder ONLY — this method
+        // performs the exactly-once inspection side effects above, never twice.
+        this.last = Object.freeze({
+            commandKey, guiId: session?.definitionId || session?.identity?.id || commandKey,
+            window: session?.window || null, sessionId: session?.id || null,
+            connectionGeneration: expectedGeneration, clicks: output.clicks
+        });
         this.logger?.info?.('GUI inspection captured.', {
             botId: this.botId, commandKey, clicks: slots,
             sessionId: session.id, title: output.gui.title, itemCount: output.items.length

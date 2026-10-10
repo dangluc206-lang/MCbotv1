@@ -153,12 +153,33 @@ class CraftingProcedureRuntime {
         const itemId = String(resolved.itemId || '').trim();
         if (!itemId) throw this.fail(state, 'CRAFTING_PROCEDURE_ITEM_MISSING', 'run-procedure-step', 'resolve logical item', recipe?.output, { step });
         if (!state.session?.window) throw this.fail(state, 'CRAFTING_PROCEDURE_GUI_NOT_OPEN', 'run-procedure-step', 'find ' + itemId, recipe?.output, { step });
+        // G21.1: recorded quantity buttons (quantity:<amount>) resolve through
+        // the quantity resolver — the same capability the production quantity
+        // phase uses — never through the recipe-slot path.
+        const quantityMatch = /^quantity:(\d+|ALL)$/i.exec(itemId);
+        if (quantityMatch) {
+            const amount = /^ALL$/i.test(quantityMatch[1]) ? 'ALL' : Number(quantityMatch[1]);
+            if (typeof this.navigator.resolveQuantitySlot !== 'function') throw this.fail(state, 'CRAFTING_PROCEDURE_RESOLVE_UNAVAILABLE', 'run-procedure-step', 'find ' + itemId, recipe?.output, { step });
+            state.foundSlot = await this.navigator.resolveQuantitySlot(state.session, amount, { guiId: state.session?.definitionId || null });
+            this.#assertGeneration(state);
+            if (!Number.isInteger(state.foundSlot) || state.foundSlot < 0) throw this.fail(state, 'CRAFTING_QUANTITY_NOT_FOUND', 'run-procedure-step', 'find ' + itemId, itemId, { step });
+            return state;
+        }
         const entryId = String(state.config?.entryMenuItemId || '').trim();
         if (entryId && itemId === entryId) {
             if (typeof this.navigator.resolveEntrySlot !== 'function') throw this.fail(state, 'CRAFTING_PROCEDURE_RESOLVE_UNAVAILABLE', 'run-procedure-step', 'find ' + itemId, recipe?.output, { step });
             state.entrySlot = await this.navigator.resolveEntrySlot(state.session, { guiId: state.session?.definitionId || null });
             this.#assertGeneration(state);
             if (!Number.isInteger(state.entrySlot) || state.entrySlot < 0) throw this.fail(state, 'CRAFTING_ENTRY_NOT_FOUND', 'run-procedure-step', 'find ' + itemId, itemId, { step });
+            return state;
+        }
+        // G21.1: any other logical target resolves through GUI knowledge when
+        // the navigator exposes it (fail-closed when it cannot be resolved —
+        // never silently re-routed to the recipe slot).
+        if (typeof this.navigator.resolveLogicalSlot === 'function') {
+            state.foundSlot = await this.navigator.resolveLogicalSlot(state.session, itemId, { guiId: state.session?.definitionId || null });
+            this.#assertGeneration(state);
+            if (!Number.isInteger(state.foundSlot) || state.foundSlot < 0) throw this.fail(state, 'CRAFTING_PROCEDURE_TARGET_NOT_FOUND', 'run-procedure-step', 'find ' + itemId, itemId, { step });
             return state;
         }
         if (typeof this.navigator.resolveRecipeSlot !== 'function') throw this.fail(state, 'CRAFTING_PROCEDURE_RESOLVE_UNAVAILABLE', 'run-procedure-step', 'find ' + itemId, recipe?.output, { step });

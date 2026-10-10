@@ -84,6 +84,7 @@ contextBridge.exposeInMainWorld('mcbot', Object.freeze({
     procedureValidate: draft => invoke('mcbot:procedure:validate', draft),
     procedureDryRun: (draft, options) => invoke('mcbot:procedure:dry-run', draft, options),
     procedureSave: draft => invoke('mcbot:procedure:save', draft),
+    procedureRecord: (botId, options) => invoke('mcbot:procedure:record', botId, options),
     backupConfig: () => invoke('mcbot:config:backup'),
     configBackups: options => invoke('mcbot:config:backups', options),
     previewConfigRestore: backupId => invoke('mcbot:config:restore-preview', backupId),

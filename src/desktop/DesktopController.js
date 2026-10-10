@@ -25,6 +25,7 @@ const BotProfileUseCases = require('./use-cases/BotProfileUseCases');
 const ModeConfigurationUseCases = require('./use-cases/ModeConfigurationUseCases');
 const FleetControlUseCases = require('./use-cases/FleetControlUseCases');
 const CraftingRequestUseCases = require('./use-cases/CraftingRequestUseCases');
+const ProcedureRecordingUseCases = require('./use-cases/ProcedureRecordingUseCases');
 const ProcedureBuilderUseCases = require('./use-cases/ProcedureBuilderUseCases');
 const ProfileDomain = require('./domains/ProfileDomain');
 const FleetDomain = require('./domains/FleetDomain');
@@ -109,6 +110,8 @@ class DesktopController {
         });
         // Decomposition: thin domains over existing use-cases/stores (no logic move).
         // DesktopController stays a facade; IPC signatures unchanged.
+        // Procedure recording is LAZY (G21.1): only the recording flow builds it,
+        // so the constructor budget stays at the pre-G21.1 level.
         this.profileDomain = new ProfileDomain({ botProfileUseCases: this.botProfileUseCases });
         this.fleetDomain = new FleetDomain({
             fleetControlUseCases: this.fleetControlUseCases,
@@ -855,6 +858,20 @@ class DesktopController {
             timeoutMs: Number(timeoutMs) || 7000
         });
         return Redactor.sanitize(snapshot);
+    }
+
+    /**
+     * G21.1: operator procedure-recording preview over the existing GUI
+     * surface. Lazily built like #procedureBuilder: stateless, only the
+     * recording flow needs it, so the constructor budget is untouched.
+     */
+    recordProcedureFromInspection(botId, options = {}) {
+        this.procedureRecordingUseCases ||= new ProcedureRecordingUseCases({
+            bundleProvider: () => this.bundle,
+            requireRunning: () => this.#requireRunning(),
+            validateDraft: draft => this.#procedureBuilder().validate(draft)
+        });
+        return this.procedureRecordingUseCases.recordFromInspection(botId, options);
     }
 
     commandOptions() {

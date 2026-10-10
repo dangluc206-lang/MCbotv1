@@ -45,7 +45,7 @@ class ProcedureRecordingRuntime {
 
   /** Records a raw GUI click against the live session window. */
   recordClick({ slot, windowId = null, amount = null } = {}) {
-    return this.recorder.record({ kind: 'click', slot, windowId, amount });
+    return this.recorder.record({ kind: 'click', slot, windowId, ...(amount === null || amount === undefined ? {} : { amount }) });
   }
 
   /** Records a quantity-button click and persists its identity when resolved. */
@@ -95,7 +95,16 @@ class ProcedureRecordingRuntime {
   /** Registers the recording into a live registry (runtime save path). */
   save(registry, options = {}) {
     if (!registry || typeof registry.register !== 'function') throw new TypeError('save requires a ProcedureRegistry.');
-    return registry.register(this.toProcedure(options).id, this.toProcedure(options));
+    const recorded = this.toProcedure(options);
+    // G21.1: an identity-incomplete recording is never publishable — callers
+    // must resolve `unresolved` (knowledge/learn pass) before saving.
+    if (!recorded.identityComplete) {
+      const error = new Error(`Cannot save procedure '${recorded.id}': ${recorded.unresolved.length} unresolved target(s).`);
+      error.code = 'PROCEDURE_RECORDING_UNRESOLVED';
+      error.unresolved = recorded.unresolved;
+      throw error;
+    }
+    return registry.register(recorded.id, recorded);
   }
 
   #resolveLogicalId(raw, context) {

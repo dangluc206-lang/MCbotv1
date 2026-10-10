@@ -46,8 +46,10 @@ test('recorder prefers logical intent; raw slot is fallback metadata only', () =
   recorder.record({ kind: 'click', slot: 99, windowId: 'crafting' });
   const proc = recorder.toProcedure({ id: 'recorded' });
   assert.equal(proc.steps[0].type, 'command');
+  // G21.1: every click replays as resolve-target + click.
   assert.deepEqual(proc.steps[1], { type: 'find-logical-item', itemId: 'refined_iron' });
-  assert.equal(proc.steps[2].type, 'find-slot');
-  assert.equal(proc.steps[2].slot, 99);
+  assert.deepEqual(proc.steps[2], { type: 'click' });
+  assert.deepEqual(proc.steps[3], { type: 'find-slot', slot: 99 });
+  assert.deepEqual(proc.steps[4], { type: 'click' });
   assert.deepEqual(proc.unresolved.map(entry => entry.slot), [99]);
 });

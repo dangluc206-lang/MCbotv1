@@ -308,6 +308,7 @@ function registerIpc() {
     safeHandle('mcbot:procedure:validate', draft => controller.procedureValidate(draft));
     safeHandle('mcbot:procedure:dry-run', (draft, options) => controller.procedureDryRun(draft, options || {}));
     safeHandle('mcbot:procedure:save', draft => controller.saveProcedure(draft));
+    safeHandle('mcbot:procedure:record', (botId, options) => controller.recordProcedureFromInspection(botId, options || {}));
     safeHandle('mcbot:config:backup', () => controller.backupConfig());
     safeHandle('mcbot:config:backups', options => controller.backupCatalog(options || {}));
     safeHandle('mcbot:config:restore-preview', backupId => controller.previewConfigRestore(backupId));

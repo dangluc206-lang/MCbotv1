@@ -1,15 +1,16 @@
 # Crafting Refactor Progress
 
 ## Current Phase
-G20.2 — Procedure Builder nested-field validation (IN_PROGRESS)
+G21.1 — Procedure Recorder executable actions and production integration (IN_PROGRESS)
 
 ## Status
 G16.1 CLOSED. G19 CLOSED. G20 CLOSED. G20.1 CLOSED. G21 CLOSED. G22 CLOSED.
-G23 CLOSED. G24 CLOSED (commit 7e31849, pushed + verified on origin/main).
-Post-closeout audit sweep IN PROGRESS: G20.2 (this section) -> G21.1 -> G23.1,
-each its own commit/push/verify. Base phases stay CLOSED, never replayed.
+G23 CLOSED. G24 CLOSED. G20.2 CLOSED (commit c50a200, pushed + verified on
+origin/main: HEAD == origin/main).
+Post-closeout audit sweep IN PROGRESS: G21.1 (this section) -> G23.1. Base phases stay
+CLOSED, never replayed.
 
-## G20.2 — Procedure Builder nested-field validation (IN_PROGRESS)
+## G20.2 — Procedure Builder nested-field validation (CLOSED: commit c50a200, verified on origin/main)
 Linked defect (found after G24 closeout in source audit): catalog declares
 `wait-for-message` field `params.pattern` (dotted key = nested step data), but
 `validateStepParams()` compared raw top-level keys against declared keys, so a
@@ -31,7 +32,56 @@ Implementation:
 - Integer-string contract comment corrected to match the code (trim tolerated);
   new test pins `' 5000 '` -> 5000 plus rejections of '5.0'/'0x10'/'5e2'/''/'  '.
 
-## Tests (G20.2, actually run)
+## G21.1 — Procedure Recorder executable actions and production integration (IN_PROGRESS)
+Scope: the four findings only — executable click pairs, amount preservation,
+quantity/general logical resolution through existing capabilities, the real
+operator path into the G20 builder, and unresolved gating. No engine rewrite.
+
+Implementation:
+- `ProcedureRecorder.#recordSlotAction()` preserves `amount` on the normalized
+  select-quantity event (plain clicks ignore it); `#toStep()` emits every
+  click as resolve-target + click (`find-logical-item` + `click`, unresolved as
+  `find-slot` + `click`). Quantity clicks additionally carry `amount` on the
+  click step. `toProcedure()` keeps per-event step offsets in `unresolved[]`
+  (now with kind/amount detail), Registry-validated as before.
+- `CraftingProcedureRuntime.stepFind()`: `quantity:<n|ALL>` resolves through
+  the EXISTING `navigator.resolveQuantitySlot` (production quantity capability);
+  entry keeps `resolveEntrySlot`; any other identity uses the new
+  `navigator.resolveLogicalSlot` and fails closed
+  (`CRAFTING_PROCEDURE_TARGET_NOT_FOUND`) when unresolvable — never silently
+  re-routed to the recipe slot.
+- `CraftingGuiNavigator.resolveLogicalSlot()`: GUI-knowledge-first
+  (`recorded:<itemId>` role, no bootstrap slot), `itemResolver.matches`
+  scan fallback, `-1` otherwise. Entry/recipe/quantity resolvers untouched.
+- Operator path (existing surface only, no new GUI contract): `mcbot:gui:inspect`
+  capture -> `GuiInspectionService.lastSnapshot()` (live snapshot kept as the
+  recording input) -> `mcbot:procedure:record` (pure recorder replay, ZERO
+  Minecraft side effects) -> preview (`steps`, `unresolved[]`,
+  `identityComplete`, same-authority valid/errors) -> identity-complete drafts
+  load into the builder for validate/dry-run/save. Files: `DesktopController`
+  facade + new `ProcedureRecordingUseCases` (lazy, constructor budget
+  untouched), `main.js`, `preload.js`, `DesktopApiContract.js` (+1 channel),
+  `index.html` record panel, `ProcedureBuilderBindings.js` record wiring,
+  `app.js` bot-selector sync.
+- `ProcedureRecordingRuntime.save()` refuses identity-incomplete recordings
+  (`PROCEDURE_RECORDING_UNRESOLVED`) instead of publishing raw-slot procedures.
+
+## Tests (G21.1, actually run)
+- Recorder/builder/runtime suites: `ProcedureRecordingRuntime` + `CraftProcedureBuilder`
+  + `CraftProcedureRuntimeWiring` + `CraftArchitectureConformance` + `CraftSpecialProcedures`
+  + `CraftGenericProcedure` + `ProcedureBuilderUseCases` + `GuiInspectionService` +
+  `CraftingModeRegistration` -> PASS 65/65 (updated G21 pair expectations incl.
+  amount preservation; 4 new G21.1 runtime tests: resolve->click capability call,
+  quantity resolver use, unresolvable fail-closed, builder-authority handoff).
+- Desktop: `DesktopControllerActions` + `DesktopProcedureBuilder` + `DesktopApiContract`
+  -> PASS 25/25 (1 new controller test: snapshot replay + stale-snapshot refuse).
+- `validate-config.js` 31/31 PASS. `check-slo-contract` PASS 7.
+- `check-static-quality.js` FAIL 1: CraftingOperation 556>500 ONLY — PRE-EXISTING
+  baseline (G24 closeout evidence: reproduced on stashed baseline). DesktopController
+  budget re-baselined 1149->1164 file / 73->75 ctor lines (measured HEAD, no logic
+  growth path: new logic lives in ProcedureRecordingUseCases).
+- `validate-architecture.js` FAIL 3: MARKDOWN_UNAUTHORIZED only — PRE-EXISTING baseline.
+- `git diff --check` clean. Mock/unit + Electron-harness only; no live-server/GUI proof claimed.
 - `node --test tests/unit/desktop/ProcedureBuilderUseCases.test.js` -> PASS 14/14
   (12 G20/G20.1 + 2 new: nested params.pattern matrix incl. Registry round-trip;
   integer-string whitespace contract).

@@ -75,6 +75,34 @@
       }
     }).catch(() => {});
 
+    // G21.1: operator recording over the existing GUI-inspection surface.
+    // Requires a fresh GUI snapshot first; recording replays the verified
+    // command+slots through the pure recorder (no side-effect replay), shows
+    // the unresolved[]/identityComplete preview, and loads an identity-complete
+    // draft into the builder for validate/dry-run/save.
+    $('#procedureRecord').onclick = event => runAction({
+      key: 'procedure-record',
+      button: event.currentTarget,
+      success: 'Đã ghi procedure từ bản chụp GUI.',
+      refresh: false,
+      fn: async () => {
+        const botId = $('#procedureRecordBot').value || $('#guiBot').value;
+        const recorded = await api(window.mcbot.procedureRecord(botId, {
+          procedureId: $('#procedureRecordId').value.trim(),
+          commandKey: $('#guiCommand').value,
+          slots: $('#guiSlots').value.split(',').map(value => Number(value.trim())).filter(Number.isInteger)
+        }));
+        $('#procedureRecordOutput').textContent = JSON.stringify(recorded, null, 2);
+        if (recorded.identityComplete) {
+          fillProcedureBuilder({ id: recorded.id, label: recorded.label, description: recorded.description, quantityStrategy: 'button-batch', maxBatch: 64, steps: recorded.steps });
+          toast(`Đã nạp ${recorded.stepCount} bước vào trình dựng — Kiểm tra rồi Lưu.`);
+        } else {
+          toast(`${recorded.unresolved.length} mục chưa phân giải — bổ sung knowledge rồi ghi lại.`, 'warn');
+        }
+        return recorded;
+      }
+    }).catch(() => {});
+
     $('#procedureSave').onclick = event => runAction({
       key: 'procedure-save',
       button: event.currentTarget,

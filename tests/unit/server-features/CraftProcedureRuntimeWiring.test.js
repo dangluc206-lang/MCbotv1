@@ -84,7 +84,7 @@ function rig({ amount = 64, procedureId = 'minerals-crafting' } = {}) {
     procedureRuntime: runtime,
     config: { commandKey: 'minerals', mineralsGuiId: 'minerals', guiId: 'crafting', quantityGuiId: 'craftingQuantity', entryMenuItemId: 'menu_crafting', entrySlot: 16, guiTimeoutMs: 100, resultDelayMs: 0, openSettleMs: 0, preQuantityClickTicks: 0, postQuantityClickTicks: 0 }
   });
-  return { calls, operation, runtime };
+  return { calls, operation, runtime, navigator, guiManager };
 }
 
 test('G14.2 production wiring: procedure navigation runs once, operation owns quantity + verification', async () => {
@@ -158,6 +158,80 @@ test('G14.2 composition root: runtime built with capability owners', () => {
   assert.match(source, /craftingOperation\.procedureRuntime\s*=/);
 });
 
+
+
+test('G21.1 recorded clicks resolve then click through the runtime capability', async () => {
+  const { runtime, navigator, guiManager } = rig();
+  navigator.resolveLogicalSlot = async () => 22;
+  const clicked = [];
+  const observed = guiManager.clickAndWaitForTransition;
+  guiManager.clickAndWaitForTransition = async (slot, options) => {
+    clicked.push(slot);
+    return observed(slot, options);
+  };
+  const state = {
+    context: { resolve: value => value }, session: sessionFor(windowWith(3, 45, { 22: { displayName: 'craft 64' } }), 'craftingQuantity'),
+    entrySlot: null, recipeSlot: null, foundSlot: null, enteredMenu: true, selectedRecipe: true,
+    commandResult: null, trace: () => {}, flow: null, cancellationToken: null, expectedGeneration: null,
+    operationContext: null, config: {}
+  };
+  const recipe = { output: 'x' };
+  await runtime.runStep({ type: 'find-logical-item', itemId: 'recorded-target' }, state, { recipe, options: {} });
+  assert.equal(state.foundSlot, 22);
+  await runtime.runStep({ type: 'click' }, state, { recipe, options: {} });
+  assert.deepEqual(clicked, [22]);
+  assert.equal(state.foundSlot, null);
+});
+
+test('G21.1 recorded quantity targets use the production quantity resolver', async () => {
+  const { runtime, navigator } = rig();
+  let seen = null;
+  navigator.resolveQuantitySlot = async (session, amount) => { seen = amount; return 22; };
+  const state = {
+    context: { resolve: value => value }, session: sessionFor(windowWith(3, 45, { 22: { displayName: 'craft 64' } }), 'craftingQuantity'),
+    entrySlot: null, recipeSlot: null, foundSlot: null, enteredMenu: true, selectedRecipe: true,
+    commandResult: null, trace: () => {}, flow: null, cancellationToken: null, expectedGeneration: null,
+    operationContext: null, config: {}
+  };
+  await runtime.runStep({ type: 'find-logical-item', itemId: 'quantity:64' }, state, { recipe: { output: 'x' }, options: {} });
+  assert.equal(seen, 64);
+  assert.equal(state.foundSlot, 22);
+});
+
+test('G21.1 unresolvable logical targets fail closed, never as fake slots', async () => {
+  const { runtime, navigator } = rig();
+  navigator.resolveLogicalSlot = async () => -1;
+  const state = {
+    context: { resolve: value => value }, session: sessionFor(windowWith(3, 45), 'craftingQuantity'),
+    entrySlot: null, recipeSlot: null, foundSlot: null, enteredMenu: true, selectedRecipe: true,
+    commandResult: null, trace: () => {}, flow: null, cancellationToken: null, expectedGeneration: null,
+    operationContext: null, config: {}
+  };
+  await assert.rejects(
+    () => runtime.runStep({ type: 'find-logical-item', itemId: 'ghost-target' }, state, { recipe: { output: 'x' }, options: {} }),
+    error => error?.code === 'CRAFTING_PROCEDURE_TARGET_NOT_FOUND'
+  );
+});
+
+test('G21.1 recording hands off through the G20 builder validation authority', () => {
+  const ProcedureRecorder = require('../../../src/server-features/crafting/procedure/ProcedureRecorder');
+  const ProcedureBuilderUseCases = require('../../../src/desktop/use-cases/ProcedureBuilderUseCases');
+  const recorder = new ProcedureRecorder({
+    resolveLogicalId: raw => (raw?.name === 'iron' ? 'menu_crafting' : null),
+    sessionProvider: () => ({ window: { slots: { 11: { name: 'iron' } } } })
+  });
+  recorder.record({ kind: 'command', commandKey: 'minerals' });
+  recorder.record({ kind: 'click', slot: 11, windowId: 'minerals' });
+  const recorded = recorder.toProcedure({ id: 'recorded-g211' });
+  assert.equal(recorded.unresolved.length, 0);
+  const validation = new ProcedureBuilderUseCases().validate({
+    id: recorded.id, steps: recorded.steps,
+    label: recorded.label, description: recorded.description,
+    quantityStrategy: recorded.quantityStrategy, maxBatch: recorded.maxBatch
+  });
+  assert.equal(validation.valid, true);
+  assert.deepEqual(validation.normalized.steps, recorded.steps);
+});
 
 
 test('G14.2 cancellation: cancelled token aborts before any side effect', async () => {

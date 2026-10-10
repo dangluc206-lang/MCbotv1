@@ -24,8 +24,8 @@ test('G20 procedure builder is wired end to end through the existing boundaries'
     assert.match(bindings, /bindProcedureBuilder\(deps\);/, 'facade must still bind the builder');
     assert.doesNotMatch(bindings, /#procedureStepPalette/, 'procedure DOM wiring must not live in the shared facade');
 
-    // Bridge surface: preload exposes the four procedure channels only.
-    for (const method of ['procedureCatalog', 'procedureValidate', 'procedureDryRun', 'procedureSave']) {
+    // Bridge surface: preload exposes the five procedure channels only.
+    for (const method of ['procedureCatalog', 'procedureValidate', 'procedureDryRun', 'procedureSave', 'procedureRecord']) {
         assert.match(preload, new RegExp(`${method}:`), method);
     }
 
@@ -39,10 +39,11 @@ test('G20 procedure builder is wired end to end through the existing boundaries'
     assert.match(controller, /#procedureBuilder\(\)/);
 });
 
-test('G20 builder page exposes add/remove/reorder/validate/dry-run/save controls', () => {
+test('G20 builder page exposes add/remove/reorder/validate/dry-run/save/record controls', () => {
     for (const id of ['procedureSelect', 'procedureId', 'procedureQuantityStrategy', 'procedureMaxBatch',
         'procedureStepPalette', 'procedureSteps', 'procedureClearSteps', 'procedureValidate',
-        'procedureDryRun', 'procedureSave', 'procedureJson', 'procedureApplyJson', 'procedureSimulation']) {
+        'procedureDryRun', 'procedureSave', 'procedureJson', 'procedureApplyJson', 'procedureSimulation',
+        'procedureRecord', 'procedureRecordBot', 'procedureRecordId', 'procedureRecordOutput']) {
         assert.match(html, new RegExp(`id="${id}"`), id);
     }
     assert.match(app, /data-procedure-action="remove"/);
@@ -94,7 +95,7 @@ test('G20 bindings forward the injected deps and wire every procedure control', 
     assert.throws(() => module.create(undefined).bind(), TypeError);
     for (const id of ['procedureStepPalette', 'procedureSteps', 'procedureStepSearch', 'procedureNew',
         'procedureSelect', 'procedureClearSteps', 'procedureApplyJson', 'procedureValidate',
-        'procedureDryRun', 'procedureSave']) {
+        'procedureDryRun', 'procedureSave', 'procedureRecord']) {
         assert.ok(wired.some(entry => entry.startsWith(`${id}:`)), `${id} must be wired`);
     }
     assert.equal(wired.filter(entry => entry === 'procedureSteps:change').length, 1);

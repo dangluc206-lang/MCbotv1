@@ -479,7 +479,7 @@ function syncSelectors() {
   const signature = `${bots.map(bot => `${bot.botId}:${bot.profile?.displayName || ''}`).join('|')}::${state.commands.map(command => `${command.key}:${command.command || ''}`).join('|')}`;
   if (signature === state.selectorSignature) return;
   state.selectorSignature = signature;
-  for (const id of ['guiBot', 'commandBot', 'skyCommandBot', 'fishingConfigBot', 'secretBotSelect', 'botDetailSelect', 'inspectorBotSelect', 'craftDebugBotSelect']) syncSelect($('#' + id), botOptions);
+  for (const id of ['guiBot', 'commandBot', 'skyCommandBot', 'fishingConfigBot', 'secretBotSelect', 'botDetailSelect', 'inspectorBotSelect', 'craftDebugBotSelect', 'procedureRecordBot']) syncSelect($('#' + id), botOptions);
   syncSelect($('#eventBot'), '<option value="all">Mọi bot</option>' + botOptions, 'all');
   syncSelect($('#incidentBotFilter'), '<option value="">Tất cả bot</option>' + botOptions);
   syncSelect($('#logBot'), '<option value="all">Mọi bot</option>' + botOptions, localStorage.getItem('mcbot.logBot') || 'all');

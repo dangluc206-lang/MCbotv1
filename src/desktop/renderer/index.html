@@ -359,6 +359,11 @@
             <div class="panel-title"><div><h2>Danh sách bước</h2><p class="helper">Thêm từ thư viện, sắp xếp bằng ↑/↓, sửa tham số có kiểu. Bước operation-owned được đánh dấu riêng.</p></div><div class="actions compact"><button class="button ghost" id="procedureClearSteps">Xóa bước</button></div></div>
             <div id="procedureSteps" class="workflow-list"></div>
           </div>
+          <div class="panel section-gap">
+            <div class="panel-title"><div><h2>Ghi procedure từ GUI</h2><p class="helper">Chụp GUI trước (Trình kiểm tra GUI), rồi ghi lại đường nhấp đã xác minh thành bản nháp procedure — không thực hiện lại side effect nào.</p></div><div class="actions compact"><button class="button ghost" id="procedureRecord">Ghi từ bản chụp GUI</button></div></div>
+            <div class="inline-fields"><label>Bot<select id="procedureRecordBot"></select></label><label>ID procedure mới<input id="procedureRecordId" placeholder="minerals-recorded"></label></div>
+            <pre id="procedureRecordOutput">Chưa ghi procedure nào.</pre>
+          </div>
           <pre id="procedureSimulation" class="panel section-gap">Chưa chạy mô phỏng.</pre>
           <details class="panel section-gap advanced-builder"><summary>Cấu hình JSON nâng cao của procedure</summary><textarea id="procedureJson" aria-label="Cấu hình JSON nâng cao của procedure" class="code-editor" rows="14" spellcheck="false"></textarea><div class="actions"><button class="button ghost" id="procedureApplyJson">Áp dụng JSON vào trình dựng</button></div></details>
         </div>
