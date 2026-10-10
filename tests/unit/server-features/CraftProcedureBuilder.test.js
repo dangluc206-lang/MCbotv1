@@ -38,7 +38,8 @@ test('builder round-trips the shipped minerals procedure without schema drift', 
 
 test('recorder prefers logical intent; raw slot is fallback metadata only', () => {
   const recorder = new ProcedureRecorder({
-    resolveLogical: ({ slot }) => (slot === 11 ? { itemId: 'refined_iron' } : null)
+    sessionProvider: () => ({ window: { slots: { 11: { name: 'iron' }, 99: { name: 'empty' } } } }),
+    resolveLogicalId: raw => (raw?.name === 'iron' ? 'refined_iron' : null)
   });
   recorder.record({ kind: 'command', commandKey: 'minerals' });
   recorder.record({ kind: 'click', slot: 11, windowId: 'crafting' });
@@ -47,5 +48,6 @@ test('recorder prefers logical intent; raw slot is fallback metadata only', () =
   assert.equal(proc.steps[0].type, 'command');
   assert.deepEqual(proc.steps[1], { type: 'find-logical-item', itemId: 'refined_iron' });
   assert.equal(proc.steps[2].type, 'find-slot');
-  assert.equal(proc.steps[2].fallback.slot, 99);
+  assert.equal(proc.steps[2].slot, 99);
+  assert.deepEqual(proc.unresolved.map(entry => entry.slot), [99]);
 });

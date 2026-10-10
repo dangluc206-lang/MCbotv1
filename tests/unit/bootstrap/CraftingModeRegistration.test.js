@@ -57,3 +57,14 @@ test('registerBotServices binds CraftingModeService as craftingMode without b5Cr
     assert.equal(source.includes('b5CraftMode'), false);
     assert.equal(source.includes('b5-craft'), false);
 });
+
+test('registerBotServices wires the G14.2 procedure runtime and the G21 recorder to capability owners', () => {
+    const source = fs.readFileSync(path.resolve(__dirname, '../../../src/bootstrap/registerBotServices.js'), 'utf8');
+    // G14.2: operation procedure navigation runs through capability owners, never raw side effects.
+    assert.match(source, /new CraftingProcedureRuntime\(\{\s*commandService,\s*guiManager,\s*navigator: craftingOperation\.navigator/);
+    // G21: the recorder binds to live per-bot identity capabilities and is reachable
+    // per-bot through both the runtime services map and the server-feature facade.
+    assert.match(source, /new ProcedureRecordingRuntime\(\{\s*guiKnowledge,\s*itemResolver,/);
+    assert.match(source, /sessionProvider: \(\) => guiManager\.current/);
+    assert.match(source, /procedureRecording,/);
+});

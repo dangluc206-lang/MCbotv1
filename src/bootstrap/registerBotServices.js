@@ -95,6 +95,7 @@ const ProcedureExecutor = require("../server-features/crafting/procedure/Procedu
 const ProcedureBuilder = require("../server-features/crafting/procedure/ProcedureBuilder");
 const CraftingProcedureRuntime = require("../server-features/crafting/CraftingProcedureRuntime");
 const ProcedureRecorder = require("../server-features/crafting/procedure/ProcedureRecorder");
+const ProcedureRecordingRuntime = require("../server-features/crafting/ProcedureRecordingRuntime");
 const QuantityStrategy = require("../server-features/crafting/quantity/QuantityStrategy");
 const MaterialCalculator = require("../planning/crafting/MaterialCalculator");
 const CraftingPlanner = require("../planning/crafting/CraftingPlanner");
@@ -579,8 +580,18 @@ function registerBotServices({ profile, configuration, shared }) {
     navigator: craftingOperation.navigator,
     logger
   });
+  // G21: the per-bot recording runtime binds the pure recorder to the live
+  // capabilities (GUI knowledge identity first, item registry second, learning
+  // back into knowledge). It owns no Minecraft side effect: callers report the
+  // actions the bot performed and the recorder normalizes them to logical steps.
+  const procedureRecording = new ProcedureRecordingRuntime({
+    guiKnowledge,
+    itemResolver,
+    sessionProvider: () => guiManager.current?.() || null
+  });
   crafting.procedureRegistry = procedureRegistry;
   crafting.recipeRegistry = recipeRegistry;
+  crafting.procedureRecording = procedureRecording;
   const craftTraceRecorder = new CraftTraceRecorder({
     botId,
     serverProfile,
@@ -822,6 +833,7 @@ function registerBotServices({ profile, configuration, shared }) {
     crafting,
     procedureRegistry,
     procedureExecutor,
+    procedureRecording,
     procedureBuilder: ProcedureBuilder,
     procedureRecorder: ProcedureRecorder,
     quantityStrategy,
@@ -1101,6 +1113,7 @@ function registerBotServices({ profile, configuration, shared }) {
       craftingTrace: craftTraceRecorder,
       procedureRegistry,
       procedureExecutor,
+      procedureRecording,
       quantityStrategy,
       craftingMode,
       fishingMode: fishingModeAdapter,

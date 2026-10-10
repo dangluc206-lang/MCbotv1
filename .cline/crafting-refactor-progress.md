@@ -1,14 +1,67 @@
 # Crafting Refactor Progress
 
 ## Current Phase
-G20.1 — Procedure Builder validation fix (IN_PROGRESS: contract fixed + tests green; closeout pending)
+G21 — Procedure Recorder (IN_PROGRESS)
 
 ## Status
-G16.1 CLOSED. G19 CLOSED. G20 CLOSED. G20.1 IN PROGRESS (corrective sub-phase of G20,
-linked to the validation defect below — NOT a G20 replay).
-Overall refactor G1–G24 remains IN PROGRESS; G21 still PLANNED.
+G16.1 CLOSED. G19 CLOSED. G20 CLOSED. G20.1 CLOSED
+(commit 655a86c, pushed + verified on origin/main: HEAD == origin/main).
+Overall refactor G1–G24 remains IN PROGRESS; G21 IN PROGRESS.
 
-## G20.1 — Procedure Builder validation contract fix (IN_PROGRESS)
+## G21 — Procedure Recorder (IN_PROGRESS)
+Scope (roadmap G21): a foundation for recording interaction sequences that maps
+`user action -> logical procedure step` instead of raw slot clicks. Raw slots must
+never become the sole contract; recording must not depend absolutely on one
+session when identity can be normalized. G21 must be a production-flow
+implementation, not just unit-test foundation.
+
+Implementation:
+- `src/server-features/crafting/procedure/ProcedureRecorder.js` (rewritten from the
+  G8-adjacent foundation): 9 record event kinds (command/slash-command/open-gui/
+  wait-for-gui/click/select-quantity/wait/wait-for-output/verify). Slot actions
+  resolve through the injected `resolveLogicalId(raw, context)` at record time and
+  emit `find-logical-item` when identity resolves, `find-slot` + `unresolved[]`
+  report otherwise. `toProcedure()` validates through the same `ProcedureRegistry`
+  the runtime consumes and returns `identityComplete` + per-step `unresolved`.
+- `src/server-features/crafting/ProcedureRecordingRuntime.js` (new): binds the pure
+  recorder to live per-bot capabilities — GUI knowledge identity first, item
+  registry second, learning resolved quantity identity back into knowledge. Owns
+  no Minecraft side effect; callers report performed actions. Hands off to the G20
+  builder via `toBuilderDraft()` and saves into a live registry via `save()`.
+- `src/bootstrap/registerBotServices.js`: per-bot `procedureRecording` constructed
+  with `{ guiKnowledge, itemResolver, sessionProvider: () => guiManager.current() }`,
+  exposed on `crafting.procedureRecording`, the BotRuntime services map, and
+  `ServerFeatureFacade.procedureRecording()`.
+- Tests: `ProcedureRecordingRuntime.test.js` (9 tests: journey mapping, unresolved
+  reporting, session-independence, registry fail-closed, kind/param/id rejection,
+  reset isolation, knowledge binding + learn-back, builder handoff + live save,
+  capability-throw degradation); `CraftProcedureBuilder.test.js` recorder case
+  updated from the stale pre-G21 constructor to the record-time identity contract;
+  `CraftingModeRegistration.test.js` asserts the composition-root wiring.
+
+## Tests (G21 so far, actually run)
+- `node --test tests/unit/bootstrap/CraftingModeRegistration.test.js
+  tests/unit/server-features/CraftProcedureBuilder.test.js
+  tests/unit/server-features/CraftGenericProcedure.test.js
+  tests/unit/server-features/ProcedureRecordingRuntime.test.js` -> PASS 20/20
+  (3 bootstrap incl. new composition-root wiring test + 8 procedure incl. updated
+  stale-constructor recorder case + 9 new recorder/runtime tests).
+- Desktop regression (13 files incl. G20.1 use-cases, controller boundary,
+  procedure bindings, API contract, renderer bindings/decomposition, operator
+  contract, dev experience, crafting control, log policy, health, card presenter,
+  mode config) -> PASS 98/98.
+- `node --test tests/e2e/desktop/desktop-critical-flow.test.js` -> PASS 1/1.
+- `node scripts/validate-config.js` -> 31/31 PASS. `check-slo-contract` -> PASS 7.
+- `node scripts/check-static-quality.js` -> FAIL 1: only pre-existing
+  CraftingOperation 556>500 (reproduced on stashed G20.1 baseline — 200 files,
+  same single failure).
+- `node scripts/validate-architecture.js` -> FAIL 3: only pre-existing
+  MARKDOWN_UNAUTHORIZED roadmap docs (reproduced on stashed baseline; 422/422
+  source reachable, procedureRecording wired, no orphans).
+- `git diff --check` clean. Mock/unit + Electron-harness only; no live-server/GUI
+  proof claimed.
+
+## G20.1 — Procedure Builder validation contract fix (CLOSED)
 Linked defect (found after G20 closed in source review): `missingRequired()` in
 `src/desktop/use-cases/ProcedureBuilderUseCases.js` skipped every non-required field
 before type/min/max/pattern checks, so a provided optional value (e.g.

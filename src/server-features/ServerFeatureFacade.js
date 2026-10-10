@@ -14,6 +14,7 @@ class ServerFeatureFacade {
     craftingAutomation() { return this.#require('craftingAutomation'); }
     procedureRegistry() { return this.#require('procedureRegistry'); }
     procedureExecutor() { return this.#require('procedureExecutor'); }
+    procedureRecording() { return this.#require('procedureRecording'); }
     quantityStrategy() { return this.#require('quantityStrategy'); }
     craftingTrace() { return this.#require('craftingTrace'); }
     island() { return this.#require('island'); }
