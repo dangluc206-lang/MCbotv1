@@ -1,16 +1,16 @@
 # Crafting Refactor Progress
 
 ## Current Phase
-G23.1 — Repair architecture conformance tests (IN_PROGRESS)
+G23.1 — Repair architecture conformance tests (CLOSED)
 
 ## Status
-G16.1 CLOSED. G19 CLOSED. G20 CLOSED. G20.1 CLOSED. G21 CLOSED. G22 CLOSED.
-G23 CLOSED. G24 CLOSED. G20.2 CLOSED. G21.1 CLOSED (commit 6fd708a, pushed +
-verified on origin/main: HEAD == origin/main).
-Post-closeout audit sweep IN PROGRESS: G23.1 (this section, last). Base phases
-stay CLOSED, never replayed.
+Base phases G1–G24 CLOSED (incl. G24 closeout 7e31849). Corrective sub-phases:
+G20.2 CLOSED (c50a200), G21.1 CLOSED (6fd708a), G23.1 CLOSED (commit bd57673,
+pushed + verified on origin/main: HEAD == origin/main). Sweep COMPLETE.
+No live Minecraft GUI/server validation exists for any phase in this sweep
+(mock/unit + Electron-harness only).
 
-## G23.1 — Repair architecture conformance tests (IN_PROGRESS)
+## G23.1 — Repair architecture conformance tests (CLOSED: commit bd57673, verified on origin/main)
 Scope: the three defects only — production-validator ghost coverage, invalid
 shape coverage, honest procedure-matrix. No production invariant was missing
 (the cross-validator already rejects ghosts), so NO production change: test-only
