@@ -35,7 +35,7 @@ class CraftIntermediateCoordinator {
     async promoteOwned(first, inspect, context, opts) {
         opts = opts || {};
         const stop = opts.stopAtTargetReady !== false;
-        let inspection = this.requireInspection(first, 'B5 promotion inspection failed.');
+        let inspection = this.requireInspection(first, 'Craft promotion inspection failed.');
         const actions = [];
         for (let guard = 0; guard < 8; guard += 1) {
             context.cancellation.token.throwIfCancelled();
@@ -46,7 +46,7 @@ class CraftIntermediateCoordinator {
             if (compacted.length > 0) {
                 changed = true;
                 actions.push({ status: 'b3-promoted-to-b4', data: compacted });
-                inspection = this.requireInspection(await inspect(), 'B5 promotion re-inspection failed.');
+                inspection = this.requireInspection(await inspect(), 'Craft promotion re-inspection failed.');
                 if (stop && this.recipeResolver.isTargetDirectlyReady(inspection.data, 1)) break;
             }
             const promotion = await this.promoteIntermediatePass(inspection, inspect, context, { stopAtTargetReady: stop });
@@ -72,23 +72,23 @@ class CraftIntermediateCoordinator {
             const owned = Math.max(0, Number(chain.vaultIntermediate || 0) + ownedInv);
             const crafts = Math.floor(owned / per);
             if (crafts <= 0) continue;
-            if (!this.reserveChain || !this.reserveChain.prepare) throw new Error('B5 reserve coordinator is unavailable.');
+            if (!this.reserveChain || !this.reserveChain.prepare) throw new Error('Craft reserve coordinator is unavailable.');
             this.progressTracker.set({ running: true, state: 'PROMOTING_B2', currentStep: { kind: 'B2/B3', id: chain.outputId, crafts } });
             const targetId = (inspection.data && inspection.data.fullPlan && inspection.data.fullPlan.targetId) || null;
             const result = await this.reserveChain.prepare({ ...chain, intermediateCrafts: 0, outputCrafts: crafts, readyToReserve: true }, context, { deferIntermediateDeposit: true, allChains: chains, targetId });
             if (result && result.deferredForSpace) {
                 actions.push({ status: 'b2-pv2-parked-for-space', intermediateId: chain.intermediateId, outputId: chain.outputId, data: result });
-                inspection = this.requireInspection(await inspect(), 'B5 promotion re-inspection failed.');
+                inspection = this.requireInspection(await inspect(), 'Craft promotion re-inspection failed.');
                 break;
             }
             if (result && result.waitingForMaterial) {
                 actions.push({ status: 'b2-waiting-material', intermediateId: chain.intermediateId, outputId: chain.outputId, data: result });
-                inspection = this.requireInspection(await inspect(), 'B5 promotion re-inspection failed.');
+                inspection = this.requireInspection(await inspect(), 'Craft promotion re-inspection failed.');
                 break;
             }
             promoted = true;
             actions.push({ status: 'b2-promoted-to-b3', intermediateId: chain.intermediateId, outputId: chain.outputId, crafts, data: result });
-            inspection = this.requireInspection(await inspect(), 'B5 promotion re-inspection failed.');
+            inspection = this.requireInspection(await inspect(), 'Craft promotion re-inspection failed.');
             if (stop && this.recipeResolver.isTargetDirectlyReady(inspection.data, 1)) break;
         }
         return { inspection, actions, changed: actions.length > 0, promoted };

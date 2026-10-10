@@ -186,7 +186,7 @@ class CraftReserveChainCoordinator {
         });
         this.progressTracker.set({ running: true, state: 'CRAFTING_B2', currentStep: { kind: 'B2', id: chain.intermediateId, crafts: state.intermediateRemaining } });
         const inputSource = acquired.source || (this.baseInventory && (this.baseInventory.inputAcquisition || this.baseInventory.b2Input) && (this.baseInventory.inputAcquisition || this.baseInventory.b2Input).source) || 'inventory';
-        if (this.logger && this.logger.info) this.logger.info('B5 B1 SOURCE CONTRACT', { operation: 'CraftingAutomation', step: 'craft-b2-source-contract', phase: 'OK',
+        if (this.logger && this.logger.info) this.logger.info('CRAFT BASE SOURCE CONTRACT', { operation: 'CraftingAutomation', step: 'craft-b2-source-contract', phase: 'OK',
             resource: chain.baseId, intermediateId: chain.intermediateId, sourceMode: inputSource === 'inventory' ? 'INVENTORY_WITHDRAW' : 'STORAGE',
             quantity: decision.quantity, baseCount, emptySlotCount: inventory.emptySlotCount });
         const crafted = await this.finalCraft.craft(chain.intermediateRecipeId, decision.quantity, context, chain.intermediateId, {

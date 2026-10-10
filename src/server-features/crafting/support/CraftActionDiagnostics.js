@@ -20,6 +20,7 @@ const PRODUCTIVE_TOKENS = Object.freeze([
     'b2-promoted-to-b3',
     'b3-promoted-to-b4',
     'final-crafted-and-deposited',
+    'existing-target-recovered',
     'existing-b5-recovered',
     'compacted-after-b3',
     'all-b1-compacted',

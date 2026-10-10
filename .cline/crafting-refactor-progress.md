@@ -1,12 +1,12 @@
 # Crafting Refactor Progress
 
 ## Current Phase
-G22 — Special procedures (CLOSED)
+G23 — Architecture tests (CLOSED)
 
 ## Status
-G16.1 CLOSED. G19 CLOSED. G20 CLOSED. G20.1 CLOSED. G21 CLOSED. G22 CLOSED
-(commit c9205d9, pushed + verified on origin/main: HEAD == origin/main).
-Overall refactor G1–G24 remains IN PROGRESS; G23 next (PLANNED -> IN_PROGRESS).
+G16.1 CLOSED. G19 CLOSED. G20 CLOSED. G20.1 CLOSED. G21 CLOSED. G22 CLOSED.
+G23 CLOSED (commit ecee64d, pushed + verified on origin/main: HEAD == origin/main).
+Overall refactor G1–G24 remains IN PROGRESS; G24 next (PLANNED -> IN_PROGRESS).
 
 ## G21 — Procedure Recorder (CLOSED: commit 64b9823, verified on origin/main)
 Scope (roadmap G21): a foundation for recording interaction sequences that maps
@@ -109,7 +109,7 @@ Implementation (no source change needed — that IS the G22 proof):
 - `git diff --check` clean. Mock/unit + Electron-harness only; no live-server/GUI
   proof claimed.
 
-## G23 — Architecture tests (PLANNED -> IN_PROGRESS)
+## G23 — Architecture tests (CLOSED: commit ecee64d, verified on origin/main)
 Scope (roadmap G23): tests for recipe (valid/invalid/missing-item/missing-
 procedure), planner (simple/nested/stock/missing/cycle/outputAmount>1), quantity
 (1/64/65/127/128/137/1000), procedure (command/GUI/click/wait/transition/
@@ -148,6 +148,63 @@ Implementation:
   CraftingOperation 556>500 (same single failure as every baseline since G20.1).
 - `node scripts/validate-architecture.js` -> FAIL 3: only pre-existing
   MARKDOWN_UNAUTHORIZED roadmap docs (422/422 reachable, no orphans).
+- `git diff --check` clean. Mock/unit + Electron-harness only; no live-server/GUI
+  proof claimed.
+
+## G24 — Final refactor and architecture cleanup (IN_PROGRESS, revised scope)
+Scope (roadmap G24): once behavior is stable — split large facades only where
+responsibility is clear (candidate: CraftRequestService / CraftingPlanner /
+RecipeRegistry / ItemRegistry / ProcedureRegistry / ProcedureExecutor /
+QuantityStrategy / CraftingVerification / CraftingReconciler). No abstraction
+for line-count; no useless indirection; remove post-migration dead code +
+unconsumed compat code; rename so no B5 trace remains in generic subsystems.
+
+Preflight correction (evidence-driven): the Step2/3/4 + GenericCraftExecutionTarget
+suites CANNOT load on a clean tree either — they require deleted `b5/` modules
+at line 6-8 (pre-existing baseline failures, documented since G16). Rewriting
+them to drop the legacy twin = scope explosion (parity matrices compare generic
+vs deleted-legacy behavior) with regression risk far beyond "smallest safe fix".
+Per B3 ("implement strictly within phase scope") + "do not fix a future task",
+G24 does NOT touch those suites.
+Revised G24 = string/comment-only B5-vocabulary cleanup in LIVE src files.
+NO facade splits (all 9 candidates already separate modules), NO alias removals
+(live consumers), NO B-chain renames (active stage semantics).
+
+Live-src changes (behavior-neutral, string/comment only):
+- `CraftTraceRecorder`: 'B5 TRACE CANCELLED'/'B5 TRACE FAILED' -> 'CRAFT TRACE ...'.
+- `CraftCycleCoordinator`: 'recalculate B5 feasibility' -> 'recalculate craft
+  feasibility'; 'prioritize B5/B4 and compress owned B2/B3...' -> generic;
+  'final B5>B4>B3>B2 compaction sweep' -> 'final target>output>intermediate...';
+  'recover-existing-b5'/'verify-recovered-b5'/'existing-b5-recovered'/
+  'Existing B5 recovery...' -> target wording (+ 'existing-target-recovered'
+  added to CraftActionDiagnostics PRODUCTIVE_TOKENS alongside the old token).
+- `CraftReserveChainCoordinator`: 'B5 B1 SOURCE CONTRACT' -> 'CRAFT BASE SOURCE'.
+- `CraftIntermediateCoordinator`: 'B5 promotion ...' (x4) + 'B5 reserve
+  coordinator...' -> generic wording.
+- `CraftChainAdapter` header comment: B5PlanningService reference -> generic.
+- `CraftBaseInventoryCoordinator`: reason 'reserve one B1 transfer slot before
+  B2' -> 'reserve one base transfer slot before intermediate craft'.
+
+## Tests (G24 closeout, actually run)
+- Adjacent suites (Conformance + SpecialProcedures + GenericProcedure/Diversity/
+  RuntimeWiring/Builder/Recording + GenericExecution/Parity/Parity2/PlanningParity/
+  VerificationParity + GuiIdentity/FixedMenuSlots/QuantityBatch/Timing/Resolver +
+  InputAcquisition + ConfigurationContracts) -> PASS 117/117.
+- `node --test tests/unit/modes/CraftingModeService.test.js` -> PASS 54/54
+  (mode-level B5-vocabulary test NAMES untouched — they describe the mode's
+  external contract, out of G24 source scope).
+- Desktop + bootstrap regression re-run at closeout (14 files) -> PASS 102/102.
+- `node --test tests/e2e/desktop/desktop-critical-flow.test.js` -> PASS 1/1.
+- `node scripts/validate-config.js` -> 31/31 PASS. `check-slo-contract` -> PASS 7.
+- `node scripts/check-static-quality.js` -> FAIL 1: only pre-existing
+  CraftingOperation 556>500 (same single failure as every baseline since G20.1;
+  G24 touched 0 lines of that file).
+- `node scripts/validate-architecture.js` -> FAIL 3: only pre-existing
+  MARKDOWN_UNAUTHORIZED roadmap docs (422/422 reachable, no orphans).
+- Baseline failures (reproduced IDENTICALLY on stashed clean tree, NOT caused by
+  G24, NOT fixed in this act): CraftStep2BaseInventory / CraftStep3ReserveChain /
+  CraftStep4Intermediate / GenericCraftExecutionTarget (require deleted b5/
+  modules at line 6-8; documented since G16).
 - `git diff --check` clean. Mock/unit + Electron-harness only; no live-server/GUI
   proof claimed.
 

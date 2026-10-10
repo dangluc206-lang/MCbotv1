@@ -1,12 +1,12 @@
 'use strict';
 
-// Pure legacy -> generic chain-field adapter (Slice 6 Step 1).
+// Pure generic chain-field adapter (Slice 6 Step 1).
 //
-// Mirrors the current production translation (B5PlanningService #legacyChain,
-// inverted): same field pairs, same missing-field behavior (absent stays a
-// null identity / zero count / dropped state key), same frozen output.
+// Maps the historical B-chain field names to the generic contract: same field
+// pairs, same missing-field behavior (absent stays a null identity / zero
+// count / dropped state key), same frozen output.
 // Pure + deterministic: no IO, no config, no planning logic, never mutates
-// its input. Legacy-only `compactableB1`/`plannedB2Exact` are intentionally
+// its input. Historical-only `compactableB1`/`plannedB2Exact` are intentionally
 // dropped, never promoted into the generic contract (verified: the live
 // generic chain from CraftPlanningService never carries them).
 

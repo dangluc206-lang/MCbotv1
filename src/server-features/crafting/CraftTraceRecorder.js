@@ -96,7 +96,7 @@ class CraftTraceRecorder {
         if (record.error) {
             const cancelled = record.error.code === 'CANCELLED';
             const log = cancelled ? this.logger?.info : this.logger?.warn;
-            log?.call(this.logger, cancelled ? 'B5 TRACE CANCELLED' : 'B5 TRACE FAILED', { traceId: record.traceId, error: record.error, plan: record.plan });
+            log?.call(this.logger, cancelled ? 'CRAFT TRACE CANCELLED' : 'CRAFT TRACE FAILED', { traceId: record.traceId, error: record.error, plan: record.plan });
         }
         return record;
     }

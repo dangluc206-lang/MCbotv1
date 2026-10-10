@@ -27,7 +27,7 @@ class CraftBaseInventoryCoordinator {
         if (state.available >= request.basePerIntermediate && state.emptySlots < request.reserveSlots) return this.#notReady(chain, request, state, 'b1-inventory-headroom-not-ready');
         if (state.available < request.basePerIntermediate && state.emptySlots <= request.reserveSlots) {
             const freed = await this.ensureFreeIntermediateSlots(chain, context, request.reserveSlots + 1, {
-                reason: 'reserve one B1 transfer slot before B2', preserveAtLeastIntermediate: chain.intermediatePerOutput,
+                reason: 'reserve one base transfer slot before intermediate craft', preserveAtLeastIntermediate: chain.intermediatePerOutput,
                 preferCurrentIntermediate: false, allChains: options.allChains || [], targetId: options.targetId || null
             });
             state = this.#state(chain, request.reserveSlots, freed?.snapshot || null);

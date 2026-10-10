@@ -25,7 +25,7 @@ class CraftCycleCoordinator {
         await this.#processMaterials(state, inspect, context, options, amount);
         await this.#finalPromotion(state, inspect, context);
         const afterReserve = await this.runStep(context, {
-            subsystem: 'crafting', step: 'inspect-after-reserve', action: 'recalculate B5 feasibility', resource: state.targetId
+            subsystem: 'crafting', step: 'inspect-after-reserve', action: 'recalculate craft feasibility', resource: state.targetId
         }, inspect);
         state.afterReserve = afterReserve;
         this.progressTracker.sync(afterReserve.data, state.targetId, {
@@ -72,22 +72,22 @@ class CraftCycleCoordinator {
         }
         this.progressTracker.set({ running: true, state: 'RECOVERING_TARGET', currentStep: { kind: 'DEPOSIT', id: targetId } });
         await this.runStep(context, {
-            subsystem: 'crafting', step: 'recover-existing-b5', action: 'deposit existing B5 before any new craft', resource: targetId,
+            subsystem: 'crafting', step: 'recover-existing-target', action: 'deposit existing target before any new craft', resource: targetId,
             details: { orphanedTargetCount: orphaned, targetVaultBefore }
         }, () => this.flows.deposit.deposit(targetId, this.childOptions(context)));
         const inventoryAfter = await this.inventoryState.waitForAtMost(targetId, 0, context.cancellation.token);
         const vault = await this.runStep(context, {
-            subsystem: 'crafting', step: 'verify-recovered-b5', action: 'verify recovered B5 in /pv 2', resource: targetId
+            subsystem: 'crafting', step: 'verify-recovered-target', action: 'verify recovered target in /pv 2', resource: targetId
         }, () => this.flows.read.readPv2(this.childOptions(context)));
         const targetVaultAfter = Number(vault.data?.totals?.[targetId] || 0);
         if (targetVaultAfter < targetVaultBefore + orphaned || inventoryAfter > 0) this.#throwRecovery(state, orphaned, targetVaultAfter, inventoryAfter, context);
-        actions.push({ status: 'existing-b5-recovered', targetId, amount: orphaned, targetVaultBefore, targetVaultAfter });
+        actions.push({ status: 'existing-target-recovered', targetId, amount: orphaned, targetVaultBefore, targetVaultAfter });
         this.progressTracker.set({ running: false, state: 'RECOVERED_TARGET', currentStep: { kind: 'DONE', id: targetId }, completedAmount: 0, stored: 'PV2' });
         return this.#earlyResult(state, amount, options, { waitingForMaterials: false, recoveredExistingB5: true, recoveredAmount: orphaned });
     }
 
     #throwRecovery(state, orphaned, targetVaultAfter, inventoryAfter, context) {
-        throw new FlowError('Existing B5 recovery could not be verified.', {
+        throw new FlowError('Existing target recovery could not be verified.', {
             code: 'CRAFT_RECOVERY_VERIFICATION_FAILED', subsystem: 'crafting', operation: 'CraftingAutomation', step: 'verify-recovered-b5',
             action: 'verify inventory and /pv 2 deltas', resource: state.targetId, retryable: true, trace: context.trace,
             details: { orphanedTargetCount: orphaned, targetVaultBefore: state.targetVaultBefore, targetVaultAfter, targetInventoryAfter: inventoryAfter }
@@ -108,7 +108,7 @@ class CraftCycleCoordinator {
 
     async #promoteInitial(state, inspect, context, options) {
         const promotion = await this.runStep(context, {
-            subsystem: 'crafting', step: 'promote-owned-intermediates', action: 'prioritize B5/B4 and compress owned B2/B3 before creating more B2', resource: state.targetId
+            subsystem: 'crafting', step: 'promote-owned-intermediates', action: 'prioritize target/output and compress owned intermediates before creating more', resource: state.targetId
         }, () => this.intermediate.promoteOwned(state.first, inspect, context));
         if (promotion?.actions?.length) state.actions.push(...promotion.actions);
         if (promotion?.inspection?.success) state.workingInspection = promotion.inspection;
@@ -231,7 +231,7 @@ class CraftCycleCoordinator {
     }
 
     async #finalPromotion(state, inspect, context) {
-        const promotion = await this.runStep(context, { subsystem: 'crafting', step: 'final-intermediate-promotion', action: 'final B5>B4>B3>B2 compaction sweep', resource: state.targetId },
+        const promotion = await this.runStep(context, { subsystem: 'crafting', step: 'final-intermediate-promotion', action: 'final target>output>intermediate compaction sweep', resource: state.targetId },
             () => this.intermediate.promoteOwned(state.workingInspection, inspect, context));
         if (promotion?.actions?.length) state.actions.push(...promotion.actions);
         if (promotion?.inspection?.success) state.workingInspection = promotion.inspection;
