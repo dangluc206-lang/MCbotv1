@@ -1,12 +1,12 @@
 # Crafting Refactor Progress
 
 ## Current Phase
-G21 — Procedure Recorder (CLOSED)
+G22 — Special procedures (CLOSED)
 
 ## Status
-G16.1 CLOSED. G19 CLOSED. G20 CLOSED. G20.1 CLOSED. G21 CLOSED
-(commit 64b9823, pushed + verified on origin/main: HEAD == origin/main).
-Overall refactor G1–G24 remains IN PROGRESS; G22 next (PLANNED -> IN_PROGRESS).
+G16.1 CLOSED. G19 CLOSED. G20 CLOSED. G20.1 CLOSED. G21 CLOSED. G22 CLOSED
+(commit c9205d9, pushed + verified on origin/main: HEAD == origin/main).
+Overall refactor G1–G24 remains IN PROGRESS; G23 next (PLANNED -> IN_PROGRESS).
 
 ## G21 — Procedure Recorder (CLOSED: commit 64b9823, verified on origin/main)
 Scope (roadmap G21): a foundation for recording interaction sequences that maps
@@ -61,7 +61,7 @@ Implementation:
 - `git diff --check` clean. Mock/unit + Electron-harness only; no live-server/GUI
   proof claimed.
 
-## G22 — Special procedures (PLANNED -> IN_PROGRESS)
+## G22 — Special procedures (CLOSED: commit c9205d9, verified on origin/main)
 Scope (roadmap G22): when a new recipe appears —
 (A) sequence already expressible -> add recipe only, no source change;
 (B) same procedure, different params -> add procedure param/config, no recipe-specific class;
@@ -95,7 +95,7 @@ Implementation (no source change needed — that IS the G22 proof):
   crafting/modes roots); Case C negative pin (forge/npc shapes fail the
   minerals-shape predicate; no shipped recipe references them).
 
-## Tests (G22 so far, actually run)
+## Tests (G22 closeout, actually run)
 - `node --test tests/unit/server-features/CraftSpecialProcedures.test.js` -> PASS 4/4.
 - Adjacent suites (GenericProcedure/Diversity/RuntimeWiring/Builder/Recording/
   GenericExecution/GenericParity/GenericParity2/PlanningParity/VerificationParity/
@@ -104,6 +104,48 @@ Implementation (no source change needed — that IS the G22 proof):
 - `node scripts/validate-config.js` -> 31/31 PASS. `check-slo-contract` -> PASS 7.
 - `node scripts/check-static-quality.js` -> FAIL 1: only pre-existing
   CraftingOperation 556>500 (same single failure as G20.1/G21 baselines).
+- `node scripts/validate-architecture.js` -> FAIL 3: only pre-existing
+  MARKDOWN_UNAUTHORIZED roadmap docs (422/422 reachable, no orphans).
+- `git diff --check` clean. Mock/unit + Electron-harness only; no live-server/GUI
+  proof claimed.
+
+## G23 — Architecture tests (PLANNED -> IN_PROGRESS)
+Scope (roadmap G23): tests for recipe (valid/invalid/missing-item/missing-
+procedure), planner (simple/nested/stock/missing/cycle/outputAmount>1), quantity
+(1/64/65/127/128/137/1000), procedure (command/GUI/click/wait/transition/
+verification/failure/timeout), exact execution (one-batch/multi-batch/partial/
+retry/reconciliation/terminal), GUI resolution (configured/logical/learned/
+fallback/window-change/stale-generation). Forbidden: send-only assertions,
+unverified success claims.
+
+Implementation:
+- `tests/unit/server-features/CraftArchitectureConformance.test.js` (new, 11
+  tests, one per roadmap bullet — deliberately reusing the SAME public
+  registries/executor/planner/resolver/guard classes the production path uses,
+  so the suite pins the roadmap shape without duplicating adjacent suites):
+  recipe valid/invalid/missing-item/missing-procedure; planner full matrix;
+  all 7 quantity amounts exact; executor across all 3 shipped procedures with
+  actual==stock postcondition; failure/timeout never success; exact execution
+  one/multi/partial/retry/terminal; GUI resolution logical-beats-configured +
+  unknown-degrades + stale-window/stale-generation rejections.
+- GUI-resolution learned/window-change legs: covered by adjacent suites
+  (CraftingGuiIdentity, FixedMineralsMenuSlots, GuiKnowledgeRegistry,
+  ClickGuard/ClickExecutor contracts) — cited, not duplicated.
+
+## Tests (G23 closeout, actually run)
+- New `CraftArchitectureConformance.test.js` -> PASS 11/11 (one test per roadmap
+  bullet; 2 harness mistakes fixed during development, both test-side only).
+- Adjacent suites (Conformance + SpecialProcedures + GenericProcedure/Diversity/
+  RuntimeWiring/Builder/Recording + GenericExecution/Parity/Parity2/PlanningParity/
+  VerificationParity + GuiIdentity/FixedMenuSlots/QuantityBatch/Timing/Resolver +
+  ConfigurationContracts) -> PASS 99/99.
+- Desktop + bootstrap regression (14 files: G20/G20.1 use-cases, controller
+  boundary, bindings, API contract, renderer, operator, dev, crafting control,
+  log policy, health, card, mode config, mode registration) -> PASS 102/102.
+- `node --test tests/e2e/desktop/desktop-critical-flow.test.js` -> PASS 1/1.
+- `node scripts/validate-config.js` -> 31/31 PASS. `check-slo-contract` -> PASS 7.
+- `node scripts/check-static-quality.js` -> FAIL 1: only pre-existing
+  CraftingOperation 556>500 (same single failure as every baseline since G20.1).
 - `node scripts/validate-architecture.js` -> FAIL 3: only pre-existing
   MARKDOWN_UNAUTHORIZED roadmap docs (422/422 reachable, no orphans).
 - `git diff --check` clean. Mock/unit + Electron-harness only; no live-server/GUI
