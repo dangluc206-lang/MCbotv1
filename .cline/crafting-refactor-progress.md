@@ -1,14 +1,60 @@
 # Crafting Refactor Progress
 
 ## Current Phase
-G21.1 — Procedure Recorder executable actions and production integration (IN_PROGRESS)
+G23.1 — Repair architecture conformance tests (IN_PROGRESS)
 
 ## Status
 G16.1 CLOSED. G19 CLOSED. G20 CLOSED. G20.1 CLOSED. G21 CLOSED. G22 CLOSED.
-G23 CLOSED. G24 CLOSED. G20.2 CLOSED (commit c50a200, pushed + verified on
-origin/main: HEAD == origin/main).
-Post-closeout audit sweep IN PROGRESS: G21.1 (this section) -> G23.1. Base phases stay
-CLOSED, never replayed.
+G23 CLOSED. G24 CLOSED. G20.2 CLOSED. G21.1 CLOSED (commit 6fd708a, pushed +
+verified on origin/main: HEAD == origin/main).
+Post-closeout audit sweep IN PROGRESS: G23.1 (this section, last). Base phases
+stay CLOSED, never replayed.
+
+## G23.1 — Repair architecture conformance tests (IN_PROGRESS)
+Scope: the three defects only — production-validator ghost coverage, invalid
+shape coverage, honest procedure-matrix. No production invariant was missing
+(the cross-validator already rejects ghosts), so NO production change: test-only
+phase plus progress metadata.
+
+Implementation (tests only, `CraftArchitectureConformance.test.js` 11 -> 15 tests):
+- Shipped snapshot now also passes the REAL `ConfigurationContractValidator`
+  (same cross-reference path `validate-config.js` runs), not just the registries.
+- `G23.1 ghost item`: ghost recipe fails production validation with the exact
+  errors (`recipes.ghost.output/menuItemId/inputs.ghost_input references
+  missing item`) + `assertValid` throws with `validationErrors` carrying them.
+- `G23.1 ghost procedure`: recipe with `ghost_procedure` fails with the exact
+  `recipes.<first>.procedure references missing procedure` error; the per-group
+  schema layer stays green on the same snapshot (proves the cross-validator
+  owns the invariant, no test-only helper).
+- `G23.1 invalid shapes`: REAL `group.schemas.recipes` validator (`(value) =>
+  ({ valid, errors })` — first probe failed by calling it as `(value, errors)`)
+  rejects empty inputs / zero outputAmount / negative input / empty procedure
+  with exact errors; valid base passes clean (needs `menuSlot`, found by probe).
+- Matrix honesty: old matrix test's fake `executeBatch` now asserts ONLY what it
+  proves (planner shape `targetId`+`steps`, quantity exactness, executor
+  reconciliation math). New `G23.1 runtime steps` test runs command / open-gui /
+  find+click / quantity-resolve / wait through the REAL `CraftingProcedureRuntime`
+  asserting OBSERVED postconditions (capability called, `commandResult`/
+  `session`/`recipeSlot` state, click slot), plus operation-owned refusals
+  (`verify-quantity`, `wait-for-output` -> `CRAFTING_PROCEDURE_STEP_NOT_OWNED`)
+  and stale-generation abort with zero side effects. Timeout/verification
+  failure paths stay covered by the adjacent `failure and timeout` + wiring
+  suites (cited, not duplicated).
+
+## Tests (G23.1, actually run)
+- `node --test tests/unit/server-features/CraftArchitectureConformance.test.js`
+  -> PASS 15/15 (11 G23 + 4 new G23.1).
+- Adjacent: Conformance + SpecialProcedures + GenericProcedure + ProcedureBuilder +
+  RecordingRuntime + RuntimeWiring + ProcedureDiversity + ConfigurationContracts
+  -> PASS 63/63.
+- `node scripts/validate-config.js` -> 31/31 PASS + cross-ref PASS (2 profiles).
+- `node scripts/check-slo-contract.js` -> PASS 7.
+- `node scripts/check-static-quality.js` -> FAIL 1: CraftingOperation 556>500 ONLY,
+  pre-existing baseline (unchanged since the G24 closeout evidence).
+- `node scripts/validate-architecture.js` -> FAIL 3: MARKDOWN_UNAUTHORIZED only,
+  pre-existing baseline.
+- `git diff --check` clean. Mock/unit only; NO live-server/GUI proof claimed —
+  no live Minecraft GUI/server validation exists for any phase in this sweep.
 
 ## G20.2 — Procedure Builder nested-field validation (CLOSED: commit c50a200, verified on origin/main)
 Linked defect (found after G24 closeout in source audit): catalog declares
@@ -32,7 +78,7 @@ Implementation:
 - Integer-string contract comment corrected to match the code (trim tolerated);
   new test pins `' 5000 '` -> 5000 plus rejections of '5.0'/'0x10'/'5e2'/''/'  '.
 
-## G21.1 — Procedure Recorder executable actions and production integration (IN_PROGRESS)
+## G21.1 — Procedure Recorder executable actions and production integration (CLOSED: commit 6fd708a, verified on origin/main)
 Scope: the four findings only — executable click pairs, amount preservation,
 quantity/general logical resolution through existing capabilities, the real
 operator path into the G20 builder, and unresolved gating. No engine rewrite.

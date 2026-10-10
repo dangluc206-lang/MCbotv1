@@ -110,28 +110,35 @@ test('G23 quantity: every roadmap amount plans exactly', () => {
 
 // ---- Procedure: command / GUI / click / wait / transition / verify / failure / timeout ----
 test('G23 procedure: one executor runs every roadmap step shape', async () => {
-    const recipes = new CraftingRecipeRegistry({
-        a: { output: 'a', outputAmount: 1, inputs: { raw: 1 }, procedure: 'minerals-crafting' },
-        b: { output: 'b', outputAmount: 1, inputs: { raw: 1 }, procedure: 'forge-crafting' },
-        c: { output: 'c', outputAmount: 1, inputs: { raw: 1 }, procedure: 'npc-crafting' }
-    });
+    const recipes = new CraftingRecipeRegistry(RECIPES);
     const procedures = new ProcedureRegistry(PROCEDURES);
-    const executor = new ProcedureExecutor({ recipeRegistry: recipes, procedureRegistry: procedures });
-    for (const [recipeId, procedureId] of [['a', 'minerals-crafting'], ['b', 'forge-crafting'], ['c', 'npc-crafting']]) {
-        let stock = 0;
-        const res = await executor.execute({
-            recipeId, requested: 5,
-            handlers: {
-                readOutput: async () => stock,
-                executeBatch: async ({ crafts }) => { stock += crafts; return { actualCrafts: crafts }; }
-            }
-        });
-        // Observed postcondition, not send-only: reported actual == stock delta.
-        assert.equal(res.procedureId, procedureId);
-        assert.equal(res.status, 'COMPLETED');
-        assert.equal(res.actual, 5);
-        assert.equal(res.actual, stock);
-    }
+    const planner = new CraftingPlanner({
+        recipeRegistry: recipes,
+        materialCalculator: new MaterialCalculator({ recipeRegistry: recipes })
+    });
+    const plan = planner.plan('refined_iron', 64, {});
+    assert.equal(plan.targetId, 'refined_iron');
+    assert.ok(Array.isArray(plan.steps) && plan.steps.length > 0, 'planner must return steps');
+    const quantity = new QuantityStrategy();
+    const batches = quantity.plan({
+        requested: 100, remaining: 100, outputAmount: 1,
+        capabilities: {
+            strategy: procedures.require('minerals-crafting').quantityStrategy,
+            maxBatch: procedures.require('minerals-crafting').maxBatch
+        }
+    });
+    assert.equal(batches.map(batch => batch.batchAmount).reduce((a, b) => a + b, 0), 100);
+    const execution = new ProcedureExecutor({ recipeRegistry: recipes, procedureRegistry: procedures });
+    const stock = {};
+    const res = await execution.execute({
+        recipeId: 'refined_iron', requested: 5,
+        handlers: {
+            readOutput: async () => stock.refined_iron || 0,
+            executeBatch: async ({ crafts }) => { stock.refined_iron = (stock.refined_iron || 0) + crafts; return { actualCrafts: crafts }; }
+        }
+    });
+    assert.equal(res.actual, 5);
+    assert.equal(res.remaining, 0);
 });
 
 test('G23 procedure: failure and timeout never report success', async () => {
@@ -247,4 +254,146 @@ test('G23 GUI resolution: stale window and stale generation reject the click', a
     try { await executor.click({ slot: 5, expectedGeneration: 1, capturedWindow: { id: 9 } }); }
     catch (error) { staleGeneration = error; }
     assert.equal(staleGeneration?.code, 'GUI_CLICK_STALE_GENERATION');
+});
+
+test('G23.1 production validator rejects ghost item references with exact errors', () => {
+    const ConfigurationContractValidator = require(path.join(ROOT, 'src/configuration/ConfigurationContractValidator'));
+    const validator = new ConfigurationContractValidator();
+    const ghostSnapshot = {
+        recipes: { ...RECIPES, ghost: { output: 'ghost_item', outputAmount: 1, menuItemId: 'ghost_item', inputs: { ghost_input: 1 }, procedure: 'minerals-crafting' } },
+        procedures: PROCEDURES,
+        items: ITEMS
+    };
+    const report = validator.validate(ghostSnapshot, { requireComplete: false });
+    assert.equal(report.valid, false);
+    const joined = report.errors.join('\n');
+    assert.match(joined, /recipes\.ghost\.output references missing item: ghost_item/);
+    assert.match(joined, /recipes\.ghost\.menuItemId references missing item: ghost_item/);
+    assert.match(joined, /recipes\.ghost\.inputs\.ghost_input references missing item: ghost_input/);
+    assert.throws(
+        () => validator.assertValid(ghostSnapshot, { requireComplete: false }),
+        error => Array.isArray(error?.validationErrors) && error.validationErrors.some(entry => /ghost_item/.test(entry))
+    );
+});
+
+test('G23.1 production validator rejects ghost procedure references with exact errors', () => {
+    const ConfigurationContractValidator = require(path.join(ROOT, 'src/configuration/ConfigurationContractValidator'));
+    const validator = new ConfigurationContractValidator();
+    const first = Object.keys(RECIPES)[0];
+    const ghostSnapshot = {
+        recipes: { ...RECIPES, [first]: { ...RECIPES[first], procedure: 'ghost_procedure' } },
+        procedures: PROCEDURES,
+        items: ITEMS
+    };
+    const report = validator.validate(ghostSnapshot, { requireComplete: false });
+    assert.equal(report.valid, false);
+    assert.match(report.errors.join('\n'), new RegExp('recipes\\.' + first + '\\.procedure references missing procedure: ghost_procedure'));
+    const groupSchemas = require(path.join(ROOT, 'src/configuration/schemas/group.schemas'));
+    const schemaErrors = [];
+    groupSchemas.recipes(ghostSnapshot.recipes, schemaErrors);
+    groupSchemas.procedures(ghostSnapshot.procedures, schemaErrors);
+    assert.deepEqual(schemaErrors, []);
+    assert.throws(
+        () => validator.assertValid(ghostSnapshot, { requireComplete: false }),
+        error => Array.isArray(error?.validationErrors) && error.validationErrors.some(entry => /ghost_procedure/.test(entry))
+    );
+});
+
+test('G23.1 production schema rejects invalid recipe shapes with exact errors', () => {
+    const groupSchemas = require(path.join(ROOT, 'src/configuration/schemas/group.schemas'));
+    const check = recipes => groupSchemas.recipes(recipes).errors;
+    const base = { output: 'refined_iron', outputAmount: 1, menuItemId: 'refined_iron', menuSlot: 10, inputs: { iron_ingot: 1 }, procedure: 'minerals-crafting' };
+    assert.deepEqual(check({ ok: base }), []);
+    assert.ok(check({ bad: { ...base, inputs: {} } }).some(error => /inputs must not be empty/.test(error)));
+    assert.ok(check({ bad: { ...base, outputAmount: 0 } }).some(error => /outputAmount/.test(error)));
+    assert.ok(check({ bad: { ...base, inputs: { iron_ingot: -2 } } }).some(error => /inputs\.iron_ingot/.test(error)));
+    assert.ok(check({ bad: { ...base, procedure: '' } }).some(error => /procedure/.test(error)));
+});
+
+test('G23.1 procedure steps execute through the real runtime with observed postconditions', async () => {
+    // The G23 executor-level test above still injects executeBatch, so it only
+    // proves quantity/reconciliation math — NOT that command/GUI/click/wait steps
+    // actually run. This executes representative steps through the REAL
+    // CraftingProcedureRuntime against stubbed capability owners and asserts the
+    // OBSERVED postconditions (capability called, state changed, verification
+    // evidence), plus the operation-owned refusal contract.
+    const CraftingProcedureRuntime = require(path.join(ROOT, 'src/server-features/crafting/CraftingProcedureRuntime'));
+    const calls = [];
+    const session = {
+        active: true, definitionId: 'minerals', identity: { id: 'minerals', confidence: 0.95 },
+        window: { id: 1, slots: [], inventoryStart: 0 },
+        setSource(source) { this.source = source; }
+    };
+    const runtime = new CraftingProcedureRuntime({
+        commandService: { send: async key => { calls.push('command:' + key); return { success: true }; } },
+        guiManager: {
+            syncCurrentWindow: () => null,
+            current: () => session,
+            clickAndWaitForTransition: async slot => { calls.push('click:' + slot); return session; }
+        },
+        navigator: {
+            assertGuiIdentity: () => {},
+            resolveRecipeSlot: async () => 10,
+            resolveQuantitySlot: async () => 22
+        }
+    });
+    const recipe = { output: 'refined_iron' };
+    const state = () => ({
+        context: { resolve: value => value }, session,
+        entrySlot: null, recipeSlot: null, foundSlot: null,
+        enteredMenu: false, selectedRecipe: false, commandResult: null,
+        trace: () => {}, flow: null, cancellationToken: null,
+        expectedGeneration: null, operationContext: null, config: {}
+    });
+    {
+        const before = state();
+        await runtime.runStep({ type: 'command', commandKey: 'minerals' }, before, { recipe, options: {} });
+        assert.ok(calls.includes('command:minerals'));
+        assert.ok(before.commandResult !== null && before.commandResult !== undefined);
+    }
+    {
+        const before = state();
+        before.session = null;
+        await runtime.runStep({ type: 'open-gui', guiId: 'minerals' }, before, { recipe, options: {} });
+        assert.ok(before.session && before.session.window);
+    }
+    {
+        const before = state();
+        await runtime.runStep({ type: 'find-logical-item', itemId: 'refined_iron' }, before, { recipe, options: {} });
+        assert.equal(before.recipeSlot, 10);
+        await runtime.runStep({ type: 'click' }, before, { recipe, options: {} });
+        assert.ok(calls.includes('click:10'));
+    }
+    {
+        const before = state();
+        await runtime.runStep({ type: 'find-logical-item', itemId: 'quantity:64' }, before, { recipe, options: {} });
+        assert.equal(before.foundSlot, 22);
+    }
+    {
+        const before = state();
+        await runtime.runStep({ type: 'wait', ms: 1 }, before, { recipe, options: {} });
+        await runtime.runStep({ type: 'wait-for-transition', ms: 1 }, before, { recipe, options: {} });
+    }
+    {
+        const before = state();
+        await assert.rejects(
+            () => runtime.runStep({ type: 'verify-quantity', amount: 5 }, before, { recipe, options: {} }),
+            error => error && error.code === 'CRAFTING_PROCEDURE_STEP_NOT_OWNED'
+        );
+        await assert.rejects(
+            () => runtime.runStep({ type: 'wait-for-output', timeoutMs: 50 }, before, { recipe, options: {} }),
+            error => error && error.code === 'CRAFTING_PROCEDURE_STEP_NOT_OWNED'
+        );
+    }
+    {
+        const before = state();
+        before.expectedGeneration = 1;
+        before.operationContext = { connectionGeneration: 2 };
+        const callsBefore = calls.length;
+        await assert.rejects(
+            () => runtime.runStep({ type: 'command', commandKey: 'minerals' }, before, { recipe, options: {} }),
+            error => error && error.code === 'GUI_STALE_GENERATION'
+        );
+        assert.equal(calls.length, callsBefore);
+    }
 });
